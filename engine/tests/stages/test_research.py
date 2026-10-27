@@ -1,0 +1,198 @@
+import json
+
+import httpx
+import pytest
+
+from lull.ledger import TAVILY_CREDIT_USD, Ledger
+from lull.stages.research import GlossaryEntry, ResearchResult, research
+from lull.tavily import Tavily, TavilyError
+from lull.types import RunOptions, VisualEvent, Word
+
+
+class FakeTF:
+    def __init__(self, terms: list[str]):
+        self.terms = terms
+        self.calls: list[dict] = []
+
+    def json(self, model, messages, schema, **kw):
+        self.calls.append({"model": model, "messages": messages, "kw": kw})
+        return {"terms": [{"term": t, "kind": "other", "why": "x"} for t in self.terms]}
+
+
+def _ev() -> list[VisualEvent]:
+    return [
+        VisualEvent(
+            id="e001",
+            t_start=0,
+            t_end=2,
+            kind="on_screen_text",
+            text="a title card",
+            verbatim_text="Elephants Dream",
+            salience=4,
+            said_in_dialogue=False,
+        )
+    ]
+
+
+WORDS = [Word(text="Proog", start=0.0, end=0.5), Word(text="and", start=0.5, end=0.7)]
+
+
+def _tavily(tmp_path, handler, sleep=lambda s: None):
+    ledger = Ledger(tmp_path / "l.db", cap_run=0, cap_day=0, cap_total=0)
+    return Tavily(
+        "tvly-secret", ledger, transport=httpx.MockTransport(handler), sleep=sleep
+    ), ledger
+
+
+def _handler(seen: list):
+    def h(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        seen.append((req.url.path, body, req.headers.get("authorization")))
+        if req.url.path == "/search":
+            q = body["query"]
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "title": f"About {q} film",
+                            "url": f"https://x.test/{q[:5]}",
+                            "content": f"{q} is a thing. " * 40,
+                            "score": 0.9,
+                        },
+                        {
+                            "title": "Other",
+                            "url": "https://y.test/",
+                            "content": "meh",
+                            "score": 0.5,
+                        },
+                    ]
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"url": body["urls"][0], "raw_content": "Source Page Title\n" + "z" * 3000}
+                ],
+                "failed_results": [],
+            },
+        )
+
+    return h
+
+
+def test_two_terms_two_searches_and_ledger(tmp_path):
+    seen: list = []
+    tv, ledger = _tavily(tmp_path, _handler(seen))
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["Proog", "Emo"]), tv, run_id="r")
+    assert isinstance(res, ResearchResult) and not res.skipped
+    assert [p for p, _, _ in seen] == ["/search", "/search"]
+    assert seen[0][2] == "Bearer tvly-secret"
+    assert [e.term for e in res.glossary] == ["Proog", "Emo"]
+    e = res.glossary[0]
+    assert (
+        e.canonical == "Proog"
+        and len(e.note) <= 200
+        and e.sources == ["https://x.test/Proog", "https://y.test/"]
+    )
+    calls = ledger.calls("r")
+    assert len(calls) == 2
+    assert all(
+        c.provider == "tavily"
+        and c.model == "tavily-search"
+        and c.stage == "research"
+        and c.role == "research"
+        and c.tokens_in == 0
+        for c in calls
+    )
+    assert calls[0].cost_usd == pytest.approx(TAVILY_CREDIT_USD)
+
+
+def test_max_terms_respected(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    tf = FakeTF(["A1", "B2", "C3", "D4"])
+    res = research(_ev(), WORDS, RunOptions(), tf, tv, run_id="r", max_terms=2)
+    assert len(res.glossary) == 2 and len(seen) == 2
+    assert (
+        "2" in tf.calls[0]["messages"][0]["content"] or "2" in tf.calls[0]["messages"][1]["content"]
+    )
+
+
+def test_source_url_extracts_first(tmp_path):
+    seen: list = []
+    tv, ledger = _tavily(tmp_path, _handler(seen))
+    tf = FakeTF(["Proog"])
+    res = research(_ev(), WORDS, RunOptions(source_url="https://src.test/p"), tf, tv, run_id="r")
+    assert seen[0][0] == "/extract" and seen[0][1]["urls"] == ["https://src.test/p"]
+    assert seen[1][0] == "/search"
+    assert res.source_context and res.source_context.startswith("Source Page Title")
+    assert len(res.source_context) <= 1500
+    assert "Source Page Title" in json.dumps(tf.calls[0]["messages"])
+    assert [c.model for c in ledger.calls("r")] == ["tavily-extract", "tavily-search"]
+
+
+def test_none_path_skips(tmp_path):
+    res = research(
+        _ev(),
+        WORDS,
+        RunOptions(source_url="https://src.test/p"),
+        FakeTF(["Proog"]),
+        None,
+        run_id="r",
+    )
+    assert res.skipped and res.source_context is None
+    assert res.glossary == [GlossaryEntry(term="Proog", canonical="Proog", note="", sources=[])]
+
+
+def test_retry_on_429(tmp_path):
+    n = {"c": 0}
+    sleeps: list[float] = []
+
+    def h(req):
+        n["c"] += 1
+        if n["c"] < 3:
+            return httpx.Response(429, text="slow")
+        return httpx.Response(200, json={"results": [], "usage": {"credits": 2}})
+
+    tv, ledger = _tavily(tmp_path, h, sleep=sleeps.append)
+    assert tv.search("q", run_id="r") == []
+    assert n["c"] == 3 and sleeps == [1, 2]
+    assert ledger.calls("r")[0].cost_usd == pytest.approx(2 * TAVILY_CREDIT_USD)
+
+
+def test_error_raises_and_hides_key(tmp_path):
+    tv, _ = _tavily(tmp_path, lambda r: httpx.Response(401, text="bad"))
+    with pytest.raises(TavilyError) as ei:
+        tv.search("q", run_id="r")
+    assert "tvly-secret" not in str(ei.value)
+
+
+def test_extract_credits_per_five(tmp_path):
+    def h(req):
+        return httpx.Response(200, json={"results": [], "failed_results": []})
+
+    tv, ledger = _tavily(tmp_path, h)
+    tv.extract([f"https://a.test/{i}" for i in range(6)], run_id="r")
+    assert ledger.calls("r")[0].cost_usd == pytest.approx(2 * TAVILY_CREDIT_USD)
+
+
+def test_canonical_casing_from_results(tmp_path):
+    def h(req):
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "title": "Proog - Elephants Dream wiki",
+                        "url": "https://x.test/",
+                        "content": "...",
+                    }
+                ]
+            },
+        )
+
+    tv, _ = _tavily(tmp_path, h)
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["proog"]), tv, run_id="r")
+    assert res.glossary[0].canonical == "Proog"
