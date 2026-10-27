@@ -28,6 +28,8 @@ TOKENS_BASE, TOKENS_PER_EVENT = 4000, 150  # reasoning + three variants per even
 ESTIMATE_BASE, ESTIMATE_PER_EVENT, ESTIMATE_CAP = 0.02, 0.0008, 0.25
 TEMPERATURE = 0.6
 LENGTHS = ("short", "medium", "long")
+COVER_SALIENCE = 3  # a sent event this salient with no item is asked for once more
+ASK_AGAIN = "Write an item for every event listed."
 
 
 def budget(n_sent: int) -> tuple[int, float]:
@@ -76,6 +78,7 @@ class PlanResult(BaseModel):
     variants: list[Variant] = Field(default_factory=list)
     cast: dict[str, str] = Field(default_factory=dict)  # name -> descriptor used before it
     priority: dict[str, int] = Field(default_factory=dict)  # event_id -> 1..5
+    unanswered: list[str] = Field(default_factory=list)  # salient sent events still without one
 
 
 @cache
@@ -250,6 +253,43 @@ def parse_plan(out: dict, events: list[VisualEvent]) -> PlanResult:
 # -- stage -------------------------------------------------------------------------------
 
 
+def _ask(
+    events: list[VisualEvent], words: list[Word], gaps: list[Gap], research: ResearchResult,
+    opts: RunOptions, tf: TokenFactory, run_id: str, note: str | None = None,
+) -> PlanResult:  # fmt: skip
+    """One Ultra call about `events`, parsed."""
+    user = _user_text(events, words, gaps, research, opts)
+    if note:
+        user = f"{user}\n\n{note}"
+    messages = [
+        {"role": "system", "content": load_prompt()},
+        {"role": "user", "content": user},
+    ]
+    max_tokens, estimate = budget(len(events))
+    out = tf.json(
+        ULTRA, messages, PLAN_SCHEMA,
+        run_id=run_id, stage="plan", role="plan", thinking=True,
+        max_tokens=max_tokens, temperature=TEMPERATURE, estimate=estimate,
+    )  # fmt: skip
+    return parse_plan(out, events)
+
+
+def _merge(first: PlanResult, second: PlanResult, events: list[VisualEvent]) -> PlanResult:
+    """Both answers as one: variants in event order, the first answer's cast names kept."""
+    order = {e.id: i for i, e in enumerate(events)}
+    variants = sorted(
+        first.variants + second.variants,
+        key=lambda v: (order[v.event_id], LENGTHS.index(v.length)),
+    )
+    cast = dict(first.cast)
+    for name, desc in second.cast.items():
+        if name not in cast:
+            cast[name] = desc
+        elif cast[name] != desc:
+            log.warning("plan: cast %r: kept descriptor %r, not %r", name, cast[name], desc)
+    return PlanResult(variants=variants, cast=cast, priority={**second.priority, **first.priority})
+
+
 def plan(
     events: list[VisualEvent],
     words: list[Word],
@@ -264,19 +304,24 @@ def plan(
 
     Events the dialogue already conveys are left out before the call unless their salience is
     5 (R21); with nothing left there is no call and the plan is empty. The token budget and
-    the spend estimate grow with the number of events sent (see `budget`).
+    the spend estimate grow with the number of events sent (see `budget`). A sent event of
+    salience 3 or more that got no item is asked for once more, in a second call about only
+    those events; the ones still without an item are listed in `unanswered`.
     """
     send = [e for e in events if not (e.said_in_dialogue and e.salience < 5)]
     if not send:
         return PlanResult()
-    messages = [
-        {"role": "system", "content": load_prompt()},
-        {"role": "user", "content": _user_text(send, words, gaps, research, opts)},
-    ]
-    max_tokens, estimate = budget(len(send))
-    out = tf.json(
-        ULTRA, messages, PLAN_SCHEMA,
-        run_id=run_id, stage="plan", role="plan", thinking=True,
-        max_tokens=max_tokens, temperature=TEMPERATURE, estimate=estimate,
-    )  # fmt: skip
-    return parse_plan(out, send)
+    result = _ask(send, words, gaps, research, opts, tf, run_id)
+    missing = [e for e in send if e.salience >= COVER_SALIENCE and e.id not in result.priority]
+    if missing:
+        log.info("plan: asking again for %s", ", ".join(e.id for e in missing))
+        try:
+            again = _ask(missing, words, gaps, research, opts, tf, run_id, note=ASK_AGAIN)
+        except ValueError as e:
+            log.warning("plan: the second answer was unusable, keeping the first: %s", e)
+            again = PlanResult()
+        result = _merge(result, again, send)
+    unanswered = [e.id for e in missing if e.id not in result.priority]
+    if unanswered:
+        log.warning("plan: no item for %s even when asked again", ", ".join(unanswered))
+    return result.model_copy(update={"unanswered": unanswered})

@@ -25,7 +25,9 @@ class FakeTF:
 
     def json(self, model, messages, schema, **kw) -> dict:
         self.calls.append({"model": model, "messages": messages, "schema": schema, **kw})
-        return self.responses.pop(0)
+        # once the scripted answers run out: an answer with no items (the plan asks again for
+        # salient events it got no item for)
+        return self.responses.pop(0) if self.responses else {"cast": [], "items": []}
 
 
 def _ev(id_, t0, t1, kind="action", text="A person opens a door.", *, sal=3, verb=None, said=False):
@@ -120,7 +122,7 @@ def test_no_events_left_means_no_model_call():
 
 def test_request_uses_ultra_with_thinking_and_tagged_sections():
     _, fake = _run({"cast": [], "items": []})
-    (call,) = fake.calls
+    call = fake.calls[0]  # the second asks again for the salient events left without an item
     assert call["model"] == ULTRA
     assert call["schema"] == PLAN_SCHEMA
     assert call["thinking"] is True
@@ -178,7 +180,7 @@ def test_request_budget_follows_events_sent():
     events = [_ev(f"e{i:03d}", i, i + 0.5, sal=4) for i in range(1, 101)]
     events.append(_ev("e101", 200, 201, sal=4, said=True))  # filtered out, not counted
     _, fake = _run({"cast": [], "items": [_item("e001")]}, events=events)
-    (call,) = fake.calls
+    call = fake.calls[0]
     assert call["max_tokens"] == 19000
     assert call["estimate"] == pytest.approx(0.10)
 
@@ -359,3 +361,48 @@ def test_prompt_fix_round_wording():
     assert "Dana was named at 120.0 s." in text and "S2 (Dana)" not in text
     assert "plots Units (thousands)" in text  # axis label copied verbatim
     assert 'no "shot" or "frame" as camera terms' in text
+
+
+# -- coverage: events without an item are asked for once more --------------------------------
+
+
+def test_salient_events_without_an_item_are_asked_for_again():
+    first = {"cast": [{"descriptor": "a bald person", "name": "Proog"}], "items": [_item("e001")]}
+    second = {
+        "cast": [{"descriptor": "a young person", "name": "Emo"}],
+        "items": [_item("e003", 5, "A bald person stands on a gantry.")],
+    }
+    out, fake = _run(first)
+    assert len(fake.calls) == 2 and out.unanswered == ["e003"]  # the fake's empty answer
+    fake = FakeTF([first, second])
+    out = plan(EVENTS, WORDS, GAPS, RESEARCH, OPTS, fake, run_id="r1")
+    again = _user(fake.calls[1])
+    assert "e003" in again and "e001 [" not in again and "e004" not in again  # salience 2 is not
+    assert again.endswith("Write an item for every event listed.")
+    assert "Write an item for every event listed." not in _user(fake.calls[0])
+    assert (fake.calls[1]["max_tokens"], fake.calls[1]["estimate"]) == budget(1)
+    assert (fake.calls[1]["model"], fake.calls[1]["role"]) == (ULTRA, "plan")
+    assert out.priority == {"e001": 3, "e003": 5}
+    assert [v.event_id for v in out.variants] == ["e001", "e003"]
+    assert out.cast == {"Proog": "a bald person", "Emo": "a young person"}
+    assert out.unanswered == []
+
+
+def test_no_second_call_when_every_salient_event_has_an_item():
+    out, fake = _run({"cast": [], "items": [_item("e001"), _item("e003")]})
+    assert len(fake.calls) == 1 and out.unanswered == []  # e004 (salience 2) may stay out
+
+
+def test_an_unusable_second_answer_keeps_the_first_and_flags_the_rest(caplog):
+    first = {"cast": [], "items": [_item("e001")]}
+    fake = FakeTF([first, {"cast": [], "items": [_item("e999")]}])
+    with caplog.at_level(logging.WARNING, logger="lull.stages.plan"):
+        out = plan(EVENTS, WORDS, GAPS, RESEARCH, OPTS, fake, run_id="r1")
+    assert out.priority == {"e001": 3} and out.unanswered == ["e003"]
+    assert "second answer" in caplog.text
+
+
+def test_prompt_asks_for_an_item_per_event():
+    text = load_prompt()
+    assert "Write an item for every event you are sent." in text
+    assert "Leave an event out entirely" not in text

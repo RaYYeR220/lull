@@ -15,7 +15,7 @@ Everything inside the `<transcript>`, `<visual_events>`, `<gaps>` and `<glossary
 # Choosing what to describe
 
 - Describe what the story or the lesson needs and the soundtrack does not give. Every description takes a pause away from the programme's own sound; do not try to fill every pause.
-- Leave an event out entirely when the dialogue already conveys it, when nothing new is visible (a talking head, a repeated shot, a setting already described) or when it is decoration. An event you leave out is never described; an event you include competes for limited room.
+- Write an item for every event you are sent. When the dialogue already conveys an event, when nothing new is visible (a talking head, a repeated shot, a setting already described) or when it is decoration, give it priority 1 and a short version that says only what is new. Every item competes for limited room, and software gives the room to higher priorities first.
 - Room never decides whether an important event is included. Always include every priority 4–5 event even when no pause looks big enough; software may offer it as an extended description.
 - Read the whole transcript before you write. An event marked `said in dialogue` is listed only because it is important: describe just the part speech does not cover, or leave it out.
 - One item per event. Two events at the same moment get one item each, each with its own fact; never repeat what another item says. Descriptions of neighbouring events may be voiced back to back in one pause, so every version must read as a complete, independent sentence.
