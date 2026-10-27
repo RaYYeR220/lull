@@ -1,0 +1,2 @@
+.eyebrow{display:flex;align-items:center;gap:12px;margin:0 0 var(--s-5);font-size:var(--fs-small);line-height:1;font-weight:500;letter-spacing:var(--tr-eyebrow);color:var(--cream-2)}
+.eyebrow::before{content:"";flex:none;width:24px;height:1px;background:var(--lamp-1)}

@@ -1,0 +1,29 @@
+.gate{display:flex;align-items:stretch}
+
+.door{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:14px;min-height:var(--hit-door);padding:0 32px;border:0;border-radius:var(--radius);
+  font-family:var(--f-ui);font-size:var(--fs-ui-door);font-weight:500;letter-spacing:var(--tr-ui);line-height:1;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background-color var(--t-hover),color var(--t-hover),box-shadow .5s var(--ease-out),transform var(--t-press) ease-out,border-color var(--t-hover)}
+.door svg{flex:none}
+
+/* lit: cream face, lamp glow, a 3px deep-lamp ledge */
+.lit{z-index:1;color:var(--night-1);font-weight:600;
+  background:linear-gradient(180deg,#fcf6ea 0%,#f3e8d3 100%);
+  box-shadow:0 0 0 1px rgb(var(--lamp-rgb) / .7),0 0 34px -4px rgb(var(--lamp-rgb) / .42),0 0 90px 0 rgb(var(--lamp-rgb) / .14)}
+.lit::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--lamp-2);transition:height var(--t-press) ease-out}
+.lit:hover{background:linear-gradient(180deg,#fffaf1 0%,#f7eedc 100%);box-shadow:0 0 0 1px rgb(var(--lamp-rgb) / .9),0 0 46px -2px rgb(var(--lamp-rgb) / .58),0 0 130px 0 rgb(var(--lamp-rgb) / .2)}
+/* pressed: drops 2px, the ledge collapses to 1px */
+.lit:active{transform:translateY(2px);background:linear-gradient(180deg,#f1e4cb 0%,#eadbbf 100%);box-shadow:0 0 0 1px rgb(var(--lamp-rgb) / .9),0 0 22px -6px rgb(var(--lamp-rgb) / .5)}
+.lit:active::after{height:1px}
+.lit:focus-visible{outline-offset:var(--focus-offset-door)}
+
+/* dark: a hairline door that picks up the lit door's light along its edge */
+.dark{color:var(--cream-0);border:1px solid var(--hair-door);border-left:0;
+  background:linear-gradient(90deg,rgb(var(--lamp-rgb) / .13),rgb(var(--lamp-rgb) / .03) 38%,rgb(var(--night-rgb) / .35) 70%)}
+.dark:hover{border-color:rgb(var(--cream-rgb) / .5);background:linear-gradient(90deg,rgb(var(--lamp-rgb) / .18),rgb(var(--lamp-rgb) / .06) 50%,rgb(var(--cream-rgb) / .04))}
+.dark:active{transform:translateY(2px);background:rgb(var(--cream-rgb) / .03)}
+
+@media (max-width:760px){
+  .gate{flex-direction:column;width:100%}
+  .door{width:100%}
+  .dark{border-left:1px solid var(--hair-door);border-top:0}
+}

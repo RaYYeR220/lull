@@ -1,0 +1,11 @@
+.meta{display:flex;flex-wrap:wrap;gap:4px 0;list-style:none;font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-2)}
+.center{justify-content:center}
+.meta li{display:flex;align-items:center}
+.meta li + li::before{content:"";width:3px;height:3px;margin:0 14px;background:var(--lamp-2)}
+.meta b{font-weight:600;color:var(--cream-1)}
+
+@media (max-width:760px){
+  .meta{flex-direction:column;align-items:flex-start;gap:2px}
+  .center{align-items:center}
+  .meta li + li::before{display:none}
+}

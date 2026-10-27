@@ -1,0 +1,6 @@
+.hair{display:block;height:1px;margin:0;border:0;background:var(--hair)}
+.faint{background:var(--hair-faint)}
+.default{background:var(--hair)}
+.strong{background:var(--hair-strong)}
+.door{background:var(--hair-door)}
+.lamp{background:var(--lamp-2)}

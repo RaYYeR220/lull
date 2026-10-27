@@ -1,0 +1,20 @@
+/* the listening room: header row, the claim, then the horizon on the floor */
+.hero{position:relative;isolation:isolate;min-height:max(100svh,760px);display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:var(--head-h) 1fr auto;overflow:hidden}
+
+.copy{grid-row:2;align-self:center;display:flex;flex-direction:column;align-items:center;text-align:center;padding:var(--s-2) var(--gutter) var(--s-4);--lede-measure:var(--measure-lede)}
+.title{max-width:11.6em}
+.copy .lede{margin-top:26px;text-wrap:balance}
+.gate{margin-top:36px}
+.hint{margin-top:14px;font-size:14px;color:var(--cream-1)}
+.proof{margin-top:6px}
+
+/* the horizon's footprint: a 240px stage plus its transport bar */
+.horizonSlot{grid-row:3;height:301px}
+
+@media (max-width:760px){
+  .hero{grid-template-rows:var(--head-h) auto auto;min-height:auto}
+  .copy{padding-top:var(--s-6);padding-bottom:var(--s-5)}
+  .copy .lede{margin-top:var(--s-5)}
+  .gate{margin-top:var(--s-6)}
+  .horizonSlot{height:240px}
+}
