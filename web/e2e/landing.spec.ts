@@ -41,6 +41,17 @@ test.describe("landing", () => {
       await expect(page.locator(`section#${id}`)).toHaveCount(1);
   });
 
+  test("the gate's second door takes you to describe your own clip", async ({ page }) => {
+    await page.goto("/");
+    const gate = page.getByRole("group", { name: "Choose how to begin" });
+    const door = gate.getByRole("link", { name: "Describe your own clip" });
+    await expect(door).toHaveAttribute("href", "/try");
+    await door.click();
+    // a client-side navigation: slower when the suite is busy
+    await expect(page).toHaveURL(/\/try$/, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Watch a description being made.");
+  });
+
   test("the horizon plays: the playhead moves and the first line is announced", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
     const live = page.locator("[data-horizon-live]");

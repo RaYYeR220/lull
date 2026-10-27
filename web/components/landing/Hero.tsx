@@ -49,8 +49,8 @@ export function Hero({ showcase }: { showcase: Showcase }) {
           <p className={cx("t-lede", styles.lede, "reveal reveal-2")}>{SITE.description}</p>
           <Gate label="Choose how to begin" className={cx(styles.gate, "reveal reveal-3")}>
             <PreviewDoor describedBy="gate-hint" />
-            <Door tone="dark" href="/studio">
-              Open the studio
+            <Door tone="dark" href="/try">
+              Describe your own clip
             </Door>
           </Gate>
           <p id="gate-hint" className={cx(styles.hint, "reveal reveal-4")}>

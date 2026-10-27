@@ -106,6 +106,17 @@ test("reduced motion shows the resting state at once", async ({ page }) => {
   expect(opacity).toBe("1");
 });
 
+test("the primary nav leads with Try it", async ({ page }) => {
+  await page.goto("/");
+  const nav = page.getByRole("navigation", { name: "Primary" });
+  await expect(nav.getByRole("link")).toHaveText(["Try it", "Studio", "Library", "Developers", "Benchmarks"]);
+  await expect(nav.getByRole("link", { name: "Try it" })).toHaveAttribute("href", "/try");
+  await nav.getByRole("link", { name: "Try it" }).click();
+  // a client-side navigation: slower when the suite is busy
+  await expect(page).toHaveURL(/\/try$/, { timeout: 15_000 });
+  await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Try it" })).toHaveAttribute("aria-current", "page");
+});
+
 test("kitchen is kept out of search", async ({ page }) => {
   await page.goto("/kitchen");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);

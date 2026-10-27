@@ -24,6 +24,7 @@ export type SiteLink = {
 };
 
 export const NAV_LINKS: readonly SiteLink[] = [
+  { href: "/try", label: "Try it", live: true },
   { href: "/studio", label: "Studio", live: false },
   { href: "/library", label: "Library", live: false },
   { href: "/developers", label: "Developers", live: false },
