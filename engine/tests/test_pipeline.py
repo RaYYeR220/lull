@@ -525,3 +525,23 @@ def test_cue_context_counts_only_what_a_listener_heard_before_the_cue():
     assert (ctx.wps, ctx.video_duration, ctx.cast) == (2.4, 60.0, cast)
     assert ctx.named == ctx.proper_nouns == names
     assert cue_context(ext, **common).introduced == {"Lull", "Proog", "Barry"}
+
+
+def test_salient_events_the_plan_left_out_are_flagged(tone_slides, tmp_path, fast_media):
+    plan = copy.deepcopy(PLAN)
+    plan["items"] = plan["items"][:2]  # nothing for e003 (salience 4, 7-12 s)
+    ledger = _ledger(tmp_path)
+    _, _, _, events = _run(tone_slides, tmp_path / "run", ledger, tf=FakeTF(ledger, plan=plan))
+    flagged = [(e.stage, e.data) for e in events if e.data.get("kind") == "undescribed"]
+    assert flagged == [
+        (
+            "schedule",
+            {
+                "kind": "undescribed",
+                "event_ids": ["e003"],
+                "message": "1 salient event has no description from the plan and stays "
+                "undescribed: e003",
+            },
+        )
+    ]
+    assert _ends(events)["schedule"]["extended"] == ["e002", "e003"]

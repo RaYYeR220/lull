@@ -578,6 +578,18 @@ def _stages(r: _Run) -> PublishResult:
         extended=placed.extended,
         proper_nouns=names,
     )
+    voiced_later = {i for c in cues if c.gap_id is None for i in c.event_ids}
+    missing = [eid for eid in placed.extended if eid not in voiced_later]
+    if missing:  # salient, placed nowhere, and no variant for the extended track either
+        one = len(missing) == 1
+        r.warn(
+            "undescribed",
+            f"{len(missing)} salient event{'' if one else 's'} {'has' if one else 'have'} no "
+            f"description from the plan and stay{'s' if one else ''} undescribed: "
+            + ", ".join(missing),
+            "schedule",
+            event_ids=missing,
+        )
     standard, extended = r.finalize(cues, gaps, events, heard.words, planned.cast, names)
     with r.step("publish") as info:
         assert_no_overlap(standard, heard.speech)

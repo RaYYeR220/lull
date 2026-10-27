@@ -119,7 +119,8 @@ def _detail(stage: str, d: dict) -> str:
     if stage == "schedule":
         used = d.get("utilisation") or 0.0
         return (
-            f"{d['placed']} placed, {len(d['extended'])} extended candidates, "
+            f"{d['placed']} placed, {len(d['extended'])} salient events left for the extended "
+            "track, "
             f"{used:.0%} of the room used"
         )
     if stage == "finalize":
