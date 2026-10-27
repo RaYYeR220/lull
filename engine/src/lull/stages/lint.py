@@ -162,10 +162,7 @@ def lint(
         if v not in text:
             add("R19-verbatim", f"on-screen text {v!r} must appear exactly", None, exempt=False)
 
-    masked = list(text)
-    for s, e in quoted:
-        masked[s:e] = " " * (e - s)
-    mtext = "".join(masked)
+    mtext = _mask_quotes(text, quoted)
     for sent in re.finditer(r"[^.!?]+[.!?]*", mtext):
         body = sent.group()
         m = re.search(r"\bin a moment\b", body, re.IGNORECASE)
@@ -177,6 +174,21 @@ def lint(
             span = (sent.start() + m.start(), sent.start() + m.end())
             add("R2-ahead-format", msg, span, exempt=False)
     return out
+
+
+def _mask_quotes(text: str, quoted: list[tuple[int, int]]) -> str:
+    """`text` with quoted spans blanked, same length; a sentence mark that ends a quote
+    ('"Hi."', 'reads: Day one.') stays, so the sentence still ends there."""
+    masked = list(text)
+    for s, e in quoted:
+        end = e
+        while end > s and text[end - 1] in "\"”’'":
+            end -= 1
+        keep = end - 1 if end > s and text[end - 1] in ".!?…" else None
+        masked[s:e] = " " * (e - s)
+        if keep is not None:
+            masked[keep] = text[keep]
+    return "".join(masked)
 
 
 def _merge(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:

@@ -184,3 +184,12 @@ def test_named_risk_negatives():
 def test_autofix_idempotent(text):
     once = autofix(text)
     assert autofix(once) == once
+
+
+def test_a_quote_ending_a_sentence_keeps_the_next_look_ahead_at_its_start():
+    """Task 12 minor: masking the quote dropped its period, so the look-ahead after it looked
+    like the middle of a sentence."""
+    assert "R2-ahead-format" not in rules('He holds a card: "Hi." In a moment, a door opens.')
+    assert "R2-ahead-format" not in rules('A sign reads "Exit!" In a moment, it flickers.')
+    assert "R2-ahead-format" not in rules("A caption reads: Day one. In a moment, rain falls.")
+    assert "R2-ahead-format" in rules('A card says "Hi" and in a moment a door opens.')
