@@ -457,6 +457,70 @@ def test_compress_sends_the_note_only_when_given():
     assert "it dropped a visual" not in plain and "it dropped a visual" in noted
 
 
+# -- (d3) a claim cut that drops a sentence its claims did not cover is tried once more --------
+
+TABBY = EV.model_copy(update={"id": "e002", "t_start": 2.5, "t_end": 6.0, "text": "A cat runs."})
+COAT_CAT = "A person in a red coat opens a door. A cat runs past."
+COAT_CLAIMS = _claims(
+    ("a person opens a door", "supported"),
+    ("the person wears a red coat", "not_visible"),
+    ("a cat runs past", "supported"),
+)
+
+
+def _coat_cat(tmp_path, video, tf, speech):
+    cue = _cue(COAT_CAT, event_ids=["e001", "e002"])
+    return _run(tmp_path, video, tf, speech, cue=cue, events={"e001": EV, "e002": TABBY})
+
+
+def test_a_claim_cut_that_drops_another_visual_is_retried_with_a_note(tmp_path, video):
+    tf = FakeTF(
+        verify=[COAT_CLAIMS, _supported("a person opens a door", "a cat runs past")],
+        remove=[
+            {"text": "A person opens a door."},
+            {"text": "A person opens a door. A cat runs past."},
+        ],
+    )
+    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "remove", "verify"]
+    first, retry = (_user_text(c) for c in tf.of("remove"))
+    assert "previous answer" not in first
+    assert 'Your previous answer "A person opens a door." dropped "A cat runs past."' in retry
+    assert out.status == "verified" and out.text == "A person opens a door. A cat runs past."
+    assert "1 claim removed: the person wears a red coat" in out.note
+
+
+def test_a_claim_cut_that_drops_another_visual_twice_is_held_with_the_line(tmp_path, video):
+    tf = FakeTF(verify=[COAT_CLAIMS], remove=[{"text": "A person opens a door."}] * 2)
+    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "remove"]
+    assert out.status == "held" and out.text == COAT_CAT  # nothing contradicted: kept for review
+    assert 'the claim cut dropped "A cat runs past." twice' in out.note
+    assert [c.verdict for c in out.claims] == ["supported", "not_visible", "supported"]
+
+
+def test_a_claim_cut_may_drop_the_sentence_its_claims_were_about(tmp_path, video):
+    tf = FakeTF(
+        verify=[
+            _claims(("a person opens a door", "supported"), ("a cat runs past", "not_visible")),
+            _supported("a person opens a door"),
+        ],
+        remove=[{"text": "A person in a red coat opens a door."}],
+    )
+    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "verify"]
+    assert out.status == "verified" and out.text == "A person in a red coat opens a door."
+
+
+def test_remove_claims_sends_the_note_only_when_given():
+    bad = [Claim(text="red", verdict="not_visible", at=None)]
+    tf = FakeTF(remove=[{"text": "A door opens."}] * 2)
+    remove_claims("A red door opens.", bad, tf, run_id="r1")
+    remove_claims("A red door opens.", bad, tf, run_id="r1", note="it dropped a visual")
+    plain, noted = (_user_text(c) for c in tf.calls)
+    assert "it dropped a visual" not in plain and "it dropped a visual" in noted
+
+
 # -- (e) verification never passes ----------------------------------------------------------
 
 
@@ -743,10 +807,12 @@ def test_quote_lost_with_an_unrelated_claim_is_demanded_back(tmp_path, video):
             _claims(('a sign reads "EXIT"', "supported"), ("in a red coat", "not_visible")),
             _supported('a sign reads "EXIT"', "a person opens a door"),
         ],
-        remove=[{"text": "A person opens a door."}],
-        repair=[{"text": 'A sign reads: "EXIT". A person opens a door.'}],
+        # the sign sentence survives but loses its quote (a whole lost sentence is asked back
+        # from the cut itself: see the (d3) tests)
+        remove=[{"text": "A sign above the door. A person opens a door."}],
+        repair=[{"text": 'A sign above the door reads: "EXIT". A person opens a door.'}],
     )
-    cue = _cue('A sign reads: "EXIT". A person in a red coat opens a door.')
+    cue = _cue('A sign above the door reads: "EXIT". A person in a red coat opens a door.')
     out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=cue, ctx=ctx)
     assert tf.roles() == ["verify", "remove", "repair", "verify"]
     assert "R19-verbatim" in _user_text(tf.of("repair")[0])

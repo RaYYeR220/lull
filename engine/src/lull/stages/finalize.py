@@ -313,6 +313,19 @@ def _content(s: str) -> set[str]:
     return {t for t in _TOKEN.findall(s.lower()) if t not in _STOP}
 
 
+def dropped_sentences(before: str, after: str, claims: Iterable[Claim]) -> list[str]:
+    """Sentences of `before` that `after` lost (fewer than half their content words survive)
+    although the `claims` cut were not about them (they cover less than half of its words)."""
+    kept = _content(after)
+    cut = set().union(*(_content(c.text) for c in claims))
+    out = []
+    for s, e in split_sentences(before):
+        words = _content(before[s:e])
+        if words and len(words & kept) * 2 < len(words) and len(words & cut) * 2 < len(words):
+            out.append(before[s:e])
+    return out
+
+
 def _lost_ahead(before: str, after: str) -> bool:
     """True when a look-ahead sentence of `before` is still in `after` without its prefix: an
     unprefixed sentence shares at least half its content words with it (Jaccard >= 0.5)."""
@@ -509,7 +522,9 @@ class _Finalise:
         self.removed.extend(c for c in bad if _key(c) not in seen)
 
     def cut(self, bad: list[Claim], last: bool) -> Cue | None:
-        """Cut the claims the frames do not support; the held cue, or None to go round."""
+        """Cut the claims the frames do not support; the held cue, or None to go round. A cut
+        that drops a sentence the claims were not about is asked for once more with a note;
+        doing it again holds the cue with the line as it was."""
         gone = {_key(c) for c in self.removed}
         again = [c for c in bad if _key(c) in gone]
         if again:
@@ -520,6 +535,17 @@ class _Finalise:
             return self.hold_unverified(reason, bad)
         before = self.text
         new = remove_claims(before, bad, self.tf, run_id=self.run_id)
+        lost = dropped_sentences(before, new, bad)
+        if lost and not _same(new, before):
+            note = (
+                f'Your previous answer "{new}" dropped "{lost[0]}", which none of the listed '
+                "claims is about. Remove only the listed claims and keep every other sentence."
+            )
+            new = remove_claims(before, bad, self.tf, run_id=self.run_id, note=note)
+            lost = dropped_sentences(before, new, bad)
+            if lost and not _same(new, before):
+                reason = f'the claim cut dropped "{lost[0]}" twice: ' + _claims_note(bad)
+                return self.hold_unverified(reason, bad, cut_tried=True)
         if _same(new, before):
             reason = "the rewrite removed nothing: " + _claims_note(bad)
             return self.hold_unverified(reason, bad, cut_tried=True)

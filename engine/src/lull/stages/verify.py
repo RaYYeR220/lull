@@ -179,10 +179,14 @@ def rewrite(prompt: str, user: str, tf: TokenFactory, *, run_id: str, role: str)
     return text if any(c.isalnum() for c in text) else ""
 
 
-def remove_claims(text: str, bad: list[Claim], tf: TokenFactory, *, run_id: str) -> str:
-    """`text` rewritten without the `bad` claims, or "" when nothing else is left."""
+def remove_claims(
+    text: str, bad: list[Claim], tf: TokenFactory, *, run_id: str, note: str | None = None
+) -> str:
+    """`text` rewritten without the `bad` claims, or "" when nothing else is left. `note` says
+    what was wrong with a previous answer."""
     if not bad:
         return text
     listed = [f"- {c.text} ({c.verdict.replace('_', ' ')})" for c in bad]
-    user = "\n\n".join([tagged("description", [text]), tagged("remove", listed)])
+    parts = [tagged("description", [text]), tagged("remove", listed)]
+    user = "\n\n".join([*parts, note] if note else parts)
     return rewrite("remove", user, tf, run_id=run_id, role="remove")
