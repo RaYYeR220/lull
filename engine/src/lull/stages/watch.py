@@ -84,29 +84,28 @@ def plan_windows(
 ) -> list[Span]:
     """Overlapping windows covering [0, duration], each at most MAX_CLIP_S long.
 
-    A window nominally ends max_len after its start. When a scene cut (or the end of the
-    video) lies within SNAP_S of that nominal end, the window ends at the nearest one instead
-    (ties go to the earlier), so window edges fall between shots. The next window starts
-    `overlap` before the previous end.
+    A window nominally ends max_len after its start. If the end of the video is no further
+    than SNAP_S past that (and within MAX_CLIP_S), the window takes the rest of the video, so
+    there is no sliver tail window. Otherwise, when a scene cut lies within SNAP_S of the
+    nominal end, the window ends at the nearest cut (ties go to the earlier), so window edges
+    fall between shots. The next window starts `overlap` before the previous end.
     """
     if not (0 <= overlap < max_len <= MAX_CLIP_S):
         raise ValueError(f"need 0 <= overlap < max_len <= {MAX_CLIP_S} (got {overlap}, {max_len})")
     if duration <= 0:
         return []
-    marks = sorted({c for c in cuts if 0 < c < duration} | {duration})
+    inner = sorted(c for c in cuts if 0 < c < duration)
     out: list[Span] = []
     start = 0.0
     while True:
         nominal = start + max_len
-        if nominal >= duration:
+        hi = min(nominal + SNAP_S, start + MAX_CLIP_S)  # >= nominal since max_len <= cap
+        if duration <= hi:
             out.append(Span(start=start, end=duration))
             return out
-        hi = min(nominal + SNAP_S, start + MAX_CLIP_S)
-        near = [c for c in marks if nominal - SNAP_S <= c <= hi and c > start + overlap]
+        near = [c for c in inner if nominal - SNAP_S <= c <= hi and c > start + overlap]
         end = min(near, key=lambda c: (abs(c - nominal), c)) if near else nominal
         out.append(Span(start=start, end=end))
-        if end >= duration:
-            return out
         start = end - overlap
 
 
@@ -162,20 +161,27 @@ def parse_events(out: dict, length: float, *, window: int = 0) -> list[VisualEve
     """Window-relative events from one model answer, clamped to [0, length].
 
     Reversed spans are swapped and events with empty text dropped. A malformed event is
-    dropped with a warning; an answer without an `events` list raises ValueError.
+    dropped with a warning. An answer without an `events` list, or whose events are all
+    malformed, raises ValueError: an empty inventory must never stand in for a broken one.
     """
     raw = out.get("events") if isinstance(out, dict) else None
     if not isinstance(raw, list):
         raise ValueError(f"watch window {window}: model answer has no 'events' list")
     events: list[VisualEvent] = []
+    errors: list[str] = []
     for n, item in enumerate(raw):
         try:
             ev = _event(item, length, f"w{window:03d}.{n:03d}")
         except (TypeError, ValueError, KeyError, AttributeError) as e:
             log.warning("watch window %d: dropped malformed event %d: %s", window, n, e)
+            errors.append(f"{n}: {e!r}")
             continue
         if ev is not None:
             events.append(ev)
+    if raw and len(errors) == len(raw):
+        raise ValueError(
+            f"watch window {window}: all {len(raw)} events malformed ({'; '.join(errors)[:300]})"
+        )
     return events
 
 
@@ -217,11 +223,15 @@ class _Group:
 def merge_events(per_window: list[tuple[Span, list[VisualEvent]]]) -> list[VisualEvent]:
     """Window-relative events -> one absolute-time list with ids e001… by start.
 
-    An event merges into one from an overlapping window when the kinds match, the starts
-    differ by at most MERGE_DT and the token Jaccard of the text (or of the on-screen text)
-    is at least MERGE_JACCARD. Matching is one-to-one, best similarity first. The merged event
-    spans both, keeps the higher salience and the longer verbatim text, and counts as said in
-    dialogue only when both say so (an undescribed visual is worse than a repeated one).
+    An event merges into one from an overlapping window when the kinds match, the token
+    Jaccard of the text (or of the on-screen text) is at least MERGE_JACCARD, and either
+    - the starts differ by at most MERGE_DT (both windows saw it begin in the overlap), or
+    - it is carried over the boundary: the earlier event is still on screen when the new
+      window starts and the new event starts with that window (both within MERGE_DT), as a
+      slide or setting that persists across the cut between windows is reported.
+    Matching is one-to-one, best similarity first. The merged event spans both, keeps the
+    higher salience and the longer verbatim text, and counts as said in dialogue only when
+    both say so (an undescribed visual is worse than a repeated one).
     """
     spans = [span for span, _ in per_window]
     groups: list[_Group] = []
@@ -239,7 +249,7 @@ def merge_events(per_window: list[tuple[Span, list[VisualEvent]]]) -> list[Visua
             (-sim, abs(g.ev.t_start - e.t_start), gi, ei)
             for gi, g in enumerate(pool)
             for ei, e in enumerate(shifted)
-            if (sim := _match(g.ev, e)) is not None
+            if (sim := _match(g.ev, e, span)) is not None
         )
         used_g: set[int] = set()
         used_e: set[int] = set()
@@ -267,8 +277,13 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b) if a and b else 0.0
 
 
-def _match(a: VisualEvent, b: VisualEvent) -> float | None:
-    if a.kind != b.kind or abs(a.t_start - b.t_start) > MERGE_DT + _EPS:
+def _match(a: VisualEvent, b: VisualEvent, span: Span) -> float | None:
+    """Similarity when `b` (from window `span`) is the same thing as earlier `a`, else None."""
+    if a.kind != b.kind:
+        return None
+    near = abs(a.t_start - b.t_start) <= MERGE_DT + _EPS
+    carried = a.t_end >= span.start - MERGE_DT - _EPS and b.t_start <= span.start + MERGE_DT + _EPS
+    if not (near or carried):
         return None
     sim = _jaccard(_tokens(a.text), _tokens(b.text))
     if a.verbatim_text and b.verbatim_text:

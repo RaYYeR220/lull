@@ -87,6 +87,11 @@ def test_plan_windows_end_of_video_counts_as_a_cut():
     assert _pairs(plan_windows(115, [])) == [(0, 115)]
 
 
+@pytest.mark.parametrize(("duration", "cuts"), [(110.2, [110.0]), (112.0, [109.5])])
+def test_plan_windows_video_end_in_snap_range_wins_over_cut(duration, cuts):
+    assert _pairs(plan_windows(duration, cuts)) == [(0, duration)]
+
+
 def test_plan_windows_always_progresses_with_small_max_len():
     wins = plan_windows(60, [7.0, 21.0, 33.0], max_len=20, overlap=10)
     assert wins[0].start == 0 and wins[-1].end == 60
@@ -193,6 +198,47 @@ def test_merge_empty():
     assert merge_events([]) == []
 
 
+def test_merge_carries_element_across_window_boundary():
+    # on screen when B starts: A reports [50,100], B reports it from its own start
+    a, b = _span(0, 110), _span(100, 210)
+    per_window = [
+        (a, [_ve(50, 100, "slide", "Slide titled Results", sal=3)]),
+        (b, [_ve(0, 30, "slide", "Slide titled Results", sal=4)]),
+    ]
+    (only,) = merge_events(per_window)
+    assert (only.t_start, only.t_end) == pytest.approx((50.0, 130.0))
+    assert only.salience == 4 and only.id == "e001"
+
+
+def test_merge_carry_over_chains_through_a_middle_window():
+    per_window = [
+        (_span(0, 110), [_ve(50, 110, "setting", "a lecture hall with tiered seats")]),
+        (_span(100, 210), [_ve(0, 110, "setting", "a lecture hall with tiered seats")]),
+        (_span(200, 260), [_ve(0, 20, "setting", "a lecture hall with tiered seats")]),
+    ]
+    (only,) = merge_events(per_window)
+    assert (only.t_start, only.t_end) == pytest.approx((50.0, 220.0))
+
+
+def test_merge_carry_over_needs_element_alive_at_the_boundary():
+    a, b = _span(0, 110), _span(100, 210)
+    gone_before_b = [
+        (a, [_ve(50, 90, "slide", "Slide titled Results")]),
+        (b, [_ve(0, 30, "slide", "Slide titled Results")]),
+    ]
+    assert len(merge_events(gone_before_b)) == 2
+    appears_later_in_b = [
+        (a, [_ve(50, 110, "slide", "Slide titled Results")]),
+        (b, [_ve(5, 30, "slide", "Slide titled Results")]),  # abs 105: not from B's start
+    ]
+    assert len(merge_events(appears_later_in_b)) == 2
+    other_kind = [
+        (a, [_ve(50, 110, "slide", "Slide titled Results")]),
+        (b, [_ve(0, 30, "on_screen_text", "Slide titled Results")]),
+    ]
+    assert len(merge_events(other_kind)) == 2
+
+
 # -- transcript slice ----------------------------------------------------------------
 
 
@@ -259,6 +305,18 @@ def test_parse_events_rejects_missing_events_list():
         parse_events({"items": []}, 10.0)
 
 
+def test_parse_events_raises_when_every_event_is_malformed():
+    bad = {"events": [{"bogus": 1}, _ev(1.0, 2.0, "explosion", "a flash")]}
+    with pytest.raises(ValueError, match="malformed"):
+        parse_events(bad, 10.0)
+
+
+def test_parse_events_keeps_good_events_beside_malformed_ones():
+    mixed = {"events": [{"bogus": 1}, _ev(1.0, 2.0)]}
+    assert len(parse_events(mixed, 10.0)) == 1
+    assert parse_events({"events": []}, 10.0) == []
+
+
 # -- schema and prompt ---------------------------------------------------------------
 
 
@@ -280,6 +338,17 @@ def test_prompt_loads_from_package():
     text = load_prompt()
     for needle in ("verbatim_text", "said_in_dialogue", "salience", "scene_change", "t_start"):
         assert needle in text
+
+
+def test_prompt_rules_wording():
+    text = load_prompt()
+    assert "A name caption establishes only the name." in text  # R14
+    assert "Use gendered words (he, she, man, woman) only when the transcript" in text
+    assert "same level of detail" in text  # R14 equal treatment
+    assert 'not "looks upset"' in text  # R12
+    assert "increment (tick spacing)" in text  # R22
+    assert "Watch the whole clip to the end; list events wherever they occur." in text
+    assert "cover the whole clip" not in text
 
 
 # -- watch (fake Token Factory) --------------------------------------------------------
@@ -345,6 +414,13 @@ def test_watch_returns_absolute_times(two_window_video: Path, tmp_path: Path):
     assert (out[1].t_start, out[1].t_end) == pytest.approx((103.5, 104.5), abs=0.05)
     assert (out[2].t_start, out[2].t_end) == pytest.approx((114.0, 119.0), abs=0.05)
     assert all(0 <= e.t_start <= e.t_end <= 125.5 for e in out)
+
+
+def test_watch_raises_when_a_window_answer_is_all_malformed(two_window_video: Path, tmp_path: Path):
+    fake = FakeTF([{"events": [{"t_start": 1.0}]}])
+    with pytest.raises(ValueError, match="malformed"):
+        watch(two_window_video, tmp_path, [], fake, run_id="r", profile="education")
+    assert len(fake.calls) == 1  # stops at the bad window, no further spend
 
 
 def test_watch_no_speech_and_proxy_fallback(
