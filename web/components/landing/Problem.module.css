@@ -1,0 +1,36 @@
+.quote{margin:var(--s-8) 0 0;position:relative}
+
+/* the silence: a flat line with one empty lit pool where the chart should have been */
+.silence{position:relative;height:120px;margin-top:6px}
+.line{position:absolute;left:0;right:calc(-1 * var(--gutter));top:58px;height:1px;background:linear-gradient(90deg,rgb(var(--cream-rgb) / .55),rgb(var(--cream-rgb) / .35) 60%,rgb(var(--cream-rgb) / .1))}
+.pool{position:absolute;left:38%;width:30%;top:-60px;height:120px;background:radial-gradient(50% 100% at 50% 100%,rgb(var(--lamp-rgb) / .22),rgb(var(--lamp-rgb) / .06) 55%,transparent 80%)}
+.pool::after{content:"";position:absolute;left:8%;right:8%;bottom:-6px;height:12px;background:radial-gradient(50% 50% at 50% 50%,rgb(var(--lamp-rgb) / .5),transparent)}
+.edge{position:absolute;top:51px;width:1px;height:15px;background:rgb(var(--lamp-rgb) / .7)}
+.note{position:absolute;top:76px;font-size:var(--fs-small);color:var(--lamp-0);white-space:nowrap}
+
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gap);row-gap:var(--s-7);margin-top:var(--s-7)}
+.text{grid-column:1 / span 5}
+.text p{font-size:var(--fs-body-l);line-height:var(--lh-body);color:var(--cream-1)}
+.text .cost{margin-top:var(--s-5);padding-left:var(--s-4);border-left:1px solid var(--lamp-2);color:var(--cream-0)}
+
+.facts{grid-column:7 / span 6;display:grid;grid-template-columns:1fr 1fr;column-gap:var(--grid-gap)}
+.fact{padding-top:var(--s-4);border-top:1px solid var(--hair-strong);display:flex;flex-direction:column;gap:var(--s-3)}
+.fact dt{display:flex;flex-direction:column;gap:6px}
+.num{font-variant-numeric:lining-nums tabular-nums}
+.what{font-size:var(--fs-small);font-weight:600;letter-spacing:.01em;color:var(--lamp-0)}
+.fact dd{display:flex;flex-direction:column;gap:var(--s-3);font-size:var(--fs-body-s);line-height:1.55;color:var(--cream-1)}
+.fact dd q{font-family:var(--f-display);font-optical-sizing:auto;font-style:italic;font-size:18px;line-height:1.45;color:var(--cream-0);quotes:"\201C" "\201D"}
+
+.src{display:inline-flex;gap:6px;align-items:baseline;font-size:var(--fs-small);color:var(--cream-2);text-decoration:none;border-bottom:1px solid var(--hair-strong);padding-bottom:2px;transition:color var(--t-hover),border-color var(--t-hover)}
+.src:hover{color:var(--cream-0);border-color:var(--lamp-1)}
+
+@media (max-width:1100px){
+  .text,.facts{grid-column:1 / -1}
+}
+@media (max-width:760px){
+  .quote{margin-top:var(--s-6)}
+  .silence{height:96px}
+  .pool{left:30%;width:52%}
+  .note{white-space:normal;width:52%}
+  .facts{grid-template-columns:1fr;row-gap:var(--s-6)}
+}

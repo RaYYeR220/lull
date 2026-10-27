@@ -1,0 +1,59 @@
+/* the horizon: the soundtrack on the floor of the hero, with its transport bar */
+.horizon{grid-row:3;margin:0;position:relative;min-width:0}
+
+.scroll{position:relative;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;scrollbar-color:var(--night-4) transparent;overscroll-behavior-x:contain}
+.scroll:focus-visible{outline-offset:-2px}
+.stage{--pad:clamp(20px,3.4vw,48px);--line-y:166px;position:relative;width:100%;min-width:100%;height:240px}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.data{position:absolute;top:0;bottom:0;left:var(--pad);right:var(--pad)}
+
+/* each pause: its measured length and how many words fit */
+.gap{position:absolute;top:calc(var(--line-y) - 54px);display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;pointer-events:none}
+.len{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:var(--fs-pause);line-height:1;letter-spacing:var(--tr-pause);color:var(--lamp-0);font-variant-numeric:lining-nums tabular-nums;white-space:nowrap}
+.cap{font-size:12px;line-height:1.2;font-weight:500;letter-spacing:.01em;color:var(--cream-2);white-space:nowrap}
+
+/* the spoken line, typed in step with the voice; italic Newsreader is the voice */
+.cue{position:absolute;bottom:calc(100% - var(--line-y) + 66px);margin:0;padding-left:9px;border-left:1px solid rgb(var(--lamp-rgb) / .55);
+  font-family:var(--f-display);font-optical-sizing:auto;font-style:italic;font-weight:350;font-size:var(--fs-cue);line-height:var(--lh-cue);letter-spacing:var(--tr-cue);color:var(--lamp-0);text-wrap:pretty;transition:opacity .4s}
+.cue[data-state="idle"]{opacity:0}
+.rest{visibility:hidden}
+.caret{display:inline-block;width:1px;height:1em;margin-left:1px;vertical-align:-.15em;background:var(--lamp-1)}
+.caret[hidden]{display:none}
+
+.ticks{position:absolute;left:0;right:0;bottom:0;height:18px}
+.ticks span{position:absolute;bottom:0;translate:-50% 0;font-family:var(--f-mono);font-size:11px;line-height:1;color:var(--cream-2)}
+.ticks span:first-child{translate:0 0}
+.ticks span:last-child{translate:-100% 0}
+
+/* transport */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3) var(--s-6);flex-wrap:wrap;padding:12px var(--gutter) 16px;border-top:1px solid var(--hair-faint)}
+.caption{font-size:var(--fs-small);line-height:1.45;color:var(--cream-2);max-width:56em}
+.caption cite{font-style:italic;color:var(--cream-1)}
+.transport{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;font-size:var(--fs-micro);font-weight:600;letter-spacing:var(--tr-micro);color:var(--lamp-0);border:1px solid rgb(var(--lamp-rgb) / .38);background:rgb(var(--lamp-rgb) / .06)}
+.readout{min-width:118px;text-align:right;padding:0 6px;font-family:var(--f-mono);font-size:12.5px;color:var(--cream-1)}
+.btn{display:inline-flex;align-items:center;gap:7px;height:var(--hit-control);padding:0 12px;font-size:13px;font-weight:500;color:var(--cream-1);background:transparent;border:1px solid var(--hair-strong);border-radius:var(--radius);cursor:pointer;
+  transition:color var(--t-hover),border-color var(--t-hover),background-color var(--t-hover)}
+.btn:hover{color:var(--cream-0);border-color:rgb(var(--cream-rgb) / .45);background:rgb(var(--cream-rgb) / .04)}
+.btn:active{background:rgb(var(--cream-rgb) / .08)}
+.btn[aria-pressed="true"]{color:var(--lamp-0);border-color:rgb(var(--lamp-rgb) / .5)}
+.btn svg{width:12px;height:12px}
+/* Original / Described: one segmented switch */
+.ab{display:inline-flex}
+.ab .btn + .btn{margin-left:-1px}
+.ab .btn[aria-pressed="true"]{position:relative;z-index:1}
+
+@media (max-width:760px){
+  .scroll{-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 28px),transparent)}
+  .stage{min-width:1040px;--pad:20px}
+  .bar{flex-direction:column;align-items:flex-start;gap:12px}
+  .readout{min-width:0;text-align:left;padding:0 4px}
+}
+@media (prefers-reduced-motion:reduce){
+  .cue{transition:none}
+  /* the lamp does not breathe, so there is nothing to pause */
+  .lampToggle{display:none}
+}
+@media print{
+  .horizon{display:none}
+}

@@ -15,8 +15,8 @@ type SectionProps = Omit<HTMLAttributes<HTMLElement>, "id" | "children"> & {
   heading: ReactNode;
   /** Sits beside the heading, bottom-aligned; below it under 1100px. */
   lede?: ReactNode;
-  /** Columns of the 12 the heading spans; the lede takes the rest. */
-  headCols?: 5 | 6 | 7 | 8;
+  /** Columns of the 12 the heading spans; the lede takes the rest. 12 for a heading with no lede. */
+  headCols?: 5 | 6 | 7 | 8 | 12;
   /** The 40px ruled floor. Alternate it by section for rhythm. */
   ruled?: boolean;
   padTop?: SectionSpace;

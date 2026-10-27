@@ -51,11 +51,19 @@ for (const route of ROUTES) {
       await page.evaluate(() => document.fonts.ready);
       const { scrollWidth, clientWidth, spill } = await page.evaluate(() => {
         const root = document.documentElement;
-        // text and controls must sit inside the viewport too, not merely be clipped by body
+        // text and controls must sit inside the viewport too, not merely be clipped by body;
+        // the only exception is content inside a deliberate sideways scroller (the horizon, the studio timeline)
+        const inScroller = (el: Element) => {
+          for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+            const o = getComputedStyle(p).overflowX;
+            if (o === "auto" || o === "scroll") return true;
+          }
+          return false;
+        };
         const spill = [...document.querySelectorAll("main a, main button, main h1, main h2, main h3, main p, main li, footer a, footer p, header a")]
           .filter((el) => {
             const r = el.getBoundingClientRect();
-            return r.width > 0 && (r.right > root.clientWidth + 1 || r.left < -1);
+            return r.width > 0 && (r.right > root.clientWidth + 1 || r.left < -1) && !inScroller(el);
           })
           .map((el) => `${el.tagName.toLowerCase()}: ${(el.textContent ?? "").trim().slice(0, 40)}`);
         return { scrollWidth: root.scrollWidth, clientWidth: root.clientWidth, spill };

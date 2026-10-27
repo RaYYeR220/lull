@@ -1,0 +1,33 @@
+.sec{position:relative;isolation:isolate;overflow-x:clip;padding:var(--section-y) 0}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gap);row-gap:var(--s-7);align-items:start}
+.copy{grid-column:1 / span 5;position:sticky;top:48px}
+.lede{margin-top:var(--s-5)}
+.note{margin-top:var(--s-5);font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1);max-width:30em}
+.note b{font-weight:600;color:var(--cream-0)}
+
+/* the folder: a tab with a diagonal flare (a gradient, never a radius) and six file rows */
+.folder{grid-column:7 / span 6;position:relative;margin-top:30px}
+.tab{position:absolute;left:-1px;bottom:100%;display:flex;align-items:center;gap:10px;height:32px;padding:0 16px;background:var(--night-2);border:1px solid var(--hair-strong);border-bottom:0;font-family:var(--f-mono);font-size:12.5px;color:var(--cream-1)}
+.tab::after{content:"";position:absolute;left:100%;bottom:-1px;width:28px;height:32px;background:linear-gradient(to top right,var(--night-2) 50%,transparent 50.5%)}
+.body{background:var(--night-2);border:1px solid var(--hair-strong);background-image:linear-gradient(to bottom,rgb(var(--lamp-rgb) / .05),transparent 40%)}
+.files{list-style:none}
+.file{display:grid;grid-template-columns:20px minmax(0,1fr) auto;column-gap:16px;row-gap:4px;align-items:baseline;padding:18px 22px;border-top:1px solid var(--hair)}
+.file:first-child{border-top:0}
+.file svg{width:18px;height:18px;align-self:start;margin-top:2px;color:var(--lamp-1)}
+.name{font-family:var(--f-mono);font-size:14.5px;color:var(--cream-0)}
+.std{font-size:var(--fs-micro);font-weight:600;letter-spacing:var(--tr-micro);color:var(--lamp-0);text-align:right;white-space:nowrap}
+.desc{grid-column:2 / span 2;font-size:14.5px;line-height:1.5;color:var(--cream-2)}
+.code{font-family:var(--f-mono);font-size:12.5px}
+.foot{display:flex;justify-content:space-between;gap:16px;padding:12px 22px;border-top:1px solid var(--hair);font-size:var(--fs-micro);color:var(--cream-2)}
+
+@media (max-width:1100px){
+  .copy{grid-column:1 / -1;position:static}
+  .folder{grid-column:1 / -1;margin-top:40px}
+}
+@media (max-width:760px){
+  .file{padding:16px;column-gap:12px}
+  .std{grid-column:2;grid-row:2;text-align:left}
+  .desc{grid-column:2 / span 2;grid-row:3}
+  .file svg{grid-row:1 / span 3}
+  .foot{flex-direction:column;gap:4px;padding:12px 16px}
+}

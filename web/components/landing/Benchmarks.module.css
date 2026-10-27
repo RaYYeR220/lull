@@ -1,0 +1,23 @@
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gap);row-gap:var(--s-7);margin-top:var(--s-8)}
+.metrics{grid-column:1 / span 8;list-style:none;border-top:1px solid var(--hair-strong)}
+.metric{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.3fr) 200px;column-gap:var(--grid-gap);align-items:center;padding:22px 0;border-bottom:1px solid var(--hair)}
+.metric p{font-size:15px;line-height:1.5;color:var(--cream-1)}
+
+/* an empty cell, lit from below: waiting to be measured */
+.slot{position:relative;height:52px;display:flex;align-items:center;justify-content:center;border:1px dashed rgb(var(--lamp-rgb) / .35);font-size:var(--fs-micro);font-weight:500;color:var(--cream-2);background:radial-gradient(60% 90% at 50% 100%,rgb(var(--lamp-rgb) / .12),transparent 75%)}
+.filled{border-style:solid}
+.value{font-family:var(--f-mono);font-size:var(--fs-mono);color:var(--lamp-0)}
+
+.measured{grid-column:10 / span 3;align-self:start;display:flex;flex-direction:column;gap:var(--s-3);padding-top:var(--s-4);border-top:1px solid var(--lamp-2)}
+.measured p{font-size:15px;line-height:1.55;color:var(--cream-1)}
+.measured .after{margin-top:4px}
+
+@media (max-width:1100px){
+  .metrics{grid-column:1 / -1}
+  .measured{grid-column:1 / span 6}
+}
+@media (max-width:760px){
+  .metric{grid-template-columns:1fr;row-gap:10px}
+  .slot{justify-content:flex-start;padding-left:14px}
+  .measured{grid-column:1 / -1}
+}

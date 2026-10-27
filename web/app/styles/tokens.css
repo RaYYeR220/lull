@@ -57,7 +57,7 @@
   --fs-cue:16px; --fs-cue-list:16.5px; --fs-cue-drawer:20px; --lh-cue:1.28; --tr-cue:-.005em;
   --fs-pause:19px;      --tr-pause:-.01em;
   --fs-wordmark:34px;   --fs-wordmark-foot:64px; --tr-wordmark:-.03em;
-  --fs-lede:clamp(17px,1.32vw,19px); --lh-lede:1.6;
+  --fs-lede:clamp(17px,1.32vw,19px); --lh-lede:1.6; --fs-lede-hero:var(--fs-lede);
   --fs-body:17px;  --fs-body-l:18px;  --lh-body:1.65;
   --fs-body-s:15.5px; --lh-body-s:1.6;
   --fs-ui-nav:15px; --fs-ui-door:17px; --fs-ui-tab:14px; --tr-ui:.005em;
@@ -91,7 +91,8 @@
 @media (max-width:760px){
   :root{
     --fs-display-1:clamp(40px,11.4vw,54px); --lh-display-1:1.02; --tr-display-1:-.038em;
-    --fs-lede:16px;
+    /* section ledes stay at 17px on phones; only the hero lede drops to 16 (--fs-lede-hero) */
+    --fs-lede-hero:16px;
     --fs-body:16px; --fs-body-l:17px;
     --fs-step-index:22px;
     --fs-wordmark:30px;

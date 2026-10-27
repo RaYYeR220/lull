@@ -3,6 +3,9 @@ export const REPO_URL = "https://github.com/RaYYeR220/lull";
 /** The skip link and every page's <main> share this id. */
 export const MAIN_ID = "main";
 
+/** The recorded run the landing page is drawn from: public/showcase/<id>/showcase.json. */
+export const SHOWCASE_ID = "ed90";
+
 export const SITE = {
   name: "Lull",
   claim: "Audio description that waits for the silence.",

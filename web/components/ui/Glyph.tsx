@@ -38,7 +38,17 @@ const GLYPHS = {
       <path d="M2 1.4v3h3" fill="none" stroke="currentColor" strokeWidth="1.5" />
     </>
   ),
+  /* a speaker: something is spoken. Drawn on a 14 x 12 grid */
+  voice: (
+    <>
+      <path d="M1 4.2h2.6L7 1.2v9.6L3.6 7.8H1z" fill="currentColor" />
+      <path d="M9.4 3.6a3.4 3.4 0 0 1 0 4.8M11.4 1.8a6 6 0 0 1 0 8.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    </>
+  ),
 } as const;
+
+/** Glyphs wider than the 12-unit square. */
+const WIDTH: Partial<Record<keyof typeof GLYPHS, number>> = { voice: 14 };
 
 export type GlyphName = keyof typeof GLYPHS;
 
@@ -47,9 +57,11 @@ type GlyphProps = Omit<SVGProps<SVGSVGElement>, "children" | "viewBox"> & {
   size?: number;
 };
 
+/** `size` is the height; wide glyphs keep their proportions. */
 export function Glyph({ name, size = 12, ...rest }: GlyphProps) {
+  const w = WIDTH[name] ?? 12;
   return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden="true" focusable="false" {...rest}>
+    <svg width={(size * w) / 12} height={size} viewBox={`0 0 ${w} 12`} aria-hidden="true" focusable="false" {...rest}>
       {GLYPHS[name]}
     </svg>
   );

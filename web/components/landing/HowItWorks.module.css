@@ -1,0 +1,29 @@
+/* numbered because it is a real sequence; one rail joins the nodes */
+.steps{--node-y:58px;position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));column-gap:var(--grid-gap);list-style:none;margin-top:var(--s-8)}
+.steps::before{content:"";position:absolute;left:0;right:0;top:var(--node-y);height:1px;background:linear-gradient(90deg,var(--hair-strong),rgb(var(--cream-rgb) / .26) 70%,rgb(var(--lamp-rgb) / .7))}
+.step{position:relative;display:flex;flex-direction:column}
+.n{height:40px;font-variant-numeric:lining-nums}
+.node{position:relative;width:11px;height:11px;margin:13px 0 30px;background:var(--night-1);border:1px solid rgb(var(--cream-rgb) / .6)}
+.step:last-child .node{background:var(--lamp-1);border-color:var(--lamp-1);box-shadow:0 0 18px 2px rgb(var(--lamp-rgb) / .45)}
+.text{margin-top:var(--s-4);font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1);max-width:24em}
+.model{margin-top:auto;padding-top:var(--s-5)}
+.model span{display:block;padding-top:var(--s-3);border-top:1px solid var(--hair);font-family:var(--f-mono);font-size:12.5px;line-height:1.5;color:var(--cream-2)}
+.model b{font-weight:500;color:var(--lamp-0)}
+
+@media (max-width:1100px){
+  .steps{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:var(--s-8);overflow:hidden}
+  .steps::before{display:none}
+  .node::after{content:"";position:absolute;left:100%;top:5px;width:100vw;height:1px;background:var(--hair-strong)}
+  .step:nth-child(3) .node::after,.step:last-child .node::after{display:none}
+}
+@media (max-width:760px){
+  .steps{grid-template-columns:1fr;row-gap:0;margin-top:var(--s-6);overflow:visible;padding-left:34px}
+  .steps::before{display:block;left:5px;right:auto;top:20px;bottom:24px;width:1px;height:auto;background:linear-gradient(to bottom,var(--hair-strong),rgb(var(--lamp-rgb) / .7))}
+  .step{padding-bottom:var(--s-7)}
+  .step:last-child{padding-bottom:0}
+  .step .n{height:auto;line-height:1.2}
+  .node{position:absolute;left:-34px;top:9px;margin:0}
+  .node::after{display:none}
+  .step h3{margin-top:6px}
+  .model{padding-top:var(--s-4)}
+}
