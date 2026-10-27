@@ -11,7 +11,8 @@
 //     mid   the run up to two cues into finalize, then pings until the client leaves
 //     fail  stops in plan with a budget error event
 //     drop  cuts the connection after listen; GET .../events then replays the whole run
-//     402 409 413 422-format 422-too_long 422-unreadable 429 503   the API's JSON refusals
+//     402 409 413 422-format 422-too_long 422-unreadable 429 503
+//     408 429-one_upload                                         the API's JSON refusals
 //   GET /v1/runs/<id>/events: replays the whole run (the drop and reload cases)
 //
 // Run: node e2e/mock-api.mjs [port]   (MOCK_API_PORT also works; default 3218)
@@ -137,6 +138,8 @@ const REFUSALS = {
   "422-unreadable": [422, { error: "unreadable", message: "This file could not be read as a video. Send an mp4, mov, webm or mkv video." }],
   429: [429, { error: "rate_limited", message: "You have started 3 live descriptions in the last hour. Try again in 52 minutes, or open a recorded run." }, { "Retry-After": "3120" }],
   503: [503, { error: "uploads_busy", message: "Other videos are being uploaded right now. Try again in a few seconds." }, { "Retry-After": "15" }],
+  408: [408, { error: "timeout", message: "The upload did not arrive within 60 s. Try a smaller file or a faster connection." }],
+  "429-one_upload": [429, { error: "one_upload_at_a_time", message: "Your previous upload is still being received. Wait for it to finish." }, { "Retry-After": "2" }],
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

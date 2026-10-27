@@ -135,6 +135,8 @@ test.describe("try it", () => {
     { scenario: "422-unreadable", heading: "This file couldn’t be read as a video.", body: "could not be read as a video", retry: false },
     { scenario: "429", heading: "You’ve reached the live limit for now.", body: "Try again in 52 minutes", retry: true },
     { scenario: "503", heading: "Other uploads are being checked.", body: "Try again in a few seconds.", retry: true },
+    { scenario: "408", heading: "The upload took too long to arrive.", body: "Try a smaller file or a faster connection.", retry: false },
+    { scenario: "429-one_upload", heading: "Your last upload is still arriving.", body: "Wait for it to finish.", retry: true },
   ];
 
   for (const r of REFUSALS) {

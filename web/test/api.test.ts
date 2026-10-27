@@ -87,6 +87,12 @@ describe("refusals", () => {
       [json(422, { error: "unreadable", message: "This file could not be read as a video." }), "unreadable", null],
       [json(429, { error: "rate_limited", message: "Try again in 52 minutes." }, { "retry-after": "3120" }), "rate_limited", 3120],
       [json(503, { error: "uploads_busy", message: "Other videos are being uploaded." }, { "retry-after": "15" }), "uploads_busy", 15],
+      [json(408, { error: "timeout", message: "The upload did not arrive within 60 s. Try a smaller file or a faster connection." }), "timeout", null],
+      [
+        json(429, { error: "one_upload_at_a_time", message: "Your previous upload is still being received. Wait for it to finish." }, { "retry-after": "15" }),
+        "one_upload_at_a_time",
+        15,
+      ],
     ];
     for (const [res, code, wait] of cases) {
       const e = await toApiError(res);
@@ -104,6 +110,15 @@ describe("refusals", () => {
     expect(e.message).toBe("The live service is not available right now.");
     expect((await toApiError(json(404, { detail: "run not found" }))).code).toBe("not_found");
     expect((await toApiError(new Response("", { status: 500 }))).code).toBe("server");
+    const slow = await toApiError(new Response("", { status: 408 }));
+    expect([slow.code, slow.message]).toEqual(["timeout", "The upload did not arrive in time. Try a smaller file or a faster connection."]);
+  });
+
+  it("gives the two upload refusals their own words when the API sends none", async () => {
+    expect((await toApiError(json(408, { error: "timeout" }))).message).toBe("The upload did not arrive in time. Try a smaller file or a faster connection.");
+    expect((await toApiError(json(429, { error: "one_upload_at_a_time" }))).message).toBe(
+      "Your previous upload is still being received. Wait for it to finish, then try again.",
+    );
   });
 
   it("reads Retry-After as seconds or a date", () => {

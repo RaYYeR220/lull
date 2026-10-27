@@ -238,7 +238,8 @@ export function TryApp({ intro, recorded }: Props) {
 
   const idle = run.phase === "idle";
   const refusal = run.refusal;
-  const retryable = refusal && ["busy", "rate_limited", "uploads_busy", "unavailable", "unreachable", "server"].includes(refusal.code);
+  const retryable =
+    refusal && ["busy", "rate_limited", "uploads_busy", "one_upload_at_a_time", "unavailable", "unreachable", "server"].includes(refusal.code);
 
   return (
     <>

@@ -47,7 +47,7 @@ const VERB: Record<RunState["phase"], string> = {
 
 function failureKind(kind: string): NoticeKind {
   if (kind === "BudgetExceeded") return "budget";
-  if (kind === "RunTimeout") return "timeout";
+  if (kind === "RunTimeout") return "run_timeout";
   return "failed";
 }
 

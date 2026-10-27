@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import { assertApiBaseForBuild } from "./lib/api-base";
 
 /** Sent with every response. */
 const SECURITY_HEADERS = [
@@ -18,7 +20,7 @@ const PLAYER_HEADERS = [
   { key: "Cache-Control", value: "public, max-age=300, stale-while-revalidate=86400" },
 ];
 
-const nextConfig: NextConfig = {
+const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // web/ is its own pnpm project; keep file tracing from walking up to other lockfiles
@@ -31,4 +33,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/** A production build must know the API's address; the dev server falls back to a local one. */
+export default function nextConfig(phase: string): NextConfig {
+  if (phase === PHASE_PRODUCTION_BUILD) assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL });
+  return config;
+}

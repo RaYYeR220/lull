@@ -1,10 +1,11 @@
+import { resolveApiBase } from "./api-base";
 import { SseParser, type SseMessage } from "./sse";
 
 /**
- * The Lull API's address. Set NEXT_PUBLIC_API_URL at build time; without it the client talks
- * to a local API on uvicorn's default port.
+ * The Lull API's address: NEXT_PUBLIC_API_URL, inlined at build time (a production build
+ * without it fails; see next.config.ts). Development and tests fall back to a local API.
  */
-export const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/+$/, "");
+export const API_BASE = resolveApiBase({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL, NODE_ENV: process.env.NODE_ENV });
 
 /** What the live route takes (engine/src/lull/api/live.py). Checked here first so a refusal costs no upload. */
 export const LIMITS = {
@@ -251,6 +252,8 @@ export type RefusalCode =
   | "unreadable"
   | "rate_limited"
   | "uploads_busy"
+  | "one_upload_at_a_time"
+  | "timeout"
   | "invalid"
   | "sample"
   | "not_found"
@@ -267,6 +270,8 @@ const API_CODES: ReadonlySet<string> = new Set([
   "unreadable",
   "rate_limited",
   "uploads_busy",
+  "one_upload_at_a_time",
+  "timeout",
   "invalid",
   "sample",
   "not_found",
@@ -281,6 +286,8 @@ const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
   unreadable: "This file could not be read as a video.",
   rate_limited: "You have reached the limit of live descriptions for now.",
   uploads_busy: "Other videos are being uploaded right now. Try again in a few seconds.",
+  one_upload_at_a_time: "Your previous upload is still being received. Wait for it to finish, then try again.",
+  timeout: "The upload did not arrive in time. Try a smaller file or a faster connection.",
   invalid: "The request was not accepted.",
   sample: "There is no sample with that id.",
   not_found: "There is no run with that id.",
@@ -316,6 +323,8 @@ function codeForStatus(status: number): RefusalCode {
       return "budget";
     case 404:
       return "not_found";
+    case 408:
+      return "timeout";
     case 409:
       return "busy";
     case 413:

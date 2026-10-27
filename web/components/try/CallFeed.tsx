@@ -28,7 +28,7 @@ const CallRow = memo(function CallRow({ call, newest }: { call: CallEvent; newes
 /** Which model did what: the spend so far, per model, then every call, newest first. */
 export const CallFeed = memo(function CallFeed({ calls, cost }: { calls: CallEvent[]; cost: number }) {
   const models = useMemo(() => totalsByModel(calls), [calls]);
-  const newestFirst = useMemo(() => calls.toReversed(), [calls]);
+  const newestFirst = useMemo(() => [...calls].reverse(), [calls]);
   const tokenTotal = useMemo(() => calls.reduce((n, c) => n + c.tokens_in + c.tokens_out, 0), [calls]);
 
   return (

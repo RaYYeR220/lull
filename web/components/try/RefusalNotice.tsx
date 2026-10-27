@@ -12,7 +12,7 @@ import shared from "./shared.module.css";
 import styles from "./RefusalNotice.module.css";
 
 /** The API's refusals, plus the ways a run can end badly once it has started. */
-export type NoticeKind = RefusalCode | "timeout" | "failed" | "lost";
+export type NoticeKind = RefusalCode | "run_timeout" | "failed" | "lost";
 
 const BUDGET: Record<string, string> = {
   total: "The live demo’s model budget is spent.",
@@ -30,13 +30,15 @@ const HEADINGS: Record<NoticeKind, string> = {
   unreadable: "This file couldn’t be read as a video.",
   rate_limited: "You’ve reached the live limit for now.",
   uploads_busy: "Other uploads are being checked.",
+  one_upload_at_a_time: "Your last upload is still arriving.",
+  timeout: "The upload took too long to arrive.",
   invalid: "The live service didn’t accept the request.",
   sample: "That sample isn’t available.",
   not_found: "There’s no run with that id.",
   unreachable: "The live service isn’t answering.",
   unavailable: "The live service is unavailable right now.",
   server: "The live service couldn’t finish the request.",
-  timeout: "The run took too long and was stopped.",
+  run_timeout: "The run took too long and was stopped.",
   failed: "The run stopped.",
   lost: "The connection to this run was lost.",
 };

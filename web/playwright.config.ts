@@ -34,7 +34,7 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, launchOptions: { executablePath } },
     },
   ],
-  // Tests run against the production server (`pnpm build` first) and a scripted stand-in for
+  // Tests run against the production server (`pnpm build:e2e` first) and a scripted stand-in for
   // the API (e2e/mock-api.mjs), which the try-it tests route the page's API address to.
   webServer: [
     ...(process.env.E2E_BASE_URL
