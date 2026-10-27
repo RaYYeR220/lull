@@ -27,6 +27,8 @@ class Probe:
     height: int
     fps: float
     has_audio: bool
+    video_codec: str = ""
+    audio_codec: str | None = None
 
 
 def _bin(name: str) -> str:
@@ -36,9 +38,9 @@ def _bin(name: str) -> str:
     return path
 
 
-def _run(cmd: list[str]) -> subprocess.CompletedProcess[bytes]:
+def _run(cmd: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
     try:
-        return subprocess.run(cmd, check=True, capture_output=True)
+        return subprocess.run(cmd, check=True, capture_output=True, cwd=cwd)
     except subprocess.CalledProcessError as e:
         tail = e.stderr.decode("utf-8", "replace").strip()[-800:]
         raise MediaError(f"{Path(cmd[0]).stem} failed (exit {e.returncode}): {tail}") from e
@@ -64,6 +66,7 @@ def probe(path: Path) -> Probe:
     info = json.loads(out.stdout)
     streams = info.get("streams", [])
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
+    audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
     if video is None:
         raise MediaError(f"no video stream in {path}")
     duration = info.get("format", {}).get("duration") or video.get("duration")
@@ -74,7 +77,9 @@ def probe(path: Path) -> Probe:
         width=int(video["width"]),
         height=int(video["height"]),
         fps=_fps(video.get("r_frame_rate", "0/1")),
-        has_audio=any(s.get("codec_type") == "audio" for s in streams),
+        has_audio=audio is not None,
+        video_codec=video.get("codec_name", ""),
+        audio_codec=None if audio is None else audio.get("codec_name", ""),
     )
 
 
@@ -126,6 +131,26 @@ def frame_at(src: Path, t: float, dst: Path) -> Path:
     if not dst.exists():
         raise MediaError(f"no frame at t={t} in {src}")
     return dst
+
+
+def frames_at(src: Path, shots: list[tuple[float, Path]], *, batch: int = 16) -> list[Path]:
+    """One JPEG per (t, dst), `batch` frames per ffmpeg run (each input seeks to its own t):
+    launching ffmpeg costs far more than decoding one frame."""
+    out: list[Path] = []
+    for i in range(0, len(shots), batch):
+        chunk = [(t, Path(d)) for t, d in shots[i : i + batch]]
+        args: list[str] = []
+        for t, _ in chunk:
+            args += ["-ss", f"{t:.3f}", "-i", str(src)]
+        for j, (_, dst) in enumerate(chunk):
+            dst.unlink(missing_ok=True)
+            args += ["-map", f"{j}:v:0", "-frames:v", "1", "-q:v", "2", str(dst)]
+        _ffmpeg(*args)
+        missing = [f"{t:.3f}" for t, dst in chunk if not dst.exists()]
+        if missing:
+            raise MediaError(f"no frame at t={', '.join(missing)} in {src}")
+        out += [dst for _, dst in chunk]
+    return out
 
 
 _PTS = re.compile(r"pts_time:(\d+(?:\.\d+)?)")

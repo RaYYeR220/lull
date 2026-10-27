@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="{{ opts.language }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio description report: {{ video }}</title>
+<style>
+  :root { --ink: #1d1d1f; --muted: #5c5c66; --rule: #d8d8de; --met: #1b6e3a; --review: #8a4b00;
+          --none: #4d4d57; --panel: #f6f6f8; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 60rem; padding: 2rem 1rem 4rem; color: var(--ink);
+         background: #fff; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; padding-bottom: .25rem;
+       border-bottom: 1px solid var(--rule); }
+  p, li { max-width: 48rem; }
+  .sub { color: var(--muted); margin: 0 0 1.5rem; }
+  dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; margin: 0; }
+  dl.meta dt { color: var(--muted); }
+  dl.meta dd { margin: 0; overflow-wrap: anywhere; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .4rem .5rem;
+           border-bottom: 1px solid var(--rule); }
+  th { font-weight: 600; background: var(--panel); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .status { display: inline-block; padding: .05rem .5rem; border-radius: 1rem; font-weight: 600;
+            border: 1.5px solid currentColor; white-space: nowrap; }
+  .status.met { color: var(--met); }
+  .status.needs-review { color: var(--review); }
+  .status.not-claimed { color: var(--none); }
+  .reasons { margin: .25rem 0 0; padding-left: 1.1rem; color: var(--review); }
+  .note { color: var(--muted); font-size: .9rem; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem;
+           margin: .5rem 0; }
+  .stat { background: var(--panel); border-radius: .5rem; padding: .6rem .8rem; }
+  .stat b { display: block; font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+  .stat span { color: var(--muted); font-size: .85rem; }
+  .disclosure { background: var(--panel); border-left: 4px solid var(--ink); padding: .75rem 1rem; }
+  ul.plain { padding-left: 1.1rem; }
+  code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9em; }
+  @media print {
+    body { max-width: none; padding: 0; font-size: 11pt; }
+    h2 { break-after: avoid; }
+    tr, .stat, li { break-inside: avoid; }
+    .stat, th, .disclosure { background: none; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Audio description report</h1>
+  <p class="sub">{{ video }} · {{ duration }}</p>
+  <dl class="meta">
+    <dt>Video</dt><dd>{{ video }}</dd>
+    <dt>Duration</dt><dd>{{ duration }}</dd>
+    <dt>Run</dt><dd><code>{{ run_id }}</code>, {{ created }}</dd>
+    <dt>Language</dt><dd>{{ opts.language }}</dd>
+    <dt>Voice</dt><dd>{{ opts.voice }}</dd>
+    <dt>Mode</dt><dd>{{ opts.mode }} · {{ opts.profile }}</dd>
+    {% if opts.source_url %}<dt>Source</dt><dd>{{ opts.source_url }}</dd>{% endif %}
+  </dl>
+</header>
+
+<section>
+  <h2>WCAG 2.2 status</h2>
+  <table>
+    <thead><tr><th>Success criterion</th><th>Status</th><th>Met by / why not</th></tr></thead>
+    <tbody>
+    {% for row in wcag %}
+      <tr>
+        <td><b>{{ row.criterion }}</b> {{ row.name }} (Level {{ row.level }})</td>
+        <td><span class="status {{ row.status | replace(' ', '-') }}">{{ row.status }}</span></td>
+        <td>
+          {% if row.via %}{{ row.via }}{% endif %}
+          {% if row.reasons %}
+          <ul class="reasons">{% for r in row.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">descriptions.vtt is also usable as a <code>&lt;track kind="descriptions"&gt;</code>
+  (H96, advisory only): browsers do not voice description tracks themselves, so the described
+  audio and video files carry the conformance claim.{% if not summary.extended_produced %}
+  The extended version was not produced in this run.{% endif %}</p>
+</section>
+
+<section>
+  <h2>Summary</h2>
+  <div class="stats">
+    <div class="stat"><b>{{ standard_count }}</b><span>descriptions voiced</span></div>
+    <div class="stat"><b>{{ extended_count }}</b><span>extended descriptions voiced</span></div>
+    <div class="stat"><b>{{ summary.cues.held }}</b><span>held for review</span></div>
+    <div class="stat"><b>{% if summary.coverage.ratio is none %}n/a{% else %}{{ "%.0f" | format(summary.coverage.ratio * 100) }}%{% endif %}</b>
+      <span>coverage: {{ summary.coverage.described }} of {{ summary.coverage.salient_events }} salient events described</span></div>
+    <div class="stat"><b>{{ "%.3f" | format(summary.overlap_seconds) }} s</b><span>overlap with dialogue, guards or other descriptions</span></div>
+    <div class="stat"><b>{{ summary.f113 | length }}</b><span>unused pauses (F113)</span></div>
+    <div class="stat"><b>${{ "%.4f" | format(summary.cost_usd) }}</b><span>model cost{% if summary.cost_per_min is not none %}, ${{ "%.4f" | format(summary.cost_per_min) }} per minute{% endif %}</span></div>
+  </div>
+  {% if summary.extended_produced %}
+  <p class="note">With the extended version: {{ summary.coverage.described_with_extended }} of
+  {{ summary.coverage.salient_events }} salient events described.</p>
+  {% else %}
+  <p class="note">extended version not produced.</p>
+  {% endif %}
+  {% if summary.coverage.undescribed %}
+  <p class="note">Salient events not described: {{ summary.coverage.undescribed | join(", ") }}.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Held descriptions</h2>
+  {% if held %}
+  <table>
+    <thead><tr><th>Cue</th><th>At</th><th>Text</th><th>Why it was held</th></tr></thead>
+    <tbody>
+    {% for h in held %}
+      <tr><td><code>{{ h.id }}</code></td><td class="num">{{ h.at }}</td><td>{{ h.text }}</td><td>{{ h.reason }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No description is held.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Unused pauses (F113)</h2>
+  {% if flags %}
+  <p>Pauses of 2 s or more with no description while important on-screen content goes undescribed:</p>
+  <ul class="plain">
+  {% for f in flags %}
+    <li><code>{{ f.gap_id }}</code> {{ f.from }} to {{ f.to }} ({{ "%.1f" | format(f.seconds) }} s):
+      {% for e in f.events %}{{ e.kind | replace('_', ' ') }} <code>{{ e.id }}</code> “{{ e.text }}”{% if not loop.last %}; {% endif %}{% endfor %}</li>
+  {% endfor %}
+  </ul>
+  {% else %}
+  <p>No unused pause.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>For the reviewer</h2>
+  {% if warnings %}
+  <ul class="plain">
+  {% for w in warnings %}
+    <li><code>{{ w.cue_id }}</code> <b>{{ w.rule }}</b>: {{ w.message }}<br><span class="note">{{ w.text }}</span></li>
+  {% endfor %}
+  </ul>
+  {% else %}
+  <p>No style warning.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Research glossary</h2>
+  {% if research is none or research.skipped %}
+  <p>research skipped: names and terms were not looked up.</p>
+  {% endif %}
+  {% if research is not none and research.glossary %}
+  <table>
+    <thead><tr><th>Term</th><th>Spelled</th><th>Note</th><th>Sources</th></tr></thead>
+    <tbody>
+    {% for g in research.glossary %}
+      <tr><td>{{ g.term }}</td><td>{{ g.canonical }}</td><td>{{ g.note }}</td>
+        <td>{% for s in g.sources %}<a href="{{ s }}">{{ s }}</a>{% if not loop.last %}<br>{% endif %}{% else %}none{% endfor %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% elif research is not none and not research.skipped %}
+  <p>No term needed a lookup.</p>
+  {% endif %}
+  {% if research is not none and research.errors %}
+  <ul class="reasons">{% for e in research.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Model calls</h2>
+  {% if calls %}
+  <table>
+    <thead><tr><th>Role</th><th>Model</th><th class="num">Calls</th><th class="num">Tokens in</th>
+      <th class="num">Cached</th><th class="num">Tokens out</th><th class="num">Cost (USD)</th><th class="num">Latency (s)</th></tr></thead>
+    <tbody>
+    {% for c in calls %}
+      <tr><td>{{ c.role }}</td><td><code>{{ c.model }}</code></td><td class="num">{{ c.calls }}</td>
+        <td class="num">{{ c.tokens_in }}</td><td class="num">{{ c.tokens_cached }}</td><td class="num">{{ c.tokens_out }}</td>
+        <td class="num">{{ "%.4f" | format(c.cost_usd) }}</td><td class="num">{{ "%.1f" | format(c.latency_s) }}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><th colspan="6">Total{% if summary.cost_per_min is not none %} (${{ "%.4f" | format(summary.cost_per_min) }} per minute of video){% endif %}</th>
+      <th class="num">{{ "%.4f" | format(summary.cost_usd) }}</th><th></th></tr></tfoot>
+  </table>
+  {% else %}
+  <p>No model call was recorded for this run.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Synthetic speech</h2>
+  <p class="disclosure">{{ summary.tts_disclosure }}</p>
+</section>
+
+<section>
+  <h2>Files</h2>
+  <ul class="plain">{% for name in outputs %}<li><code>{{ name }}</code></li>{% endfor %}
+    {% if keyframes %}<li><code>keyframes/</code>: {{ keyframes }} frames for the Studio</li>{% endif %}</ul>
+  <p class="note">manifest.json lists the SHA-256 of every file.</p>
+</section>
+</body>
+</html>
