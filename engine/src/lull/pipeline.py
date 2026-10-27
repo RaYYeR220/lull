@@ -7,11 +7,11 @@
 One voice rate (words per second, calibrated per voice; see lull.voices) times everything: the
 gap capacities, the windows split_gaps cuts and the scheduler's sentence deadlines. Each
 stage's result is cached in the run directory (lull.store) under a key over its inputs, the
-video's sha256 and the engine fingerprint (package version + every prompt file), finalize cue
-by cue; a run stopped by a spend cap or a crash resumes where it stopped, a finished run repeats
-without a model call, and the run directory can move. Before anything runs the ledger must allow
-an estimate of $0.05 a minute + $0.02; a cap or a provider 402 mid-run raises BudgetExceeded
-with every finished stage kept.
+video's sha256 and the engine fingerprint (package version + a digest of every source and
+prompt file), finalize cue by cue; a run stopped by a spend cap or a crash resumes where it
+stopped, a finished run repeats without a model call, and the run directory can move. Before
+anything runs the ledger must allow an estimate of $0.05 a minute + $0.02; a cap or a
+provider 402 mid-run raises BudgetExceeded with every finished stage kept.
 
 Progress goes to `on_event` as Event(type, stage, data, ts): stage_start / stage_end (seconds,
 cached, counts), a `call` per ledger record, a `cue` per finalised cue, `warning`s (held cues,
@@ -97,21 +97,36 @@ def run_id_for(video: Path, sha256: str) -> str:
     return f"{Path(video).stem}-{sha256[:8]}"
 
 
-def prompts_digest(root: Path | Traversable | None = None) -> str:
-    """sha256 over the name and contents of every prompt file (.md) in `root` (default: the
-    packaged prompts), in name order."""
-    root = root if root is not None else files("lull") / "prompts"
+_COMPILED = (".pyc", ".pyo")
+
+
+def _source_files(root: Path | Traversable, prefix: str = "") -> Iterator[tuple[str, bytes]]:
+    for item in root.iterdir():
+        rel = f"{prefix}{item.name}"
+        if item.is_dir():
+            if item.name != "__pycache__":
+                yield from _source_files(item, rel + "/")
+        elif not item.name.endswith(_COMPILED):
+            yield rel, item.read_bytes()
+
+
+def source_digest(root: Path | Traversable | None = None) -> str:
+    """sha256 over the relative path and contents of every file of the package at `root`
+    (default: the installed lull package): code, prompts and templates, in path order;
+    compiled caches are left out."""
+    root = root if root is not None else files("lull")
     h = hashlib.sha256()
-    for item in sorted((i for i in root.iterdir() if i.name.endswith(".md")), key=lambda i: i.name):
-        h.update(item.name.encode("utf-8") + b"\0" + item.read_bytes() + b"\0")
+    for rel, data in sorted(_source_files(root)):
+        h.update(rel.encode("utf-8") + b"\0" + data + b"\0")
     return h.hexdigest()
 
 
 @functools.cache
 def engine_fingerprint() -> str:
-    """What every stage key includes besides its inputs: the package version and the prompts,
-    so a new engine or an edited prompt never reuses an old stage result."""
-    return f"{lull.__version__}+{prompts_digest()[:16]}"
+    """What every stage key includes besides its inputs: the package version and a digest of
+    every source and prompt file (ruling, Task 16), so any change to the engine reruns every
+    stage instead of reusing a result the old code made."""
+    return f"{lull.__version__}+{source_digest()[:16]}"
 
 
 # -- who has been introduced -------------------------------------------------------------------

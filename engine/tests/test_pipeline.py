@@ -10,6 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+import lull
 from lull import pipeline
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, CallRecord, Ledger
@@ -19,9 +20,9 @@ from lull.pipeline import (
     budget_estimate,
     cue_context,
     introduced_before,
-    prompts_digest,
     run,
     run_id_for,
+    source_digest,
 )
 from lull.stages.finalize import OverlapError
 from lull.store import file_sha256
@@ -684,14 +685,38 @@ def test_a_new_engine_or_prompt_reruns_every_stage(tone_slides, tmp_path, fast_m
     assert "transcribe" in speech.calls and "plan" in tf.roles()
 
 
-def test_prompts_digest_follows_every_prompt_file(tmp_path):
-    (tmp_path / "plan.md").write_text("Describe.", encoding="utf-8")
-    (tmp_path / "verify.md").write_text("Check.", encoding="utf-8")
-    first = prompts_digest(tmp_path)
-    assert first == prompts_digest(tmp_path) and len(first) == 64
-    (tmp_path / "verify.md").write_text("Check twice.", encoding="utf-8")
-    assert prompts_digest(tmp_path) != first
-    assert len(prompts_digest()) == 64  # the packaged prompts
+def test_source_digest_follows_every_source_and_prompt_file(tmp_path):
+    """Ruling (Task 16): any change to the engine's code, prompts or templates is a new
+    fingerprint; compiled caches are not part of it."""
+    pkg = tmp_path / "lull"
+    files = {
+        "__init__.py": "x = 1",
+        "stages/plan.py": "def plan(): ...",
+        "prompts/plan.md": "Describe.",
+        "templates/report.html": "<p>",
+    }
+    for rel, text in files.items():
+        (pkg / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / rel).write_text(text, encoding="utf-8")
+    first = source_digest(pkg)
+    assert first == source_digest(pkg) and len(first) == 64
+    (pkg / "__pycache__").mkdir()
+    (pkg / "__pycache__" / "plan.cpython-313.pyc").write_bytes(b"compiled")
+    assert source_digest(pkg) == first
+    seen = {first}
+    for change in (
+        lambda: (pkg / "stages" / "plan.py").write_text("def plan(): return 1", encoding="utf-8"),
+        lambda: (pkg / "prompts" / "plan.md").write_text("Describe it.", encoding="utf-8"),
+        lambda: (pkg / "templates" / "report.html").write_text("<p>x", encoding="utf-8"),
+        lambda: (pkg / "stages" / "new.py").write_text("", encoding="utf-8"),
+        lambda: (pkg / "stages" / "new.py").rename(pkg / "stages" / "other.py"),
+    ):
+        change()
+        digest = source_digest(pkg)
+        assert digest not in seen
+        seen.add(digest)
+    assert len(source_digest()) == 64  # the installed package
+    assert pipeline.engine_fingerprint() == f"{lull.__version__}+{source_digest()[:16]}"
 
 
 class _BrokenTavily:
