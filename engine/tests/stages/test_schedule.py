@@ -179,7 +179,8 @@ def test_a_visual_ending_within_a_word_of_the_gap_start_is_not_placed():
     variants = [_var("e001", "short", 2)]
     gaps = [_gap("g001", 10.0, 20.0, 30)]
     for run in (schedule, schedule_greedy):
-        assert run(events, variants, {"e001": 5}, gaps) == ([], [])
+        # priority 5 and unplaced: offered for the extended track instead
+        assert run(events, variants, {"e001": 5}, gaps) == ([], ["e001"])
     placements, _ = schedule(events, variants, {"e001": 5}, gaps, wps=6.0)
     assert placements == [_pl("e001", "short", "g001")]
 
@@ -239,6 +240,19 @@ def test_continuous_speech_leaves_only_extended_candidates():
         assert run(events, variants, priority, []) == ([], ["e002", "e001"])
 
 
+def test_extended_candidates_follow_the_plan_priority_not_the_first_guess():
+    """Live csc_intro: the inventory rated 42 one-second shots salience 4; the plan, seeing the
+    whole video, rated most of them priority 1, yet each one stopped the video. Only what the
+    plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and stays
+    undescribed, which the pipeline reports)."""
+    events = [_ev("e001", 1.0, 2.0, sal=4), _ev("e002", 2.0, 3.0, sal=3),
+              _ev("e003", 3.0, 4.0, sal=5), _ev("e004", 4.0, 5.0, sal=4)]  # fmt: skip
+    variants = [_var(e, "short", 4) for e in ("e001", "e002", "e003")]
+    priority = {"e001": 1, "e002": 5, "e003": 4}  # e004: no item
+    for run in (schedule, schedule_greedy):
+        assert run(events, variants, priority, []) == ([], ["e002", "e003", "e004"])
+
+
 # -- solver vs greedy, randomised -------------------------------------------------------
 
 
@@ -252,8 +266,9 @@ def test_random_instances_keep_invariants_and_solver_beats_greedy(k):
     assert _objective(solved, priority) >= _objective(greedy, priority)
     for placements, ext in ((solved, solved_ext), (greedy, greedy_ext)):
         placed = {p.event_id for p in placements}
-        salient = sorted((e for e in events if e.salience >= 4), key=lambda e: (e.t_start, e.id))
-        assert ext == [e.id for e in salient if e.id not in placed]
+        ordered = sorted(events, key=lambda e: (e.t_start, e.id))
+        rated = [e for e in ordered if priority.get(e.id, e.salience) >= 4]
+        assert ext == [e.id for e in rated if e.id not in placed]
 
 
 def test_tie_break_never_costs_objective(monkeypatch):

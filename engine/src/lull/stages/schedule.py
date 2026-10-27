@@ -48,7 +48,7 @@ AHEAD_PENALTY = 1  # objective cost of a look-ahead placement
 AHEAD_PREFIX = "In a moment, "
 AHEAD_WORDS = 3  # words in AHEAD_PREFIX
 LEAD = 6.0  # seconds a look-ahead may come before its visual starts
-SALIENT = 4  # unplaced events at or above this salience become extended candidates
+SALIENT = 4  # unplaced events at or above this priority become extended candidates
 WPS = 2.36  # voice rate used to time each sentence inside its gap
 TIME_LIMIT_S = 5.0
 NUM_WORKERS = 1  # parallel workers race to different co-optimal answers: not reproducible
@@ -258,13 +258,27 @@ def _words(x: list, options: list[_Option], ix: list[int]):
 
 
 def _extended(events: Iterable[VisualEvent], placed: set[str]) -> list[str]:
+    """Unplaced events of salience >= 4 (the inventory's first guess), by start."""
     ordered = sorted(events, key=lambda e: (e.t_start, e.id))
     return [e.id for e in ordered if e.salience >= SALIENT and e.id not in placed]
 
 
+def extended_candidates(
+    events: Iterable[VisualEvent], priority: dict[str, int], placed: set[str]
+) -> list[str]:
+    """Unplaced events the plan rates priority >= 4, by start: the ones worth stopping the
+    video for. An event the plan gave no priority counts with its salience (it has no variant
+    then, and the caller reports it undescribed)."""
+    ordered = sorted(events, key=lambda e: (e.t_start, e.id))
+    return [
+        e.id for e in ordered if e.id not in placed and priority.get(e.id, e.salience) >= SALIENT
+    ]
+
+
 def _result(
-    options: list[_Option], chosen: list[int], events: Sequence[VisualEvent]
-) -> tuple[list[Placement], list[str]]:
+    options: list[_Option], chosen: list[int], events: Sequence[VisualEvent],
+    priority: dict[str, int],
+) -> tuple[list[Placement], list[str]]:  # fmt: skip
     picked = sorted(
         (options[i] for i in chosen),
         key=lambda o: (o.gap.usable_start, o.gap.id, o.event.t_start, o.event.id),
@@ -273,7 +287,7 @@ def _result(
         Placement(event_id=o.event.id, variant=o.length, gap_id=o.gap.id, ahead=o.ahead)
         for o in picked
     ]
-    return placements, _extended(events, {p.event_id for p in placements})
+    return placements, extended_candidates(events, priority, {p.event_id for p in placements})
 
 
 def schedule(
@@ -287,8 +301,8 @@ def schedule(
     time_limit_s: float = TIME_LIMIT_S,
     wps: float = WPS,
 ) -> tuple[list[Placement], list[str]]:
-    """Placements (in gap order) and the ids of salience >= 4 events left unplaced (by start),
-    which are the extended-mode candidates.
+    """Placements (in gap order) and the ids of the events left unplaced that the plan rates
+    priority >= 4 (by start; see extended_candidates), which are the extended-mode candidates.
 
     An event may sit in gap g when g.usable_start < t_end and g.usable_end > t_start - lead; it
     is a look-ahead when g.usable_end <= t_start and then costs `ahead_words` more words. Inside
@@ -300,7 +314,7 @@ def schedule(
     options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
     greedy = _greedy(options)
     chosen = _solve(options, greedy, time_limit_s) if options else []
-    return _result(options, greedy if chosen is None else chosen, events)
+    return _result(options, greedy if chosen is None else chosen, events, priority)
 
 
 def schedule_greedy(
@@ -315,7 +329,7 @@ def schedule_greedy(
 ) -> tuple[list[Placement], list[str]]:
     """The fallback `schedule` uses without a solver answer: same rules, greedy choice."""
     options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
-    return _result(options, _greedy(options), events)
+    return _result(options, _greedy(options), events, priority)
 
 
 # -- cue text ----------------------------------------------------------------------------
