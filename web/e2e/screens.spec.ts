@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { routeFixtures, waitReady } from "./player-fixtures";
+import { routeApi } from "./try-api";
 
 /**
  * Captures the pages at the two reference sizes into e2e/__screens__/ for a side-by-side
@@ -143,6 +144,52 @@ test.describe("player screens @screens", () => {
       await expect(p.getByText("This video isn’t available")).toBeVisible();
       await p.scrollIntoViewIfNeeded();
       await p.screenshot({ path: path.join(OUT, `player-missing-${size.name}.png`) });
+    });
+  }
+});
+
+/**
+ * The try-it page against the scripted API: the picker, a run held mid-finalize (two cues in,
+ * the sweep at the second), a finished run and a refusal, at both sizes. Viewport captures
+ * plus full pages: e2e/__screens__/try-<state>-<size>(-full).png.
+ */
+test.describe("try screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 90_000 });
+
+  for (const size of SIZES) {
+    test(`try at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await routeApi(page, "mid");
+      await page.goto("/try", { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+      await expect(page.getByRole("button", { name: "Describe Elephants Dream" })).toBeEnabled();
+      await page.waitForTimeout(900);
+      await page.screenshot({ path: path.join(OUT, `try-pick-${size.name}.png`) });
+      await fullPage(page, `try-pick-${size.name}-full.png`);
+
+      await page.getByRole("button", { name: "Describe Elephants Dream" }).click();
+      await expect(page.locator("li[data-cue]")).toHaveCount(2);
+      await page.waitForTimeout(1200);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: path.join(OUT, `try-mid-${size.name}.png`) });
+      await fullPage(page, `try-mid-${size.name}-full.png`);
+
+      await routeApi(page, "run");
+      await page.goto("/try", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Describe Elephants Dream" }).click();
+      await expect(page.getByRole("heading", { name: /^Ready to watch/ })).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(900);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: path.join(OUT, `try-done-${size.name}.png`) });
+      await fullPage(page, `try-done-${size.name}-full.png`);
+
+      await routeApi(page, "429");
+      await page.goto("/try", { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Describe Elephants Dream" }).click();
+      await expect(page.getByRole("heading", { name: "You’ve reached the live limit for now." })).toBeVisible();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `try-refused-${size.name}.png`) });
     });
   }
 });

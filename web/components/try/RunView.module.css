@@ -1,0 +1,43 @@
+.bar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 40px;padding:20px 20px 18px;border-bottom:1px solid var(--hair)}
+.what{flex:1 1 420px;min-width:0}
+.title{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:var(--fs-title);line-height:var(--lh-title);letter-spacing:var(--tr-title);color:var(--cream-0);overflow-wrap:anywhere}
+.title:focus{outline:none}
+.meta{margin-top:10px}
+.id{font-size:12px;color:var(--cream-1);overflow-wrap:anywhere}
+
+.figures{display:flex;gap:32px}
+.figures div{display:flex;flex-direction:column-reverse;gap:6px;min-width:64px}
+.figures dt{font-size:12px;font-weight:500;line-height:1.2;color:var(--cream-2)}
+.figures dd{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:26px;line-height:1;letter-spacing:-.02em;color:var(--cream-0);white-space:nowrap}
+
+/* the upload is on its way: one slow lamp line, no fake percentage */
+.sending{display:flex;flex-direction:column;gap:12px;padding:16px 20px 18px;border-bottom:1px solid var(--hair);font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-1)}
+.line{position:relative;display:block;height:2px;background:var(--night-4);overflow:hidden}
+.line::after{content:"";position:absolute;top:0;bottom:0;left:0;width:30%;background:var(--lamp-1);animation:slide 1.8s var(--ease-breathe) infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+
+.run .notice{border-top:0;border-right:0;border-bottom:1px solid var(--hair);background:linear-gradient(90deg,rgb(var(--lamp-rgb) / .07),transparent 55%)}
+
+.body{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,400px)}
+.main{min-width:0;border-right:1px solid var(--hair)}
+.side{min-width:0}
+
+.notes{padding:0 20px 22px}
+.notes ul{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--hair);list-style:none}
+.notes li{font-size:13px;line-height:1.45;color:var(--cream-2)}
+
+@media (max-width:1100px){
+  .body{grid-template-columns:minmax(0,1fr)}
+  .main{border-right:0;border-bottom:1px solid var(--hair)}
+}
+@media (max-width:760px){
+  .bar{padding:16px 14px;gap:14px}
+  .what{flex-basis:100%}
+  .figures{gap:24px}
+  .figures dd{font-size:22px}
+  .sending{padding:14px}
+  .notes{padding:0 14px 18px}
+}
+@media (prefers-reduced-motion:reduce){
+  .line::after{animation:none;width:100%;opacity:.5}
+}

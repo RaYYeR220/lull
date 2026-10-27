@@ -1,0 +1,271 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  API_BASE,
+  ApiError,
+  budgetEstimate,
+  capReached,
+  followRun,
+  health,
+  parseEvent,
+  parseRetryAfter,
+  startRun,
+  toApiError,
+  type RunEvent,
+} from "../lib/api";
+
+const enc = new TextEncoder();
+
+/** A text/event-stream response whose body arrives in the given byte pieces (and may then break). */
+function sse(pieces: (string | Uint8Array)[], opts: { breakAfter?: boolean } = {}): Response {
+  const queue = pieces.map((p) => (typeof p === "string" ? enc.encode(p) : p));
+  // one piece per read, as a network would deliver them; erroring in start() would drop the queue
+  const body = new ReadableStream<Uint8Array>({
+    pull(c) {
+      const next = queue.shift();
+      if (next) c.enqueue(next);
+      else if (opts.breakAfter) c.error(new TypeError("network connection was lost"));
+      else c.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+}
+
+const frame = (ev: Record<string, unknown>) => `id: ${ev.seq}\nevent: ${ev.type}\ndata: ${JSON.stringify(ev)}\n\n`;
+
+const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("parseEvent", () => {
+  it("types each event the API sends", () => {
+    const run = parseEvent(JSON.stringify({ type: "run", run_id: "live-1", duration: 90, options: { mode: "standard", voice: "Sofia" }, edit_token: "t", seq: 0, ts: 1, stage: null }));
+    expect(run).toMatchObject({ type: "run", run_id: "live-1", duration: 90, edit_token: "t", resumed: false, seq: 0 });
+
+    const end = parseEvent(JSON.stringify({ type: "stage_end", stage: "listen", seconds: 3.2, cached: true, words: 212, windows: 6, seq: 3 }));
+    expect(end).toMatchObject({ type: "stage_end", stage: "listen", seconds: 3.2, cached: true, info: { words: 212, windows: 6 } });
+
+    const call = parseEvent(JSON.stringify({ type: "call", stage: "watch", role: "watch", model: "nvidia/Nemotron-3.5-Super-VL", tokens_in: 1200, tokens_out: 80, cost_usd: 0.0004, latency_s: 2.1 }));
+    expect(call).toMatchObject({ type: "call", stage: "watch", role: "watch", tokens_cached: 0, cost_usd: 0.0004 });
+
+    const cue = parseEvent(JSON.stringify({ type: "cue", id: "c002", status: "held", text: "A door.", start: 12.5, audio_dur: null, note: "the door is not visible", stage: "finalize" }));
+    expect(cue).toMatchObject({ type: "cue", id: "c002", status: "held", audio_dur: null, note: "the door is not visible", cached: false });
+
+    const err = parseEvent(JSON.stringify({ type: "error", kind: "BudgetExceeded", message: "The live demo has used its model budget for today.", scope: "day", stage: "plan" }));
+    expect(err).toMatchObject({ type: "error", kind: "BudgetExceeded", scope: "day", stage: "plan" });
+
+    const done = parseEvent(
+      JSON.stringify({
+        type: "done",
+        run_id: "live-1",
+        summary: { cues: { verified: 3, held: 1 }, coverage: { ratio: 0.8, described: 4, salient_events: 5 }, overlap_seconds: 0, cost_usd: 0.02, wcag: [{ criterion: "1.2.5", level: "AA", name: "AD", status: "needs review", via: "", reasons: ["1 description held for review"] }] },
+      }),
+    );
+    expect(done).toMatchObject({ type: "done", run_id: "live-1", summary: { cues: { verified: 3, held: 1 }, coverage: { ratio: 0.8, described: 4, salient: 5 }, overlapSeconds: 0, costUsd: 0.02 } });
+  });
+
+  it("falls back to the SSE event name and refuses what it can't read", () => {
+    expect(parseEvent(JSON.stringify({ stage: "plan" }), "stage_start")).toMatchObject({ type: "stage_start", stage: "plan" });
+    expect(parseEvent("not json")).toBeNull();
+    expect(parseEvent(JSON.stringify({ type: "progress" }))).toBeNull(); // unknown: a newer API
+    expect(parseEvent(JSON.stringify({ type: "cue", id: "c1", status: "maybe", start: 1 }))).toBeNull();
+    expect(parseEvent(JSON.stringify({ type: "run" }))).toBeNull();
+  });
+});
+
+describe("refusals", () => {
+  it("maps each refusal to its code, message, wait and scope", async () => {
+    const cases: [Response, string, number | null][] = [
+      [json(402, { error: "budget", scope: "day", message: "The live demo has used its model budget for today. Recorded runs still work." }), "budget", null],
+      [json(409, { error: "busy", message: "Another description is running." }, { "retry-after": "60" }), "busy", 60],
+      [json(413, { error: "too_large", message: "This file is over 30 MB." }), "too_large", null],
+      [json(422, { error: "format", message: "Send an mp4, mov, webm or mkv video." }), "format", null],
+      [json(422, { error: "too_long", message: "This video is 121.5 s long." }), "too_long", null],
+      [json(422, { error: "unreadable", message: "This file could not be read as a video." }), "unreadable", null],
+      [json(429, { error: "rate_limited", message: "Try again in 52 minutes." }, { "retry-after": "3120" }), "rate_limited", 3120],
+      [json(503, { error: "uploads_busy", message: "Other videos are being uploaded." }, { "retry-after": "15" }), "uploads_busy", 15],
+    ];
+    for (const [res, code, wait] of cases) {
+      const e = await toApiError(res);
+      expect(e).toBeInstanceOf(ApiError);
+      expect([e.code, e.retryAfter]).toEqual([code, wait]);
+      expect(e.message.length).toBeGreaterThan(5);
+    }
+    expect((await toApiError(json(402, { error: "budget", scope: "day", message: "x" }))).scope).toBe("day");
+  });
+
+  it("falls back on the status when the body isn't the API's", async () => {
+    const html = new Response("<html>Service Unavailable</html>", { status: 503 });
+    const e = await toApiError(html);
+    expect([e.code, e.status]).toEqual(["unavailable", 503]);
+    expect(e.message).toBe("The live service is not available right now.");
+    expect((await toApiError(json(404, { detail: "run not found" }))).code).toBe("not_found");
+    expect((await toApiError(new Response("", { status: 500 }))).code).toBe("server");
+  });
+
+  it("reads Retry-After as seconds or a date", () => {
+    expect(parseRetryAfter("120")).toBe(120);
+    expect(parseRetryAfter(new Date(10_000 + 30_000).toUTCString(), 10_000)).toBe(30);
+    expect(parseRetryAfter("soon")).toBeNull();
+    expect(parseRetryAfter(null)).toBeNull();
+  });
+});
+
+describe("health and budget", () => {
+  it("reads health, with live_busy when the API sends it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(200, { ok: true, speech: false, live_busy: true, budget: { spent_today: 0.4, cap_day: 5, spent_total: null, cap_total: 50 } })),
+    );
+    expect(await health()).toEqual({
+      ok: true,
+      speech: false,
+      liveBusy: true,
+      budget: { spentToday: 0.4, capDay: 5, spentTotal: null, capTotal: 50 },
+    });
+  });
+
+  it("says the service is unreachable when nothing answers", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("fetch failed"))));
+    await expect(health()).rejects.toMatchObject({ code: "unreachable", status: 0 });
+  });
+
+  it("finds the cap a run would cross, as the API's spend check does", () => {
+    const b = { spentToday: 4.95, capDay: 5, spentTotal: 10, capTotal: 50 };
+    expect(budgetEstimate(90)).toBeCloseTo(0.095);
+    expect(capReached(b, budgetEstimate(90))).toBe("day");
+    expect(capReached(b, 0.04)).toBeNull();
+    expect(capReached({ ...b, spentTotal: 50 }, 0)).toBeNull(); // spent == cap: nothing more fits, but 0 more is fine
+    expect(capReached({ ...b, spentTotal: 49.99 }, 0.02)).toBe("total");
+    expect(capReached({ ...b, capDay: 0 }, 1)).toBeNull(); // 0 is no cap
+  });
+});
+
+describe("startRun", () => {
+  const events = [
+    { type: "run", run_id: "live-1", duration: 90, options: { mode: "standard", voice: "Sofia" }, seq: 0, ts: 1, stage: null },
+    { type: "stage_start", stage: "listen", seq: 1, ts: 2 },
+    { type: "cue", stage: "finalize", id: "c001", status: "verified", text: "Un café, s’il vous plaît.", start: 4, audio_dur: 1.8, note: null, seq: 2, ts: 3 },
+    { type: "done", stage: null, run_id: "live-1", summary: { cues: { verified: 1 } }, seq: 3, ts: 4 },
+  ];
+
+  it("posts the form and streams events in order, whatever the chunking", async () => {
+    // cut inside the two-byte "é" and inside a CRLF-free frame boundary
+    const bytes = enc.encode(events.map(frame).join(": ping\n\n"));
+    const cut = bytes.indexOf(0xc3) + 1;
+    const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => sse([bytes.slice(0, 7), bytes.slice(7, cut), bytes.slice(cut)]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const seen: RunEvent[] = [];
+    const end = await startRun({ sample: "ed90" }, { mode: "extended", voice: "Aria" }, (e) => seen.push(e));
+
+    expect(end).toEqual({ end: "done", runId: "live-1", lastSeq: 3 });
+    expect(seen.map((e) => e.type)).toEqual(["run", "stage_start", "cue", "done"]);
+    expect(seen[2]).toMatchObject({ text: "Un café, s’il vous plaît." });
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe(`${API_BASE}/v1/runs`);
+    expect(init.method).toBe("POST");
+    const form = init.body as FormData;
+    expect([form.get("sample"), form.get("mode"), form.get("voice")]).toEqual(["ed90", "extended", "Aria"]);
+  });
+
+  it("drops events it has already seen", async () => {
+    const body = [events[0]!, events[1]!, events[1]!, events[0]!, events[3]!].map(frame).join("");
+    vi.stubGlobal("fetch", vi.fn(async () => sse([body])));
+    const seen: string[] = [];
+    await startRun({ sample: "ed90" }, { mode: "standard", voice: "Sofia" }, (e) => seen.push(e.type));
+    expect(seen).toEqual(["run", "stage_start", "done"]);
+  });
+
+  it("throws a refusal before any stream", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(409, { error: "busy", message: "Another description is running." }, { "retry-after": "60" })));
+    const onEvent = vi.fn();
+    await expect(startRun({ sample: "ed90" }, { mode: "standard", voice: "Sofia" }, onEvent)).rejects.toMatchObject({
+      code: "busy",
+      retryAfter: 60,
+    });
+    expect(onEvent).not.toHaveBeenCalled();
+  });
+
+  it("reports a stream cut off mid-run as dropped, with what it saw", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => sse([frame(events[0]!), frame(events[1]!)], { breakAfter: true })));
+    const end = await startRun({ sample: "ed90" }, { mode: "standard", voice: "Sofia" }, () => {});
+    expect(end).toEqual({ end: "dropped", runId: "live-1", lastSeq: 1 });
+  });
+
+  it("rethrows an abort", async () => {
+    const ctrl = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_u: string, init: RequestInit) => {
+        ctrl.abort();
+        throw init.signal?.reason;
+      }),
+    );
+    await expect(startRun({ sample: "x" }, { mode: "standard", voice: "Sofia" }, () => {}, ctrl.signal)).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+/** Just enough of EventSource to drive followRun. */
+class FakeEventSource {
+  static CLOSED = 2;
+  static last: FakeEventSource | null = null;
+  readyState = 0;
+  closed = false;
+  private listeners = new Map<string, ((e: Event) => void)[]>();
+  constructor(readonly url: string) {
+    FakeEventSource.last = this;
+  }
+  addEventListener(type: string, fn: (e: Event) => void) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  close() {
+    this.closed = true;
+    this.readyState = 2;
+  }
+  emit(ev: Record<string, unknown>) {
+    const e = new MessageEvent(String(ev.type), { data: JSON.stringify(ev), lastEventId: String(ev.seq) });
+    for (const fn of this.listeners.get(String(ev.type)) ?? []) fn(e);
+  }
+  fail(closed: boolean) {
+    this.readyState = closed ? 2 : 0;
+    for (const fn of this.listeners.get("error") ?? []) fn(new Event("error"));
+  }
+}
+
+describe("followRun", () => {
+  it("follows with EventSource, drops replayed repeats and stops at the last event", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const seen: string[] = [];
+    const done = followRun("live-1", (e) => seen.push(`${e.type}:${e.seq}`));
+    const es = FakeEventSource.last!;
+    expect(es.url).toBe(`${API_BASE}/v1/runs/live-1/events`);
+    es.emit({ type: "run", run_id: "live-1", seq: 0 });
+    es.emit({ type: "stage_start", stage: "listen", seq: 1 });
+    es.fail(false); // the browser reconnects with Last-Event-ID; the API may replay
+    es.emit({ type: "stage_start", stage: "listen", seq: 1 });
+    es.emit({ type: "error", kind: "RunTimeout", message: "This description took longer than 10 minutes and was stopped.", seq: 2 });
+    await expect(done).resolves.toEqual({ end: "error", runId: "live-1", lastSeq: 2 });
+    expect(seen).toEqual(["run:0", "stage_start:1", "error:2"]);
+    expect(es.closed).toBe(true);
+  });
+
+  it("asks the API why when the stream closes for good", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    const fetchMock = vi.fn(async () => json(404, { error: "not_found", message: "This run stopped before it finished and cannot resume." }));
+    vi.stubGlobal("fetch", fetchMock);
+    const done = followRun("live-2", () => {});
+    FakeEventSource.last!.fail(true);
+    await expect(done).rejects.toMatchObject({ code: "not_found", message: "This run stopped before it finished and cannot resume." });
+  });
+
+  it("without EventSource, reads the same URL with fetch (204: nothing left)", async () => {
+    vi.stubGlobal("EventSource", undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
+    await expect(followRun("live-3", () => {})).resolves.toEqual({ end: "closed", runId: null, lastSeq: -1 });
+  });
+});

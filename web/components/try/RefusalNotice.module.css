@@ -1,0 +1,19 @@
+/* a refusal is a calm note, not an alarm: a lamp rule, plain words, what to do next */
+.notice{position:relative;display:flex;flex-direction:column;gap:var(--s-3);padding:22px 24px 24px;border:1px solid var(--hair-strong);border-left:2px solid var(--lamp-1);
+  background:linear-gradient(90deg,rgb(var(--lamp-rgb) / .07),transparent 55%),var(--night-2)}
+.h{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:var(--fs-title-s);line-height:1.15;letter-spacing:var(--tr-title-s);color:var(--cream-0);text-wrap:balance}
+.h:focus{outline:none}
+.body{max-width:42em;font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1)}
+
+.retry{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:var(--s-2)}
+.wait{font-size:var(--fs-small);color:var(--cream-1);font-variant-numeric:tabular-nums}
+
+.rec{margin-top:var(--s-2);padding-top:var(--s-3);border-top:1px solid var(--hair)}
+.recLead{font-size:var(--fs-small);color:var(--cream-2)}
+.rec ul{display:flex;flex-wrap:wrap;gap:6px 24px;margin-top:8px;list-style:none}
+.rec li{display:flex;align-items:baseline;gap:10px;font-size:15px}
+.dur{font-size:12px;color:var(--cream-2)}
+
+@media (max-width:760px){
+  .notice{padding:18px 16px 20px}
+}

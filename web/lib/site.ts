@@ -36,8 +36,16 @@ export const FOOTER_LINKS: readonly SiteLink[] = [
   { href: "/benchmarks", label: "Benchmarks", live: false },
 ];
 
-/** Prefetch setting for a link to `href`: default for live routes, off for routes not built yet. */
+/**
+ * Route prefixes no nav link names that aren't built yet: links into them (a run's
+ * /watch/<id> page) skip prefetching too. Remove a prefix when its route ships.
+ */
+const UNBUILT_PREFIXES: readonly string[] = ["/watch"];
+
+/** Prefetch setting for a link to `href`: default for live routes, off for routes not built yet (and pages under them). */
 export function prefetchFor(href: string): false | undefined {
-  const link = [...NAV_LINKS, ...FOOTER_LINKS].find((l) => l.href === href);
-  return link && !link.live ? false : undefined;
+  const under = (base: string) => href === base || href.startsWith(`${base}/`);
+  const link = [...NAV_LINKS, ...FOOTER_LINKS].find((l) => l.href.startsWith("/") && under(l.href));
+  if (link) return link.live ? undefined : false;
+  return UNBUILT_PREFIXES.some(under) ? false : undefined;
 }

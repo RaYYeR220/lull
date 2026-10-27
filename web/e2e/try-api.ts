@@ -1,0 +1,43 @@
+import type { Page } from "@playwright/test";
+
+/**
+ * The address the site was built to call (NEXT_PUBLIC_API_URL; a local API by default) and
+ * the scripted stand-in that playwright.config starts (e2e/mock-api.mjs).
+ */
+export const API = (process.env.E2E_API_BASE ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "");
+export const MOCK = `http://127.0.0.1:${process.env.MOCK_API_PORT ?? 3218}`;
+export const RUN_ID = "live-20261027-214500-a1b2c3";
+
+/** Sends the page's API calls to the mock, under a scenario (see the header of mock-api.mjs). */
+export async function routeApi(page: Page, scenario: string): Promise<void> {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await page.route(`${API}/**`, (route) => route.continue({ url: route.request().url().replace(API, `${MOCK}/${scenario}`) }));
+}
+
+/** Nothing answers at the API's address. */
+export async function apiDown(page: Page): Promise<void> {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await page.route(`${API}/**`, (route) => route.abort("connectionrefused"));
+}
+
+/** Records every text the polite live region is given. */
+export async function recordAnnouncements(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const said: string[] = [];
+    (window as unknown as { __said: string[] }).__said = said;
+    const watch = () => {
+      const region = document.querySelector("main [role=status]");
+      if (!region) return false;
+      new MutationObserver(() => {
+        const t = region.textContent ?? "";
+        if (t) said.push(t);
+      }).observe(region, { childList: true, characterData: true, subtree: true });
+      return true;
+    };
+    document.addEventListener("DOMContentLoaded", () => {
+      if (!watch()) new MutationObserver((_, obs) => watch() && obs.disconnect()).observe(document.body, { childList: true, subtree: true });
+    });
+  });
+}
+
+export const announcements = (page: Page) => page.evaluate(() => (window as unknown as { __said: string[] }).__said ?? []);

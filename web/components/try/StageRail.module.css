@@ -1,0 +1,45 @@
+/* a real sequence: seven cells on one rail; the rail lights where the run is */
+.rail{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));list-style:none;border-bottom:1px solid var(--hair)}
+
+.stage{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0;padding:16px 14px;border-left:1px solid var(--hair-faint)}
+.stage:first-child{border-left:0}
+.stage::before{content:"";position:absolute;left:0;right:0;top:-1px;height:2px;background:var(--night-4)}
+
+.name{font-size:15px;font-weight:600;line-height:1.25;color:var(--cream-0)}
+.what{flex:1;font-size:12.5px;line-height:1.4;color:var(--cream-2)}
+.state{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin-top:8px;font-size:13px;font-weight:600;line-height:1.2;color:var(--cream-1)}
+.detail{font-size:12.5px;line-height:1.35;color:var(--cream-2)}
+.cached{display:inline-flex;align-items:center;height:20px;padding:0 6px;border:1px solid var(--hair-strong);font-size:11px;font-weight:600;letter-spacing:var(--tr-micro);color:var(--cream-1)}
+
+.waiting .name{color:var(--cream-2)}
+.waiting .state{font-weight:500;color:var(--cream-2)}
+
+.done::before{background:rgb(var(--cream-rgb) / .42)}
+
+.active{background:linear-gradient(to bottom,rgb(var(--lamp-rgb) / .09),transparent 80%)}
+.active::before{background:var(--lamp-1);box-shadow:0 0 14px rgb(var(--lamp-rgb) / .55)}
+.active .state{color:var(--lamp-0)}
+.active .detail{color:var(--cream-1)}
+.pulse{width:7px;height:7px;flex:none;background:var(--lamp-1);animation:pulse 1.6s var(--ease-breathe) infinite alternate}
+@keyframes pulse{from{opacity:.3}to{opacity:1}}
+
+.failed::before{background:var(--cream-3)}
+.failed .state{color:var(--cream-0)}
+.failed .state svg{color:var(--cream-2)}
+
+@media (max-width:1100px){
+  .what{display:none}
+  .stage{padding:14px 12px}
+}
+@media (max-width:760px){
+  .rail{grid-template-columns:minmax(0,1fr)}
+  .stage{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 12px;padding:10px 14px 10px 16px;border-left:0;border-top:1px solid var(--hair-faint)}
+  .stage:first-child{border-top:0}
+  .stage::before{top:0;bottom:0;left:0;right:auto;width:2px;height:auto}
+  .state{grid-column:2;grid-row:1;justify-content:flex-end;margin-top:0}
+  .active .what{display:block;grid-column:1 / -1;grid-row:2}
+  .detail{grid-column:1 / -1}
+}
+@media (prefers-reduced-motion:reduce){
+  .pulse{animation:none}
+}

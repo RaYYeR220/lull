@@ -1,0 +1,55 @@
+.tl{margin:0;padding:18px 20px 16px;border-bottom:1px solid var(--hair)}
+.head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 24px;margin-bottom:14px}
+.caption{font-size:13px;line-height:1.45;color:var(--cream-1);text-align:right}
+
+.lanes{--lab-w:56px;position:relative;display:grid;grid-template-columns:var(--lab-w) minmax(0,1fr);align-items:stretch}
+.lab{display:flex;align-items:center;font-size:12px;font-weight:500;color:var(--cream-2)}
+.track{position:relative;min-width:0}
+
+/* ruler */
+.ruler{height:26px;border-bottom:1px solid var(--hair)}
+.tick{position:absolute;bottom:0;width:1px;height:5px;background:var(--night-5)}
+.tick b{position:absolute;bottom:9px;left:0;translate:-50% 0;font-size:10.5px;font-weight:400;line-height:1;color:var(--cream-2);white-space:nowrap}
+.tick:first-child b{translate:0 0}
+.tick:last-child:not(:first-child) b{translate:-100% 0}
+
+/* what listen heard: counts only, so the band holds words, not positions */
+.heard{display:flex;align-items:center;justify-content:center;height:34px;margin:10px 0 6px;border:1px solid var(--hair);overflow:hidden}
+.heard[data-listen="waiting"]{background:repeating-linear-gradient(135deg,rgb(var(--cream-rgb) / .05) 0 2px,transparent 2px 9px)}
+.heard[data-listen="active"]{border-color:rgb(var(--lamp-rgb) / .45);background:linear-gradient(90deg,transparent,rgb(var(--lamp-rgb) / .2),transparent) no-repeat;background-size:38% 100%;animation:sweep 2.4s linear infinite}
+/* opaque, and above the finalize line, which passes behind the band's words */
+.heard[data-listen="done"]{position:relative;z-index:1;border-color:rgb(var(--lamp-rgb) / .32);background:linear-gradient(rgb(var(--lamp-rgb) / .06),rgb(var(--lamp-rgb) / .06)),var(--night-2)}
+.heard[data-listen="failed"]{border-style:dashed}
+.heardText{padding:0 10px;font-size:12px;font-weight:500;color:var(--cream-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.heard[data-listen="waiting"] .heardText{color:var(--cream-2)}
+@keyframes sweep{from{background-position:-60% 0}to{background-position:160% 0}}
+
+/* cues land where they play */
+.cues{height:58px}
+.blk{position:absolute;top:10px;left:var(--l);width:max(14px,var(--w));height:24px;display:flex;align-items:center;justify-content:center;color:var(--night-1);animation:land .5s var(--ease-out) backwards}
+.ext{position:absolute;top:14px;left:var(--l);width:16px;height:16px;translate:-50% 0;display:flex;align-items:center;justify-content:center;color:var(--night-1);animation:land .5s var(--ease-out) backwards}
+.verified{background:var(--verified)}
+.edited{background:var(--edited)}
+.approved{background:var(--lamp-0)}
+.extended{background:var(--cream-0)}
+.held{background:var(--hatch-held)}
+.num{position:absolute;top:30px;left:0;font-size:11px;font-weight:500;line-height:1;color:var(--cream-2)}
+.latest{outline:1px solid var(--lamp-0);outline-offset:3px}
+@keyframes land{from{opacity:0;transform:translateY(-10px)}}
+
+/* how far finalize has checked: a line down every lane from the ruler */
+.over{position:absolute;z-index:0;top:26px;bottom:18px;left:var(--lab-w);right:0;pointer-events:none}
+.sweep{position:absolute;top:0;bottom:0;left:0;width:1px;background:var(--lamp-1);transition:left .6s var(--ease-out)}
+.sweep::before{content:"";position:absolute;top:-4px;left:-4px;width:9px;height:9px;background:var(--lamp-1)}
+
+@media (max-width:760px){
+  .tl{padding:16px 14px 12px}
+  .caption{text-align:left}
+  .lanes{--lab-w:44px}
+  .minor b{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .heard[data-listen="active"]{animation:none;background:rgb(var(--lamp-rgb) / .1)}
+  .blk,.ext{animation:none}
+  .sweep{transition:none}
+}

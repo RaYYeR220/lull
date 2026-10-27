@@ -1,0 +1,22 @@
+/* What the try-it components share: the raised panel, small labels, controls and links. */
+.panel{position:relative;border:1px solid var(--hair-strong);background:var(--night-2)}
+
+.label{margin:0;font-size:12.5px;font-weight:600;line-height:1.2;letter-spacing:var(--tr-micro);color:var(--cream-2)}
+
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:0}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 14px;border:1px solid var(--hair-strong);border-radius:var(--radius);background:transparent;
+  font-family:var(--f-ui);font-size:13.5px;font-weight:600;letter-spacing:var(--tr-ui);line-height:1.2;color:var(--cream-0);text-decoration:none;cursor:pointer;
+  transition:border-color var(--t-hover),background-color var(--t-hover)}
+.btn:hover{border-color:rgb(var(--cream-rgb) / .5);background:rgb(var(--cream-rgb) / .03)}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{color:var(--cream-3);border-color:var(--hair);background:transparent;cursor:not-allowed;transform:none}
+.btn svg{flex:none}
+
+.link{color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-decoration-thickness:1px;text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.link:hover{text-decoration-color:var(--lamp-1)}
+
+@media (prefers-reduced-motion:reduce){
+  .btn,.link{transition:none}
+  .btn:active{transform:none}
+}
