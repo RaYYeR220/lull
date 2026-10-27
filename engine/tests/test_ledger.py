@@ -1,3 +1,4 @@
+import sqlite3
 import threading
 import time
 from datetime import UTC, datetime
@@ -228,3 +229,42 @@ def test_runs_lists_each_run_with_calls_cost_and_times(tmp_path):
     assert (a["calls"], a["first_ts"], a["last_ts"]) == (2, 100.0, 300.0)
     assert a["cost_usd"] == pytest.approx(0.4)
     assert mk(tmp_path / "empty").runs() == []
+
+
+# -- guards (Task 4 minors) ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("estimate", [float("nan"), float("inf"), -0.01])
+def test_check_refuses_an_estimate_that_is_not_a_cost(tmp_path, estimate):
+    led = mk(tmp_path, cap_run=1.0)
+    with pytest.raises(ValueError, match="estimate"):
+        led.check("r1", estimate)
+    led.check("r1", 0.0)  # nothing to spend is fine
+
+
+def test_a_cap_switched_off_in_the_settings_is_logged(tmp_path, monkeypatch, caplog):
+    from lull.config import get_settings
+
+    monkeypatch.setenv("LULL_CAP_DAY", "0")
+    get_settings.cache_clear()
+    try:
+        with caplog.at_level("WARNING", logger="lull.ledger"):
+            Ledger(tmp_path / "d.db")
+            Ledger(tmp_path / "e.db", cap_day=0)  # asked for in code: deliberate, no warning
+    finally:
+        get_settings.cache_clear()
+    warnings = [r.getMessage() for r in caplog.records]
+    assert len(warnings) == 1 and "LULL_CAP_DAY" in warnings[0] and "no day cap" in warnings[0]
+
+
+def test_ledger_closes_and_is_a_context_manager(tmp_path):
+    path = tmp_path / "d.db"
+    with Ledger(path, cap_run=0, cap_day=0, cap_total=0) as led:
+        led.record(rec(cost=0.5))
+        assert led.spent() == 0.5
+    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+        led.spent()
+    led.close()  # twice is fine
+    for p in tmp_path.iterdir():
+        p.unlink()  # nothing holds the database open any more (Windows)
+    assert list(tmp_path.iterdir()) == []

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import sqlite3
 import threading
 from collections.abc import Callable
@@ -81,6 +82,11 @@ def _midnight_utc() -> float:
 
 
 class Ledger:
+    """Every model and search call, in SQLite, and the spend caps checked before each one.
+
+    check() and record() are separate steps: two calls checked at once may both pass and
+    overshoot a cap by one estimate. The pipeline makes its calls one at a time per run."""
+
     def __init__(
         self,
         path: Path,
@@ -93,6 +99,13 @@ class Ledger:
         self.cap_run = s.lull_cap_run if cap_run is None else cap_run
         self.cap_day = s.lull_cap_day if cap_day is None else cap_day
         self.cap_total = s.lull_cap_total if cap_total is None else cap_total
+        for scope, given, cap in (("run", cap_run, self.cap_run), ("day", cap_day, self.cap_day),
+                                  ("total", cap_total, self.cap_total)):  # fmt: skip
+            if given is None and cap <= 0:
+                log.warning(
+                    "ledger: LULL_CAP_%s is %s: no %s cap, spending is not limited",
+                    scope.upper(), cap, scope,
+                )  # fmt: skip
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
@@ -102,6 +115,17 @@ class Ledger:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(_SCHEMA)
             self._db.commit()
+
+    def close(self) -> None:
+        """Close the database (a closed ledger raises on use; closing twice is fine)."""
+        with self._lock:
+            self._db.close()
+
+    def __enter__(self) -> Ledger:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     def record(self, rec: CallRecord) -> None:
         d = asdict(rec)
@@ -146,7 +170,10 @@ class Ledger:
             return float(self._db.execute(sql, args).fetchone()[0])
 
     def check(self, run_id: str, estimate: float) -> None:
-        """Raise BudgetExceeded if spending `estimate` more would cross a cap (<=0 = no cap)."""
+        """Raise BudgetExceeded if spending `estimate` more would cross a cap (<=0 = no cap).
+        An estimate that is not a finite, non-negative amount raises ValueError."""
+        if not (isinstance(estimate, int | float) and math.isfinite(estimate) and estimate >= 0):
+            raise ValueError(f"ledger: the spend estimate must be a cost in USD, got {estimate!r}")
         checks = (
             ("run", self.cap_run, self.spent(run_id=run_id)),
             ("day", self.cap_day, self.spent(since=_midnight_utc())),
