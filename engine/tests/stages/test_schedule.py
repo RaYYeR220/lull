@@ -222,7 +222,8 @@ def test_no_speech_video_does_not_over_describe():
     variants = [_var("e001", "short", 5), _var("e001", "medium", 10), _var("e001", "long", 18)]
     gaps = [_gap("g001", 0.2, 29.8, 88)]
     for run in (schedule, schedule_greedy):
-        placements, extended = run(events, variants, {"e001": 1}, gaps)
+        assert run(events, variants, {"e001": 1}, gaps) == ([], [])  # priority 1: never placed
+        placements, extended = run(events, variants, {"e001": 2}, gaps)
         assert placements == [_pl("e001", "long", "g001")]
         assert extended == []
         cues = compose_cues(placements, variants, events, gaps)
@@ -588,3 +589,40 @@ def test_placement_report_summarises_use_of_the_gaps():
     }
     empty = placement_report([], [], [], [])
     assert empty["utilisation"] == 0.0 and empty["placed"] == [] and empty["gaps"] == []
+
+
+# -- what may be placed, what may stop the video (Task 16) ------------------------------------
+
+
+def test_standard_placement_needs_priority_two():
+    """Ruling (Task 16): a priority-1 line never fills spare room."""
+    events = [_ev("e001", 1.0, 9.0, sal=4), _ev("e002", 1.0, 9.0, sal=4)]
+    variants = [_var("e001", "short", 3), _var("e002", "short", 3)]
+    gaps = [_gap("g001", 2.0, 8.0, 18)]
+    for run in (schedule, schedule_greedy):
+        placements, extended = run(events, variants, {"e001": 1, "e002": 2}, gaps)
+        assert placements == [_pl("e002", "short", "g001")]
+        assert extended == []
+
+
+def test_compose_and_report_take_extended_candidates_from_the_plan_priority():
+    """No salience-only leftovers: compose_cues' default extended list and the report's
+    unplaced_salient follow the plan priority like extended_candidates."""
+    events = [_ev("e001", 1.0, 3.0, sal=5), _ev("e002", 10.0, 12.0, sal=3),
+              _ev("e003", 20.0, 22.0, sal=4)]  # fmt: skip
+    variants = [_var("e001", "short", 2, "Rain falls."), _var("e002", "short", 2, "Lights dim.")]
+    priority = {"e001": 1, "e002": 4}  # e003: no item, so its salience counts
+    cues = compose_cues([], variants, events, [], priority=priority)
+    assert [c.id for c in cues] == ["x002"]  # e003 has no variant to voice
+    report = placement_report([], variants, events, [], priority=priority)
+    assert report["unplaced_salient"] == ["e002", "e003"]
+
+
+def test_events_the_dialogue_conveys_never_stop_the_video():
+    """R21: an event said in dialogue (salience under 5) is not planned, so it is no extended
+    candidate either (and never reported undescribed)."""
+    said = _ev("e001", 1.0, 3.0, sal=4).model_copy(update={"said_in_dialogue": True})
+    loud = _ev("e002", 5.0, 6.0, sal=5).model_copy(update={"said_in_dialogue": True})
+    for run in (schedule, schedule_greedy):
+        assert run([said, loud], [], {}, []) == ([], ["e002"])
+    assert placement_report([], [], [said, loud], [])["unplaced_salient"] == ["e002"]

@@ -4,12 +4,14 @@ One reasoning call sees the full transcript, the visual-event inventory, the gap
 glossary, and returns, per event worth describing, a priority and up to three variants (short,
 medium, long) plus a cast registry (name -> descriptor). It never places anything in time: the
 scheduler does that. Word counts are always computed here, never taken from the model.
+Near-duplicate items are dropped afterwards (`drop_near_duplicates`).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from functools import cache
 from importlib.resources import files
 
@@ -30,6 +32,13 @@ TEMPERATURE = 0.6
 LENGTHS = ("short", "medium", "long")
 COVER_SALIENCE = 3  # a sent event this salient with no item is asked for once more
 ASK_AGAIN = "Write an item for every event listed."
+DUP_JACCARD = 0.6  # short lines this alike ...
+DUP_WINDOW_S = 30.0  # ... this close in time say the same thing: one is kept
+_EPS = 1e-9
+_STOP = frozenset(
+    "a an the and or of to in on at by for from with into onto is are its their".split()
+)
+_WORD = re.compile(r"\w+")
 
 
 def budget(n_sent: int) -> tuple[int, float]:
@@ -79,6 +88,7 @@ class PlanResult(BaseModel):
     cast: dict[str, str] = Field(default_factory=dict)  # name -> descriptor used before it
     priority: dict[str, int] = Field(default_factory=dict)  # event_id -> 1..5
     unanswered: list[str] = Field(default_factory=list)  # salient sent events still without one
+    duplicates: dict[str, str] = Field(default_factory=dict)  # dropped event -> the one kept
 
 
 @cache
@@ -296,6 +306,65 @@ def _merge(first: PlanResult, second: PlanResult, events: list[VisualEvent]) -> 
     return PlanResult(variants=variants, cast=cast, priority={**second.priority, **first.priority})
 
 
+def _tokens(text: str) -> set[str]:
+    return {t for t in _WORD.findall(text.lower()) if t not in _STOP}
+
+
+def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanResult:
+    """The plan without items that repeat an earlier one (ruling, Task 16).
+
+    Items are taken in visual start order; one whose short variant has a token Jaccard of at
+    least DUP_JACCARD with an item kept less than DUP_WINDOW_S earlier is a near-duplicate of
+    it. The higher priority stays (the earlier one on a tie); the other loses its variants and
+    priority and is recorded in `duplicates` as dropped -> kept, so coverage can count it with
+    its twin.
+    """
+    by_id = {e.id: e for e in events}
+    words: dict[str, set[str]] = {}
+    for v in result.variants:  # the short line, else the first variant the event has
+        if v.event_id not in words or v.length == "short":
+            words[v.event_id] = _tokens(v.text)
+    order = sorted(
+        (by_id[eid] for eid in result.priority if eid in by_id and eid in words),
+        key=lambda e: (e.t_start, e.id),
+    )
+    kept: list[VisualEvent] = []
+    dup: dict[str, str] = dict(result.duplicates)
+    for e in order:
+        twin = next(
+            (
+                k
+                for k in reversed(kept)
+                if e.t_start - k.t_start <= DUP_WINDOW_S + _EPS
+                and _jaccard(words[e.id], words[k.id]) >= DUP_JACCARD - _EPS
+            ),
+            None,
+        )
+        if twin is None:
+            kept.append(e)
+        elif result.priority[e.id] > result.priority[twin.id]:
+            kept.remove(twin)
+            kept.append(e)
+            dup = {d: (e.id if k == twin.id else k) for d, k in dup.items()}
+            dup[twin.id] = e.id
+        else:
+            dup[e.id] = twin.id
+    if not dup:
+        return result
+    log.info("plan: dropped near-duplicate items %s", ", ".join(f"{d}~{k}" for d, k in dup.items()))
+    return result.model_copy(
+        update={
+            "variants": [v for v in result.variants if v.event_id not in dup],
+            "priority": {eid: p for eid, p in result.priority.items() if eid not in dup},
+            "duplicates": dup,
+        }
+    )
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+
 def plan(
     events: list[VisualEvent],
     words: list[Word],
@@ -312,7 +381,8 @@ def plan(
     5 (R21); with nothing left there is no call and the plan is empty. The token budget and
     the spend estimate grow with the number of events sent (see `budget`). A sent event of
     salience 3 or more that got no item is asked for once more, in a second call about only
-    those events; the ones still without an item are listed in `unanswered`.
+    those events; the ones still without an item are listed in `unanswered`. Near-duplicate
+    items are dropped last (`drop_near_duplicates`).
     """
     send = [e for e in events if not said_already(e)]
     if not send:
@@ -330,4 +400,4 @@ def plan(
     unanswered = [e.id for e in missing if e.id not in result.priority]
     if unanswered:
         log.warning("plan: no item for %s even when asked again", ", ".join(unanswered))
-    return result.model_copy(update={"unanswered": unanswered})
+    return drop_near_duplicates(result.model_copy(update={"unanswered": unanswered}), send)

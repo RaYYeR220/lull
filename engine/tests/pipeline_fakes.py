@@ -49,7 +49,7 @@ WATCH = {
     "events": [
         _event(0.0, 6.0, "setting", "A plain red screen."),
         _event(0.3, 1.5, "on_screen_text", "A small logo reads Lull.", "Lull", salience=5),
-        _event(7.0, 12.0, "setting", "A plain blue screen."),
+        _event(7.0, 12.0, "setting", "The screen turns blue."),  # unlike e001: not folded
     ]
 }
 TERMS = {"terms": [{"term": "Lull", "kind": "work", "why": "the logo"}]}

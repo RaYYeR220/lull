@@ -406,3 +406,53 @@ def test_prompt_asks_for_an_item_per_event():
     text = load_prompt()
     assert "Write an item for every event you are sent." in text
     assert "Leave an event out entirely" not in text
+
+
+# -- near-duplicate items (ruling, Task 16) ---------------------------------------------------
+
+
+RUNS = [
+    _ev("e010", 18.0, 22.0, sal=4, text="The smaller person runs along a platform."),
+    _ev("e011", 29.0, 33.0, sal=4, text="The smaller person runs along a platform again."),
+    _ev("e012", 40.0, 44.0, sal=4, text="The smaller person runs on."),
+    _ev("e013", 41.0, 45.0, sal=4, text="The two people climb a slanted beam."),
+]
+
+
+def test_near_duplicate_items_are_dropped_keeping_the_higher_priority():
+    """ED90: three "The smaller person runs..." lines within 30 s. The short variants'
+    Jaccard is at least 0.6, so one is kept: the higher priority, the earlier on a tie."""
+    answer = {"cast": [], "items": [
+        _item("e010", 2, "The smaller person runs along a narrow platform.", "Medium one."),
+        _item("e011", 3, "The smaller person runs along the narrow platform.", "Medium two."),
+        _item("e012", 3, "Along a narrow platform the smaller person runs.", None, "Long."),
+        _item("e013", 2, "The two people climb a slanted metal beam."),
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=RUNS)
+    assert result.priority == {"e011": 3, "e013": 2}
+    assert result.duplicates == {"e010": "e011", "e012": "e011"}
+    assert sorted({v.event_id for v in result.variants}) == ["e011", "e013"]
+    assert [v.text for v in result.variants if v.event_id == "e011"] == [
+        "The smaller person runs along the narrow platform.", "Medium two."
+    ]  # fmt: skip
+
+
+def test_near_duplicates_need_similar_short_lines_within_30_s():
+    events = [
+        _ev("e020", 0.0, 2.0, sal=4), _ev("e021", 31.0, 33.0, sal=4),  # 31 s apart
+        _ev("e022", 40.0, 41.0, sal=4), _ev("e023", 42.0, 43.0, sal=4),  # unlike
+        _ev("e024", 50.0, 51.0, sal=4), _ev("e025", 80.0, 81.0, sal=4),  # exactly 30 s
+        _ev("e026", 120.0, 121.0, sal=4),
+    ]  # fmt: skip
+    answer = {"cast": [], "items": [
+        _item("e020", 3, "A red door opens slowly."),
+        _item("e021", 3, "A red door opens slowly."),
+        _item("e022", 3, "The smaller person runs along a narrow platform."),
+        _item("e023", 3, "The smaller person runs across a narrow beam."),  # Jaccard 0.5
+        _item("e024", 4, "Snow falls on the empty square.", "Medium."),
+        _item("e025", 4, "Snow falls on an empty square."),
+        _item("e026", 5, "Snow falls on the empty square."),  # 70 s after e024
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=events)
+    assert result.duplicates == {"e025": "e024"}
+    assert set(result.priority) == {"e020", "e021", "e022", "e023", "e024", "e026"}
