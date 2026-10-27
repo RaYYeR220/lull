@@ -1,1 +1,34 @@
 .superpowers/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# Node
+node_modules/
+.next/
+
+# Secrets and env
+.env
+.env.*
+
+# Media, runs and local artifacts
+runs/
+*.mp4
+*.wav
+*.m4a
+models/
+ui-prototypes/
+mockups/
+variants/
+.claude/
+.remember/
+docs/superpowers/
+*-internal/
