@@ -104,13 +104,69 @@ def test_quoted_exemption():
     assert "R7-person" in rules("A sign reads: Hello. We enter.")
 
 
-def test_autofix_strips_and_normalises():
-    assert autofix("we see  a dog   run") == "A dog run."
+def test_autofix_strips_only_at_sentence_start():
+    assert autofix("we see a dog run") == "A dog run."
     assert autofix("You can see that a man waits") == "A man waits."
-    assert autofix("We can see the door.") == "The door."
+    assert autofix("Door opens. We see a dog.") == "Door opens. A dog."
+    assert autofix("In a moment, we see Maria enter") == "In a moment, Maria enter."
+    assert autofix("  you see that  it  rains") == "It rains."
+    assert autofix("Door opens and we see a dog.") == "Door opens and we see a dog."
+    assert autofix("We see.") == "We see."
     assert autofix("already fine.") == "Already fine."
-    assert autofix('A sign reads: "We see you".') == 'A sign reads: "We see you".'
     assert autofix("  ") == ""
+
+
+def test_autofix_keeps_quoted_text_verbatim():
+    t = 'A sign reads: "We see   you".'
+    assert autofix(t) == t
+    assert autofix('Door. A slide says "a  b". Done') == 'Door. A slide says "a  b". Done.'
+
+
+def test_autofix_terminal_punctuation():
+    assert autofix("Exit:") == "Exit:"
+    assert autofix("Wait…") == "Wait…"
+    assert autofix("Really?") == "Really?"
+    assert autofix("A door") == "A door."
+
+
+def test_roman_numeral_i_not_person():
+    for t in ["World War I ends.", "Part I begins.", "Road I-95 glows.", "Type I appears."]:
+        assert "R7-person" not in rules(t), t
+    assert "R7-person" in rules("I enter.")
+    assert "R7-person" in rules("I’m here.")
+
+
+def test_r15_case_sensitive_and_quoted_intro():
+    assert "R15-name" not in rules("A red rose blooms.", named={"Rose"})
+    assert "R15-name" not in rules("It will rain.", named={"Will"})
+    assert "R15-name" in rules("Rose blooms.", named={"Rose"})
+    assert "R15-name" not in rules('A card reads: "Rose". Rose smiles.', named={"Rose"})
+
+
+def test_r2_per_sentence_and_quotes():
+    assert "R2-ahead-format" not in rules("A door shuts.  In a moment, Maria enters.")
+    assert "R2-ahead-format" in rules("In a moment, a door shuts. Then in a moment it opens.")
+    assert "R2-ahead-format" not in rules('A sign reads: "in a moment".')
+
+
+def test_unmatched_quote_does_not_exempt():
+    assert "R7-person" in rules('He says " and we enter.')
+
+
+def test_curly_apostrophe_tokenised():
+    assert "R14-gender" in rules("He’s near.")
+
+
+def test_r18_close_up_noun_only():
+    assert "R18-label" in rules("A close-up of a hand.")
+    assert "R18-label" in rules("The close up of a hand.")
+    assert "R18-label" not in rules("Maria will close up the shop.")
+
+
+def test_named_risk_negatives():
+    assert not rules("A title appears.") - {"R7-tense"}
+    assert not rules("Rain falls there.")
+    assert "R7-person" not in rules("A sign reads: Hello we")
 
 
 @pytest.mark.parametrize(
