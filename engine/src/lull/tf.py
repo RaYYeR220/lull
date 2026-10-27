@@ -30,6 +30,8 @@ _MIME = {
     ".png": "image/png",
 }
 _FENCE = re.compile(r"^```[a-zA-Z]*\s*\n?(.*?)\n?```$", re.DOTALL)
+_THINK = re.compile(r"^<think>.*?</think>", re.DOTALL)
+_UNSENT = (httpx.ConnectError, httpx.ConnectTimeout)  # the request never reached the server
 
 
 class TFError(Exception):
@@ -63,12 +65,21 @@ def image_part(path: Path) -> dict:
     return {"type": "image_url", "image_url": {"url": url}}
 
 
-def _parse_json(content: str) -> object:
+def _parse_json(content: str) -> dict:
+    """The JSON object in a model answer: a leading <think>...</think> block (reasoning that
+    leaked into the content) and a code fence are dropped; anything but an object raises
+    ValueError, so a stray list or an unclosed reasoning block counts as unparseable."""
     s = content.strip()
+    s = _THINK.sub("", s, count=1).strip()
+    if s.startswith("<think>"):
+        raise ValueError("unclosed <think> block")
     m = _FENCE.match(s)
     if m:
         s = m.group(1).strip()
-    return json.loads(s)
+    out = json.loads(s)
+    if not isinstance(out, dict):
+        raise ValueError(f"expected a JSON object, got {type(out).__name__}")
+    return out
 
 
 class TokenFactory:
@@ -99,6 +110,12 @@ class TokenFactory:
 
     def close(self) -> None:
         self._http.close()
+
+    def __enter__(self) -> TokenFactory:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     # -- public API -----------------------------------------------------------------
 
@@ -181,11 +198,13 @@ class TokenFactory:
             t0 = time.monotonic()
             try:
                 r = self._http.post("/chat/completions", json=body, headers=headers)
-            except httpx.TransportError as e:
+            except _UNSENT as e:  # never reached the server: safe to send again
                 if i < len(_BACKOFF):
                     self._sleep(_BACKOFF[i])
                     continue
                 raise TFError(f"network error: {e}") from e
+            except httpx.TransportError as e:  # may have run (and been billed): never resent
+                raise TFError(f"network error after sending: {e}") from e
             latency = time.monotonic() - t0
             if r.status_code == 200:
                 try:
