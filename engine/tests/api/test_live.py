@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -33,6 +34,11 @@ def fake_probe(path):
         raise MediaError(f"ffprobe failed (exit 1): {path}: Invalid data found")
     secs = float(head[4:].split(b";")[0]) if head.startswith(b"DUR=") else 10.0
     return Probe(duration=secs, width=64, height=64, fps=25.0, has_audio=True)
+
+
+def fake_trim(src, dst, seconds):
+    shutil.copyfile(src, dst)
+    return dst
 
 
 def happy(job):
@@ -93,19 +99,23 @@ class Script:
         self.events, self.exc, self.manifest = events, exc, manifest
         self.delay, self.gate, self.gate_at = delay, gate, gate_at
         self.jobs: list = []
+        self.finished = threading.Event()
 
     def __call__(self, job, on_event) -> None:
         self.jobs.append(job)
-        for i, ev in enumerate(self.events(job)):
-            if self.gate is not None and i == self.gate_at:
-                assert self.gate.wait(10), "gate never opened"
-            on_event(ev)
-            if self.delay:
-                time.sleep(self.delay)
-        if self.exc is not None:
-            raise self.exc(job)
-        if self.manifest:
-            (job.run_dir / "manifest.json").write_text(json.dumps({"run_id": job.run_id}))
+        try:
+            for i, ev in enumerate(self.events(job)):
+                if self.gate is not None and i == self.gate_at:
+                    assert self.gate.wait(10), "gate never opened"
+                on_event(ev)
+                if self.delay:
+                    time.sleep(self.delay)
+            if self.exc is not None:
+                raise self.exc(job)
+            if self.manifest:
+                (job.run_dir / "manifest.json").write_text(json.dumps({"run_id": job.run_id}))
+        finally:
+            self.finished.set()
 
 
 # -- helpers -----------------------------------------------------------------------------------
@@ -201,6 +211,7 @@ def app(settings, monkeypatch, tmp_path):
     get_settings.cache_clear()
     app = create_app(settings)
     app.state.live.probe = fake_probe
+    app.state.live.trim = fake_trim
     app.state.live.runner = Script()
     yield app
     get_settings.cache_clear()
@@ -264,9 +275,9 @@ def test_post_streams_run_then_engine_events_then_done(lc, live, data, tmp_path)
 
 
 def test_post_with_real_probe(lc, live, noaudio):
-    from lull import media
+    from lull.api import clip
 
-    live.probe = media.probe
+    live.probe, live.trim = clip.probe, clip.trim
     r = post(lc, noaudio.read_bytes(), name="portrait.mp4")
     assert types(parse_sse(r.text))[-1] == "done"
     assert live.runner.jobs[0].duration == pytest.approx(4.0, abs=0.1)
@@ -365,9 +376,9 @@ def test_unsupported_extension_422(lc, data, name):
 
 
 def test_unreadable_container_422_without_paths(lc, live, data, tmp_path):
-    from lull import media
+    from lull.api import clip
 
-    live.probe = media.probe
+    live.probe, live.trim = clip.probe, clip.trim
     r = post(lc, b"definitely not a video" * 10, name="clip.webm")
     assert r.status_code == 422
     j = r.json()
@@ -619,7 +630,7 @@ def test_real_pipeline_through_the_api(
 ):
     """The default runner (the one adapter into lull.pipeline.run) with the engine's own test
     doubles for the model and speech services: real stages, ledger calls and cues stream out."""
-    from lull import media
+    from lull.api import clip
     from lull.api import live as live_mod
     from pipeline_fakes import FakeSpeech, FakeTF
 
@@ -633,7 +644,7 @@ def test_real_pipeline_through_the_api(
     monkeypatch.setattr(live_mod.Tavily, "from_settings", staticmethod(lambda ledger: None))
     monkeypatch.setattr(live_mod.NemoSpeechHTTP, "from_settings", staticmethod(FakeSpeech))
     live.runner = live_mod._run_pipeline
-    live.probe = media.probe
+    live.probe, live.trim = clip.probe, clip.trim
     live.ledger = Ledger(tmp_path / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
 
     r = post(lc, tone_slides.read_bytes(), name="tone slides.mp4")
@@ -650,7 +661,7 @@ def test_real_pipeline_through_the_api(
     assert any(e["type"] == "cue" for e in events)
     assert events[-1]["run_id"] == run_id and "summary" in events[-1]
     assert leaks(events, tmp_path) == []
-    assert calls == [live.ledger]
+    assert [getattr(c, "inner", c) for c in calls] == [live.ledger]
     d = data / "runs" / run_id
     assert (d / "manifest.json").exists() and not (d / "error.json").exists()
     assert json.loads((d / "manifest.json").read_text("utf-8"))["video"]["name"] == (
@@ -658,3 +669,244 @@ def test_real_pipeline_through_the_api(
     )
     stored = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()]
     assert stored == events
+
+
+# -- bounded uploads, real durations, a wall clock ---------------------------------------------
+
+
+def gated_probe(entered: threading.Event, gate: threading.Event):
+    def probe(path):
+        entered.set()
+        assert gate.wait(10), "gate never opened"
+        return fake_probe(path)
+
+    return probe
+
+
+def test_concurrent_uploads_are_bounded_503(lc, live, data):
+    entered, gate = threading.Event(), threading.Event()
+    live.max_uploads = 1
+    live.probe = gated_probe(entered, gate)
+    out: dict = {}
+    t = threading.Thread(target=lambda: out.setdefault("r", post(lc)))
+    t.start()
+    try:
+        assert entered.wait(10)
+        r = post(lc)
+        assert r.status_code == 503
+        assert r.json()["error"] == "uploads_busy" and r.json()["message"]
+        assert int(r.headers["retry-after"]) > 0
+        assert lc.get("/v1/runs").json() == []  # the upload in progress is not listed
+    finally:
+        gate.set()
+        t.join(10)
+    assert types(parse_sse(out["r"].text))[-1] == "done"
+    assert live.uploading == 0
+    assert [i["id"] for i in lc.get("/v1/runs").json()] == [run_dirs(data)[0].name]
+
+
+def test_refused_uploads_count_in_their_own_window(lc, live):
+    live.refusals = RateLimiter(per_client=2, client_window=3600, per_day=10**6)
+    assert post(lc, b"DUR=500;").status_code == 422
+    assert post(lc, b"BAD").status_code == 422
+    r = post(lc)  # a good upload, but this visitor has been refused twice this hour
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    assert 3500 < int(r.headers["retry-after"]) <= 3600
+    assert live.runner.jobs == []
+
+
+def test_runs_use_the_trimmed_copy_and_its_duration(lc, live, data):
+    def trim(src, dst, seconds):
+        assert seconds == live.max_seconds
+        Path(dst).write_bytes(b"DUR=5;trimmed")
+        return dst
+
+    live.trim = trim
+    r = post(lc, b"DUR=9;original")
+    assert types(parse_sse(r.text))[-1] == "done"
+    (job,) = live.runner.jobs
+    assert job.duration == 5.0 and job.video.read_bytes() == b"DUR=5;trimmed"
+    assert sorted(p.name for p in (job.run_dir / "input").iterdir()) == ["clip.mp4"]
+    req = json.loads((job.run_dir / "request.json").read_text("utf-8"))
+    assert req["video"]["duration"] == 5.0
+
+
+def test_trimmed_copy_still_too_long_422(lc, live, data):
+    def trim(src, dst, seconds):
+        Path(dst).write_bytes(b"DUR=300;")
+        return dst
+
+    live.trim = trim
+    r = post(lc, b"DUR=9;")
+    assert r.status_code == 422 and r.json()["error"] == "too_long"
+    assert "300.0 s" in r.json()["message"]
+    assert run_dirs(data) == []
+
+
+def test_a_container_that_understates_its_length_is_cut(lc, live, noaudio):
+    """The header claims 1 s; the clip is 4 s. The run gets the first 2 s (the limit here)."""
+    from lull.api import clip
+
+    def lying(path):
+        if Path(path).name.startswith(".trim-"):
+            return clip.probe(path)
+        return Probe(duration=1.0, width=720, height=1280, fps=25.0, has_audio=False)
+
+    live.probe, live.trim, live.max_seconds = lying, clip.trim, 2.0
+    r = post(lc, noaudio.read_bytes(), name="portrait.mp4")
+    assert types(parse_sse(r.text))[-1] == "done", r.text
+    (job,) = live.runner.jobs
+    assert job.duration == pytest.approx(2.0, abs=0.3)
+    assert clip.probe(job.video).duration == pytest.approx(2.0, abs=0.3)
+
+
+def test_probe_runs_under_a_time_limit(noaudio):
+    from lull.api import clip
+
+    assert clip.probe(noaudio).duration == pytest.approx(4.0, abs=0.1)
+    with pytest.raises(MediaError, match="timed out"):
+        clip.probe(noaudio, timeout=0.001)
+
+
+def test_concat_scripts_and_other_demuxers_are_refused(lc, live, noaudio, tmp_path):
+    """An ffconcat script named .mp4 would make ffmpeg read any local file it lists."""
+    from lull.api import clip
+
+    script = tmp_path / "evil.mp4"
+    script.write_text(f"ffconcat version 1.0\nfile '{noaudio.as_posix()}'\n")
+    with pytest.raises(MediaError):
+        clip.probe(script)
+    live.probe, live.trim = clip.probe, clip.trim
+    r = post(lc, script.read_bytes(), name="evil.mp4")
+    assert r.status_code == 422 and r.json()["error"] == "unreadable"
+
+
+def test_watchdog_stops_a_run_that_takes_too_long(lc, live, data):
+    gate = threading.Event()
+    live.executor.wall_clock = 0.3
+    slow = Script(gate=gate, gate_at=1)  # stage_start, then hangs
+    live.runner = slow
+    events = parse_sse(post(lc).text)
+    assert types(events) == ["run", "stage_start", "error"]
+    err = events[-1]
+    assert err["kind"] == "RunTimeout" and err["stage"] == "listen"
+    assert "took longer than" in err["message"]
+    (d,) = run_dirs(data)
+    saved = json.loads((d / "error.json").read_text("utf-8"))
+    assert saved == {"type": "RunTimeout", "message": err["message"], "stage": "listen"}
+    (job,) = slow.jobs
+    assert job.stop.is_set()
+
+    live.runner = Script()  # the executor is free again although the thread still hangs
+    assert types(parse_sse(post(lc).text))[-1] == "done"
+    gate.set()
+    assert slow.finished.wait(10)
+    time.sleep(0.1)  # what the stuck thread said after it was stopped goes nowhere
+    assert parse_sse(lc.get(f"/v1/runs/{d.name}/events").text) == events
+
+
+def test_the_stopped_runs_ledger_refuses_further_spend(tmp_path):
+    from lull.api.live import RunTimeout, StopLedger
+
+    stop = threading.Event()
+    inner = Ledger(tmp_path / "l.db", cap_run=0, cap_day=0, cap_total=0)
+    ledger = StopLedger(inner, stop)
+    ledger.check("r", 0.01)
+    assert ledger.spent() == 0.0 and ledger.inner is inner
+    stop.set()
+    with pytest.raises(RunTimeout):
+        ledger.check("r", 0.01)
+
+
+# -- smaller things ----------------------------------------------------------------------------
+
+
+def test_upload_limit_is_30_mb(lc, live):
+    from lull.api.live import MAX_UPLOAD_BYTES
+
+    assert MAX_UPLOAD_BYTES == live.max_bytes == 30 * 2**20
+    r = lc.post(
+        "/v1/runs",
+        content=b"x",
+        headers={
+            "content-type": "multipart/form-data; boundary=b",
+            "content-length": str(31 * 2**20),
+        },
+    )
+    assert r.status_code == 413 and "30 MB" in r.json()["message"]
+
+
+def test_cors_exposes_retry_after(lc):
+    r = lc.get("/v1/samples", headers={"Origin": "http://web.test"})
+    assert "retry-after" in r.headers["access-control-expose-headers"].lower()
+
+
+def test_health_says_whether_a_live_run_is_going(lc, live, monkeypatch):
+    import lull.speech
+
+    monkeypatch.setattr(lull.speech.NemoSpeechHTTP, "health", lambda self: True)
+    assert lc.get("/v1/health").json()["live_busy"] is False
+    gate = threading.Event()
+    live.runner = Script(gate=gate)
+    with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as r:
+        lines = r.iter_lines()
+        lines_until(lines, "event: run")
+        assert lc.get("/v1/health").json()["live_busy"] is True  # not from the 10 s cache
+        gate.set()
+        list(lines)
+    assert lc.get("/v1/health").json()["live_busy"] is False
+
+
+def test_replay_with_nothing_left_is_204(lc, live):
+    events = parse_sse(post(lc).text)
+    run_id, last = events[0]["run_id"], events[-1]["seq"]
+    r = lc.get(f"/v1/runs/{run_id}/events", headers={"Last-Event-ID": str(last)})
+    assert r.status_code == 204 and r.content == b""
+    assert lc.get(f"/v1/runs/{run_id}/events?after={last - 1}").status_code == 200
+
+
+def test_multipart_errors_have_the_error_shape(lc, data):
+    files = [("file", ("a.mp4", b"x", "video/mp4")), ("file", ("b.mp4", b"y", "video/mp4"))]
+    r = lc.post("/v1/runs", files=files)
+    assert r.status_code == 400
+    assert set(r.json()) == {"error", "message"} and r.json()["error"] == "invalid"
+    assert run_dirs(data) == []
+
+
+def test_ipv6_clients_are_counted_by_their_64():
+    rl = RateLimiter()
+    a = rl.client_key("2001:db8:1:2:aaaa::1")
+    assert a == rl.client_key("2001:db8:1:2:bbbb:cccc:dddd:2")
+    assert a != rl.client_key("2001:db8:1:3::1")
+    assert rl.client_key("::ffff:1.2.3.4") == rl.client_key("1.2.3.4")
+    assert rl.client_key("1.2.3.4") != rl.client_key("1.2.3.5")
+    assert rl.client_key("not an ip") == rl.client_key("not an ip")
+
+
+def test_ids_with_a_trailing_newline_are_refused(lc, data):
+    from lull.api.live import SAMPLE_RE
+    from lull.api.store import CUE_ID_RE, KEYFRAME_RE, RUN_ID_RE
+
+    (data / "samples").mkdir(parents=True)
+    (data / "samples" / "street.mp4").write_bytes(b"DUR=8;")
+    r = post(lc, None, sample="street\n")
+    assert r.status_code == 422 and r.json()["error"] == "sample"
+    for rx, ok in (
+        (SAMPLE_RE, "street"),
+        (RUN_ID_RE, "r1"),
+        (CUE_ID_RE, "c001"),
+        (KEYFRAME_RE, "c001.jpg"),
+    ):
+        assert rx.fullmatch(ok) and not rx.fullmatch(ok + "\n")
+        assert rx.match(ok + "\n") is None  # anchored however it is called
+
+
+@pytest.mark.parametrize(
+    "body", ["{not json", "[]", '{"options": {"mode": "silly"}, "input": "input/clip.mp4"}']
+)
+def test_resume_with_a_damaged_request_json_is_404(lc, live, data, body):
+    d = make_unfinished(data)
+    (d / "request.json").write_text(body)
+    r = lc.get(f"/v1/runs/{d.name}/events")
+    assert r.status_code == 404 and r.json()["error"] == "not_found"
+    assert live.runner.jobs == []

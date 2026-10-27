@@ -604,7 +604,7 @@ router = APIRouter()
 async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
     studio = _studio(request)
     run_dir = studio.writable(run_id)
-    if not CUE_ID_RE.match(cue_id):
+    if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
     studio.check_rate(request)
     text = (await _body(request)).get("text")
@@ -660,7 +660,7 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
 async def approve_cue(run_id: str, cue_id: str, request: Request) -> dict:
     studio = _studio(request)
     run_dir = studio.writable(run_id)
-    if not CUE_ID_RE.match(cue_id):
+    if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
     async with studio.lock(run_id):
         studio.not_described(run_id)
@@ -685,7 +685,7 @@ async def approve_cue(run_id: str, cue_id: str, request: Request) -> dict:
 async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
     studio = _studio(request)
     run_dir = studio.writable(run_id)
-    if not CUE_ID_RE.match(cue_id):
+    if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
     reason = (await _body(request)).get("reason")
     if reason is not None and not isinstance(reason, str):

@@ -27,13 +27,15 @@ from lull.api.settings import ApiSettings
 
 log = logging.getLogger(__name__)
 
-RUN_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
-CUE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-KEYFRAME_RE = re.compile(r"^[\w.-]+\.jpg$")
+# \Z, not $: "$" also matches before a final newline. Called with fullmatch.
+RUN_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,80}\Z")
+CUE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
+KEYFRAME_RE = re.compile(r"[\w.-]+\.jpg\Z")
 MAX_LIVE = 20
 LIST_TTL = 5.0
 JSON_CACHE = 256
 MANIFEST, CUES, STUDIO, ERROR = "manifest.json", "cues.json", "studio.json", "error.json"
+PENDING = ".pending"  # in a run folder still being filled (an upload, a fork): not listed
 OPTION_KEYS = ("mode", "profile", "voice", "language", "source_url")
 VERSION_KEYS = ("engine", "models", "tts")
 SUMMARY_KEYS = (
@@ -65,7 +67,7 @@ def _num(x: Any) -> float | int | None:
 def _dirs(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
-    return [p for p in root.iterdir() if p.is_dir() and RUN_ID_RE.match(p.name)]
+    return [p for p in root.iterdir() if p.is_dir() and RUN_ID_RE.fullmatch(p.name)]
 
 
 def _mtime(d: Path) -> float:
@@ -102,7 +104,7 @@ def contained_file(d: Path, rel: str) -> Path | None:
 def audio_url(run_id: str, cue: dict) -> str | None:
     """The cue's audio route, versioned by the file it plays so a new take is not cached."""
     path, cue_id = cue.get("audio_path"), cue.get("id")
-    if not isinstance(path, str) or not isinstance(cue_id, str) or not CUE_ID_RE.match(cue_id):
+    if not isinstance(path, str) or not isinstance(cue_id, str) or not CUE_ID_RE.fullmatch(cue_id):
         return None
     tag = hashlib.sha256(f"{path}|{cue.get('audio_dur')}".encode()).hexdigest()[:10]
     return f"/v1/runs/{run_id}/cues/{cue_id}/audio?v={tag}"
@@ -176,7 +178,7 @@ class RunStore:
 
     def find(self, run_id: str) -> tuple[str, Path] | None:
         """Return (kind, dir) for a run id, or None. Showcase wins over live."""
-        if not RUN_ID_RE.match(run_id) or run_id in (".", ".."):
+        if not RUN_ID_RE.fullmatch(run_id) or run_id in (".", ".."):
             return None
         for kind, root in (
             ("showcase", self.settings.showcase_dir),
@@ -228,7 +230,8 @@ class RunStore:
                 return self._list[1]
         show = self._summaries("showcase", _dirs(self.settings.showcase_dir))
         show.sort(key=lambda r: r["id"])
-        newest = sorted(_dirs(self.settings.runs_dir), key=_mtime, reverse=True)[:MAX_LIVE]
+        ready = [d for d in _dirs(self.settings.runs_dir) if not (d / PENDING).exists()]
+        newest = sorted(ready, key=_mtime, reverse=True)[:MAX_LIVE]
         live = self._summaries("live", newest)
         live.sort(key=lambda r: r["created"], reverse=True)
         result = show + live
@@ -291,7 +294,7 @@ class RunStore:
 
     def cue_audio(self, d: Path, cue_id: str) -> Path | None:
         """The .wav take cues.json names for `cue_id`: relative, inside the run folder."""
-        if not CUE_ID_RE.match(cue_id):
+        if not CUE_ID_RE.fullmatch(cue_id):
             return None
         doc = _dict(self.read_json(d / CUES))
         for key in ("cues", "extended"):
@@ -312,7 +315,7 @@ class RunStore:
         manifest = self.manifest(d)
         outputs = manifest.get("outputs") if manifest is not None else None
         listed = isinstance(outputs, dict) and rel in outputs
-        keyframe = len(parts) == 2 and parts[0] == "keyframes" and KEYFRAME_RE.match(parts[1])
+        keyframe = len(parts) == 2 and parts[0] == "keyframes" and KEYFRAME_RE.fullmatch(parts[1])
         if not (listed or keyframe):
             return None
         return contained_file(d, rel)

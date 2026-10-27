@@ -57,11 +57,13 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         allow_origins=settings.origins,
         allow_methods=CORS_METHODS,
         allow_headers=["*"],
+        expose_headers=["Retry-After"],
     )
 
     @app.get("/v1/health")
     def health():
-        return app.state.health.get()
+        # the cached answer, plus whether a live run is going now (never cached)
+        return {**app.state.health.get(), "live_busy": app.state.live.executor.busy}
 
     @app.get("/v1/runs")
     def list_runs():

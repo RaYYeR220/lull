@@ -1,8 +1,11 @@
 """Live runs: one description at a time, its progress streamed as Server-Sent Events.
 
 POST /v1/runs takes an upload (or a sample id). Before anything streams, it checks that no
-other run is going (409), the visitor's rate limit (429), the size (413), the format and the
-duration (422) and the spend caps (402). Then it answers with text/event-stream: a `run` event,
+other run is going (409) and at most MAX_UPLOADS uploads are being received (503), the
+visitor's rate limits (429: runs started, and uploads refused), the size (413), the format and
+the duration (422) and the spend caps (402). The run gets a remuxed copy cut at MAX_SECONDS
+and probed again (lull.api.clip), so the duration that counts is the copy's, not what the
+container claims. Then it answers with text/event-stream: a `run` event,
 every engine event as it happens (stage_start / stage_end / call / cue / warning), a final
 `done` or `error`, and a `: ping` comment whenever the stream has been quiet for 15 s.
 
@@ -11,7 +14,9 @@ The engine runs in a worker thread. Its callback only hands each event to the ev
 runs/<id>/events.jsonl and goes to every listener. GET /v1/runs/{id}/events replays that file
 and follows the run if it is still going in this process. It resumes a live run nobody
 finished (no manifest, no error.json: the process stopped); the engine's stage cache makes
-that cheap.
+that cheap. A run still going after WALL_CLOCK_S is given up: error event, error.json, the
+executor freed; its thread cannot be killed, but its next model call is refused and anything
+it reports after that is dropped.
 """
 
 from __future__ import annotations
@@ -24,25 +29,28 @@ import os
 import re
 import secrets
 import shutil
+import threading
 import time
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, BinaryIO
 
 import anyio
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import ValidationError
 from starlette.datastructures import FormData, UploadFile
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import Message
 
 from lull import media
+from lull.api import clip
 from lull.api.clean import Scrubber, default_roots
-from lull.api.ratelimit import RateLimiter
+from lull.api.ratelimit import HOUR, RateLimiter
 from lull.api.settings import ApiSettings
-from lull.api.store import RunStore
+from lull.api.store import PENDING, RunStore
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, Ledger
 from lull.pipeline import Event, budget_estimate
@@ -55,12 +63,17 @@ from lull.voices import DEFAULT_WPS, voice_wps
 
 log = logging.getLogger(__name__)
 
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+MAX_UPLOAD_BYTES = 30 * 1024 * 1024  # Cloud Run refuses HTTP/1 bodies over 32 MiB
 FORM_SLACK = 64 * 1024  # multipart headers and the small fields around the file
 MAX_SECONDS = 120.0
+TRIM_SLACK = 1.0  # a stream copy cuts at a packet, a little past the limit
 FORMATS = (".mp4", ".mov", ".webm", ".mkv")
 HEARTBEAT_S = 15.0
 BUSY_RETRY_S = 60
+MAX_UPLOADS = 2  # uploads received and checked at once
+UPLOADS_RETRY_S = 15
+REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
+WALL_CLOCK_S = 600.0
 
 EVENTS, REQUEST, ERROR, MANIFEST, INPUT = (
     "events.jsonl",
@@ -69,7 +82,7 @@ EVENTS, REQUEST, ERROR, MANIFEST, INPUT = (
     "manifest.json",
     "input",
 )
-SAMPLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+SAMPLE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")  # called with fullmatch
 BUSY_MESSAGE = "Another description is running. Try again in a minute, or open a recorded run."
 FORMAT_MESSAGE = "Send an mp4, mov, webm or mkv video."
 
@@ -107,6 +120,15 @@ def busy() -> LiveError:
     return LiveError(409, "busy", BUSY_MESSAGE, headers={"Retry-After": str(BUSY_RETRY_S)})
 
 
+def uploads_busy() -> LiveError:
+    return LiveError(
+        503,
+        "uploads_busy",
+        "Other videos are being uploaded right now. Try again in a few seconds.",
+        headers={"Retry-After": str(UPLOADS_RETRY_S)},
+    )
+
+
 def too_large(limit: int) -> LiveError:
     mb = f"{limit / 2**20:g}"
     return LiveError(
@@ -132,9 +154,30 @@ def _wait_words(seconds: int) -> str:
 # -- the engine --------------------------------------------------------------------------------
 
 
+class RunTimeout(Exception):
+    """The run went on past the wall clock and was given up."""
+
+
+class StopLedger:
+    """A run's ledger that refuses every further spend once `stop` is set: how the watchdog
+    ends a run whose thread it cannot kill (every model and search call checks first)."""
+
+    def __init__(self, inner: Ledger, stop: threading.Event) -> None:
+        self.inner, self._stop = inner, stop
+
+    def check(self, run_id: str, estimate: float) -> None:
+        if self._stop.is_set():
+            raise RunTimeout("the run was stopped by its wall clock")
+        self.inner.check(run_id, estimate)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
+
+
 @dataclass(frozen=True)
 class Job:
-    """One engine run: `runner(job, on_event)` does it in a worker thread."""
+    """One engine run: `runner(job, on_event)` does it in a worker thread. `stop` is set when
+    the watchdog gives the run up; a runner should end at its next chance."""
 
     run_id: str
     run_dir: Path
@@ -143,15 +186,18 @@ class Job:
     duration: float
     ledger: Ledger
     resumed: bool = False
+    stop: threading.Event = field(default_factory=threading.Event, compare=False)
 
 
 Runner = Callable[[Job, Callable[[Event], None]], object]
 
 
 def _run_pipeline(job: Job, on_event: Callable[[Event], None]) -> None:
-    """The API's one call into the engine, with real clients recording to the job's ledger."""
-    tf = TokenFactory.from_settings(job.ledger)
-    tavily = Tavily.from_settings(job.ledger)
+    """The API's one call into the engine, with real clients recording to the job's ledger
+    (made to refuse spend once the run is stopped)."""
+    ledger: Any = StopLedger(job.ledger, job.stop)
+    tf = TokenFactory.from_settings(ledger)
+    tavily = Tavily.from_settings(ledger)
     try:
         run_engine(
             job.video,
@@ -160,7 +206,7 @@ def _run_pipeline(job: Job, on_event: Callable[[Event], None]) -> None:
             tf=tf,
             speech=NemoSpeechHTTP.from_settings(),
             tavily=tavily,
-            ledger=job.ledger,
+            ledger=ledger,
             on_event=on_event,
             run_id=job.run_id,
         )
@@ -268,6 +314,8 @@ class LiveRun:
         info: dict[str, Any] = {"type": type(e).__name__}
         if isinstance(e, BudgetExceeded):
             info.update(message=budget_message(e.scope), stage=stage, scope=e.scope)
+        elif isinstance(e, RunTimeout):
+            info.update(message=str(e), stage=stage)
         else:
             info.update(message=self.scrub(str(e))[:500] or type(e).__name__, stage=stage)
         try:
@@ -303,12 +351,19 @@ class LiveRun:
 
 class Executor:
     """One live run at a time per process. The lock is never waited on: a second run is
-    refused (409), not queued."""
+    refused (409), not queued. A run still going after `wall_clock` seconds is given up.
+    `changed(run_dir)` is told when a run starts and ends (the run list cache)."""
 
-    def __init__(self) -> None:
+    def __init__(self, changed: Callable[[Path], None] | None = None) -> None:
         self.lock = asyncio.Lock()
         self.active: dict[str, LiveRun] = {}
+        self.wall_clock = WALL_CLOCK_S
+        self.changed = changed
         self._tasks: set[asyncio.Task] = set()
+
+    def _changed(self, run_dir: Path) -> None:
+        if self.changed is not None:
+            self.changed(run_dir)
 
     @property
     def busy(self) -> bool:
@@ -332,6 +387,7 @@ class Executor:
             self.lock.release()
             raise
         self.active[job.run_id] = run
+        self._changed(job.run_dir)
         task = asyncio.create_task(self._drive(run, job, runner), name=f"live {job.run_id}")
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
@@ -346,8 +402,15 @@ class Executor:
             except RuntimeError:  # the loop is closed: shutting down
                 pass
 
+        work = loop.run_in_executor(None, runner, job, on_event)
         try:
-            await loop.run_in_executor(None, runner, job, on_event)
+            await asyncio.wait_for(asyncio.shield(work), self.wall_clock)
+        except TimeoutError:
+            job.stop.set()  # its next model call is refused; what it reports now is dropped
+            work.add_done_callback(_late(job.run_id))
+            log.warning("live run %s given up after %g s", job.run_id, self.wall_clock)
+            limit = _wait_words(math.ceil(self.wall_clock))
+            run.fail(RunTimeout(f"This description took longer than {limit} and was stopped."))
         except Exception as e:
             if isinstance(e, BudgetExceeded):
                 log.warning("live run %s stopped by the %s cap", job.run_id, e.scope)
@@ -361,6 +424,17 @@ class Executor:
             self.lock.release()
             self.active.pop(run.run_id, None)
             run.close()
+            self._changed(job.run_dir)
+
+
+def _late(run_id: str) -> Callable[[asyncio.Future], None]:
+    """What a given-up run's thread did in the end, for the log."""
+
+    def done(f: asyncio.Future) -> None:
+        e = None if f.cancelled() else f.exception()
+        log.info("live run %s: its thread ended after the wall clock (%r)", run_id, e)
+
+    return done
 
 
 # -- what the routes share ---------------------------------------------------------------------
@@ -373,12 +447,18 @@ class Live:
     def __init__(self, settings: ApiSettings, store: RunStore) -> None:
         self.settings, self.store = settings, store
         self.runner: Runner = _run_pipeline
-        self.probe: Callable[[Path], media.Probe] = media.probe
+        self.probe: Callable[[Path], media.Probe] = clip.probe
+        self.trim: Callable[[Path, Path, float], Path] = clip.trim
         self.limiter = RateLimiter()
-        self.executor = Executor()
+        self.refusals = RateLimiter(
+            per_client=REFUSALS_PER_HOUR, client_window=HOUR, per_day=1_000_000
+        )
+        self.executor = Executor(changed=store.invalidate)
         self.heartbeat = HEARTBEAT_S
         self.max_bytes = MAX_UPLOAD_BYTES
         self.max_seconds = MAX_SECONDS
+        self.max_uploads = MAX_UPLOADS
+        self.uploading = 0
         self._ledger: Ledger | None = None
 
     @property
@@ -416,6 +496,16 @@ class Live:
                 f"Try again in {_wait_words(wait)}, or open a recorded run."
             )
         raise LiveError(429, "rate_limited", message, headers={"Retry-After": str(wait)})
+
+    def check_refusals(self, key: str) -> None:
+        stop = self.refusals.retry_after(key)
+        if stop is not None:
+            wait = stop[1]
+            message = (
+                f"Too many of your uploads were refused in the last hour. Try again in "
+                f"{_wait_words(wait)}, or open a recorded run."
+            )
+            raise LiveError(429, "rate_limited", message, headers={"Retry-After": str(wait)})
 
     async def start(self, job: Job, first: dict) -> tuple[list[dict], LiveRun, asyncio.Queue]:
         run = await self.executor.start(job, self.runner, self.scrubber(job.run_dir), first)
@@ -468,6 +558,8 @@ async def _read_form(request: Request, limit: int) -> FormData:
         return await Request(request.scope, counted).form(max_files=1, max_fields=8)
     except _TooLarge:
         raise too_large(limit) from None
+    except StarletteHTTPException as e:  # a body the multipart parser refuses
+        raise LiveError(400, "invalid", f"The upload could not be read: {e.detail}") from None
 
 
 def _safe_name(filename: str | None) -> str | None:
@@ -518,8 +610,58 @@ def _options(form: FormData) -> RunOptions:
     return RunOptions(mode=mode, voice=voice)
 
 
+def _new_run_dir(run_dir: Path) -> Path:
+    """The run folder, marked pending (left out of the run list) until the run starts."""
+    run_dir.mkdir(parents=True)
+    (run_dir / PENDING).touch()
+    (run_dir / INPUT).mkdir()
+    return run_dir / INPUT
+
+
+def unreadable() -> LiveError:
+    return LiveError(422, "unreadable", f"This file could not be read as a video. {FORMAT_MESSAGE}")
+
+
+def too_long(duration: float, limit: float) -> LiveError:
+    return LiveError(
+        422,
+        "too_long",
+        f"This video is {duration:.1f} s long. Live descriptions take videos up to {limit:.0f} s.",
+    )
+
+
+async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
+    try:
+        info = await anyio.to_thread.run_sync(live.probe, video)
+    except Exception:
+        log.info("live run %s: %s does not probe", run_id, video.name, exc_info=True)
+        raise unreadable() from None
+    if not info.duration > 0:
+        raise unreadable()
+    return info
+
+
+async def _cut(live: Live, run_id: str, video: Path) -> media.Probe:
+    """Check the video, then replace it by a remuxed copy cut at the length limit, and return
+    what probing that copy says: the container's own claim is not trusted."""
+    info = await _probe(live, run_id, video)
+    if info.duration > live.max_seconds:
+        raise too_long(info.duration, live.max_seconds)
+    cut = video.with_name(f".trim-{video.name}")
+    try:
+        await anyio.to_thread.run_sync(live.trim, video, cut, live.max_seconds)
+    except Exception:
+        log.info("live run %s: %s does not remux", run_id, video.name, exc_info=True)
+        raise unreadable() from None
+    info = await _probe(live, run_id, cut)
+    if info.duration > live.max_seconds + TRIM_SLACK:
+        raise too_long(info.duration, live.max_seconds)
+    os.replace(cut, video)
+    return info
+
+
 def _sample(settings: ApiSettings, sample_id: str) -> Path | None:
-    if not SAMPLE_RE.match(sample_id):
+    if not SAMPLE_RE.fullmatch(sample_id):
         return None
     path = settings.samples_dir / f"{sample_id}.mp4"
     return path if path.is_file() else None
@@ -542,8 +684,7 @@ async def _accept(live: Live, request: Request, run_id: str, run_dir: Path, clie
                 raise LiveError(422, "format", FORMAT_MESSAGE)
             if upload.size is not None and upload.size > live.max_bytes:
                 raise too_large(live.max_bytes)
-            video = run_dir / INPUT / name
-            video.parent.mkdir(parents=True)
+            video = _new_run_dir(run_dir) / name
             size = await anyio.to_thread.run_sync(_save, upload.file, video, live.max_bytes)
             source: dict[str, Any] = {"kind": "upload", "name": name, "bytes": size}
         else:
@@ -551,29 +692,13 @@ async def _accept(live: Live, request: Request, run_id: str, run_dir: Path, clie
             path = _sample(live.settings, sample)
             if path is None:
                 raise LiveError(422, "sample", "There is no sample with that id.")
-            video = run_dir / INPUT / path.name
-            video.parent.mkdir(parents=True)
+            video = _new_run_dir(run_dir) / path.name
             await anyio.to_thread.run_sync(_link_or_copy, path, video)
             source = {"kind": "sample", "id": sample, "name": path.name}
     finally:
         await form.close()
 
-    try:
-        info = await anyio.to_thread.run_sync(live.probe, video)
-    except Exception:
-        log.info("live run %s: the video does not probe", run_id, exc_info=True)
-        info = None
-    if info is None or not info.duration > 0:
-        raise LiveError(
-            422, "unreadable", f"This file could not be read as a video. {FORMAT_MESSAGE}"
-        )
-    if info.duration > live.max_seconds:
-        raise LiveError(
-            422,
-            "too_long",
-            f"This video is {info.duration:.1f} s long. Live descriptions take videos up to "
-            f"{live.max_seconds:.0f} s.",
-        )
+    info = await _cut(live, run_id, video)
     live.check_budget(run_id, info.duration)
     _write_json(
         run_dir / REQUEST,
@@ -605,6 +730,7 @@ def _resume_job(live: Live, run_id: str, run_dir: Path) -> Job:
         rel, duration, opts = None, 0.0, None
     video = run_dir / rel if rel is not None else None
     ok = rel is not None and not rel.is_absolute() and ".." not in rel.parts
+    ok = ok and not (run_dir / PENDING).exists()  # an upload that never finished
     if not ok or opts is None or video is None or not video.is_file():
         raise LiveError(404, "not_found", "This run stopped before it finished and cannot resume.")
     return Job(run_id, run_dir, video, opts, duration, live.ledger, resumed=True)
@@ -685,7 +811,7 @@ def list_samples(request: Request) -> list[dict[str, str]]:
     root = _live(request).settings.samples_dir
     if not root.is_dir():
         return []
-    paths = sorted(p for p in root.glob("*.mp4") if p.is_file() and SAMPLE_RE.match(p.stem))
+    paths = sorted(p for p in root.glob("*.mp4") if p.is_file() and SAMPLE_RE.fullmatch(p.stem))
     return [{"id": p.stem} for p in paths]
 
 
@@ -695,30 +821,42 @@ async def create_run(request: Request) -> StreamingResponse:
     key = live.limiter.client_key(client_ip(request, live.settings.lull_proxy_hops))
     if live.executor.busy:
         raise busy()
+    if live.uploading >= live.max_uploads:
+        raise uploads_busy()
     live.check_rate(key)
+    live.check_refusals(key)
     length = request.headers.get("content-length", "")
     if length.isdigit() and int(length) > live.max_bytes + FORM_SLACK:
         raise too_large(live.max_bytes)
 
     run_id = new_run_id()
     run_dir = live.settings.runs_dir / run_id
+    live.uploading += 1
     try:
-        job = await _accept(live, request, run_id, run_dir, key)
+        try:
+            job = await _accept(live, request, run_id, run_dir, key)
+        except LiveError as e:
+            if e.status in (400, 413, 422):  # read, then refused: counts against the visitor
+                live.refusals.hit(key)
+            raise
         # checked again with the claim, in one step: the upload took a while
         if live.executor.busy:
             raise busy()
         live.check_rate(key)
+        (run_dir / PENDING).unlink()
         first = {"run_id": run_id, "duration": job.duration, "options": _opts(job)}
         backlog, run, q = await live.start(job, first)
     except BaseException:
         shutil.rmtree(run_dir, ignore_errors=True)
         raise
+    finally:
+        live.uploading -= 1
     live.limiter.hit(key)
     return _sse(backlog, run, q, live.heartbeat)
 
 
 @router.get("/v1/runs/{run_id}/events")
-async def run_events(run_id: str, request: Request, after: int | None = None) -> StreamingResponse:
+async def run_events(run_id: str, request: Request, after: int | None = None) -> Response:
     live = _live(request)
     after = _after(request, after)
     found = live.store.find(run_id)
@@ -736,7 +874,10 @@ async def run_events(run_id: str, request: Request, after: int | None = None) ->
         events = read_events(run_dir)
         if not events:
             raise LiveError(404, "not_found", "No progress was recorded for this run.")
-        return _sse(_since(events, after))
+        rest = _since(events, after)
+        if not rest:  # seen to its end: 204 tells an EventSource to stop reconnecting
+            return Response(status_code=204)
+        return _sse(rest)
 
     job = _resume_job(live, run_id, run_dir)
     if live.executor.busy:

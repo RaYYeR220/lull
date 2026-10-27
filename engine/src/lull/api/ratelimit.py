@@ -2,12 +2,14 @@
 
 Visitors are known only by sha256(daily salt + ip): the salt is random, lives in memory and
 changes at UTC midnight, so the key cannot be turned back into an address or linked across
-days. The windows reset when the process restarts; the ledger's day cap still holds then.
+days. An IPv6 address counts as its /64 (one subscriber's prefix), an IPv4-mapped one as the
+IPv4 address. The windows reset when the process restarts; the ledger's day cap still holds then.
 """
 
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import math
 import secrets
 import time
@@ -19,6 +21,19 @@ DAY = 86_400.0
 HOUR = 3_600.0
 
 Limit = Literal["client", "global"]
+
+
+def subject(ip: str) -> str:
+    """What a visitor is counted as: the address, or for IPv6 its /64."""
+    try:
+        addr = ipaddress.ip_address(ip.strip().strip("[]"))
+    except ValueError:
+        return ip
+    if isinstance(addr, ipaddress.IPv6Address):
+        if addr.ipv4_mapped is not None:
+            return str(addr.ipv4_mapped)
+        return str(ipaddress.IPv6Network((int(addr) >> 64 << 64, 64)))
+    return str(addr)
 
 
 class RateLimiter:
@@ -39,11 +54,11 @@ class RateLimiter:
         self._salt: tuple[int, bytes] = (-1, b"")
 
     def client_key(self, ip: str) -> str:
-        """sha256 of today's salt and the address (hex)."""
+        """sha256 of today's salt and the visitor's address (hex)."""
         day = int(self._clock() // DAY)
         if self._salt[0] != day:
             self._salt = (day, secrets.token_bytes(16))
-        return hashlib.sha256(self._salt[1] + ip.encode("utf-8", "replace")).hexdigest()
+        return hashlib.sha256(self._salt[1] + subject(ip).encode("utf-8", "replace")).hexdigest()
 
     def _prune(self, now: float) -> None:
         while self._all and self._all[0] <= now - self.day_window:
