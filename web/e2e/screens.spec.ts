@@ -4,7 +4,7 @@ import { test } from "@playwright/test";
 
 /**
  * Captures the hero at the two reference sizes into e2e/__screens__/ for a
- * side-by-side look against the approved design. Run with `pnpm screens`.
+ * side-by-side look against the approved design. Run with `pnpm test:screens` (not part of `pnpm test:e2e`).
  */
 const OUT = path.join(__dirname, "__screens__");
 const SIZES = [

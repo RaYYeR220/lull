@@ -104,3 +104,12 @@ test("unknown routes get the styled not-found page", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("There’s nothing at this address.");
   await expect(page.getByRole("link", { name: "Go to the home page" })).toBeVisible();
 });
+
+test("responses carry the security headers", async ({ request }) => {
+  const res = await request.get("/");
+  const h = res.headers();
+  expect(h["x-content-type-options"]).toBe("nosniff");
+  expect(h["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(h["x-frame-options"]).toBe("DENY");
+  expect(h["permissions-policy"]).toBe("camera=(), microphone=(), geolocation=()");
+});

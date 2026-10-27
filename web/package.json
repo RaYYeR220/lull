@@ -13,8 +13,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test --grep-invert @screens",
-    "screens": "playwright test --grep @screens"
+    "test:e2e": "playwright test",
+    "test:screens": "playwright test -c playwright.screens.config.ts"
   },
   "dependencies": {
     "next": "15.5.28",
