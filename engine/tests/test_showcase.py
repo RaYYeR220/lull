@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 from typer.testing import CliRunner
 
+from locks import assert_locked
 from lull import cli, media
 from lull.showcase import SHOWCASE, ShowcaseError, export_showcase
 
@@ -287,3 +288,41 @@ def test_export_showcase_command(run_dir, tmp_path):
     assert "3 cues" in r.output and "showcase.json" in r.output
     r = CliRunner().invoke(cli.app, ["export-showcase", str(tmp_path / "nope"), str(out)])
     assert r.exit_code == 1 and "manifest.json" in r.output
+
+
+# -- fix round 1 -------------------------------------------------------------------------------
+
+
+def test_a_reused_folder_keeps_no_old_cue_audio_or_keyframes(run_dir, tmp_path):
+    """M3: the cue audio and keyframes of an earlier export do not linger."""
+    out = tmp_path / "site"
+    for name in ("audio/c099.m4a", "keyframes/c099.jpg"):
+        (out / name).parent.mkdir(parents=True, exist_ok=True)
+        (out / name).write_bytes(b"old")
+    export_showcase(run_dir, out)
+    assert sorted(p.name for p in (out / "audio").iterdir()) == ["c001.m4a", "c004.m4a",
+                                                                   "x003.m4a"]  # fmt: skip
+    assert "c099.jpg" not in {p.name for p in (out / "keyframes").iterdir()}
+
+
+def test_every_showcase_input_is_locked_to_local_files(run_dir, tmp_path, monkeypatch):
+    """M7: the export's probe and ffmpeg calls read local files only, like the pipeline's."""
+    seen: list[list[str]] = []
+    real = media.subprocess.run
+
+    def spy(cmd, *args, **kwargs):
+        seen.append([str(c) for c in cmd])
+        return real(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(media.subprocess, "run", spy)
+    export_showcase(run_dir, tmp_path / "site")
+    assert len(seen) >= 5  # probe, video, sound, 3 cue files
+    for cmd in seen:
+        assert_locked(cmd)
+
+
+def test_the_command_says_the_cost_is_per_run_id():
+    """M4: costUsd is what the ledger holds for the run id, every run under it."""
+    r = CliRunner().invoke(cli.app, ["export-showcase", "--help"], terminal_width=200)
+    text = " ".join(r.output.split())
+    assert r.exit_code == 0 and "costUsd" in text and "every run under that run id" in text

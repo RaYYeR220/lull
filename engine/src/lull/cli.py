@@ -353,7 +353,10 @@ def export_showcase_cmd(
 ) -> None:
     """Export a finished run for the website: showcase.json, a small video.mp4 with the
     original sound, the described audio, the description tracks, each cue's audio and the
-    keyframes."""
+    keyframes.
+
+    costUsd is the ledger total of every run under that run id; describe with a fresh
+    --run-id to show the cost of one run."""
     try:
         path = export_showcase(run_dir, out_dir, id=id, title=title, credit=credit)
     except (ShowcaseError, MediaError) as e:

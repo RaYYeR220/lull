@@ -23,6 +23,10 @@ cue, claims [{text, verdict}]}, costUsd}.
 The verify example is the first published cue whose verification history shows a claim the
 frames did not support (it was cut before the cue was voiced): its draft as first checked and
 every verdict on it. Without one it is the first verified cue with its claims.
+
+costUsd is the run's summary cost: what the ledger holds for its run id, every run under that
+run id (describe with a fresh --run-id to show one run's cost). A reused OUT_DIR loses the cue
+audio and keyframes of an earlier export.
 """
 
 from __future__ import annotations
@@ -171,7 +175,9 @@ def export_showcase(
     rows.sort(key=lambda r: (r[0], r[1].id))
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / AUDIO_DIR).mkdir(exist_ok=True)
+    for folder in (AUDIO_DIR, KEYFRAMES):  # nothing from an earlier export lingers
+        shutil.rmtree(out_dir / folder, ignore_errors=True)
+    (out_dir / AUDIO_DIR).mkdir()
     video = out_dir / VIDEO
     has_sound = _video(described, info, video)
     with tempfile.TemporaryDirectory(prefix="lull-showcase-") as tmp:
@@ -180,7 +186,6 @@ def export_showcase(
     for name in COPIED:
         shutil.copyfile(run_dir / name, out_dir / name)
     if (run_dir / KEYFRAMES).is_dir():
-        shutil.rmtree(out_dir / KEYFRAMES, ignore_errors=True)
         shutil.copytree(run_dir / KEYFRAMES, out_dir / KEYFRAMES)
     for _, c in rows:
         src = Path(c.audio_path)
