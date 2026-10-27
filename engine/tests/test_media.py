@@ -274,3 +274,27 @@ def test_a_variable_frame_rate_video_probes_and_cuts(tmp_path):
     assert all(f.read_bytes()[:2] == b"\xff\xd8" for f in frames)
     clip = media.cut_clip(vfr, tmp_path / "c.mp4", 1.0, 3.0, height=120)
     assert media.probe(clip).duration == pytest.approx(2.0, abs=0.2)
+
+
+# -- fix round 1 -------------------------------------------------------------------------------
+
+
+def test_probe_refuses_a_list_before_opening_what_it_names(tone_slides, tmp_path, commands):
+    """I1: ffprobe gets a format whitelist, so a concat list is refused before it is read: a
+    list naming an existing file and one naming a missing file fail the same way (no oracle
+    for which files exist) and the named file is never opened."""
+    shutil.copy(tone_slides, tmp_path / "real.mp4")
+    errors = []
+    for name, target in (("a.mp4", "real.mp4"), ("b.mp4", "nothere.mp4")):
+        path = tmp_path / name
+        path.write_text(f"ffconcat version 1.0\nfile {target}\nduration 12.0\n", encoding="utf-8")
+        with pytest.raises(media.MediaError) as err:
+            media.probe(path)
+        errors.append(str(err.value))
+    assert errors[0] == errors[1]
+    assert "container" in errors[0] and "real.mp4" not in errors[0]
+    [cmd] = [c for c in commands if c[-1].endswith("a.mp4")]
+    assert "-format_whitelist" in cmd
+    debug = [("debug" if a == "error" else a) for a in cmd]  # the same call, verbose
+    log = subprocess.run(debug, capture_output=True, text=True).stderr
+    assert "a.mp4" in log and "real.mp4" not in log  # opened the list, never what it names

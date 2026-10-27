@@ -21,7 +21,9 @@ import numpy as np
 
 _FLOOR_DB = -120.0
 SAFE_PROTOCOLS = "file,pipe"
-SAFE_CONTAINERS = frozenset({"mov", "mp4", "m4a", "3gp", "3g2", "mj2", "matroska", "webm"})
+SAFE_FORMATS = "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm"  # ffprobe's -format_whitelist
+SAFE_CONTAINERS = frozenset(SAFE_FORMATS.split(","))
+_NOT_LISTED = re.compile(r"\[(\w+) @ [^\]]*\] Format not on whitelist")
 # demuxers that open other files or URLs, or are not media files at all: never accepted, even
 # next to an allowed name
 UNSAFE_CONTAINERS = frozenset(
@@ -80,8 +82,12 @@ def assert_safe_container(info: Probe) -> None:
     names = {n.strip().lower() for n in info.format_name.split(",") if n.strip()}
     if names & SAFE_CONTAINERS and not names & UNSAFE_CONTAINERS:
         return
-    raise MediaError(
-        f"unsupported container {info.format_name or 'unknown'!r}: only MP4/MOV, Matroska and "
+    raise _unsupported(info.format_name)
+
+
+def _unsupported(format_name: str) -> MediaError:
+    return MediaError(
+        f"unsupported container {format_name or 'unknown'!r}: only MP4/MOV, Matroska and "
         "WebM video files are accepted"
     )
 
@@ -112,11 +118,22 @@ def _rotation(stream: dict) -> int:
 
 def probe(path: Path) -> Probe:
     """Duration, displayed size (a quarter-turned video reports its turned size), frame
-    rate, audio and container of `path`."""
-    out = _run(
-        [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS, "-v", "error",
-         "-print_format", "json", "-show_format", "-show_streams", str(path)]
-    )  # fmt: skip
+    rate, audio and container of `path`.
+
+    ffprobe may only pick an MP4/MOV, Matroska or WebM demuxer (-format_whitelist): a playlist
+    or a concat list is refused before anything it names is opened, with the same error
+    whatever it names, so the answer never tells which files exist."""
+    try:
+        out = _run(
+            [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS,
+             "-format_whitelist", SAFE_FORMATS, "-v", "error",
+             "-print_format", "json", "-show_format", "-show_streams", str(path)]
+        )  # fmt: skip
+    except MediaError as e:
+        refused = _NOT_LISTED.search(str(e))
+        if refused:
+            raise _unsupported(refused.group(1)) from None
+        raise
     info = json.loads(out.stdout)
     streams = info.get("streams", [])
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
