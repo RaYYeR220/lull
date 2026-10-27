@@ -24,6 +24,7 @@ from lull.pipeline import (
     run_id_for,
     source_digest,
 )
+from lull.showcase import export_showcase
 from lull.stages.finalize import OverlapError
 from lull.store import file_sha256
 from lull.tavily import TavilyError
@@ -144,6 +145,25 @@ def test_full_run_publishes_every_output(runs):
     assert [re.sub(r"-[0-9a-f]{16}", "-<key>", n) for n in names if n.startswith("research/")] == [
         "research/terms-<key>.json"  # research's own steps (no Tavily: no lookups)
     ]
+
+
+def test_a_published_run_exports_for_the_showcase(runs, tmp_path):
+    """The exporter reads what a real run publishes (cues.json timeline, finalize history)."""
+    path = export_showcase(runs["run_dir"], tmp_path / "site", id="tone")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert [(c["id"], c["status"]) for c in data["cues"]] == [
+        ("x002", "extended"), ("c001", "verified"), ("c002", "verified"),
+    ]  # fmt: skip
+    assert data["cues"][1]["start"] == 1.8 and data["gaps"][0] == {
+        "id": "g001", "start": 1.8, "end": 6.25, "capacity": 13,
+    }  # fmt: skip
+    assert data["speech"] == [[0.3, 1.6], [11.2, 11.95]]
+    assert [w["t"] for w in data["words"]] == ["Hi,", "I", "am", "Ada.", "Bye."]
+    assert data["verifyExample"]["cueId"] == "c001"  # every claim held: the first verified cue
+    assert data["verifyExample"]["cue"] == CUE_TEXT["c001"]
+    assert len(data["loudness"]) == 120 and max(data["loudness"][:35]) > -30
+    for name in ("video.mp4", "described-audio.m4a", "audio/c001.m4a", "audio/x002.m4a"):
+        assert (tmp_path / "site" / name).stat().st_size > 0, name
 
 
 def test_run_reports_stages_calls_cues_warnings_and_done(runs):

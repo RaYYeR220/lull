@@ -1,4 +1,5 @@
-"""Command line: `lull describe`, `lull calibrate-voice` and `lull ledger`.
+"""Command line: `lull describe`, `lull calibrate-voice`, `lull ledger` and
+`lull export-showcase`.
 
 Settings come from the environment or a .env file: NEBIUS_API_KEY, TAVILY_API_KEY (optional),
 LULL_SPEECH_URL (default http://127.0.0.1:8089), LULL_SPEECH_KEY, LULL_HOME (ledger and voice
@@ -7,6 +8,7 @@ rates, default ~/.lull) and the LULL_CAP_* spend caps.
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import tempfile
@@ -24,6 +26,7 @@ from lull.config import get_settings
 from lull.ledger import BudgetExceeded, Ledger
 from lull.media import MediaError
 from lull.pipeline import Event, run, run_id_for
+from lull.showcase import ShowcaseError, export_showcase
 from lull.speech import DEFAULT_URL, NemoSpeechHTTP, SpeechClient, SpeechError
 from lull.stages.finalize import OverlapError
 from lull.store import file_sha256
@@ -335,6 +338,32 @@ def ledger_cmd(
     typer.echo(
         f"  {'total':<9} {'':<13} {summary['calls']:>5} {tin:>10,} {cached:>8,} "
         f"{tout:>8,}  ${summary['total_cost_usd']:.4f}  {seconds:>7.1f}"
+    )
+
+
+@app.command("export-showcase")
+def export_showcase_cmd(
+    run_dir: Annotated[Path, typer.Argument(help="A finished `lull describe` output folder.")],
+    out_dir: Annotated[Path, typer.Argument(help="Where the website's files go.")],
+    id: Annotated[str | None, typer.Option("--id", help="Showcase id (default: folder name).")] = (
+        None
+    ),
+    title: Annotated[str | None, typer.Option(help="Title (default: the video's name).")] = None,
+    credit: Annotated[str, typer.Option(help="Credit line for the video.")] = "",
+) -> None:
+    """Export a finished run for the website: showcase.json, a small video.mp4 with the
+    original sound, the described audio, the description tracks, each cue's audio and the
+    keyframes."""
+    try:
+        path = export_showcase(run_dir, out_dir, id=id, title=title, credit=credit)
+    except (ShowcaseError, MediaError) as e:
+        _fail(f"{type(e).__name__}: {_one_line(str(e))}", 1)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    files = sum(1 for p in Path(out_dir).rglob("*") if p.is_file())
+    typer.echo(
+        f"{data['id']}: {len(data['cues'])} cues, {len(data['gaps'])} pauses, "
+        f"{data['duration']:.1f} s, ${data['costUsd']:.4f}; {files} files in {out_dir} "
+        f"({path.name})"
     )
 
 

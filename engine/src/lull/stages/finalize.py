@@ -49,7 +49,7 @@ from lull.stages.verify import (
 from lull.stages.voice import MAX_TEMPO, atempo, voice
 from lull.tf import TokenFactory
 from lull.timeline import merge_spans
-from lull.types import Claim, Cue, Gap, RunOptions, Span, VisualEvent
+from lull.types import Check, Claim, Cue, Gap, RunOptions, Span, VisualEvent
 
 log = logging.getLogger(__name__)
 
@@ -385,6 +385,7 @@ class _Finalise:
     findings: list[Finding] = field(default_factory=list)
     removed: list[Claim] = field(default_factory=list)
     words_before: int | None = None  # word count before the first compression
+    checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
 
     @property
@@ -442,6 +443,7 @@ class _Finalise:
                 "tempo": tempo,
                 "findings": [f.model_dump(mode="json") for f in self.findings],
                 "note": self._note(reason, extra),
+                "checks": list(self.checks),
             }
         )
 
@@ -515,7 +517,9 @@ class _Finalise:
             self.clip = (cut_clip(self.video, dst, lo, hi, height=CLIP_HEIGHT), lo)
         clip, offset = self.clip
         names = names_in(self.text, self.names)
-        return verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset)
+        claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset)
+        self.checks.append(Check(text=self.text, claims=claims))
+        return claims
 
     def _removed_add(self, bad: list[Claim]) -> None:
         seen = {_key(c) for c in self.removed}

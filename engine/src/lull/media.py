@@ -44,6 +44,7 @@ class Probe:
     video_codec: str = ""
     audio_codec: str | None = None
     format_name: str = ""  # ffprobe's demuxer names, comma-separated ("mov,mp4,m4a,3gp,3g2,mj2")
+    audio_streams: int = 0
 
 
 def _bin(name: str) -> str:
@@ -117,6 +118,7 @@ def probe(path: Path) -> Probe:
         video_codec=video.get("codec_name", ""),
         audio_codec=None if audio is None else audio.get("codec_name", ""),
         format_name=str(info.get("format", {}).get("format_name") or ""),
+        audio_streams=sum(s.get("codec_type") == "audio" for s in streams),
     )
 
 

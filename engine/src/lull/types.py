@@ -88,6 +88,14 @@ class Claim(BaseModel):
     at: float | None
 
 
+class Check(BaseModel):
+    """One verification round of a cue: the text the frames were checked against and the
+    verdict on each of its claims."""
+
+    text: str
+    claims: list[Claim]
+
+
 class Cue(BaseModel):
     id: str
     gap_id: str | None
@@ -103,6 +111,7 @@ class Cue(BaseModel):
     tempo: float = 1.0
     findings: list[dict] = Field(default_factory=list)  # lint findings, serialised
     note: str | None = None  # why the cue is held, or what finalisation changed
+    checks: list[Check] = Field(default_factory=list)  # every verification round, in order
 
 
 class RunOptions(BaseModel):

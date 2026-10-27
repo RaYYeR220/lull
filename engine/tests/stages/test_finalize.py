@@ -213,6 +213,11 @@ def test_not_visible_claim_is_removed_and_reverified(tmp_path, video):
     assert rm["schema"] == TEXT_SCHEMA
     assert "in a red coat" in _user_text(rm) and _description(rm) == TEXT
     assert _description(tf.of("verify")[1]) == "A person opens a door."
+    # every verification round is kept: the draft as first checked, then the cut line
+    assert [(c.text, [k.verdict for k in c.claims]) for c in out.checks] == [
+        (TEXT, ["supported", "not_visible", "supported"]),
+        ("A person opens a door.", ["supported", "supported"]),
+    ]
 
 
 def test_contradicted_claim_is_removed(tmp_path, video):
