@@ -6,6 +6,7 @@ import pytest
 from lull.stages import watch as watch_mod
 from lull.stages.watch import (
     EVENT_SCHEMA,
+    confirm_said,
     load_prompt,
     merge_events,
     parse_events,
@@ -417,7 +418,7 @@ def test_watch_returns_absolute_times(two_window_video: Path, tmp_path: Path):
         {"events": [_ev(2.0, 5.0, "setting", "a plain red screen", sal=2),
                     _ev(103.5, 150.0, "scene_change", "the screen turns blue", sal=4)]},
         {"events": [_ev(10.0, 10.5, "scene_change", "the screen turns blue", sal=4),
-                    _ev(20.0, 25.0, "object", "a blue field fills the frame")]},
+                    _ev(20.0, 25.0, "object", "a blue field fills the frame", said=True)]},
     ])  # fmt: skip
     out = watch(two_window_video, tmp_path, words, fake, run_id="r1", profile="education")
 
@@ -451,6 +452,7 @@ def test_watch_returns_absolute_times(two_window_video: Path, tmp_path: Path):
     assert (out[1].t_start, out[1].t_end) == pytest.approx((103.5, 104.5), abs=0.05)
     assert (out[2].t_start, out[2].t_end) == pytest.approx((114.0, 119.0), abs=0.05)
     assert all(0 <= e.t_start <= e.t_end <= 125.5 for e in out)
+    assert out[2].said_in_dialogue is False  # R1: nobody says "blue field" near 114-119 s
 
 
 def test_watch_raises_when_a_window_answer_is_all_malformed(two_window_video: Path, tmp_path: Path):
@@ -477,3 +479,43 @@ def test_watch_no_speech_and_proxy_fallback(
     assert len(proxied) == 2 and all(mb == 100 for _, mb in proxied)
     assert "(no speech in this window)" in _user_text(fake.calls[0])
     assert "entertainment" in _user_text(fake.calls[1])
+
+
+# -- fix round 1: rulings R1 and R3 ------------------------------------------------------------
+
+
+def _w(text, start, end=None):
+    return Word(text=text, start=start, end=start + 0.4 if end is None else end, speaker=1)
+
+
+def test_said_in_dialogue_is_kept_only_when_the_words_are_said_near_it():
+    """R1: the model's flag stands only when at least 30 % of the event's content words are
+    said within 5 s of it; the code never sets the flag itself."""
+    words = [_w("Safe", 0.2), _w("here.", 0.7), _w("Water", 30.0), _w("use", 30.5),
+             _w("by", 31.0), _w("sector", 31.5), _w("is", 32.0), _w("high.", 32.5)]  # fmt: skip
+    events = [
+        _ve(1.0, 3.0, "action", "The person climbs out of the window onto a ledge", said=True),
+        _ve(33.0, 36.0, "slide", "A slide titled Water use by sector", said=True),  # 2.5 s off
+        _ve(60.0, 62.0, "slide", "A slide titled Water use by sector", said=True),  # too far
+        _ve(31.0, 32.0, "slide", "Water use by sector", said=False),  # never set by code
+        # 3 of 10 content words said: exactly 30 % is enough
+        _ve(29.0, 33.0, "chart", "chart water use sector bars rise fall left right top",
+            said=True),
+    ]  # fmt: skip
+    out = confirm_said(events, words)
+    assert [e.said_in_dialogue for e in out] == [False, True, False, False, True]
+    assert [e.text for e in out] == [e.text for e in events]
+
+
+def test_the_fold_never_crosses_a_scene_cut():
+    """R3: a cut between two look-alike events keeps them apart (the pipeline fixture's red
+    and blue screens are a Jaccard-0.5 pair one second apart)."""
+    w = _span(0, 12)
+    pair = [_ve(0.0, 6.0, "setting", "A plain red screen."),
+            _ve(7.0, 12.0, "setting", "A plain blue screen.")]  # fmt: skip
+    assert len(merge_events([(w, pair)])) == 1  # no cut known: ruling B1 folds them
+    assert len(merge_events([(w, pair)], cuts=[6.0])) == 2
+    slices = [_ve(9.0, 10.0, "on_screen_text", "Tag #A on black", verb="#A"),
+              _ve(10.0, 11.0, "on_screen_text", "Tag #A on black", verb="#A")]  # fmt: skip
+    assert len(merge_events([(_span(30, 130), slices)], cuts=[20.0, 45.0])) == 1  # cuts elsewhere
+    assert len(merge_events([(_span(30, 130), slices)], cuts=[40.0])) == 2  # absolute times
