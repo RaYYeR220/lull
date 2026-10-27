@@ -315,25 +315,26 @@ def test_api_uses_no_private_ledger_helpers():
         assert "_midnight_utc" not in src.read_text(encoding="utf-8"), src.name
 
 
-# -- the scrubber: roots only at path boundaries, never inside URLs --------------------------------
+# -- the scrubber: URLs stay readable, a root is cut only as whole path parts ---------------------
+
+LEGIT_URLS = [
+    "https://huggingface.co/datasets/nvidia/Nemotron-Personas-USA",
+    "https://example.com/tmpl/page.html",
+]
 
 
-def _scrubber():
+def _scrubber(**kw):
     from lull.api.clean import Scrubber
 
-    return Scrubber(Path("/data/runs/r1"), [Path("/data"), Path("/tmp"), Path("/root")])
+    return Scrubber(Path("/data/runs/r1"), [Path("/data"), Path("/tmp"), Path("/root")], **kw)
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "see https://example.org/data/report.html for more",
-        "fetched https://cdn.example.com/tmp/clip.mp4 (404)",
-        "https://example.org/root/x and http://h.test/data",
-    ],
-)
-def test_scrubber_leaves_urls_alone(text):
-    assert _scrubber()(text) == text
+@pytest.mark.parametrize("url", LEGIT_URLS)
+@pytest.mark.parametrize("names_only", [False, True])
+def test_scrubber_keeps_legitimate_urls_readable(url, names_only):
+    s = _scrubber(names_only=names_only)
+    assert s(url) == url
+    assert s(f"fetched {url} (404)") == f"fetched {url} (404)"
 
 
 def test_scrubber_cuts_roots_only_at_path_boundaries():
@@ -343,14 +344,7 @@ def test_scrubber_cuts_roots_only_at_path_boundaries():
     assert s("open /database/table.db") == "open table.db"  # not "base/table.db"
     assert s("in /rooted/thing.txt now") == "in thing.txt now"  # not "ed/thing.txt"
     assert s("(/data)") == "()"
-
-
-def test_names_only_scrubber_keeps_urls_in_titles():
-    from lull.api.clean import Scrubber
-
-    s = Scrubber(Path("/data"), [Path("/data"), Path("/tmp")], names_only=True)
-    assert s("https://example.org/data/clip.mp4") == "https://example.org/data/clip.mp4"
-    assert s("/data/runs/r1/input/clip.mp4") == "clip.mp4"
+    assert _scrubber(names_only=True)("/data/runs/r1/input/clip.mp4") == "clip.mp4"
 
 
 # -- /v1/health does not make callers wait on a slow speech probe ---------------------------------
@@ -400,7 +394,7 @@ def _win_scrubber():
     "text",
     [
         r"error:C:\Users\egori\secret\x.log",
-        r"\?\C:\Users\egori\secret\x.log",
+        r"\\?\C:\Users\egori\secret\x.log",
         "file:///C:/Users/egori/secret/x.log",
         "x-/home/app/secret/x.log",
         "see c:/users/EGORI/secret/x.log",
@@ -415,12 +409,19 @@ def test_scrubber_cuts_every_form_of_a_root(text):
 
 
 @pytest.mark.parametrize(
-    "url",
-    ["https://example.org/data/report.html", "https://cdn.example.com/tmp/clip.mp4"],
+    "text",
+    [
+        r"GET http://x.test/?p=C:\Users\egori\secret\x.log failed",
+        "see file://host/C:/Users/egori/secret/x.log",
+        "see file://fileserver/home/app/secret/x.log",
+        "open http://C:/Users/egori/secret/x.log",
+        "https://example.org/home/app/x.log",
+    ],
 )
-def test_scrubber_keeps_urls_whole_even_with_a_root_inside(url):
-    from lull.api.clean import Scrubber
+def test_no_known_root_survives_inside_a_url(text):
+    out = _win_scrubber()(text)
+    assert "egori" not in out.lower() and "/home/app" not in out
 
-    s = Scrubber(Path("/data/runs/r1"), [Path("/data"), Path("/tmp")])
-    assert s(f"fetched {url} (404)") == f"fetched {url} (404)"
-    assert s(url) == url
+
+def test_a_root_right_after_a_url_host_leaves_a_readable_url():
+    assert _scrubber()("https://example.org/data/report.html") == "https://example.org/report.html"
