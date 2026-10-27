@@ -16,8 +16,13 @@ def test_span_end_before_start_rejected():
 
 def test_visual_event_salience_bounds():
     base = dict(
-        id="e1", t_start=0.0, t_end=1.0, kind="action", text="x",
-        verbatim_text=None, said_in_dialogue=False,
+        id="e1",
+        t_start=0.0,
+        t_end=1.0,
+        kind="action",
+        text="x",
+        verbatim_text=None,
+        said_in_dialogue=False,
     )
     assert VisualEvent(salience=5, **base).salience == 5
     with pytest.raises(ValidationError):
@@ -28,10 +33,17 @@ def test_visual_event_salience_bounds():
 
 def test_cue_json_round_trip():
     cue = Cue(
-        id="c1", gap_id="g1", start=2.0, end=4.5, text="A woman opens a door.",
-        event_ids=["e1"], status="verified", ahead=False,
+        id="c1",
+        gap_id="g1",
+        start=2.0,
+        end=4.5,
+        text="A woman opens a door.",
+        event_ids=["e1"],
+        status="verified",
+        ahead=False,
         claims=[Claim(text="a woman", verdict="supported", at=2.1)],
-        audio_path=None, audio_dur=None,
+        audio_path=None,
+        audio_dur=None,
     )
     assert cue.tempo == 1.0
     assert Cue.model_validate_json(cue.model_dump_json()) == cue
@@ -40,13 +52,25 @@ def test_cue_json_round_trip():
 def test_run_options_defaults():
     o = RunOptions()
     assert (o.mode, o.profile, o.voice, o.source_url, o.language) == (
-        "standard", "education", "Sofia", None, "en",
+        "standard",
+        "education",
+        "Sofia",
+        None,
+        "en",
     )
 
 
 def test_settings_load_without_env(monkeypatch, tmp_path):
-    for k in ("NEBIUS_API_KEY", "TAVILY_API_KEY", "LULL_SPEECH_URL", "LULL_SPEECH_KEY",
-              "LULL_CAP_RUN", "LULL_CAP_DAY", "LULL_CAP_TOTAL", "LULL_HOME"):
+    for k in (
+        "NEBIUS_API_KEY",
+        "TAVILY_API_KEY",
+        "LULL_SPEECH_URL",
+        "LULL_SPEECH_KEY",
+        "LULL_CAP_RUN",
+        "LULL_CAP_DAY",
+        "LULL_CAP_TOTAL",
+        "LULL_HOME",
+    ):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.chdir(tmp_path)
     s = Settings(_env_file=None)

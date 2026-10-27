@@ -19,11 +19,31 @@ SUPER = "nvidia/Nemotron-3.5-Super-VL"
 LIGHT = "nvidia/Nemotron-3_5-Lightning"
 
 
-def rec(run_id="r1", cost=0.1, ts=None, role="describe", model=SUPER, provider="tokenfactory",
-        tin=10, tcached=0, tout=5, lat=1.5):
-    return CallRecord(run_id=run_id, stage="s", role=role, provider=provider, model=model,
-                      tokens_in=tin, tokens_cached=tcached, tokens_out=tout, latency_s=lat,
-                      cost_usd=cost, ts=time.time() if ts is None else ts)
+def rec(
+    run_id="r1",
+    cost=0.1,
+    ts=None,
+    role="describe",
+    model=SUPER,
+    provider="tokenfactory",
+    tin=10,
+    tcached=0,
+    tout=5,
+    lat=1.5,
+):
+    return CallRecord(
+        run_id=run_id,
+        stage="s",
+        role=role,
+        provider=provider,
+        model=model,
+        tokens_in=tin,
+        tokens_cached=tcached,
+        tokens_out=tout,
+        latency_s=lat,
+        cost_usd=cost,
+        ts=time.time() if ts is None else ts,
+    )
 
 
 def midnight_utc() -> float:
@@ -113,6 +133,7 @@ def test_check_total_and_order(tmp_path):
 
 def test_caps_default_from_settings(tmp_path, monkeypatch):
     from lull.config import get_settings
+
     monkeypatch.setenv("LULL_CAP_RUN", "0.2")
     get_settings.cache_clear()
     try:
@@ -149,8 +170,12 @@ def test_summary(tmp_path):
     assert (d["calls"], d["tokens_in"], d["tokens_cached"], d["tokens_out"]) == (2, 30, 2, 11)
     assert d["cost_usd"] == pytest.approx(0.3) and d["latency_s"] == pytest.approx(3.0)
     assert rows[("plan", ULTRA)]["calls"] == 1
-    assert led.summary("none") == {"run_id": "none", "calls": 0, "total_cost_usd": 0.0,
-                                   "by_role_model": []}
+    assert led.summary("none") == {
+        "run_id": "none",
+        "calls": 0,
+        "total_cost_usd": 0.0,
+        "by_role_model": [],
+    }
 
 
 def test_threaded_writes(tmp_path):
