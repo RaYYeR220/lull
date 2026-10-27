@@ -61,7 +61,8 @@ def run_dir(tmp_path_factory) -> Path:
         "-f", "lavfi", "-i", f"sine=frequency=440:duration=2,apad=whole_dur={DURATION}",
         "-f", "lavfi", "-i", f"sine=frequency=2000:duration={DURATION}",
         "-map", "0:v", "-map", "2:a", "-map", "1:a",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-t", str(DURATION),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-ac:a:1", "6",
+        "-t", str(DURATION),
         "-metadata:s:a:0", "handler_name=Described", "-metadata:s:a:1", "handler_name=Original",
         str(root / "described.mp4"),
     )  # fmt: skip
@@ -217,6 +218,11 @@ def test_media_is_small_and_relative(exported, run_dir):
     video = media.probe(out / "video.mp4")
     assert video.height == 480 and video.width % 2 == 0 and video.video_codec == "h264"
     assert video.audio_codec == "aac" and video.audio_streams == 1
+    channels = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=channels",
+         "-of", "csv=p=0", str(out / "video.mp4")], capture_output=True, text=True, check=True,
+    ).stdout.strip()  # fmt: skip
+    assert channels == "2"  # a 5.1 original is folded down for the browser
     body = (out / "video.mp4").read_bytes()
     assert 0 < body.find(b"moov") < body.find(b"mdat")  # faststart: the index comes first
     for k, dur in (("c001", 1.0), ("x003", 0.6), ("c004", 0.8)):

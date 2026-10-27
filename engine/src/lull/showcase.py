@@ -4,7 +4,8 @@
 
 OUT_DIR gets
   video.mp4            the original picture and sound (the "Original" track of described.mp4),
-                       at most 480 lines, H.264 CRF 30 + AAC 96k, index first (faststart)
+                       at most 480 lines, H.264 CRF 30 + AAC 96k stereo, index first
+                       (faststart)
   described-audio.m4a  the described mix, as published
   descriptions.vtt     the standard description track, as published
   extended.vtt         the extended descriptions, as published
@@ -131,7 +132,7 @@ def _ffmpeg(*args: str) -> None:
 def _video(src: Path, info: media.Probe, dst: Path) -> bool:
     """The original picture and sound at most MAX_HEIGHT lines; True when it has sound."""
     original = 1 if info.audio_streams >= 2 else None  # track 2 "Original"; none: no sound
-    sound = ["-map", "0:a:1", "-c:a", "aac", "-b:a", VIDEO_AUDIO] if original else []
+    sound = ["-map", "0:a:1", "-c:a", "aac", "-b:a", VIDEO_AUDIO, "-ac", "2"] if original else []
     height = f"trunc(min({MAX_HEIGHT},ih)/2)*2"
     _ffmpeg(
         *media.input_args(src), "-map", "0:v:0", *sound,
