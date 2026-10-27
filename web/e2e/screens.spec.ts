@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import { routeFixtures, waitReady } from "./player-fixtures";
 
 /**
  * Captures the pages at the two reference sizes into e2e/__screens__/ for a side-by-side
@@ -65,6 +66,83 @@ test.describe("screens @screens", () => {
       await page.waitForTimeout(2200);
       await page.screenshot({ path: path.join(OUT, `kitchen-${size.name}.png`) });
       await fullPage(page, `kitchen-${size.name}-full.png`);
+    });
+  }
+});
+
+/**
+ * The player inside the site (the kitchen instance, with the fixture media routed in place
+ * of the recorded run's): each mode mid-line, the menu, the panels, an extended hold and the
+ * missing-media state, at both sizes. Element captures: e2e/__screens__/player-<state>-<size>.png.
+ */
+test.describe("player screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 90_000 });
+
+  const MODES = [
+    { file: "mixed", radio: "Mixed audio" },
+    { file: "spoken", radio: "Spoken cues" },
+    { file: "screen-reader", radio: "My screen reader" },
+  ];
+
+  for (const size of SIZES) {
+    test(`player at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await routeFixtures(page, "**/showcase/ed90/**", "/showcase/ed90/");
+      await page.goto("/kitchen#player", { waitUntil: "networkidle" });
+      await waitReady(page);
+      await page.evaluate(() => document.fonts.ready);
+      const p = page.locator("lull-player");
+      const shot = (state: string) => p.screenshot({ path: path.join(OUT, `player-${state}-${size.name}.png`) });
+      const modeButton = p.getByRole("button", { name: /^Description mode/ });
+      const seek = (t: number) => p.evaluate((el, at) => (el as unknown as { seek(t: number): void }).seek(at), t);
+      await p.scrollIntoViewIfNeeded();
+      await shot("rest");
+
+      for (const m of MODES) {
+        await modeButton.click();
+        await p.getByRole("radio", { name: m.radio }).check();
+        if ((await modeButton.getAttribute("aria-expanded")) === "true") await page.keyboard.press("Escape");
+        await seek(1.15);
+        await p.getByRole("button", { name: "Play" }).click();
+        await page.waitForTimeout(450);
+        await shot(m.file);
+        await p.getByRole("button", { name: "Pause" }).click();
+      }
+
+      // extended: caught during the hold
+      await modeButton.click();
+      await p.getByRole("radio", { name: "Extended" }).check();
+      await seek(2.3);
+      await p.getByRole("button", { name: "Play" }).click();
+      await expect.poll(() => p.evaluate((el) => (el as unknown as { state: { holding: boolean } }).state.holding)).toBe(true);
+      await page.waitForTimeout(300);
+      await shot("extended");
+      await p.getByRole("button", { name: "Pause" }).click();
+
+      await modeButton.click();
+      await page.waitForTimeout(100);
+      await page.screenshot({ path: path.join(OUT, `player-menu-${size.name}.png`) });
+      await page.keyboard.press("Escape");
+
+      await p.getByRole("button", { name: "Transcript" }).click();
+      await seek(3.7);
+      if (size.name === "1440") await p.getByRole("button", { name: "Keys" }).click();
+      await page.waitForTimeout(150);
+      await shot("panels");
+      await p.getByRole("button", { name: "Transcript" }).focus();
+      await page.keyboard.press("Tab");
+      await shot("focus");
+    });
+
+    test(`player, media missing, at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await page.goto("/kitchen#player", { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+      const p = page.locator("lull-player");
+      await expect(p.getByText("This video isn’t available")).toBeVisible();
+      await p.scrollIntoViewIfNeeded();
+      await p.screenshot({ path: path.join(OUT, `player-missing-${size.name}.png`) });
     });
   }
 });

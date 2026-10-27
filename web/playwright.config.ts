@@ -11,6 +11,8 @@ const executablePath = process.env.E2E_CHROMIUM_PATH || (existsSync(LOCAL_CHROMI
 
 export default defineConfig({
   testDir: "./e2e",
+  // generates the player's test media (e2e/fixtures/) and checks public/player.js exists
+  globalSetup: "./e2e/global-setup.ts",
   // the screenshot capture runs on its own: `pnpm test:screens`
   testIgnore: ["**/screens.spec.ts"],
   fullyParallel: true,

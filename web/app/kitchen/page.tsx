@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Footer } from "@/components/chrome/Footer";
 import { Nav } from "@/components/chrome/Nav";
+import { Player } from "@/components/player/Player";
 import { Room } from "@/components/texture/Room";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Door, Gate } from "@/components/ui/Gate";
@@ -12,7 +13,7 @@ import { Section } from "@/components/ui/Section";
 import { STATUS, StatusMark, type Status } from "@/components/ui/StatusMark";
 import { Timecode } from "@/components/ui/Timecode";
 import { cx } from "@/lib/cx";
-import { MAIN_ID, SITE } from "@/lib/site";
+import { MAIN_ID, SHOWCASE_ID, SITE } from "@/lib/site";
 import styles from "./kitchen.module.css";
 
 export const metadata: Metadata = {
@@ -128,6 +129,9 @@ const MOTION = [
   ["--t-press", ".12s", "Doors drop 2px; the ledge collapses"],
   ["--t-breathe", "30s", "One lamp breath; paused by body.is-still"],
 ] as const;
+
+/** The recorded run's files, where the showcase export puts them. Missing until it runs. */
+const MEDIA = `/showcase/${SHOWCASE_ID}`;
 
 const STATUSES = Object.keys(STATUS) as Status[];
 const GLYPHS: GlyphName[] = ["ok", "out", "held", "edit", "approved", "extended", "play", "pause", "replay"];
@@ -302,7 +306,25 @@ export default function Kitchen() {
           </div>
         </Section>
 
-        <Section id="motion" eyebrow="Tokens" heading="Motion" lede="One orchestrated entrance, one breathing lamp. Reduced motion turns both off and nothing waits on opacity 0.">
+        <Section
+          id="player"
+          eyebrow="Components"
+          heading="Player"
+          lede="The described-video player, as the showcase and embeds use it. Until the recorded run's media is exported it says the video isn't there and why."
+        >
+          <div className={styles.player}>
+            <Player
+              src={`${MEDIA}/video.mp4`}
+              descriptions={`${MEDIA}/descriptions.vtt`}
+              extended={`${MEDIA}/extended.vtt`}
+              describedAudio={`${MEDIA}/described-audio.m4a`}
+              cueAudioBase={`${MEDIA}/audio/`}
+              label="Elephants Dream, described"
+            />
+          </div>
+        </Section>
+
+        <Section id="motion" eyebrow="Tokens" heading="Motion" lede="One orchestrated entrance, one breathing lamp. Reduced motion turns both off and nothing waits on opacity 0." ruled>
           <table className={styles.table}>
             <caption className="sr-only">Motion tokens</caption>
             <thead>
