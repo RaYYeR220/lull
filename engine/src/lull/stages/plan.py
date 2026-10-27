@@ -90,6 +90,12 @@ def load_prompt() -> str:
     return (files("lull") / "prompts" / "plan.md").read_text(encoding="utf-8")
 
 
+def said_already(e: VisualEvent) -> bool:
+    """R21: the dialogue already conveys the event (said in dialogue, salience under 5), so it
+    is not sent to the plan and is never counted as undescribed."""
+    return e.said_in_dialogue and e.salience < 5
+
+
 def count_words(text: str) -> int:
     """Spoken words: whitespace tokens that hold a letter or digit ("2.1" is one word)."""
     return sum(1 for tok in text.split() if any(c.isalnum() for c in tok))
@@ -308,7 +314,7 @@ def plan(
     salience 3 or more that got no item is asked for once more, in a second call about only
     those events; the ones still without an item are listed in `unanswered`.
     """
-    send = [e for e in events if not (e.said_in_dialogue and e.salience < 5)]
+    send = [e for e in events if not said_already(e)]
     if not send:
         return PlanResult()
     result = _ask(send, words, gaps, research, opts, tf, run_id)

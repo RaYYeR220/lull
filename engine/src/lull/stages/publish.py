@@ -45,6 +45,7 @@ from lull.ledger import Ledger
 from lull.media import MediaError
 from lull.stages import mix as mixer
 from lull.stages.finalize import assert_no_overlap, overlap_report
+from lull.stages.plan import said_already
 from lull.stages.research import ResearchResult
 from lull.stages.schedule import SALIENT
 from lull.timeline import complement, merge_spans
@@ -60,6 +61,7 @@ REPORT = "report.html"
 MANIFEST = "manifest.json"
 KEYFRAMES = "keyframes"
 F113_MIN_PAUSE = 2.0  # seconds of usable pause
+MIN_COVERAGE = 0.8  # salient events described, for 1.2.5 / 1.2.7 to be met (ruling, Task 16)
 REVIEWED = ("edited", "approved")  # statuses a person has signed off
 STATUSES = ("verified", "edited", "approved", "held", "extended")  # counted in the summary
 TTS_NAME = mixer.TTS_NAME
@@ -133,21 +135,33 @@ def outside_pauses(gaps: Sequence[Gap], cues: Sequence[Cue]) -> list[Span]:
     return complement(windows, 0.0, end)
 
 
+def _counted(e: VisualEvent) -> bool:
+    """Salient, and not left to the dialogue (R21): the events a description is owed."""
+    return e.salience >= SALIENT and not said_already(e)
+
+
+def _in(eid: str, described: set[str], duplicates: dict[str, str]) -> bool:
+    """`eid` is described, itself or through the twin the plan kept for it."""
+    return eid in described or duplicates.get(eid) in described
+
+
 def coverage(
     cues: Sequence[Cue], extended: Sequence[Cue], events: Sequence[VisualEvent], *,
-    extended_produced: bool,
+    extended_produced: bool, duplicates: dict[str, str] | None = None,
 ) -> dict:  # fmt: skip
     """Salient events (salience >= 4) described by a voiced standard cue, and also counting
-    voiced extended cues when the extended version exists. Ratios are None without salient
-    events."""
+    voiced extended cues when the extended version exists. Events the dialogue conveys (R21)
+    are not counted; an event the plan dropped as a near-duplicate (`duplicates`: dropped ->
+    kept) is described when its twin is. Ratios are None without salient events."""
+    dup = duplicates or {}
     ordered = sorted(events, key=lambda e: (e.t_start, e.id))
-    salient = [e.id for e in ordered if e.salience >= SALIENT]
+    salient = [e.id for e in ordered if _counted(e)]
     std = {i for c in mixer.voiced(cues) for i in c.event_ids}
     ext = set()
     if extended_produced:
         ext = {i for c in mixer.voiced_extended(extended) for i in c.event_ids}
-    described = [i for i in salient if i in std]
-    with_ext = [i for i in salient if i in std or i in ext]
+    described = [i for i in salient if _in(i, std, dup)]
+    with_ext = [i for i in salient if _in(i, std | ext, dup)]
 
     def ratio(n: int) -> float | None:
         return round(n / len(salient), 3) if salient else None
@@ -163,16 +177,19 @@ def coverage(
 
 
 def f113_flags(
-    gaps: Sequence[Gap], cues: Sequence[Cue], events: Sequence[VisualEvent]
-) -> list[dict]:
+    gaps: Sequence[Gap], cues: Sequence[Cue], events: Sequence[VisualEvent], *,
+    duplicates: dict[str, str] | None = None,
+) -> list[dict]:  # fmt: skip
     """Pauses of >= 2 s usable time with no voiced cue while a salient (>= 4) event of any
     kind that no voiced standard cue describes is on screen (WCAG F113, a failure of 1.2.5).
-    A held cue leaves its pause empty."""
+    A held cue leaves its pause empty. Events the dialogue conveys (R21) and near-duplicates
+    whose twin is described are not missing."""
+    dup = duplicates or {}
     spoken = mixer.voiced(cues)
     used = {c.gap_id for c in spoken}
     described = {i for c in spoken for i in c.event_ids}
     candidates = sorted(
-        (e for e in events if e.salience >= SALIENT and e.id not in described),
+        (e for e in events if _counted(e) and not _in(e.id, described, dup)),
         key=lambda e: (e.t_start, e.id),
     )
     flags = []
@@ -204,18 +221,32 @@ def _n(count: int, word: str) -> str:
     return f"{count} {word}{'' if count == 1 else 's'}"
 
 
+def _missing(cov: dict | None, key: str) -> list[str]:
+    """Why coverage blocks a pass: fewer than MIN_COVERAGE of the salient events described
+    (`key`: "described" or "described_with_extended")."""
+    if not cov or not cov.get("salient_events"):
+        return []
+    total, done = cov["salient_events"], cov[key]
+    if done >= MIN_COVERAGE * total - _EPS:
+        return []
+    n = total - done
+    return [f"{_n(n, 'salient event')} undescribed ({done} of {total} described)"]
+
+
 def wcag_status(
     *, standard: int, extended_produced: bool, held: int, overlap_s: float, f113: int,
-    reviewed: bool = False, extended_error: str | None = None,
+    reviewed: bool = False, extended_error: str | None = None, coverage: dict | None = None,
 ) -> list[dict]:  # fmt: skip
     """1.2.3, 1.2.5 and 1.2.7 as met / met (automated checks) / needs review / not claimed,
     with what meets them and why not.
 
     1.2.5 passes when a described version exists (standard track G78/G173, or the extended
-    version G8) and nothing overlaps, no F113 pause is left and no cue is held; every
-    technique used for it also meets 1.2.3. 1.2.7 is claimed only for extended.mp4, on the
-    same checks (a held cue or an unused pause is missing from it too). A pass reads "met"
-    only when every published line was reviewed by a person.
+    version G8) and nothing overlaps, no F113 pause is left, no cue is held and at least
+    MIN_COVERAGE of the salient events are described by the standard track (by the extended
+    version when it is the only one); every technique used for it also meets 1.2.3, which does
+    not depend on coverage. 1.2.7 is claimed only for extended.mp4, on the same checks with
+    extended descriptions counted (a held cue or an unused pause is missing from it too). A
+    pass reads "met" only when every published line was reviewed by a person.
     """
     blockers = []
     if standard == 0 and not extended_produced:
@@ -233,6 +264,11 @@ def wcag_status(
         blockers.append(f"{_n(held, 'description')} held for review")
     passed = MET if reviewed else MET_AUTOMATED
     status = passed if not blockers else REVIEW
+    only_extended = standard == 0 and extended_produced
+    blockers_125 = blockers + _missing(
+        coverage, "described_with_extended" if only_extended else "described"
+    )
+    blockers_127 = blockers + _missing(coverage, "described_with_extended")
     ad = []
     if standard:
         ad.append("described.mp4 and described-audio.m4a (G173 described version, "
@@ -244,8 +280,9 @@ def wcag_status(
     )
     via_123 = ", ".join([*texts, "script.md"]) + (f", with {' and '.join(ad)}" if ad else "")
     if extended_produced:
-        row_127 = (status, "extended.mp4 (G8 extended audio description) and extended.vtt",
-                   list(blockers))  # fmt: skip
+        row_127 = (passed if not blockers_127 else REVIEW,
+                   "extended.mp4 (G8 extended audio description) and extended.vtt",
+                   blockers_127)  # fmt: skip
     elif extended_error:
         row_127 = (NOT_CLAIMED, "", [f"extended version not produced: {extended_error}"])
     else:
@@ -255,7 +292,8 @@ def wcag_status(
          "name": "Audio Description or Media Alternative (Prerecorded)",
          "status": status, "via": via_123, "reasons": list(blockers)},
         {"criterion": "1.2.5", "level": "AA", "name": "Audio Description (Prerecorded)",
-         "status": status, "via": " and ".join(ad), "reasons": list(blockers)},
+         "status": passed if not blockers_125 else REVIEW, "via": " and ".join(ad),
+         "reasons": blockers_125},
         {"criterion": "1.2.7", "level": "AAA", "name": "Extended Audio Description (Prerecorded)",
          "status": row_127[0], "via": row_127[1], "reasons": row_127[2]},
     ]  # fmt: skip
@@ -424,10 +462,12 @@ def publish(
     opts: RunOptions,
     *,
     speech: list[Span],
+    duplicates: dict[str, str] | None = None,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc). Raises OverlapError, writing
     nothing, when a voiced standard cue overlaps speech, a guard, protected sound or another
-    cue. `speech` is the listen stage's speech spans."""
+    cue. `speech` is the listen stage's speech spans; `duplicates` the events the plan dropped
+    as near-duplicates of another (dropped -> kept), counted as described with their twin."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -475,13 +515,14 @@ def publish(
 
     counts = Counter(c.status for c in everything)
     held = [c for c in sorted(everything, key=lambda c: (c.start, c.id)) if c.status == "held"]
-    flags = f113_flags(gaps, cues, events)
-    cov = coverage(cues, extended, events, extended_produced=ext_video is not None)
+    flags = f113_flags(gaps, cues, events, duplicates=duplicates)
+    cov = coverage(cues, extended, events, extended_produced=ext_video is not None,
+                   duplicates=duplicates)  # fmt: skip
     signed_off = reviewed(everything)
     wcag = wcag_status(
         standard=len(spoken), extended_produced=ext_video is not None, held=len(held),
         overlap_s=overlap["total_s"], f113=len(flags), reviewed=signed_off,
-        extended_error=ext_error,
+        extended_error=ext_error, coverage=cov,
     )  # fmt: skip
     disclosure = tts_disclosure(everything)
     calls = ledger.summary(run_id)

@@ -373,6 +373,65 @@ def test_wcag_without_a_voiced_standard_track():
     assert "described.mp4" not in rows["1.2.5"]["via"]
 
 
+def _cov(salient: int, described: int, with_ext: int | None = None) -> dict:
+    with_ext = described if with_ext is None else with_ext
+    return {"salient_events": salient, "described": described,
+            "ratio": round(described / salient, 3) if salient else None,
+            "described_with_extended": with_ext,
+            "ratio_with_extended": round(with_ext / salient, 3) if salient else None,
+            "undescribed": []}  # fmt: skip
+
+
+def test_wcag_met_needs_four_in_five_salient_events_described():
+    """Ruling (Task 16): 1.2.5 and 1.2.7 are met only with salient coverage >= 0.8; 1.2.7
+    counts the extended descriptions too. 1.2.3 does not depend on coverage."""
+    rows = _wcag(extended_produced=True, coverage=_cov(10, 7, 8))
+    assert rows["1.2.3"]["status"] == "met"
+    assert rows["1.2.5"]["status"] == "needs review"
+    assert rows["1.2.5"]["reasons"] == ["3 salient events undescribed (7 of 10 described)"]
+    assert rows["1.2.7"]["status"] == "met" and rows["1.2.7"]["reasons"] == []
+    rows = _wcag(extended_produced=True, coverage=_cov(10, 7, 7))
+    assert rows["1.2.7"]["status"] == "needs review"
+    assert rows["1.2.7"]["reasons"] == ["3 salient events undescribed (7 of 10 described)"]
+    rows = _wcag(coverage=_cov(5, 4), reviewed=False)
+    assert rows["1.2.5"]["status"] == "met (automated checks)"
+    rows = _wcag(coverage=_cov(4, 3))
+    assert rows["1.2.5"]["reasons"] == ["1 salient event undescribed (3 of 4 described)"]
+    rows = _wcag(coverage=_cov(0, 0))  # nothing salient: nothing to miss
+    assert rows["1.2.5"]["status"] == "met"
+    # continuous speech: the extended version is the described version, so it counts
+    rows = _wcag(standard=0, extended_produced=True, coverage=_cov(5, 0, 4))
+    assert rows["1.2.5"]["status"] == "met"
+    rows = _wcag(standard=0, extended_produced=True, coverage=_cov(5, 0, 3))
+    assert rows["1.2.5"]["reasons"] == ["2 salient events undescribed (3 of 5 described)"]
+
+
+def test_events_the_dialogue_conveys_are_never_counted_undescribed():
+    """Events left out of the plan because the dialogue already says them (R21: said in
+    dialogue, salience under 5) are neither salient for coverage nor F113 candidates."""
+    events = [
+        _ev("e1", 1.0, 3.0, salience=4).model_copy(update={"said_in_dialogue": True}),
+        _ev("e2", 1.0, 3.0, salience=5).model_copy(update={"said_in_dialogue": True}),
+        _ev("e3", 7.0, 9.0, salience=4).model_copy(update={"said_in_dialogue": True}),
+    ]
+    cov = coverage([], [], events, extended_produced=False)
+    assert cov["salient_events"] == 1 and cov["undescribed"] == ["e2"]
+    flags = f113_flags([_gap("g001", 0.5, 4.0), _gap("g002", 6.5, 9.5)], [], events)
+    assert [f["event_ids"] for f in flags] == [["e2"]]
+
+
+def test_a_duplicate_the_plan_dropped_counts_with_its_twin():
+    events = [_ev("e1", 1.0, 3.0, salience=5), _ev("e2", 6.0, 8.0, salience=5),
+              _ev("e3", 12.0, 13.0, salience=4)]  # fmt: skip
+    cues = [_cue("c001", 1.0, 1.0, ev=["e1"])]
+    dup = {"e2": "e1", "e3": "e9"}
+    cov = coverage(cues, [], events, extended_produced=False, duplicates=dup)
+    assert (cov["described"], cov["undescribed"]) == (2, ["e3"])
+    gaps = [_gap("g001", 1.0, 4.0), _gap("g002", 5.5, 9.0), _gap("g003", 11.5, 14.0)]
+    flags = f113_flags(gaps, cues, events, duplicates=dup)
+    assert [f["gap_id"] for f in flags] == ["g003"]
+
+
 def test_tts_disclosure_says_reviewed_only_when_every_cue_was_edited():
     edited = [_cue("c001", 1.0, 1.0, status="edited")]
     assert tts_disclosure(edited) == (
