@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from lull.stages.listen import ListenResult, listen, protected_spans
+from lull.stages.listen import ClampedWord, ListenResult, clamp_words, listen, protected_spans
 from lull.timeline import find_gaps, speech_spans
 from lull.types import Span, Turn, Word
 
@@ -112,3 +112,51 @@ def test_listen_propagates_speech_errors(tone_slides: Path, tmp_path: Path):
 
     with pytest.raises(RuntimeError, match="asr down"):
         listen(tone_slides, tmp_path, Boom(), wps=3.0)
+
+
+# -- stretched ASR words -------------------------------------------------------------------
+
+
+def test_clamp_words_stretched_word_from_elephants_dream():
+    """Parakeet returned one word "way." spanning 17.2-35.76 s on Elephants Dream: 18 s of
+    real silence counted as speech. A word lasts at most 0.09 s/char + 0.25 s (0.3..1.5 s)."""
+    words = [
+        Word(text="the", start=16.8, end=17.1, speaker=1),
+        Word(text="way.", start=17.2, end=35.76, speaker=1),
+        Word(text="Emo,", start=36.0, end=36.4, speaker=2),
+    ]
+    out, clamped = clamp_words(words)
+    assert [w.text for w in out] == ["the", "way.", "Emo,"]
+    assert out[1].start == 17.2
+    assert out[1].end == pytest.approx(17.81)  # 0.09 * 4 + 0.25 = 0.61 s
+    assert out[1].speaker == 1
+    assert out[0] == words[0] and out[2] == words[2]  # plausible words are untouched
+    assert clamped == [ClampedWord(text="way.", start=17.2, end=35.76, clamped_end=17.81)]
+    # the silence after the word is a usable gap again
+    gaps = find_gaps(speech_spans(out, []), 40.0, wps=3.0)
+    assert any(g.usable_start <= 18.1 and g.usable_end >= 35.7 for g in gaps)
+
+
+def test_clamp_words_bounds():
+    long_word = "internationalisation"  # 20 chars: 2.05 s would be allowed, capped at 1.5
+    words = [
+        Word(text="a", start=0.0, end=0.9),  # 0.34 s allowed, floor 0.3 does not bind
+        Word(text="I", start=1.0, end=1.2),  # short and plausible
+        Word(text=long_word, start=2.0, end=4.0),
+        Word(text=long_word, start=5.0, end=6.5),  # exactly the cap: kept
+    ]
+    out, clamped = clamp_words(words)
+    assert [round(w.end, 3) for w in out] == [0.34, 1.2, 3.5, 6.5]
+    assert [c.text for c in clamped] == ["a", long_word]
+    assert clamp_words([]) == ([], [])
+
+
+def test_listen_clamps_before_speech_and_gaps(tone_slides: Path, tmp_path: Path):
+    words = [Word(text="way.", start=1.0, end=11.5)]
+    res = listen(tone_slides, tmp_path, FakeSpeech(words), wps=3.0)
+    assert res.words[0].end == pytest.approx(1.61)
+    assert res.clamped == [ClampedWord(text="way.", start=1.0, end=11.5, clamped_end=1.61)]
+    assert res.speech == [Span(start=1.0, end=1.61)]
+    assert res.gaps == find_gaps(res.speech, res.duration, protected=res.protected, wps=3.0)
+    assert max(g.usable_end for g in res.gaps) > 11.0  # the stretched tail is usable again
+    assert ListenResult.model_validate_json(res.model_dump_json()) == res

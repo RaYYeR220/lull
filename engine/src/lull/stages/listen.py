@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from statistics import median
 
@@ -12,8 +13,21 @@ from lull.speech import SpeechClient, assign_speakers
 from lull.timeline import find_gaps, speech_spans
 from lull.types import Gap, Span, Turn, Word
 
+log = logging.getLogger(__name__)
+
 FLOOR_DB = -120.0
 EPS = 1e-6
+# Longest plausible word: 0.09 s per character + 0.25 s, kept within 0.3..1.5 s.
+WORD_S_PER_CHAR, WORD_BASE_S, WORD_MIN_S, WORD_MAX_S = 0.09, 0.25, 0.3, 1.5
+
+
+class ClampedWord(BaseModel):
+    """A word the recogniser stretched over silence, as it was given and where it now ends."""
+
+    text: str
+    start: float
+    end: float
+    clamped_end: float
 
 
 class ListenResult(BaseModel):
@@ -24,6 +38,29 @@ class ListenResult(BaseModel):
     protected: list[Span] = Field(default_factory=list)
     duration: float
     has_audio: bool
+    clamped: list[ClampedWord] = Field(default_factory=list)
+
+
+def clamp_words(words: list[Word]) -> tuple[list[Word], list[ClampedWord]]:
+    """Words with implausible durations cut back, and the ones that were cut.
+
+    The recogniser sometimes stretches a word over a long silence (Parakeet gave "way." 17.2 to
+    35.76 s on Elephants Dream), which would count that silence as speech. A word ends at most
+    clamp(0.09 x characters + 0.25, 0.3, 1.5) seconds after it starts.
+    """
+    out: list[Word] = []
+    clamped: list[ClampedWord] = []
+    for w in words:
+        longest = min(WORD_MAX_S, max(WORD_MIN_S, WORD_S_PER_CHAR * len(w.text) + WORD_BASE_S))
+        end = round(w.start + longest, 3)
+        if w.end > end + EPS:
+            log.warning(
+                "listen: clamped %r %.3f-%.3f s to end at %.3f s", w.text, w.start, w.end, end
+            )
+            clamped.append(ClampedWord(text=w.text, start=w.start, end=w.end, clamped_end=end))
+            w = w.model_copy(update={"end": end})
+        out.append(w)
+    return out, clamped
 
 
 def protected_spans(
@@ -74,7 +111,7 @@ def listen(video: Path, work: Path, speech: SpeechClient, *, wps: float) -> List
         )
     work.mkdir(parents=True, exist_ok=True)
     wav = extract_wav(video, work / "audio16k.wav")
-    words = speech.transcribe(wav)
+    words, clamped = clamp_words(speech.transcribe(wav))
     turns = speech.diarize(wav)
     words = assign_speakers(words, turns)
     spans = speech_spans(words, turns)
@@ -87,4 +124,5 @@ def listen(video: Path, work: Path, speech: SpeechClient, *, wps: float) -> List
         protected=protected,
         duration=info.duration,
         has_audio=True,
+        clamped=clamped,
     )
