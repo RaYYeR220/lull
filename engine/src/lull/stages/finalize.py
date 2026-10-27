@@ -231,16 +231,15 @@ def repair(
 
 
 def compress(
-    text: str, target_words: int, keep: list[str], tf: TokenFactory, *, run_id: str
-) -> str:
+    text: str, target_words: int, keep: list[str], tf: TokenFactory, *, run_id: str,
+    note: str | None = None,
+) -> str:  # fmt: skip
     """`text` shortened towards `target_words` words, every `keep` string intact (Lightning).
-    The word target is guidance; the caller voices the result and measures it."""
+    The word target is guidance; the caller voices the result and measures it. `note` says
+    what was wrong with a previous answer."""
+    ask = f"Shorten it to about {target_words} words or fewer."
     user = "\n\n".join(
-        [
-            tagged("description", [text]),
-            f"Shorten it to about {target_words} words or fewer.",
-            tagged("keep", keep),
-        ]
+        [tagged("description", [text]), f"{ask} {note}" if note else ask, tagged("keep", keep)]
     )
     return rewrite("compress", user, tf, run_id=run_id, role="compress")
 
@@ -579,15 +578,44 @@ class _Finalise:
                 out.append((k, at, end))
         return out
 
+    def overcut(self, before: str, new: str, target: int) -> str | None:
+        """What a compression of `before` cut that it should not have: more than half of the
+        word target, or a visual's sentence (fewer sentences than visuals, as far as `before`
+        had one per visual). None when it is fine, or empty (held by the caller)."""
+        if not new:
+            return None
+        words = count_words(new)
+        if words * 2 < target:
+            return f"kept {words} of about {target} words"
+        need = min(len(self.events), len(split_sentences(before)))
+        have = len(split_sentences(new))
+        if have < need:
+            return f"left {have} sentence{'' if have == 1 else 's'} for {need} visuals"
+        return None
+
     def shorten(self, target: int, reason: str) -> Cue | None:
-        """Compress towards `target` words; the held cue, or None to go round."""
+        """Compress towards `target` words; the held cue, or None to go round. A compression
+        that cuts too much (see `overcut`) is asked for once more with a note; cutting too much
+        again holds the cue with the line as it was before compression."""
         if target < 1:
             return self.held(reason)
         before = self.text
-        if self.words_before is None:
-            self.words_before = count_words(before)
         keep = [k for k in self.keep if _occurs(before, k)]
         new = compress(before, target, keep, self.tf, run_id=self.run_id)
+        problem = self.overcut(before, new, target)
+        if problem:
+            n = len(self.events)
+            each = f"keep a sentence for each of the {n} visuals" if n > 1 else "keep what it shows"
+            note = (
+                f'Your previous answer "{new}" {problem}. Shorten every sentence instead of '
+                f"dropping one; {each}."
+            )
+            new = compress(before, target, keep, self.tf, run_id=self.run_id, note=note)
+            problem = self.overcut(before, new, target)
+            if problem:
+                return self.held(f"compression {problem}, twice")
+        if self.words_before is None:
+            self.words_before = count_words(before)
         self.claims = []
         if not new:
             self.text = ""

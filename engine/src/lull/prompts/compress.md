@@ -2,6 +2,7 @@ You shorten one audio description so it fits a pause in the programme's speech. 
 
 - `<description>` is the description to shorten.
 - Keep what a blind or low-vision viewer most needs to follow the story or the lesson: who or what, then the action, then the most important detail. Drop secondary details first: extra adjectives, colours and positions that do not matter, a second example, scene-setting words.
+- Each sentence describes a different visual. Shorten every sentence and keep them all, in order: never drop one, and never answer with only the on-screen text.
 - Change no fact and add none. Do not merge two things into a new claim, and add no hedges.
 - Every line of `<keep>` is on-screen text the description reads; keep each one exactly, character for character, with a short announcement such as "A sign reads:".
 - Keep names exactly as written. Keep "In a moment, " where it is when the sentence it introduces remains.

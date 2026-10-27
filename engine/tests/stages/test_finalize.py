@@ -403,6 +403,60 @@ def test_never_fits_is_held_after_four_rounds(tmp_path, video):
     assert (out.audio_path, out.audio_dur, out.end) == (None, None, None)
 
 
+# -- (d2) a compression that cuts too much is tried once more, then held ---------------------
+
+LOGO = EV.model_copy(update={"id": "e002", "t_start": 3.0, "t_end": 6.0, "text": "A logo."})
+# live csc_intro run: Lightning answered this 14-word line (target 10) with "#CLIMATECHAMPIONS."
+HASHTAG = (
+    'A hashtag reads: "#CLIMATECHAMPIONS". The USGS logo and tagline appear on a black background.'
+)
+
+
+def _two_visuals(tmp_path, video, tf, speech):
+    ctx = CTX.model_copy(update={"verbatim": ["#CLIMATECHAMPIONS"]})
+    cue = _cue(HASHTAG, event_ids=["e001", "e002"])
+    events = {"e001": EV, "e002": LOGO}
+    return _run(tmp_path, video, tf, speech, cue=cue, events=events, ctx=ctx)
+
+
+def test_a_compression_that_guts_the_line_is_retried_with_a_note(tmp_path, video):
+    shorter = 'A hashtag reads: "#CLIMATECHAMPIONS". The USGS logo appears.'  # 8 words
+    tf = FakeTF(
+        verify=[_supported("a hashtag reads #CLIMATECHAMPIONS", "the USGS logo")] * 2,
+        compress=[{"text": "#CLIMATECHAMPIONS."}, {"text": shorter}],
+    )
+    out = _two_visuals(tmp_path, video, tf, FakeSpeech([5.0, 3.5]))  # usable 4.0 s
+    assert tf.roles() == ["verify", "compress", "compress", "verify"]
+    first, retry = (_user_text(c) for c in tf.of("compress"))
+    assert "about 10 words" in first and "previous answer" not in first
+    assert 'previous answer "#CLIMATECHAMPIONS." kept 1 of about 10 words' in retry
+    assert out.status == "verified" and out.text == shorter
+    assert "compressed 14→8 words" in out.note
+
+
+def test_a_compression_that_drops_a_visual_twice_is_held_with_the_full_line(tmp_path, video):
+    one = 'A black screen shows the hashtag "#CLIMATECHAMPIONS".'  # 7 words, 1 sentence
+    tf = FakeTF(
+        verify=[_supported("a hashtag reads #CLIMATECHAMPIONS", "the USGS logo")],
+        compress=[{"text": one}, {"text": one}],
+    )
+    out = _two_visuals(tmp_path, video, tf, FakeSpeech([5.0]))
+    assert tf.roles() == ["verify", "compress", "compress"]
+    assert "left 1 sentence for 2 visuals" in _user_text(tf.of("compress")[1])
+    assert out.status == "held" and out.text == HASHTAG  # the reviewer gets the whole line
+    assert "compression left 1 sentence for 2 visuals, twice" in out.note
+    assert [c.verdict for c in out.claims] == ["supported", "supported"]  # they judged HASHTAG
+    assert (out.audio_path, out.audio_dur) == (None, None)
+
+
+def test_compress_sends_the_note_only_when_given():
+    tf = FakeTF(compress=[{"text": "A door opens."}] * 2)
+    compress("A red door opens slowly.", 3, [], tf, run_id="r1")
+    compress("A red door opens slowly.", 3, [], tf, run_id="r1", note="it dropped a visual")
+    plain, noted = (_user_text(c) for c in tf.calls)
+    assert "it dropped a visual" not in plain and "it dropped a visual" in noted
+
+
 # -- (e) verification never passes ----------------------------------------------------------
 
 
