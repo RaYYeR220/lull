@@ -98,3 +98,39 @@ def find_gaps(
             )
         )
     return gaps
+
+
+def split_gaps(
+    gaps: list[Gap], *, max_window: float = 6.0, breath: float = 0.3, wps: float
+) -> list[Gap]:
+    """Long gaps cut into short windows, so a cue can't describe a visual far ahead of time.
+
+    A gap whose usable length is over 1.5 x max_window becomes n = ceil(usable / max_window)
+    equal windows `breath` seconds apart (no extra guard: there is no speech between them),
+    each with its capacity recomputed and no protected spans; the first keeps the gap's start
+    and the last its end. Shorter gaps are kept as they are. All gaps are renumbered g001... in
+    time order.
+    """
+    out: list[Gap] = []
+    for g in sorted(gaps, key=lambda g: (g.usable_start, g.id)):
+        usable = g.usable_end - g.usable_start
+        if usable <= 1.5 * max_window + EPS:
+            out.append(g)
+            continue
+        n = math.ceil(usable / max_window - EPS)
+        width = (usable - (n - 1) * breath) / n
+        for i in range(n):
+            us = g.usable_start + i * (width + breath)
+            ue = g.usable_end if i == n - 1 else us + width
+            out.append(
+                Gap(
+                    id=g.id,
+                    start=g.start if i == 0 else _r(us),
+                    end=g.end if i == n - 1 else _r(ue),
+                    usable_start=_r(us),
+                    usable_end=_r(ue),
+                    capacity_words=capacity_words(width, wps),
+                    protected=[],
+                )
+            )
+    return [g.model_copy(update={"id": f"g{i + 1:03d}"}) for i, g in enumerate(out)]

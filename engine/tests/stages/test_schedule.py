@@ -12,6 +12,7 @@ from lull.stages.schedule import (
     schedule,
     schedule_greedy,
 )
+from lull.timeline import find_gaps, split_gaps
 from lull.types import Gap, Variant, VisualEvent
 
 
@@ -41,7 +42,7 @@ def _objective(placements, priority):
     return sum(priority[p.event_id] * WEIGHTS[p.variant] - p.ahead for p in placements)
 
 
-def _check_invariants(placements, events, variants, gaps, *, lead=6.0, ahead_words=3):
+def _check_invariants(placements, events, variants, gaps, *, lead=6.0, ahead_words=3, wps=2.36):
     ev = {e.id: e for e in events}
     gp = {g.id: g for g in gaps}
     words = {(v.event_id, v.length): v.words for v in variants}
@@ -57,6 +58,16 @@ def _check_invariants(placements, events, variants, gaps, *, lead=6.0, ahead_wor
         used[g.id] += words[(p.event_id, p.variant)] + ahead_words * p.ahead
     for gid, n in used.items():
         assert n <= gp[gid].capacity_words, f"{gid} over capacity: {n} > {gp[gid].capacity_words}"
+    # R2 per sentence: a gap voices its sentences in visual start order, so each one starts
+    # after the words before it; it must start before its own visual has ended
+    for gid in gp:
+        here = sorted((p for p in placements if p.gap_id == gid),
+                      key=lambda p: (ev[p.event_id].t_start, p.event_id))  # fmt: skip
+        before = 0
+        for p in here:
+            start = gp[gid].usable_start + before / wps
+            assert start < ev[p.event_id].t_end, f"{p.event_id} voiced at {start:.2f} s, too late"
+            before += words[(p.event_id, p.variant)] + ahead_words * p.ahead
 
 
 def _random_instance(rng: random.Random):
@@ -127,7 +138,7 @@ def test_event_ending_before_a_gap_is_never_placed_there():
         assert run(events, variants, {"e001": 5}, gaps) == ([], ["e001"])
 
 
-def test_one_gap_two_events_takes_both_shorts_over_one_long():
+def test_long_too_big_for_the_gap_so_both_events_get_their_short():
     events = [_ev("e001", 1.0, 9.0), _ev("e002", 1.0, 9.0)]
     variants = [_var("e001", "short", 5), _var("e001", "long", 12), _var("e002", "short", 4)]
     priority = {"e001": 5, "e002": 2}
@@ -136,6 +147,53 @@ def test_one_gap_two_events_takes_both_shorts_over_one_long():
     for run in (schedule, schedule_greedy):
         placements, _ = run(events, variants, priority, gaps)
         assert sorted(placements, key=lambda p: p.event_id) == expected
+
+
+def test_a_brief_visual_is_not_voiced_after_a_long_sentence_ends_it():
+    """Reviewer's case: A (9-30 s, 20 words) sorts first in gap 10-20, so B (10.5-11 s) would
+    start about 8.5 s in, long after it ended; only one of them may use the gap."""
+    events = [_ev("e001", 9.0, 30.0), _ev("e002", 10.5, 11.0, sal=4)]
+    variants = [_var("e001", "long", 20), _var("e002", "short", 4)]
+    gaps = [_gap("g001", 10.0, 20.0, 30)]
+    for run in (schedule, schedule_greedy):
+        placements, extended = run(events, variants, {"e001": 5, "e002": 5}, gaps)
+        assert placements == [_pl("e001", "long", "g001")], run.__name__
+        assert extended == ["e002"]
+        _check_invariants(placements, events, variants, gaps)
+
+
+def test_a_brief_visual_that_starts_first_is_voiced_first():
+    events = [_ev("e001", 10.5, 11.0), _ev("e002", 12.0, 30.0)]
+    variants = [_var("e001", "short", 4, "A light blinks."), _var("e002", "long", 20)]
+    gaps = [_gap("g001", 10.0, 20.0, 30)]
+    for run in (schedule, schedule_greedy):
+        placements, _ = run(events, variants, {"e001": 5, "e002": 5}, gaps)
+        assert placements == [_pl("e001", "short", "g001"), _pl("e002", "long", "g001")]
+        [cue] = compose_cues(placements, variants, events, gaps)
+        assert cue.text.startswith("A light blinks. word")
+
+
+def test_a_visual_ending_within_a_word_of_the_gap_start_is_not_placed():
+    # floor((10.4 - 10.0) x 2.36) - 1 < 0: not even the first word would land in time
+    events = [_ev("e001", 9.0, 10.4)]
+    variants = [_var("e001", "short", 2)]
+    gaps = [_gap("g001", 10.0, 20.0, 30)]
+    for run in (schedule, schedule_greedy):
+        assert run(events, variants, {"e001": 5}, gaps) == ([], [])
+    placements, _ = schedule(events, variants, {"e001": 5}, gaps, wps=6.0)
+    assert placements == [_pl("e001", "short", "g001")]
+
+
+def test_split_windows_keep_a_no_speech_video_near_its_visuals():
+    """With the 30 s no-speech gap split into windows, a visual at 25 s is voiced near 25 s,
+    not at 0.2 s together with the one at 3 s."""
+    windows = split_gaps(find_gaps([], 30, wps=2.36), wps=2.36)
+    events = [_ev("e001", 3.0, 8.0), _ev("e002", 25.0, 28.0)]
+    variants = [_var("e001", "short", 6), _var("e002", "short", 6)]
+    placements, _ = schedule(events, variants, {"e001": 3, "e002": 3}, windows)
+    cues = compose_cues(placements, variants, events, windows)
+    assert [c.event_ids for c in cues] == [["e001"], ["e002"]]
+    assert cues[0].start < 3.0 + 0.5 and 24.0 < cues[1].start < 25.0 + 0.5
 
 
 @pytest.mark.parametrize("cap, placed", [(8, False), (9, True)])
@@ -196,6 +254,13 @@ def test_random_instances_keep_invariants_and_solver_beats_greedy(k):
         placed = {p.event_id for p in placements}
         salient = sorted((e for e in events if e.salience >= 4), key=lambda e: (e.t_start, e.id))
         assert ext == [e.id for e in salient if e.id not in placed]
+
+
+def test_tie_break_never_costs_objective(monkeypatch):
+    with_tie = [_objective(schedule(*inst)[0], inst[2]) for inst in INSTANCES]
+    monkeypatch.setattr(sched, "TIE_BREAK", False)
+    without = [_objective(schedule(*inst)[0], inst[2]) for inst in INSTANCES]
+    assert with_tie == without
 
 
 def test_random_instances_exercise_the_solver():
@@ -279,13 +344,21 @@ def test_equal_value_look_aheads_go_to_the_latest_gap_not_the_earliest():
 # -- greedy fallback -------------------------------------------------------------------
 
 
-def test_greedy_orders_by_priority_then_length_then_earliest_gap():
+def test_greedy_orders_by_priority_then_length_then_closest_gap():
     events = [_ev("e001", 0.0, 12.0), _ev("e002", 0.0, 12.0)]
     variants = [_var("e001", "short", 5), _var("e001", "long", 12),
                 _var("e002", "short", 4), _var("e002", "long", 10)]  # fmt: skip
     gaps = [_gap("g001", 0.5, 5.0, 6), _gap("g002", 6.0, 11.0, 20)]
     placements, _ = schedule_greedy(events, variants, {"e001": 5, "e002": 3}, gaps)
     assert placements == [_pl("e002", "short", "g001"), _pl("e001", "long", "g002")]
+
+
+def test_greedy_prefers_a_gap_during_the_visual_to_an_earlier_look_ahead():
+    events = [_ev("e001", 20.0, 40.0)]
+    variants = [_var("e001", "short", 3)]
+    gaps = [_gap("g001", 15.0, 19.0, 20), _gap("g002", 22.0, 25.0, 20)]
+    placements, _ = schedule_greedy(events, variants, {"e001": 3}, gaps)
+    assert placements == [_pl("e001", "short", "g002")]
 
 
 def test_falls_back_to_greedy_without_ortools(monkeypatch):
@@ -311,6 +384,32 @@ def test_falls_back_to_greedy_when_the_solver_finds_nothing(monkeypatch):
     assert schedule(events, variants, priority, gaps) == schedule_greedy(
         events, variants, priority, gaps
     )
+
+
+def test_a_timed_out_answer_worse_than_greedy_gives_way_to_greedy(monkeypatch):
+    real = sched.cp_model.CpSolver
+    seen = []
+
+    class Feasible:
+        """A solver stopped by its time limit holding a poor (empty) answer."""
+
+        def __init__(self):
+            self.parameters = real().parameters
+            seen.append(self.parameters)
+
+        def solve(self, model):
+            return sched.cp_model.FEASIBLE
+
+        def boolean_value(self, var):
+            return False
+
+    monkeypatch.setattr(sched.cp_model, "CpSolver", Feasible)
+    events, variants, priority, gaps = next(i for i in INSTANCES if schedule_greedy(*i)[0])
+    greedy = schedule_greedy(events, variants, priority, gaps)
+    assert schedule(events, variants, priority, gaps, time_limit_s=2.5) == greedy
+    [params] = seen
+    assert params.max_time_in_seconds == 2.5 and params.max_deterministic_time == 2.5
+    assert params.num_workers == 1 and params.random_seed == 0
 
 
 # -- edge inputs -----------------------------------------------------------------------
@@ -350,6 +449,16 @@ def test_missing_priority_falls_back_to_salience():
         ("Proog's hand shakes.", None, "In a moment, proog's hand shakes."),
         ('"Exit" glows above the door.', None, 'In a moment, "Exit" glows above the door.'),
         ("A sign reads Exit", None, "In a moment, a sign reads Exit."),
+        ("I am here, says a sign.", None, "In a moment, I am here, says a sign."),
+        ("I'm open, reads a sign.", None, "In a moment, I'm open, reads a sign."),
+        ("I'll, I've and I'd fill a slide.", None, "In a moment, I'll, I've and I'd fill a slide."),
+        ("I've arrived, reads a banner.", None, "In a moment, I've arrived, reads a banner."),
+        ("I'd stay, reads a card.", None, "In a moment, I'd stay, reads a card."),
+        ("U.S. flags wave.", None, "In a moment, U.S. flags wave."),
+        ("TV screens flicker.", None, "In a moment, TV screens flicker."),
+        ("It rains.", None, "In a moment, it rains."),
+        ("Ice covers the lake.", None, "In a moment, ice covers the lake."),
+        ("A U.S. flag waves.", None, "In a moment, a U.S. flag waves."),
     ],
 )
 def test_ahead_prefix_and_casing(text, proper, expected):
@@ -441,7 +550,7 @@ def test_placement_report_summarises_use_of_the_gaps():
     variants = [_var("e001", "long", 6), _var("e002", "short", 4), _var("e003", "short", 4)]
     gaps = [_gap("g001", 2.0, 6.0, 14), _gap("g002", 8.0, 10.0, 6), _gap("g003", 20, 22, 6)]
     placements = [_pl("e002", "short", "g001", ahead=True), _pl("e001", "long", "g001")]
-    report = placement_report(placements, events, gaps, variants)
+    report = placement_report(placements, variants, events, gaps)
     assert report == {
         "placed": [
             {"event_id": "e001", "variant": "long", "gap_id": "g001", "ahead": False, "words": 6},

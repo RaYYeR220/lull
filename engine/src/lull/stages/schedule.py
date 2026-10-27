@@ -7,16 +7,23 @@ has room for, nothing described after its visual has ended (R2), maximising prio
 information. A gap that ends before the event starts (within `lead` seconds) may carry it as a
 look-ahead, voiced with "In a moment, " which costs `ahead_words` words of the gap.
 
+R2 holds per sentence, not just per gap: a gap voices its sentences in visual start order (as
+compose_cues writes them), so a sentence starts after the words before it, at `wps` words per
+second; it must start before its visual ends. Long gaps should first be cut into windows with
+`lull.timeline.split_gaps` so one cue cannot describe a visual long before it appears.
+
 Same input, same answer: inputs are sorted by id, equal-value answers are broken towards the
 gap closest to each visual, and the solver runs one worker with a fixed seed (parallel workers
-return different co-optimal answers from run to run; one worker solves a 300-event, 120-gap
-instance to optimality in about a second). A greedy pass stands in when ortools is missing or
-the solver returns no solution in time.
+return different co-optimal answers from run to run). An instance solved to optimality is
+reproducible; one stopped by the time limit may depend on machine speed. A greedy pass stands
+in when ortools is missing or the solver returns no solution in time, and wins over a
+timed-out solver answer that is worse.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
@@ -42,11 +49,15 @@ AHEAD_PREFIX = "In a moment, "
 AHEAD_WORDS = 3  # words in AHEAD_PREFIX
 LEAD = 6.0  # seconds a look-ahead may come before its visual starts
 SALIENT = 4  # unplaced events at or above this salience become extended candidates
+WPS = 2.36  # voice rate used to time each sentence inside its gap
 TIME_LIMIT_S = 5.0
 NUM_WORKERS = 1  # parallel workers race to different co-optimal answers: not reproducible
+TIE_BREAK = True  # prefer the closest gap among equal-value answers
 
+_EPS = 1e-9
 _TERMINAL = (".", "!", "?", "…")
 _CLOSERS = "\"'”’)]»"
+_FIRST_PERSON = {"I", "I'm", "I'll", "I've", "I'd"}
 
 
 class Placement(BaseModel):
@@ -67,7 +78,8 @@ class _Option:
     priority: int
     cost: int  # words the gap must hold, look-ahead prefix included
     value: int  # the brief's objective term: priority x weight, minus the look-ahead penalty
-    rank: int  # 0 = the event's closest eligible gap; only breaks ties between equal values
+    rank: int  # 0 = the event's best gap (open during it, then closest); breaks ties only
+    limit: int  # most words that may come before this sentence in its gap (R2 per sentence)
 
 
 # -- options -----------------------------------------------------------------------------
@@ -96,11 +108,33 @@ def _distance(e: VisualEvent, g: Gap) -> float:
     return max(0.0, g.usable_start - e.t_start)
 
 
+def _order(e: VisualEvent) -> tuple[float, str]:
+    """Order of sentences inside a gap: visual start, then id (as compose_cues voices them)."""
+    return (e.t_start, e.id)
+
+
+def _limit(e: VisualEvent, g: Gap, wps: float) -> int:
+    """Most words before e's sentence in g that still let it start before e ends: preceding
+    words / wps < t_end - usable_start, kept one word on the safe side."""
+    return math.floor((e.t_end - g.usable_start) * wps + _EPS) - 1
+
+
+def _in_time(group: Iterable[_Option]) -> bool:
+    """True when every sentence of one gap starts before its visual ends."""
+    before = 0
+    for o in sorted(group, key=lambda o: _order(o.event)):
+        if before > o.limit:
+            return False
+        before += o.cost
+    return True
+
+
 def _options(
     events: Sequence[VisualEvent], variants: Sequence[Variant], priority: dict[str, int],
-    gaps: Sequence[Gap], lead: float, ahead_words: int,
+    gaps: Sequence[Gap], lead: float, ahead_words: int, wps: float,
 ) -> list[_Option]:  # fmt: skip
-    """Every (event, variant, gap) triple that is eligible and fits the gap on its own."""
+    """Every (event, variant, gap) triple that is eligible, fits the gap on its own and would
+    start in time if voiced first in it."""
     table = _variant_table(variants)
     gaps = sorted(gaps, key=lambda g: g.id)
     out: list[_Option] = []
@@ -110,41 +144,54 @@ def _options(
             continue
         p = max(1, int(priority.get(e.id, e.salience)))  # plan sets one per event it answers
         eligible = [g for g in gaps if _eligible(e, g, lead)]
-        near = sorted(eligible, key=lambda g: (_distance(e, g), g.id))
+        # closest first, gaps open during the visual before look-aheads (as the objective has it)
+        near = sorted(eligible, key=lambda g: (_is_ahead(e, g), _distance(e, g), g.id))
         for rank, g in enumerate(near):
-            ahead = _is_ahead(e, g)
+            ahead, limit = _is_ahead(e, g), _limit(e, g, wps)
+            if limit < 0:
+                continue
             for v in mine:
                 cost = v.words + ahead_words * ahead
                 if cost > g.capacity_words:
                     continue
                 value = p * WEIGHTS[v.length] - AHEAD_PENALTY * ahead
-                out.append(_Option(e, v.length, g, ahead, p, cost, value, rank))
+                out.append(_Option(e, v.length, g, ahead, p, cost, value, rank, limit))
     return out
 
 
 # -- placing -----------------------------------------------------------------------------
 
 
+def _value(options: list[_Option], chosen: Iterable[int]) -> int:
+    """The brief's objective for a choice of options."""
+    return sum(options[i].value for i in chosen)
+
+
 def _greedy(options: list[_Option]) -> list[int]:
     """Events by priority (desc) then start; each takes its longest variant that still fits,
-    in the earliest eligible gap with room for it."""
+    in the eligible gap closest to its visual that has room for it and keeps every sentence
+    of that gap in time."""
     mine: dict[str, list[int]] = defaultdict(list)
     for i, o in enumerate(options):
         mine[o.event.id].append(i)
     left = {o.gap.id: o.gap.capacity_words for o in options}
+    held: dict[str, list[_Option]] = defaultdict(list)  # gap id -> options placed there
     first = {eid: options[ix[0]] for eid, ix in mine.items()}
     order = sorted(mine, key=lambda eid: (-first[eid].priority, first[eid].event.t_start, eid))
     chosen: list[int] = []
     for eid in order:
         for length in reversed(LENGTHS):
-            fits = [
+            fits = (
                 i
-                for i in mine[eid]
-                if options[i].length == length and options[i].cost <= left[options[i].gap.id]
-            ]
-            if fits:
-                i = min(fits, key=lambda i: (options[i].gap.usable_start, options[i].gap.id))
+                for i in sorted(mine[eid], key=lambda i: options[i].rank)
+                if options[i].length == length
+                and options[i].cost <= left[options[i].gap.id]
+                and _in_time([*held[options[i].gap.id], options[i]])
+            )
+            i = next(fits, None)
+            if i is not None:
                 left[options[i].gap.id] -= options[i].cost
+                held[options[i].gap.id].append(options[i])
                 chosen.append(i)
                 break
     return chosen
@@ -166,24 +213,48 @@ def _solve(options: list[_Option], hint: list[int], time_limit_s: float) -> list
         model.add_at_most_one(x[i] for i in ix)
     for ix in per_gap.values():
         cap = options[ix[0]].gap.capacity_words
-        words = cp_model.LinearExpr.weighted_sum([x[i] for i in ix], [options[i].cost for i in ix])
-        model.add(words <= cap)
-    # Lexicographic: one unit of the brief's objective outweighs every tie-break unit together
-    # (at most one option per event is chosen), so the optimum of the brief's objective is kept.
-    scale = 1 + sum(max(options[i].rank for i in ix) for ix in per_event.values())
-    model.maximize(cp_model.LinearExpr.weighted_sum(x, [o.value * scale - o.rank for o in options]))
+        model.add(_words(x, options, ix) <= cap)
+        # R2 per sentence: when option o is chosen, the words voiced before it in this gap
+        # (options of visuals that start earlier) must leave it starting before its visual ends
+        for o_i in ix:
+            o = options[o_i]
+            before = [i for i in ix if _order(options[i].event) < _order(o.event)]
+            most: dict[str, int] = defaultdict(int)  # largest cost per earlier event
+            for i in before:
+                most[options[i].event.id] = max(most[options[i].event.id], options[i].cost)
+            if min(cap, sum(most.values())) > o.limit:  # otherwise it can never bind
+                model.add(_words(x, options, before) <= o.limit).only_enforce_if(x[o_i])
+    weights = [o.value for o in options]
+    if TIE_BREAK:
+        # Lexicographic: one unit of the brief's objective outweighs every tie-break unit
+        # together (at most one option per event is chosen), so its optimum is kept.
+        scale = 1 + sum(max(options[i].rank for i in ix) for ix in per_event.values())
+        weights = [o.value * scale - o.rank for o in options]
+    model.maximize(cp_model.LinearExpr.weighted_sum(x, weights))
     chosen = set(hint)
     for i, var in enumerate(x):
         model.add_hint(var, i in chosen)  # start from the greedy answer
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_s
+    # Reproducible stop when it binds first; measured at about 0.07 deterministic units per
+    # wall second, so the wall limit above is usually what stops a long solve.
+    solver.parameters.max_deterministic_time = time_limit_s
     solver.parameters.num_workers = NUM_WORKERS
     solver.parameters.random_seed = 0
     status = solver.solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         log.warning("schedule: solver status %s, placing greedily", status)
         return None
-    return [i for i, var in enumerate(x) if solver.boolean_value(var)]
+    answer = [i for i, var in enumerate(x) if solver.boolean_value(var)]
+    if status == cp_model.FEASIBLE and _value(options, answer) < _value(options, hint):
+        log.warning("schedule: solver timed out below the greedy answer, placing greedily")
+        return list(hint)
+    return answer
+
+
+def _words(x: list, options: list[_Option], ix: list[int]):
+    """The words the chosen options among `ix` put in their gap, as a linear expression."""
+    return cp_model.LinearExpr.weighted_sum([x[i] for i in ix], [options[i].cost for i in ix])
 
 
 def _extended(events: Iterable[VisualEvent], placed: set[str]) -> list[str]:
@@ -214,16 +285,19 @@ def schedule(
     lead: float = LEAD,
     ahead_words: int = AHEAD_WORDS,
     time_limit_s: float = TIME_LIMIT_S,
+    wps: float = WPS,
 ) -> tuple[list[Placement], list[str]]:
     """Placements (in gap order) and the ids of salience >= 4 events left unplaced (by start),
     which are the extended-mode candidates.
 
     An event may sit in gap g when g.usable_start < t_end and g.usable_end > t_start - lead; it
-    is a look-ahead when g.usable_end <= t_start and then costs `ahead_words` more words. The
-    model maximises sum(priority x weight) - 1 per look-ahead, weights short 60, medium 85,
-    long 100. An event missing from `priority` counts with its salience.
+    is a look-ahead when g.usable_end <= t_start and then costs `ahead_words` more words. Inside
+    a gap the words voiced before an event's sentence (earlier-starting visuals, ties by id) may
+    be at most floor((t_end - usable_start) x wps) - 1. The model maximises
+    sum(priority x weight) - 1 per look-ahead, weights short 60, medium 85, long 100. An event
+    missing from `priority` counts with its salience.
     """
-    options = _options(events, variants, priority, gaps, lead, ahead_words)
+    options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
     greedy = _greedy(options)
     chosen = _solve(options, greedy, time_limit_s) if options else []
     return _result(options, greedy if chosen is None else chosen, events)
@@ -237,9 +311,10 @@ def schedule_greedy(
     *,
     lead: float = LEAD,
     ahead_words: int = AHEAD_WORDS,
+    wps: float = WPS,
 ) -> tuple[list[Placement], list[str]]:
     """The fallback `schedule` uses without a solver answer: same rules, greedy choice."""
-    options = _options(events, variants, priority, gaps, lead, ahead_words)
+    options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
     return _result(options, _greedy(options), events)
 
 
@@ -257,13 +332,20 @@ def _sentence(text: str) -> str:
 
 
 def _lower_first(text: str, proper_nouns: set[str]) -> str:
-    """First letter lower-cased to follow AHEAD_PREFIX, unless the first word is an acronym
-    ("NASA", "TV") or a known proper noun. Text that starts with a quote is left alone."""
+    """First letter lower-cased to follow AHEAD_PREFIX, unless the first word is "I" or one of
+    its contractions, an all-caps word of two or more letters ("NASA's", "U.S.", "TV") or a
+    known proper noun. Text that starts with a quote is left alone."""
     if not text or not text[0].isupper() or (len(text) > 1 and text[1].isupper()):
         return text
-    first = text.split(maxsplit=1)[0]
+    first = text.split(maxsplit=1)[0].replace("’", "'").rstrip(",;:!?")
+    letters = re.sub(r"'s$", "", first).replace(".", "").replace("'", "")
     word = re.match(r"\w+", first)
-    if first.rstrip(".,;:!?") in proper_nouns or (word and word.group() in proper_nouns):
+    if (
+        first in _FIRST_PERSON
+        or (len(letters) >= 2 and letters.isalpha() and letters.isupper())
+        or first.rstrip(".") in proper_nouns
+        or (word and word.group() in proper_nouns)
+    ):
         return text
     return text[0].lower() + text[1:]
 
@@ -375,9 +457,9 @@ def compose_cues(
 
 def placement_report(
     placements: list[Placement],
+    variants: list[Variant],
     events: list[VisualEvent],
     gaps: list[Gap],
-    variants: list[Variant],
     *,
     ahead_words: int = AHEAD_WORDS,
 ) -> dict:
