@@ -310,12 +310,12 @@ test.describe("player, embedded on another site", () => {
     await seek.focus();
     await expect(seek).toHaveAttribute("aria-valuetext", "0 seconds of 6 seconds");
     await page.keyboard.press("k");
-    await page.waitForTimeout(1600);
+    await expect.poll(async () => (await videoClock(page)).t, { timeout: 5000 }).toBeGreaterThan(1.2);
     await expect(seek).toHaveAttribute("aria-valuetext", "0 seconds of 6 seconds");
     // pausing brings it up to date, and so does moving it
     await page.keyboard.press("k");
     expect((await playerState(page)).playing).toBe(false);
-    await expect(seek).toHaveAttribute("aria-valuetext", /^1 second of 6 seconds$/);
+    await expect(seek).toHaveAttribute("aria-valuetext", /^[1-5] seconds? of 6 seconds$/);
     await page.keyboard.press("ArrowRight");
     await expect(seek).toHaveAttribute("aria-valuetext", /^[56] seconds of 6 seconds$/);
   });

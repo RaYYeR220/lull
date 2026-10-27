@@ -10,12 +10,12 @@
  *                extended="extended.vtt" cue-audio-base="audio/" captions="captions.vtt"
  *                poster="poster.jpg" label="Lecture 3"></lull-player>
  */
-import { CueClock } from "./clock";
+import { CueClock, holdFor } from "./clock";
 import { ElementProgramme, GraphProgramme, type Programme } from "./duck";
 import { MediaFollower } from "./sync";
 import { clock, seconds2, spokenTime } from "./time";
 import { ICON, STYLE, TEMPLATE } from "./view";
-import { Voice, type Playback, type VoiceSource } from "./voice";
+import { DEFAULT_EXT, Voice, type Playback, type VoiceSource, type VoiceStatus } from "./voice";
 import { parseVtt, type VttCue } from "./vtt";
 
 export type PlayerMode = "mixed" | "spoken" | "screen-reader" | "extended";
@@ -91,7 +91,7 @@ const LATE_HOLD = 2;
 const HOLD_CAP_MS = 8000;
 const PREFETCH_AHEAD = 20;
 
-const ATTRS = ["src", "descriptions", "described-audio", "extended", "cue-audio-base", "captions", "poster", "mode", "label", "crossorigin"] as const;
+const ATTRS = ["src", "descriptions", "described-audio", "extended", "cue-audio-base", "cue-audio-ext", "captions", "poster", "mode", "label", "crossorigin"] as const;
 
 const isMode = (v: unknown): v is PlayerMode => typeof v === "string" && (MODES as readonly string[]).includes(v);
 const speaks = (m: PlayerMode | null) => m === "spoken" || m === "extended";
@@ -194,6 +194,19 @@ export class LullPlayer extends Base {
   private rowEls = new Map<Cue, HTMLButtonElement>();
   private spanEls = new Map<Cue, HTMLElement>();
   private announceTimer: Record<"status" | "cue", ReturnType<typeof setTimeout> | undefined> = { status: undefined, cue: undefined };
+  private connectedOnce = false;
+  /** Track loads cut off by leaving the page, to run again on return. */
+  private reload = new Set<"desc" | "ext">();
+  /** Lines in flight, by playback. */
+  private speaking = new Map<Playback, Cue>();
+  /** System-voice lines a pause cut short, said again on play. */
+  private interrupted: Cue[] = [];
+  /** What the voice was last known to be; a change to fallback or mixed is said once. */
+  private voiceSeen: VoiceStatus = "none";
+  private voiceNotice = false;
+  /** The video is reloading under a new crossorigin setting: its pause events are ours. */
+  private reloading = false;
+  private seekAnnounced = "";
 
   constructor() {
     super();
@@ -242,13 +255,16 @@ export class LullPlayer extends Base {
       liveCue: q('[data-live="cue"]'),
     };
     this.voice = new Voice(() => this.ctx);
+    this.voiceSeen = this.voice.status();
     this.voice.onStatus = () => {
+      this.noteVoice();
       this.resolveMode();
       this.renderAll();
     };
     this.programme = new ElementProgramme(this.els.video);
     this.buildMenu();
     this.wire();
+    this.wireVideo(this.els.video);
     this.renderAll();
   }
 
@@ -308,7 +324,12 @@ export class LullPlayer extends Base {
     }
     document.addEventListener("fullscreenchange", this.onFullscreen);
     document.addEventListener("webkitfullscreenchange", this.onFullscreen);
-    this.resolveMode();
+    // back in the page: run the loads that leaving cut off, and set the mode up again
+    // (the mixed track's follower, the levels), since leaving took it down
+    for (const which of this.reload) void this.loadTrack(which, this.getAttribute(which === "desc" ? "descriptions" : "extended"));
+    this.reload.clear();
+    this.connectedOnce = true;
+    this.applyMode(this.pickMode());
     this.renderAll();
   }
 
@@ -320,10 +341,26 @@ export class LullPlayer extends Base {
     this.cancelHold();
     this.silence();
     this.follower?.detach();
+    this.follower = null;
     this.els.video.pause();
     this.stopLoop();
     clearTimeout(this.announceTimer.status);
     clearTimeout(this.announceTimer.cue);
+    for (const which of ["desc", "ext"] as const) {
+      const ctl = this.loads[which];
+      if (!ctl) continue;
+      ctl.abort();
+      this.loads[which] = null;
+      this.reload.add(which);
+    }
+    this.voice.abort();
+    // a video routed into Web Audio stays bound to that context, and the context is about to
+    // close: give the player a fresh video element so it has sound when it comes back
+    if (this.programme.kind === "graph") this.replaceVideo();
+    if (this.ctx) {
+      void this.ctx.close().catch(() => undefined);
+      this.ctx = null;
+    }
   }
 
   private readonly onFullscreen = () => this.renderAll();
@@ -372,6 +409,11 @@ export class LullPlayer extends Base {
         this.voice.reset();
         this.prefetch(true);
         break;
+      case "cue-audio-ext":
+        this.voice.ext = value?.trim() || DEFAULT_EXT;
+        this.voice.reset();
+        this.prefetch(true);
+        break;
       case "captions":
         this.setCaptionsTrack(value);
         break;
@@ -383,10 +425,13 @@ export class LullPlayer extends Base {
         this.els.player.setAttribute("aria-label", value?.trim() || "Described video");
         break;
       case "crossorigin": {
+        if (_old === value) break;
         const v = value === null ? null : value === "use-credentials" ? "use-credentials" : "anonymous";
         video.crossOrigin = v;
         audio.crossOrigin = v;
         this.voice.credentials = v === "use-credentials" ? "include" : "same-origin";
+        // the setting only applies to the next load: load everything again under it
+        if (this.connectedOnce) this.reloadMedia();
         break;
       }
     }
@@ -396,7 +441,7 @@ export class LullPlayer extends Base {
   // ---------------------------------------------------------------- wiring
 
   private wire(): void {
-    const { video, audio, stage, play, seek, mode, menu, group, speed, cc, tx, keys, mute, volume, fs, lines } = this.els;
+    const { audio, stage, play, seek, mode, menu, group, speed, cc, tx, keys, mute, volume, fs, lines } = this.els;
 
     play.addEventListener("click", () => this.togglePlay());
     stage.addEventListener("click", () => {
@@ -438,54 +483,6 @@ export class LullPlayer extends Base {
     });
     this.els.player.addEventListener("keydown", (e) => this.onKey(e));
 
-    video.addEventListener("loadedmetadata", () => {
-      this.videoState = "ready";
-      if (video.videoWidth && video.videoHeight) this.els.stage.style.setProperty("--lp-ar", `${video.videoWidth} / ${video.videoHeight}`);
-      this.buildSpans();
-      this.renderAll();
-    });
-    video.addEventListener("error", () => {
-      if (!this.getAttribute("src")) return;
-      this.videoState = "error";
-      this.want = false;
-      this.cancelHold();
-      this.silence();
-      this.renderAll();
-      if (this.interacted) this.say("This video isn’t available.");
-    });
-    video.addEventListener("play", () => {
-      if (!this.want) this.want = true; // started from outside: media keys, picture-in-picture
-      void this.ctx?.resume().catch(() => undefined);
-      this.loop();
-      this.renderAll();
-    });
-    video.addEventListener("pause", () => {
-      // paused from outside (media keys) while we meant to play
-      if (this.want && !this.hold && !this.bufferHold && !video.ended) this.userPause(false);
-      this.renderAll();
-    });
-    video.addEventListener("ended", () => {
-      this.want = false;
-      this.cancelHold();
-      this.stopLoop();
-      this.renderAll();
-      this.say("Ended.");
-    });
-    video.addEventListener("seeking", () => {
-      if (this.hold && Math.abs(video.currentTime - this.hold.cue.start) < 0.02) return;
-      this.onSeek(video.currentTime);
-    });
-    video.addEventListener("seeked", () => this.renderTime());
-    video.addEventListener("timeupdate", () => this.tick());
-    video.addEventListener("durationchange", () => {
-      this.buildSpans();
-      this.renderTime();
-    });
-    video.addEventListener("ratechange", () => {
-      if (video.playbackRate !== this.speed) this.speed = video.playbackRate;
-      this.renderAll();
-    });
-
     audio.addEventListener("loadedmetadata", () => {
       this.mixedState = "ready";
       this.resolveMode();
@@ -497,6 +494,125 @@ export class LullPlayer extends Base {
       this.resolveMode();
       this.renderAll();
     });
+  }
+
+
+  /** The video's events. Events from a video the player has since replaced are ignored. */
+  private wireVideo(v: HTMLVideoElement): void {
+    const on = (type: string, fn: () => void) =>
+      v.addEventListener(type, () => {
+        if (v === this.els.video) fn();
+      });
+    on("loadedmetadata", () => {
+      this.videoState = "ready";
+      this.reloading = false;
+      if (v.videoWidth && v.videoHeight) this.els.stage.style.setProperty("--lp-ar", `${v.videoWidth} / ${v.videoHeight}`);
+      this.buildSpans();
+      this.renderAll();
+    });
+    on("error", () => {
+      if (!this.getAttribute("src")) return;
+      this.reloading = false;
+      this.videoState = "error";
+      this.want = false;
+      this.cancelHold();
+      this.silence();
+      this.renderAll();
+      if (this.interacted) this.say("This video isn’t available.");
+    });
+    on("play", () => {
+      if (this.hold) {
+        // only the hold moves the picture on: undo a play from outside (a media key, picture-in-picture)
+        v.pause();
+        if (Math.abs(v.currentTime - this.hold.cue.start) > 0.02) v.currentTime = this.hold.cue.start;
+        return;
+      }
+      if (!this.want) this.want = true; // started from outside: media keys, picture-in-picture
+      void this.ctx?.resume().catch(() => undefined);
+      this.loop();
+      this.renderAll();
+    });
+    on("pause", () => {
+      // paused from outside (media keys) while we meant to play
+      if (this.want && !this.hold && !this.bufferHold && !this.reloading && !v.ended) this.userPause(false);
+      this.renderAll();
+    });
+    on("ended", () => {
+      this.want = false;
+      this.cancelHold();
+      this.stopLoop();
+      this.renderAll();
+      this.say("Ended.");
+    });
+    on("seeking", () => {
+      if (this.hold && Math.abs(v.currentTime - this.hold.cue.start) < 0.02) return;
+      this.onSeek(v.currentTime);
+    });
+    on("seeked", () => this.renderTime());
+    on("timeupdate", () => this.tick());
+    on("durationchange", () => {
+      this.buildSpans();
+      this.renderTime();
+    });
+    on("ratechange", () => {
+      if (v.playbackRate !== this.speed) this.speed = v.playbackRate;
+      this.voice.setRate(this.speed);
+      this.renderAll();
+    });
+  }
+
+  /** A fresh video element in place of the current one, at the same position and settings. */
+  private replaceVideo(): void {
+    const old = this.els.video;
+    const t = old.currentTime;
+    const v = document.createElement("video");
+    v.setAttribute("playsinline", "");
+    v.preload = "metadata";
+    const co = this.getAttribute("crossorigin");
+    if (co !== null) v.crossOrigin = co === "use-credentials" ? co : "anonymous";
+    const poster = this.getAttribute("poster");
+    if (poster) v.poster = poster;
+    old.replaceWith(v);
+    this.els.video = v;
+    old.removeAttribute("src");
+    old.load();
+    this.wireVideo(v);
+    this.programme.dispose();
+    this.programme = new ElementProgramme(v, { level: this.programmeLevel() });
+    const src = this.getAttribute("src");
+    this.videoState = src ? "loading" : "none";
+    if (src) {
+      v.src = src;
+      if (t > 0) v.currentTime = t;
+    }
+    v.defaultPlaybackRate = this.speed;
+    v.playbackRate = this.speed;
+    this.setCaptionsTrack(this.getAttribute("captions"));
+    this.applyLevels();
+  }
+
+  /** Loads the media and tracks again (a new crossorigin setting), keeping the position and play state. */
+  private reloadMedia(): void {
+    const { video, audio } = this.els;
+    const t = video.currentTime;
+    this.cancelHold();
+    this.silence();
+    if (this.getAttribute("src")) {
+      this.reloading = true;
+      this.videoState = "loading";
+      video.load();
+      if (t > 0) video.currentTime = t;
+      if (this.want) this.playVideo();
+    }
+    if (this.getAttribute("described-audio")) {
+      this.mixedState = "loading";
+      audio.load();
+    }
+    this.setCaptionsTrack(this.getAttribute("captions"));
+    void this.loadTrack("desc", this.getAttribute("descriptions"));
+    void this.loadTrack("ext", this.getAttribute("extended"));
+    this.voice.reset();
+    this.prefetch(true);
   }
 
   // ---------------------------------------------------------------- modes
@@ -527,9 +643,13 @@ export class LullPlayer extends Base {
   }
 
   /** The requested mode when it can run, else the first that can. */
-  private resolveMode(): void {
+  private pickMode(): PlayerMode | null {
     const order = [this.requested, ...MODES].filter(isMode);
-    const next = order.find((m) => this.availability(m) === null) ?? null;
+    return order.find((m) => this.availability(m) === null) ?? null;
+  }
+
+  private resolveMode(): void {
+    const next = this.pickMode();
     if (next === this.current) return;
     const prev = this.current;
     const lost = prev && this.availability(prev);
@@ -555,13 +675,17 @@ export class LullPlayer extends Base {
     if (byViewer) {
       const why = this.availability(m);
       if (why) this.say(`${MODE_NAME[m]} isn’t available. ${why}`);
-      else if (this.current === m) this.say(this.modeSentence(m));
+      else if (this.current === m) {
+        this.say(this.modeSentence(m));
+        if (speaks(m)) this.voiceNotice = false;
+      }
     }
     if (before === this.current) this.renderAll();
   }
 
   private applyMode(next: PlayerMode | null): void {
     const { video, audio } = this.els;
+    const changed = next !== this.current;
     this.cancelHold();
     this.silence();
     this.follower?.detach();
@@ -584,7 +708,7 @@ export class LullPlayer extends Base {
     }
     if (this.want && video.paused && !video.ended) this.playVideo();
     this.renderAll();
-    this.dispatchEvent(new CustomEvent<ModeEventDetail>("lull-modechange", { detail: { mode: next, requested: this.requested }, bubbles: true, composed: true }));
+    if (changed) this.dispatchEvent(new CustomEvent<ModeEventDetail>("lull-modechange", { detail: { mode: next, requested: this.requested }, bubbles: true, composed: true }));
   }
 
   private modeSentence(m: PlayerMode): string {
@@ -596,9 +720,20 @@ export class LullPlayer extends Base {
   private voiceWords(): string {
     const s = this.voice.status();
     if (s === "recorded") return "Recorded voice";
-    if (s === "mixed") return "Recorded voice, and the system voice where a line has no recording";
+    if (s === "fallback") return "Recorded voice unavailable, using system voice";
+    if (s === "mixed") return "Some recordings unavailable, using system voice for those lines";
     if (s === "system") return "System voice";
     return "No voice";
+  }
+
+  /** Says once that recordings couldn't be loaded: now if the viewer is listening, else with the next play. */
+  private noteVoice(): void {
+    const s = this.voice.status();
+    if (s === this.voiceSeen) return;
+    this.voiceSeen = s;
+    if (s !== "fallback" && s !== "mixed") return;
+    if (speaks(this.current) && this.interacted) this.say(`${this.voiceWords()}.`);
+    else this.voiceNotice = true;
   }
 
   private readStoredMode(): PlayerMode | null {
@@ -636,11 +771,14 @@ export class LullPlayer extends Base {
       const track = parseVtt(await res.text());
       if (ctl?.signal.aborted) return;
       const kind: CueKind = which === "ext" ? "extended" : "standard";
-      const cues = track.cues.map((c, index) => ({ ...c, kind, index, pause: kind === "extended" ? (c.pause ?? Math.max(0.5, c.end - c.start)) : c.pause }));
+      // an extended cue holds for its NOTE pause or its span, never past MAX_HOLD_S
+      const cues = track.cues.map((c, index) => ({ ...c, kind, index, pause: kind === "extended" ? holdFor(c) : c.pause }));
       if (which === "desc" && track.language) this.voice.lang = track.language;
+      if (this.loads[which] === ctl) this.loads[which] = null;
       set(cues.length ? "ready" : "empty", cues);
     } catch {
       if (ctl?.signal.aborted) return;
+      if (this.loads[which] === ctl) this.loads[which] = null;
       set("error");
     }
   }
@@ -677,11 +815,17 @@ export class LullPlayer extends Base {
     // the press is what lets audio start: wake the context now (made here for the spoken modes)
     const ctx = speaks(this.current) ? this.audioCtx() : this.ctx;
     if (ctx) void ctx.resume().then(() => this.ensureGraph(), () => undefined);
-    this.say("Playing.");
+    const notice = this.voiceNotice && speaks(this.current);
+    if (notice) this.voiceNotice = false;
+    this.say(notice ? `Playing. ${this.voiceWords()}.` : "Playing.");
+    const again = this.interrupted;
+    this.interrupted = [];
     if (this.hold) {
       this.resumeHold();
     } else if (!this.startHoldIfDue(this.els.video.currentTime)) {
       this.playVideo();
+      // the system voice can't be paused: lines the pause cut short are said again
+      if (speaks(this.current)) for (const c of again) this.speakCue(c, c.start);
     }
     this.loop();
     this.renderAll();
@@ -691,8 +835,10 @@ export class LullPlayer extends Base {
     this.want = false;
     if (this.hold) this.pauseHold();
     this.els.video.pause();
-    // lines in flight wait with the picture: clips freeze with the audio clock, the system voice stops
+    // lines in flight wait with the picture: clips freeze with the audio clock, the system voice
+    // stops and its lines are said again on play
     void this.ctx?.suspend().catch(() => undefined);
+    if (!this.hold) this.interrupted = [...this.speaking].filter(([p]) => p.source === "system").map(([, c]) => c);
     this.voice.stopSpeech();
     this.stopLoop();
     if (announce) this.say("Paused.");
@@ -727,6 +873,19 @@ export class LullPlayer extends Base {
     this.silence();
     this.descClock.reset(t);
     this.extClock.reset(t);
+    if (this.current === "screen-reader") {
+      // landing inside a line reads it, once, rather than waiting for the next one
+      const i = this.descClock.active(t);
+      const cue = this.desc.cues[i];
+      if (cue) {
+        this.descClock.skip(i);
+        const key = `${i}@${t.toFixed(3)}`;
+        if (key !== this.seekAnnounced) {
+          this.seekAnnounced = key;
+          this.announceCue(cue);
+        }
+      }
+    }
     this.prefetch(true, t);
     if (this.want && this.els.video.paused && !this.bufferHold && !this.els.video.ended) this.playVideo();
     this.renderAll(t);
@@ -735,6 +894,7 @@ export class LullPlayer extends Base {
   /** Stops every line in flight and lifts the duck. */
   private silence(): void {
     this.gen++;
+    this.interrupted = [];
     this.voice.stopAll();
     this.ducks = 0;
     this.programme.duck(false);
@@ -850,7 +1010,11 @@ export class LullPlayer extends Base {
         this.emitCue(cue, p.source === "none" ? "screen-reader" : p.source);
         // no voice at all: the line still reaches a screen reader
         if (p.source === "none") this.announceCue(cue, false);
-        void p.done.then(release);
+        this.speaking.set(p, cue);
+        void p.done.then(() => {
+          this.speaking.delete(p);
+          release();
+        });
         if (p.source === "none") release();
       }, release);
     this.renderAll();
@@ -884,7 +1048,8 @@ export class LullPlayer extends Base {
 
   private startHold(cue: Cue): void {
     const v = this.els.video;
-    const pause = cue.pause ?? Math.max(0.5, cue.end - cue.start);
+    // the clip plays at the video's rate, so the wait shortens (or lengthens) with it
+    const pause = holdFor(cue) / (this.speed || 1);
     this.hold = { cue, remaining: pause * 1000, since: 0, timer: undefined, cap: undefined, playback: null, timeUp: false, voiceDone: false, respeak: false };
     v.pause();
     // land on the frame the line belongs to
@@ -928,7 +1093,7 @@ export class LullPlayer extends Base {
         return;
       }
       h.playback = p;
-      if (first) this.emitCue(h.cue, p.source === "none" ? "screen-reader" : p.source, h.cue.pause ?? h.remaining / 1000);
+      if (first) this.emitCue(h.cue, p.source === "none" ? "screen-reader" : p.source, holdFor(h.cue));
       if (p.source === "none") this.announceCue(h.cue, false);
       void p.done.then(() => {
         if (this.hold !== h || h.playback !== p) return;
@@ -1495,7 +1660,7 @@ export class LullPlayer extends Base {
     idle.hidden = !!shownCue;
     idle.textContent = this.current ? IDLE[this.current] : "This video has no descriptions.";
     hold.hidden = !this.hold;
-    if (this.hold) holdWait.textContent = `The video waits ${seconds2(this.hold.cue.pause ?? 0)} for this line`;
+    if (this.hold) holdWait.textContent = `The video waits ${seconds2(holdFor(this.hold.cue) / (this.speed || 1))} for this line`;
 
     for (const [c, el] of this.spanEls) el.classList.toggle("on", c === live);
     for (const [c, row] of this.rowEls) {

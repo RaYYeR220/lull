@@ -33,6 +33,11 @@ export class CueClock<C extends TimedCue = TimedCue> {
     this.fired = this.cues.map((c) => c.start < t - SEEK_EPS);
   }
 
+  /** Counts cue `i` as fired (it was just read out another way). */
+  skip(i: number): void {
+    if (i >= 0 && i < this.fired.length) this.fired[i] = true;
+  }
+
   /** Lets cue `i` fire again (a hold the viewer interrupted). */
   rearm(i: number): void {
     if (i >= 0 && i < this.fired.length) this.fired[i] = false;
@@ -66,4 +71,17 @@ export class CueClock<C extends TimedCue = TimedCue> {
     });
     return at;
   }
+}
+
+/** The longest an extended cue may hold the picture, whatever its file says. */
+export const MAX_HOLD_S = 30;
+const MIN_HOLD_S = 0.5;
+
+/**
+ * Seconds the programme waits for an extended cue: its `NOTE extended pause=`, or failing that
+ * its span (at least half a second), never more than MAX_HOLD_S.
+ */
+export function holdFor(c: { start: number; end: number; pause?: number }): number {
+  const said = c.pause !== undefined && Number.isFinite(c.pause) && c.pause > 0 ? c.pause : Math.max(MIN_HOLD_S, c.end - c.start);
+  return Math.min(MAX_HOLD_S, said);
 }

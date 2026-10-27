@@ -18,6 +18,9 @@ export default defineConfig({
   // the screenshot capture runs on its own: `pnpm test:screens`
   testIgnore: ["**/screens.spec.ts"],
   fullyParallel: true,
+  // real media playback and whole-page axe sweeps share the machine with five other workers:
+  // the default 30 s per test is too tight under that load
+  timeout: 60_000,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],

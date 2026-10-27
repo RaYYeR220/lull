@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "3";
+const VERSION = "4";
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "e2e", "fixtures");
 const STAMP = path.join(OUT, ".version");
 
@@ -24,6 +24,11 @@ const CUES = [
   { id: "c002", start: 3.6, dur: 1.0, text: "The card turns over & shows a clock." },
 ];
 const EXTENDED = [{ id: "x001", start: 2.5, dur: 1.5, text: "Two words appear on the card: still here." }];
+/**
+ * Recordings as the engine's export names them (`audio/<cue id>.m4a`), except c002, which only
+ * has a .wav: the player must try .wav when the .m4a isn't there.
+ */
+const CLIP_EXT = { c001: "m4a", c002: "wav", x001: "m4a" };
 const DURATION = 6;
 
 const FILES = [
@@ -33,7 +38,8 @@ const FILES = [
   "extended.vtt",
   "captions.vtt",
   "poster.jpg",
-  ...[...CUES, ...EXTENDED].map((c) => `audio/${c.id}.wav`),
+  "extended-long.vtt",
+  ...[...CUES, ...EXTENDED].map((c) => `audio/${c.id}.${CLIP_EXT[c.id]}`),
 ];
 
 const force = process.argv.includes("--force");
@@ -81,7 +87,9 @@ ffmpeg(["-ss", "0.5", "-i", path.join(OUT, "video.mp4"), "-frames:v", "1", "-q:v
 
 // one clip per cue: a 660 Hz tone as long as the line
 for (const c of [...CUES, ...EXTENDED]) {
-  ffmpeg(["-f", "lavfi", "-i", `sine=frequency=660:sample_rate=24000:duration=${c.dur}`, "-filter:a", "volume=0.4", "-ac", "1", path.join(OUT, "audio", `${c.id}.wav`)]);
+  const ext = CLIP_EXT[c.id];
+  const codec = ext === "m4a" ? ["-c:a", "aac", "-b:a", "64k"] : [];
+  ffmpeg(["-f", "lavfi", "-i", `sine=frequency=660:sample_rate=24000:duration=${c.dur}`, "-filter:a", "volume=0.4", "-ac", "1", ...codec, path.join(OUT, "audio", `${c.id}.${ext}`)]);
 }
 
 // the mixed track: the programme tone ducked under each cue's tone
@@ -102,6 +110,21 @@ writeFileSync(
 writeFileSync(
   path.join(OUT, "extended.vtt"),
   [header, ...EXTENDED.map((c) => `NOTE extended pause=${c.dur.toFixed(3)}\n\n${c.id}\n${tc(c.start)} --> ${tc(c.start + c.dur)}\n${esc(c.text)}\n`)].join("\n"),
+);
+// pauses far past what a viewer should sit through: one by NOTE, one by the cue's span
+writeFileSync(
+  path.join(OUT, "extended-long.vtt"),
+  `${header}
+NOTE extended pause=999
+
+x101
+00:00:01.000 --> 00:00:02.000
+A wait that would stall the video.
+
+x102
+00:00:04.000 --> 00:01:44.000
+A line with no pause note and a long span.
+`,
 );
 writeFileSync(path.join(OUT, "captions.vtt"), "WEBVTT\n\n00:00:00.200 --> 00:00:02.800\n[a low steady tone]\n");
 writeFileSync(STAMP, `${VERSION}\n`);

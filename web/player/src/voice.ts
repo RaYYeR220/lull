@@ -1,43 +1,66 @@
 /**
  * Speaks a description cue: its recorded clip through Web Audio when one exists, otherwise
- * the system voice (speechSynthesis at rate 1.0). Clips are fetched and decoded ahead of
- * the playhead and kept in a small cache.
+ * the system voice (speechSynthesis). Both follow the video's playback rate, so a line keeps
+ * to its pause at any speed. Clips are fetched and decoded ahead of the playhead and kept in
+ * a small cache.
+ *
+ * Recordings are `<base>/<cue id>.<ext>` (the engine's export writes .m4a); when that file
+ * is missing the same name is tried once as .wav. A base containing `{id}` is used as is.
  */
 export type VoiceSource = "clip" | "system" | "none";
-export type VoiceStatus = "recorded" | "system" | "mixed" | "none";
+/**
+ * recorded: lines have recordings. system: there are none to look for (no base).
+ * fallback: recordings were looked for and none could be loaded; the system voice speaks.
+ * mixed: some lines have recordings, the system voice speaks the rest. none: nothing can speak.
+ */
+export type VoiceStatus = "recorded" | "system" | "fallback" | "mixed" | "none";
 
 export type Playback = {
   readonly source: VoiceSource;
   /** Resolves when the line has finished or was stopped. */
   readonly done: Promise<void>;
   stop(): void;
+  /** Follows a new playback rate mid-line. */
+  setRate(rate: number): void;
 };
 
 export type SpeakableCue = { id: string; text: string };
 
+export const DEFAULT_EXT = "m4a";
+const FALLBACK_EXT = "wav";
 const SAFE_ID = /^[A-Za-z0-9_-]+$/;
+const SAFE_EXT = /^[a-z0-9]{1,8}$/;
 const CACHE_MAX = 32;
 /** How long a line may wait for its clip to arrive before the system voice takes it. */
 const CLIP_WAIT_MS = 600;
 /** Speaking rate assumed when guarding against a system voice that never reports its end. */
 const GUARD_WPS = 1.8;
 
-/** The URL of a cue's recording: `{id}` in the base is replaced, otherwise `<base>/<id>.wav`. */
-export function clipUrl(base: string | null | undefined, id: string): string | null {
-  if (!base || !SAFE_ID.test(id)) return null;
-  if (base.includes("{id}")) return base.split("{id}").join(encodeURIComponent(id));
-  return `${base}${base.endsWith("/") ? "" : "/"}${encodeURIComponent(id)}.wav`;
+/**
+ * The URLs to try for a cue's recording, in order: `<base>/<id>.<ext>`, then the same name as
+ * .wav. A base containing `{id}` gives exactly that URL. Empty when there is nothing to fetch.
+ */
+export function clipUrls(base: string | null | undefined, id: string, ext: string = DEFAULT_EXT): string[] {
+  if (!base || !SAFE_ID.test(id)) return [];
+  if (base.includes("{id}")) return [base.split("{id}").join(encodeURIComponent(id))];
+  const wanted = String(ext ?? "").replace(/^\./, "").toLowerCase();
+  const e = SAFE_EXT.test(wanted) ? wanted : DEFAULT_EXT;
+  const stem = `${base}${base.endsWith("/") ? "" : "/"}${encodeURIComponent(id)}.`;
+  return e === FALLBACK_EXT ? [stem + FALLBACK_EXT] : [stem + e, stem + FALLBACK_EXT];
 }
 
-const NONE: Playback = { source: "none", done: Promise.resolve(), stop: () => undefined };
+const NONE: Playback = { source: "none", done: Promise.resolve(), stop: () => undefined, setRate: () => undefined };
 const hasSpeech = () => typeof speechSynthesis !== "undefined" && typeof SpeechSynthesisUtterance !== "undefined";
 
 function after<T>(ms: number, value: T): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), ms));
 }
 
+const isAbort = (err: unknown) => (err as { name?: string } | null)?.name === "AbortError";
+
 export class Voice {
   base: string | null = null;
+  ext = DEFAULT_EXT;
   lang = "";
   credentials: RequestCredentials = "same-origin";
   /** Called when what the voice can do changes (a clip arrived or failed). */
@@ -50,6 +73,10 @@ export class Voice {
   private bus: GainNode | null = null;
   private busCtx: AudioContext | null = null;
   private level = 1;
+  private rate = 1;
+  /** After a .wav stood in for a missing file, try .wav first. */
+  private wavFirst = false;
+  private aborter: AbortController | null = typeof AbortController !== "undefined" ? new AbortController() : null;
 
   constructor(getCtx: () => AudioContext | null) {
     this.getCtx = getCtx;
@@ -66,7 +93,7 @@ export class Voice {
     const results = [...this.results.values()];
     const ok = results.filter(Boolean).length;
     const failed = results.length - ok;
-    if (failed && !ok) return speech ? "system" : "none";
+    if (failed && !ok) return speech ? "fallback" : "none";
     if (failed && ok) return speech ? "mixed" : "recorded";
     return "recorded";
   }
@@ -86,25 +113,54 @@ export class Voice {
     }
   }
 
+  /** The video's playback rate: lines in flight and lines to come follow it. */
+  setRate(rate: number): void {
+    this.rate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    for (const p of this.live) p.setRate(this.rate);
+  }
+
+  /** Forgets every clip (the base, the extension or the credentials changed). */
+  reset(): void {
+    this.abort();
+    this.cache.clear();
+    this.results.clear();
+    this.wavFirst = false;
+  }
+
+  /** Cancels clip downloads in flight; they count as neither found nor missing. */
+  abort(): void {
+    this.aborter?.abort();
+    this.aborter = typeof AbortController !== "undefined" ? new AbortController() : null;
+  }
+
   /** The decoded clip for a cue, or null when there is none. Cached. */
   load(id: string): Promise<AudioBuffer | null> {
-    const url = clipUrl(this.base, id);
-    if (!url) return Promise.resolve(null);
-    const hit = this.cache.get(url);
+    let urls = clipUrls(this.base, id, this.ext);
+    if (!urls.length) return Promise.resolve(null);
+    if (this.wavFirst && urls.length > 1) urls = [...urls].reverse();
+    const key = `${this.base}|${this.ext}|${id}`;
+    const hit = this.cache.get(key);
     if (hit) {
       // refresh its place in the cache
-      this.cache.delete(url);
-      this.cache.set(url, hit);
+      this.cache.delete(key);
+      this.cache.set(key, hit);
       return hit;
     }
-    const p = this.fetchClip(url).then((buf) => {
+    const signal = this.aborter?.signal;
+    const p: Promise<AudioBuffer | null> = this.fetchFirst(urls, signal).then((found) => {
+      if (found === "aborted") {
+        if (this.cache.get(key) === p) this.cache.delete(key);
+        return null;
+      }
+      const buf = found?.buf ?? null;
+      if (found && found.url !== urls[0] && found.url.endsWith(`.${FALLBACK_EXT}`)) this.wavFirst = true;
       const had = this.results.get(id);
       this.results.set(id, !!buf);
       if (had !== !!buf) this.onStatus?.();
-      if (!buf) this.cache.delete(url);
+      if (!buf && this.cache.get(key) === p) this.cache.delete(key);
       return buf;
     });
-    this.cache.set(url, p);
+    this.cache.set(key, p);
     while (this.cache.size > CACHE_MAX) {
       const oldest = this.cache.keys().next().value;
       if (oldest === undefined) break;
@@ -123,24 +179,18 @@ export class Voice {
    */
   async play(cue: SpeakableCue, { offset = 0, current = () => true }: { offset?: number; current?: () => boolean } = {}): Promise<Playback> {
     const t0 = Date.now();
-    if (clipUrl(this.base, cue.id)) {
+    if (clipUrls(this.base, cue.id, this.ext).length) {
       const buf = await Promise.race([this.load(cue.id), after(CLIP_WAIT_MS, null)]);
       if (!current()) return NONE;
       const ctx = this.getCtx();
       if (buf && ctx && ctx.state === "running") {
-        const waited = (Date.now() - t0) / 1000;
+        const waited = ((Date.now() - t0) / 1000) * this.rate;
         return this.track(this.playClip(ctx, buf, offset + (waited < 1 ? waited : 0)));
       }
     }
     if (!current()) return NONE;
     if (hasSpeech()) return this.track(this.speak(cue.text));
     return NONE;
-  }
-
-  /** Forgets every clip (the base changed). */
-  reset(): void {
-    this.cache.clear();
-    this.results.clear();
   }
 
   /** Stops lines spoken by the system voice; clips are left to the audio clock. */
@@ -166,18 +216,23 @@ export class Voice {
     return p;
   }
 
-  private async fetchClip(url: string): Promise<AudioBuffer | null> {
-    try {
-      const res = await fetch(url, { credentials: this.credentials });
-      if (!res.ok) {
-        void res.body?.cancel().catch(() => undefined);
-        return null;
+  /** The first URL that gives a decodable clip; null when none does; "aborted" when cancelled. */
+  private async fetchFirst(urls: string[], signal: AbortSignal | undefined): Promise<{ url: string; buf: AudioBuffer } | null | "aborted"> {
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { credentials: this.credentials, signal });
+        if (!res.ok) {
+          // let the connection go: an unread error body keeps the request open
+          void res.body?.cancel().catch(() => undefined);
+          continue;
+        }
+        const data = await res.arrayBuffer();
+        return { url, buf: await this.decode(data) };
+      } catch (err) {
+        if (isAbort(err) || signal?.aborted) return "aborted";
       }
-      const data = await res.arrayBuffer();
-      return await this.decode(data);
-    } catch {
-      return null;
     }
+    return null;
   }
 
   private decode(data: ArrayBuffer): Promise<AudioBuffer> {
@@ -204,6 +259,7 @@ export class Voice {
   private playClip(ctx: AudioContext, buf: AudioBuffer, offset: number): Playback {
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    src.playbackRate.value = this.rate;
     src.connect(this.busFor(ctx));
     let finish: () => void = () => undefined;
     const done = new Promise<void>((resolve) => {
@@ -222,12 +278,13 @@ export class Voice {
         }
         finish();
       },
+      setRate: (rate) => src.playbackRate.setValueAtTime(rate, ctx.currentTime),
     };
   }
 
   private speak(text: string): Playback {
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1;
+    u.rate = this.rate;
     u.volume = this.level;
     if (this.lang) u.lang = this.lang;
     let finish: () => void = () => undefined;
@@ -236,7 +293,7 @@ export class Voice {
     });
     // some engines never report the end of a line (or have no voices): give up after a fair time
     const words = text.split(/\s+/).filter(Boolean).length;
-    const guard = setTimeout(() => finish(), (words / GUARD_WPS + 1.5) * 1000);
+    const guard = setTimeout(() => finish(), (words / (GUARD_WPS * this.rate) + 1.5) * 1000);
     const end = () => {
       clearTimeout(guard);
       finish();
@@ -251,6 +308,8 @@ export class Voice {
         speechSynthesis.cancel();
         end();
       },
+      // an utterance keeps the rate it started with; the next line takes the new one
+      setRate: () => undefined,
     };
   }
 }

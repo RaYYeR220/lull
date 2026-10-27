@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CueClock } from "../src/clock";
+import { CueClock, MAX_HOLD_S, holdFor } from "../src/clock";
 import { DUCK_DB, ElementProgramme, GraphProgramme, RAMP_S, dbToGain } from "../src/duck";
 import { MediaFollower } from "../src/sync";
 import { clock, spokenTime } from "../src/time";
-import { clipUrl } from "../src/voice";
+import { clipUrls } from "../src/voice";
 
 describe("CueClock", () => {
   const cues = [
@@ -40,6 +40,14 @@ describe("CueClock", () => {
     expect(c.due(1)).toEqual([0]);
     c.reset(5);
     expect(c.next(5)).toBe(10);
+  });
+
+  it("skips a cue that was read out another way (a seek into it)", () => {
+    const c = new CueClock(cues);
+    c.reset(3.6);
+    c.skip(1);
+    expect(c.due(3.7)).toEqual([]);
+    expect(c.next(3.7)).toBe(10);
   });
 
   it("rearms a cue and knows which one is active", () => {
@@ -197,15 +205,36 @@ describe("MediaFollower", () => {
 });
 
 describe("clip URLs", () => {
-  it("names a recording by cue id, or fills a pattern", () => {
-    expect(clipUrl("/runs/ed90/audio/", "c001")).toBe("/runs/ed90/audio/c001.wav");
-    expect(clipUrl("/runs/ed90/audio", "x002")).toBe("/runs/ed90/audio/x002.wav");
-    expect(clipUrl("https://cdn.example/a/{id}.m4a", "c003")).toBe("https://cdn.example/a/c003.m4a");
+  it("names a recording <id>.m4a by default, with one .wav to try after", () => {
+    expect(clipUrls("/runs/ed90/audio/", "c001")).toEqual(["/runs/ed90/audio/c001.m4a", "/runs/ed90/audio/c001.wav"]);
+    expect(clipUrls("/runs/ed90/audio", "x002")).toEqual(["/runs/ed90/audio/x002.m4a", "/runs/ed90/audio/x002.wav"]);
   });
-  it("refuses ids that could leave the folder, and no base", () => {
-    expect(clipUrl("/audio/", "../secret")).toBeNull();
-    expect(clipUrl("/audio/", "")).toBeNull();
-    expect(clipUrl(null, "c001")).toBeNull();
+  it("takes the extension it is given, and a .wav extension has nothing after it", () => {
+    expect(clipUrls("/a/", "c001", "mp3")).toEqual(["/a/c001.mp3", "/a/c001.wav"]);
+    expect(clipUrls("/a/", "c001", ".WAV")).toEqual(["/a/c001.wav"]);
+    expect(clipUrls("/a/", "c001", "wav")).toEqual(["/a/c001.wav"]);
+    expect(clipUrls("/a/", "c001", "")).toEqual(["/a/c001.m4a", "/a/c001.wav"]);
+  });
+  it("fills a pattern as given", () => {
+    expect(clipUrls("https://cdn.example/a/{id}.ogg", "c003")).toEqual(["https://cdn.example/a/c003.ogg"]);
+  });
+  it("refuses ids or extensions that could leave the folder, and no base", () => {
+    expect(clipUrls("/audio/", "../secret")).toEqual([]);
+    expect(clipUrls("/audio/", "")).toEqual([]);
+    expect(clipUrls(null, "c001")).toEqual([]);
+    expect(clipUrls("/audio/", "c001", "m4a/../x")).toEqual(["/audio/c001.m4a", "/audio/c001.wav"]);
+  });
+});
+
+describe("extended holds", () => {
+  it("wait for the NOTE pause, or the cue's span, never more than 30 s", () => {
+    expect(MAX_HOLD_S).toBe(30);
+    expect(holdFor({ start: 2.5, end: 4, pause: 1.5 })).toBe(1.5);
+    expect(holdFor({ start: 1, end: 2, pause: 999 })).toBe(30);
+    expect(holdFor({ start: 4, end: 104 })).toBe(30);
+    expect(holdFor({ start: 4, end: 5.2 })).toBeCloseTo(1.2, 6);
+    expect(holdFor({ start: 4, end: 4 })).toBe(0.5);
+    expect(holdFor({ start: 4, end: 9, pause: Number.NaN })).toBe(5);
   });
 });
 

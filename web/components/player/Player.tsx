@@ -16,8 +16,10 @@ export type PlayerProps = {
   describedAudio?: string;
   /** extended.vtt; enables the extended mode. */
   extended?: string;
-  /** Where the per-cue recordings live: `<base>/<cue id>.wav`, or a pattern with `{id}`. */
+  /** Where the per-cue recordings live: `<base>/<cue id>.<cueAudioExt>` (a .wav is tried after), or a pattern with `{id}`. */
   cueAudioBase?: string;
+  /** The recordings' extension; "m4a" (the engine's export) when left out. */
+  cueAudioExt?: string;
   captions?: string;
   poster?: string;
   /** The mode to start in; a viewer's own earlier choice wins when this is left out. */
@@ -38,6 +40,7 @@ type LullPlayerAttributes = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLE
   "described-audio"?: string;
   extended?: string;
   "cue-audio-base"?: string;
+  "cue-audio-ext"?: string;
   captions?: string;
   poster?: string;
   mode?: string;
@@ -64,6 +67,7 @@ export function Player({
   describedAudio,
   extended,
   cueAudioBase,
+  cueAudioExt,
   captions,
   poster,
   mode,
@@ -107,6 +111,7 @@ export function Player({
       described-audio={describedAudio}
       extended={extended}
       cue-audio-base={cueAudioBase}
+      cue-audio-ext={cueAudioExt}
       captions={captions}
       poster={poster}
       mode={mode}

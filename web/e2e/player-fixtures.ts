@@ -75,7 +75,7 @@ export async function routeFixtures(page: Page, pattern: string, prefix: string)
 }
 
 export type PlayerAttrs = Partial<
-  Record<"src" | "descriptions" | "described-audio" | "extended" | "cue-audio-base" | "captions" | "poster" | "mode" | "label" | "crossorigin", string>
+  Record<"src" | "descriptions" | "described-audio" | "extended" | "cue-audio-base" | "cue-audio-ext" | "captions" | "poster" | "mode" | "label" | "crossorigin", string>
 >;
 
 /** Every input the player takes, from the fixtures. */
@@ -134,5 +134,65 @@ export async function waitReady(page: Page): Promise<void> {
     const el = document.querySelector("lull-player") as (HTMLElement & { state: { video: string; descriptions: string } }) | null;
     const v = el?.shadowRoot?.querySelector("video") as HTMLVideoElement | null;
     return !!el && !!v && v.readyState >= 2 && el.state.video === "ready" && el.state.descriptions !== "loading";
+  });
+}
+
+/**
+ * Watches the page's audio before it loads: every AudioContext made (window.__ctxs), the
+ * playbackRate of every clip started (window.__starts), and a stand-in system voice that
+ * records each line (window.__speech) and takes 2.5 s to say it unless cancelled. Headless
+ * Chromium has no voices, so this is how the system-voice paths are observed.
+ */
+export async function instrument(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as {
+      __ctxs: AudioContext[];
+      __starts: number[];
+      __speech: { text: string; rate: number; cancelled: boolean }[];
+    };
+    w.__ctxs = [];
+    w.__starts = [];
+    w.__speech = [];
+    const AC = window.AudioContext;
+    window.AudioContext = class extends AC {
+      constructor(...args: ConstructorParameters<typeof AudioContext>) {
+        super(...args);
+        w.__ctxs.push(this);
+      }
+    };
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, ...args: Parameters<AudioBufferSourceNode["start"]>) {
+      w.__starts.push(this.playbackRate.value);
+      return start.apply(this, args);
+    };
+    let pending: { id: ReturnType<typeof setTimeout>; u: SpeechSynthesisUtterance; rec: { cancelled: boolean } }[] = [];
+    const synth = window.speechSynthesis;
+    synth.speak = (u: SpeechSynthesisUtterance) => {
+      const rec = { text: u.text, rate: u.rate, cancelled: false };
+      w.__speech.push(rec);
+      const id = setTimeout(() => {
+        pending = pending.filter((p) => p.id !== id);
+        u.onend?.call(u, new Event("end") as SpeechSynthesisEvent);
+      }, 2500);
+      pending.push({ id, u, rec });
+    };
+    synth.cancel = () => {
+      for (const p of pending) {
+        clearTimeout(p.id);
+        p.rec.cancelled = true;
+        p.u.onerror?.call(p.u, new Event("error") as SpeechSynthesisErrorEvent);
+      }
+      pending = [];
+    };
+  });
+}
+
+type Watched = { ctxs: string[]; starts: number[]; speech: { text: string; rate: number; cancelled: boolean }[] };
+
+/** What instrument() has seen so far. */
+export function watched(page: Page): Promise<Watched> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __ctxs: AudioContext[]; __starts: number[]; __speech: Watched["speech"] };
+    return { ctxs: w.__ctxs.map((c) => c.state), starts: [...w.__starts], speech: w.__speech.map((s) => ({ ...s })) };
   });
 }
