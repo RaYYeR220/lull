@@ -29,6 +29,7 @@ CLIP_MAX_BYTES = MAX_VIDEO_BYTES
 PAUSE_S = 1.0  # a transcript line ends at a pause longer than this
 MERGE_DT = 2.0
 MERGE_JACCARD = 0.5
+FOLD_GAP_S = 1.5  # within one window, same-kind look-alikes this close are one event
 MAX_TOKENS = 6000
 TEMPERATURE = 0.6
 ESTIMATE = 0.01
@@ -220,9 +221,29 @@ class _Group:
     windows: set[int]
 
 
+def fold_window(events: list[VisualEvent]) -> list[VisualEvent]:
+    """One window's events with near-duplicates folded (ruling, Task 16): an event joins the
+    last event of its kind when the token Jaccard of their text (or on-screen text) is at least
+    MERGE_JACCARD and it starts at most FOLD_GAP_S after that one ends. The model sometimes
+    reports one shot as per-second slices; folded, they span the union and keep the higher
+    salience (see _combine)."""
+    out: list[VisualEvent] = []
+    last: dict[str, int] = {}  # kind -> index in out of the latest event of that kind
+    for e in sorted(events, key=lambda e: (e.t_start, e.t_end)):
+        i = last.get(e.kind)
+        if i is not None and e.t_start - out[i].t_end <= FOLD_GAP_S + _EPS:
+            if _similarity(out[i], e) >= MERGE_JACCARD - _EPS:
+                out[i] = _combine(out[i], e)
+                continue
+        last[e.kind] = len(out)
+        out.append(e)
+    return out
+
+
 def merge_events(per_window: list[tuple[Span, list[VisualEvent]]]) -> list[VisualEvent]:
     """Window-relative events -> one absolute-time list with ids e001… by start.
 
+    Each window's near-duplicates are folded first (`fold_window`).
     An event merges into one from an overlapping window when the kinds match, the token
     Jaccard of the text (or of the on-screen text) is at least MERGE_JACCARD, and either
     - the starts differ by at most MERGE_DT (both windows saw it begin in the overlap), or
@@ -238,7 +259,7 @@ def merge_events(per_window: list[tuple[Span, list[VisualEvent]]]) -> list[Visua
     for wi, (span, events) in enumerate(per_window):
         shifted = [
             e.model_copy(update={"t_start": e.t_start + span.start, "t_end": e.t_end + span.start})
-            for e in events
+            for e in fold_window(events)
         ]
         pool = [
             g
@@ -285,10 +306,16 @@ def _match(a: VisualEvent, b: VisualEvent, span: Span) -> float | None:
     carried = a.t_end >= span.start - MERGE_DT - _EPS and b.t_start <= span.start + MERGE_DT + _EPS
     if not (near or carried):
         return None
+    sim = _similarity(a, b)
+    return sim if sim >= MERGE_JACCARD - _EPS else None
+
+
+def _similarity(a: VisualEvent, b: VisualEvent) -> float:
+    """Token Jaccard of the descriptions, or of the on-screen text when both have some."""
     sim = _jaccard(_tokens(a.text), _tokens(b.text))
     if a.verbatim_text and b.verbatim_text:
         sim = max(sim, _jaccard(_tokens(a.verbatim_text), _tokens(b.verbatim_text)))
-    return sim if sim >= MERGE_JACCARD - _EPS else None
+    return sim
 
 
 def _combine(a: VisualEvent, b: VisualEvent) -> VisualEvent:

@@ -158,10 +158,47 @@ def test_merge_keeps_distinct_events():
     assert len(merge_events(per_window)) == 4
 
 
-def test_merge_never_merges_within_one_window():
+def test_merge_folds_near_duplicates_within_one_window():
+    """Ruling (Task 16): one shot reported as per-second slices becomes one event."""
+    w = _span(30, 130)
+    tag = "#CLIMATECHAMPIONS"
+    per_window = [(w, [
+        _ve(9.0, 10.0, "on_screen_text", "The tag #CLIMATECHAMPIONS on black", sal=4, verb=tag),
+        _ve(10.0, 11.0, "on_screen_text", "Hashtag #CLIMATECHAMPIONS shown on black", sal=5,
+            verb=tag),
+        _ve(11.5, 12.5, "on_screen_text", "Hashtag #CLIMATECHAMPIONS on black", sal=4, verb=tag),
+        _ve(12.5, 13.5, "on_screen_text", "USGS logo with the tagline science for a changing world",
+            sal=5, verb="USGS science for a changing world"),
+        _ve(13.5, 14.5, "on_screen_text", "USGS logo and tagline", sal=4,
+            verb="USGS science for a changing world"),
+        _ve(10, 12, text="a person waves"), _ve(11, 13, text="a person waves"),
+    ])]  # fmt: skip
+    out = merge_events(per_window)
+    assert [(e.kind, e.t_start, e.t_end, e.salience) for e in out] == [
+        ("on_screen_text", 39.0, 42.5, 5),
+        ("action", 40.0, 43.0, 3),
+        ("on_screen_text", 42.5, 44.5, 5),
+    ]
+    assert [e.id for e in out] == ["e001", "e002", "e003"]
+    assert out[0].verbatim_text == tag
+    assert out[2].text == "USGS logo with the tagline science for a changing world"
+
+
+def test_merge_within_a_window_needs_same_kind_similar_text_and_at_most_1_5_s_apart():
     w = _span(0, 100)
-    per_window = [(w, [_ve(10, 12, text="a person waves"), _ve(11, 13, text="a person waves")])]
-    assert len(merge_events(per_window)) == 2
+    cases = [
+        [_ve(10, 11, "action", "a person waves"), _ve(11, 12, "gesture", "a person waves")],
+        [_ve(10, 11, text="a person waves"), _ve(11, 12, text="a dog runs across the yard")],
+        [_ve(10, 11, text="a person waves"), _ve(12.6, 13, text="a person waves")],  # 1.6 s
+        # adjacent means the last event of that kind: another action in between breaks the run
+        [_ve(10, 11, text="a person waves"), _ve(11, 12, text="a dog runs across the yard"),
+         _ve(12, 13, text="a person waves")],
+    ]  # fmt: skip
+    for events in cases:
+        assert len(merge_events([(w, events)])) == len(events), events
+    edge = [_ve(10, 11, text="a person waves"), _ve(12.5, 13, text="a person waves")]  # 1.5 s
+    (one,) = merge_events([(w, edge)])
+    assert (one.t_start, one.t_end) == (10, 13)
 
 
 def test_merge_only_between_overlapping_windows():
@@ -174,10 +211,10 @@ def test_merge_only_between_overlapping_windows():
 
 def test_merge_is_one_to_one():
     w1, w2 = _span(0, 100), _span(90, 200)
-    per_window = [
-        (w1, [_ve(95, 96, text="a person waves at the camera")]),
-        (w2, [_ve(5, 6, text="a person waves at the camera"),
-              _ve(6, 7, text="a person waves at the camera again")]),
+    per_window = [  # the two in w2 are each like the one in w1, not like each other
+        (w1, [_ve(95, 96, text="a person waves at the camera and smiles")]),
+        (w2, [_ve(5, 6, text="a person waves at the camera, laughing"),
+              _ve(6, 7, text="a person smiles and waves, nodding")]),
     ]  # fmt: skip
     out = merge_events(per_window)
     assert len(out) == 2
