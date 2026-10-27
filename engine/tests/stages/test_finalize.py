@@ -24,6 +24,7 @@ from lull.stages.verify import (
     UNSPECIFIED,
     VERIFY_SCHEMA,
     clip_window,
+    parse_claims,
     remove_claims,
     verify,
 )
@@ -1126,3 +1127,32 @@ def test_described_events_follow_their_own_words_through_rewrites():
     assert described_events({"e1": "A red door opens."}, "The door swings open.") == ["e1"]
     assert described_events({}, "Anything.") is None  # no parts: nothing to judge
     assert described_events(parts, "") == []
+
+
+# -- fix round 1: ruling R2 ----------------------------------------------------------------------
+
+
+def test_the_verify_clip_is_at_least_4_s():
+    """R2: a 1.3 s fall gets 4 s of clip around it (padded, kept inside the video), still at
+    most 12 s."""
+    assert clip_window([_e(72.0, 73.3)], 90.0) == (70.65, 74.65)
+    assert clip_window([_e(0.2, 0.8)], 30.0) == (0.0, 4.0)  # moved inside the video
+    assert clip_window([_e(29.5, 29.9)], 30.0) == (26.0, 30.0)
+    assert clip_window([_e(0.0, 1.0)], 2.0) == (0.0, 2.0)  # a 2 s video gives what it has
+    assert clip_window([_e(0.0, 20.0)], 30.0) == (4.0, 16.0)  # the cap still holds
+
+
+def test_repeated_claims_are_judged_once():
+    """R2: identical claims (case and spacing aside) count once; a repeat with a worse verdict
+    makes the kept one worse, never better."""
+    same = [{"text": "Winged figures fly past.", "verdict": "supported", "at": 1.0}] * 24
+    assert len(parse_claims({"claims": same})) == 1
+    mixed = {"claims": [
+        {"text": "A cat sits", "verdict": "supported", "at": 1.0},
+        {"text": "a  CAT sits", "verdict": "not_visible", "at": None},
+        {"text": "A dog barks", "verdict": "supported", "at": 2.0},
+    ]}  # fmt: skip
+    got = parse_claims(mixed)
+    assert [(c.text, c.verdict) for c in got] == [
+        ("A cat sits", "not_visible"), ("A dog barks", "supported")
+    ]  # fmt: skip

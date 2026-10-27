@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 STAGE = "finalize"
 CLIP_PAD_S = 1.0  # context on each side of the cue's events
 CLIP_CAP_S = 12.0  # longest clip sent to the verifier (cost control)
+CLIP_MIN_S = 4.0  # shortest clip (ruling R2): a 1 s event needs context to be seen
 CLIP_HEIGHT = 360
 VERIFY_MAX_TOKENS = 1500
 VERIFY_TEMPERATURE = 0.2
@@ -70,22 +71,25 @@ def load_prompt(name: str) -> str:
 
 def clip_window(
     events: Iterable[VisualEvent], duration: float, *, pad: float = CLIP_PAD_S,
-    cap: float = CLIP_CAP_S,
+    cap: float = CLIP_CAP_S, least: float = CLIP_MIN_S,
 ) -> tuple[float, float]:  # fmt: skip
-    """[first start - pad, last end + pad] clamped to the video; when that is longer than `cap`,
-    the `cap` seconds centred on the events, moved inside the video if they would leave it."""
+    """[first start - pad, last end + pad] clamped to the video. When that is longer than `cap`
+    it is the `cap` seconds centred on the events, and when it is shorter than `least` the
+    `least` seconds centred on them (ruling R2), moved inside the video if they would leave it
+    (a video shorter than `least` gives all it has)."""
     evs = list(events)
     if not evs:
         raise ValueError("verify: a cue needs at least one event to check against")
     first, last = min(e.t_start for e in evs), max(e.t_end for e in evs)
     lo, hi = max(0.0, first - pad), min(duration, last + pad)
-    if hi - lo > cap:
+    size = cap if hi - lo > cap else least if hi - lo < least else None
+    if size is not None:
         mid = (first + last) / 2
-        lo, hi = mid - cap / 2, mid + cap / 2
+        lo, hi = mid - size / 2, mid + size / 2
         if lo < 0:
-            lo, hi = 0.0, cap
+            lo, hi = 0.0, min(duration, size)
         if hi > duration:
-            lo, hi = max(0.0, duration - cap), duration
+            lo, hi = max(0.0, duration - size), duration
     if hi <= lo:
         raise ValueError(f"verify: events {first}..{last} lie outside the video (0..{duration})")
     return round(lo, 3), round(hi, 3)
@@ -132,7 +136,28 @@ def parse_claims(out: object, *, offset: float = 0.0) -> list[Claim]:
         )
     if raw and not claims:
         raise ValueError(f"verify: all {len(raw)} claims were supported claims without text")
-    return claims
+    return _distinct(claims)
+
+
+_WORST = {"supported": 0, "not_visible": 1, "contradicted": 2}
+
+
+def _distinct(claims: list[Claim]) -> list[Claim]:
+    """Each claim once (ruling R2), compared without case or spacing, in first-seen order; a
+    repeat with a worse verdict makes the kept claim worse, never better. Claims without text
+    (UNSPECIFIED) all stay."""
+    kept: dict[object, Claim] = {}
+    for n, c in enumerate(claims):
+        # a claim the verifier gave no text is its own claim: never folded into another
+        key = n if c.text == UNSPECIFIED else " ".join(c.text.lower().split())
+        first = kept.get(key)
+        if first is None:
+            kept[key] = c
+        elif _WORST[c.verdict] > _WORST[first.verdict]:
+            kept[key] = first.model_copy(update={"verdict": c.verdict})
+    if len(kept) < len(claims):
+        log.info("verify: %d repeated claims judged once", len(claims) - len(kept))
+    return list(kept.values())
 
 
 def verify(
