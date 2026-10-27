@@ -145,7 +145,9 @@ def test_none_path_skips(tmp_path):
         run_id="r",
     )
     assert res.skipped and res.source_context is None
-    assert res.glossary == [GlossaryEntry(term="Proog", canonical="Proog", note="", sources=[])]
+    assert res.glossary == [
+        GlossaryEntry(term="Proog", canonical="Proog", note="", sources=[], kind="person")
+    ]
 
 
 def test_retry_on_429(tmp_path):
@@ -278,7 +280,7 @@ def test_search_failure_degrades(tmp_path):
     tv, _ = _tavily(tmp_path, h)
     res = research(_ev(), WORDS, RunOptions(), FakeTF(["Bad", "Proog"]), tv, run_id="r")
     assert res.glossary[0] == GlossaryEntry(
-        term="Bad", canonical="Bad", note="lookup failed", sources=[]
+        term="Bad", canonical="Bad", note="lookup failed", sources=[], kind="person"
     )
     assert res.glossary[1].sources and len(res.errors) == 1
 
@@ -334,3 +336,47 @@ def test_filter_before_max_terms(tmp_path):
     tf = FakeTF(["junk one", "junk two", "junk three", "Proog", "Emo"])
     res = research(_ev(), WORDS, RunOptions(), tf, tv, run_id="r", max_terms=2)
     assert [e.term for e in res.glossary] == ["Proog", "Emo"] and len(seen) == 2
+
+
+class KindsTF:
+    """Lightning answering with a kind per term."""
+
+    def __init__(self, pairs: list[tuple[str, str]]):
+        self.pairs = pairs
+
+    def json(self, model, messages, schema, **kw):
+        return {"terms": [{"term": t, "kind": k, "why": "x"} for t, k in self.pairs]}
+
+
+_LECTURE = "We study the seafloor at the USGS with volcanologists".split()
+LECTURE = [Word(text=t, start=i * 0.5, end=i * 0.5 + 0.4) for i, t in enumerate(_LECTURE)]
+SLIDE = [_ev()[0].model_copy(update={"verbatim_text": "Photosynthesis in kelp forests"})]
+
+
+def test_technical_terms_are_looked_up_only_when_on_screen(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    tf = KindsTF([("seafloor", "technical"), ("volcanologists", "technical"),
+                  ("photosynthesis", "technical"), ("USGS", "organization")])  # fmt: skip
+    res = research(SLIDE, LECTURE, RunOptions(), tf, tv, run_id="r")
+    assert [(e.term, e.kind) for e in res.glossary] == [
+        ("photosynthesis", "technical"), ("USGS", "organization"),
+    ]  # fmt: skip
+    assert [body["query"] for _, body, _ in seen] == ["photosynthesis", "USGS"]
+
+
+def test_glossary_entries_carry_their_kind_also_without_tavily():
+    tf = KindsTF([("Proog", "person"), ("Elephants Dream", "work"), ("Proog", "place")])
+    res = research(_ev(), WORDS, RunOptions(), tf, None, run_id="r")
+    assert [(e.term, e.kind) for e in res.glossary] == [
+        ("Proog", "person"), ("Elephants Dream", "work"),
+    ]  # fmt: skip
+    assert GlossaryEntry(term="x", canonical="x", note="").kind == "other"  # older caches
+
+
+def test_at_most_five_terms_by_default(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    names = ["Proog", "Emo", "A1", "B2", "C3", "D4", "Bad"]  # all said in WORDS
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(names), tv, run_id="r")
+    assert [e.term for e in res.glossary] == names[:5] and len(seen) == 5
