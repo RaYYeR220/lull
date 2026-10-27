@@ -2,7 +2,7 @@
 
 One reasoning call sees the full transcript, the visual-event inventory, the gap table and the
 glossary, and returns, per event worth describing, a priority and up to three variants (short,
-medium, long) plus a cast registry (descriptor -> name). It never places anything in time: the
+medium, long) plus a cast registry (name -> descriptor). It never places anything in time: the
 scheduler does that. Word counts are always computed here, never taken from the model.
 """
 
@@ -23,10 +23,18 @@ from lull.types import Gap, RunOptions, Span, Variant, VisualEvent, Word
 log = logging.getLogger(__name__)
 
 MAX_WORDS = 22  # hard ceiling for any variant; the prompt only gives soft targets
-MAX_TOKENS = 12000
+MIN_TOKENS, MAX_TOKENS = 12000, 32000
+TOKENS_BASE, TOKENS_PER_EVENT = 4000, 150  # reasoning + three variants per event
+ESTIMATE_BASE, ESTIMATE_PER_EVENT, ESTIMATE_CAP = 0.02, 0.0008, 0.25
 TEMPERATURE = 0.6
-ESTIMATE = 0.08
 LENGTHS = ("short", "medium", "long")
+
+
+def budget(n_sent: int) -> tuple[int, float]:
+    """(max_tokens, spend estimate in USD) for one plan call over `n_sent` events."""
+    tokens = min(MAX_TOKENS, max(MIN_TOKENS, TOKENS_BASE + TOKENS_PER_EVENT * n_sent))
+    return tokens, min(ESTIMATE_CAP, ESTIMATE_BASE + ESTIMATE_PER_EVENT * n_sent)
+
 
 _NULLABLE_STR = {"anyOf": [{"type": "string"}, {"type": "null"}]}
 _ITEM_PROPS: dict = {
@@ -66,7 +74,7 @@ PLAN_SCHEMA: dict = {  # cast is a list of pairs: strict mode needs fixed object
 
 class PlanResult(BaseModel):
     variants: list[Variant] = Field(default_factory=list)
-    cast: dict[str, str] = Field(default_factory=dict)  # descriptor -> name once named
+    cast: dict[str, str] = Field(default_factory=dict)  # name -> descriptor used before it
     priority: dict[str, int] = Field(default_factory=dict)  # event_id -> 1..5
 
 
@@ -176,8 +184,12 @@ def _cast(raw: object) -> dict[str, str]:
         if not (isinstance(desc, str) and isinstance(name, str)):
             continue
         desc, name = _one_line(desc), _one_line(name)
-        if desc and name and desc not in cast:
-            cast[desc] = name
+        if not (desc and name):
+            continue
+        if name not in cast:
+            cast[name] = desc
+        elif cast[name] != desc:
+            log.warning("plan: cast %r: kept descriptor %r, not %r", name, cast[name], desc)
     return cast
 
 
@@ -225,6 +237,10 @@ def parse_plan(out: dict, events: list[VisualEvent]) -> PlanResult:
     if raw and not known:
         ids = sorted({str(i.get("event_id")) for i in raw if isinstance(i, dict)})
         raise ValueError(f"plan: no item names a known event id (got {', '.join(ids)[:200]})")
+    log.info(
+        "plan: %d events sent, %d got an item, %d kept a variant",
+        len(events), len(seen), len(priority),
+    )  # fmt: skip
     picked.sort(key=lambda t: (t[0], t[1]))
     return PlanResult(
         variants=[v for _, _, v in picked], cast=_cast(out.get("cast")), priority=priority
@@ -247,7 +263,8 @@ def plan(
     """Prioritised description variants for the events worth describing, from one Ultra call.
 
     Events the dialogue already conveys are left out before the call unless their salience is
-    5 (R21); with nothing left there is no call and the plan is empty.
+    5 (R21); with nothing left there is no call and the plan is empty. The token budget and
+    the spend estimate grow with the number of events sent (see `budget`).
     """
     send = [e for e in events if not (e.said_in_dialogue and e.salience < 5)]
     if not send:
@@ -256,9 +273,10 @@ def plan(
         {"role": "system", "content": load_prompt()},
         {"role": "user", "content": _user_text(send, words, gaps, research, opts)},
     ]
+    max_tokens, estimate = budget(len(send))
     out = tf.json(
         ULTRA, messages, PLAN_SCHEMA,
         run_id=run_id, stage="plan", role="plan", thinking=True,
-        max_tokens=MAX_TOKENS, temperature=TEMPERATURE, estimate=ESTIMATE,
+        max_tokens=max_tokens, temperature=TEMPERATURE, estimate=estimate,
     )  # fmt: skip
     return parse_plan(out, send)

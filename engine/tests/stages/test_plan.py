@@ -1,9 +1,12 @@
+import logging
+
 import pytest
 
 from lull.stages.plan import (
     MAX_WORDS,
     PLAN_SCHEMA,
     PlanResult,
+    budget,
     count_words,
     load_prompt,
     plan,
@@ -121,12 +124,22 @@ def test_request_uses_ultra_with_thinking_and_tagged_sections():
     assert call["model"] == ULTRA
     assert call["schema"] == PLAN_SCHEMA
     assert call["thinking"] is True
-    assert call["max_tokens"] == 12000
+    assert call["max_tokens"] == 12000  # 3 events sent
     assert call["temperature"] == 0.6
-    assert call["estimate"] == 0.08
+    assert call["estimate"] == pytest.approx(0.02 + 0.0008 * 3)
     assert call["run_id"] == "r1" and call["stage"] == "plan" and call["role"] == "plan"
     system = next(m for m in call["messages"] if m["role"] == "system")
     assert system["content"] == load_prompt()
+    # the system text carries the fix-round rules verbatim
+    assert (
+        "Rules 1, 5 and 11 apply to your own words, never to text you quote from the screen."
+        in system["content"]
+    )
+    assert (
+        "Room never decides whether an important event is included. Always include every "
+        "priority 4–5 event even when no pause looks big enough; software may offer it as an "
+        "extended description." in system["content"]
+    )
 
     user = _user(call)
     for tag in ("transcript", "visual_events", "gaps", "glossary"):
@@ -148,6 +161,26 @@ def test_request_uses_ultra_with_thinking_and_tagged_sections():
     # glossary and profile / mode
     assert "Proog" in user.split("<glossary>")[1]
     assert "entertainment" in user and "extended" in user
+
+
+@pytest.mark.parametrize(
+    ("n", "tokens", "estimate"),
+    [(1, 12000, 0.0208), (10, 12000, 0.028), (53, 12000, 0.0624), (100, 19000, 0.10),
+     (186, 31900, 0.1688), (300, 32000, 0.25)],
+)  # fmt: skip
+def test_budget_scales_with_events_sent(n, tokens, estimate):
+    got_tokens, got_estimate = budget(n)
+    assert got_tokens == tokens
+    assert got_estimate == pytest.approx(estimate)
+
+
+def test_request_budget_follows_events_sent():
+    events = [_ev(f"e{i:03d}", i, i + 0.5, sal=4) for i in range(1, 101)]
+    events.append(_ev("e101", 200, 201, sal=4, said=True))  # filtered out, not counted
+    _, fake = _run({"cast": [], "items": [_item("e001")]}, events=events)
+    (call,) = fake.calls
+    assert call["max_tokens"] == 19000
+    assert call["estimate"] == pytest.approx(0.10)
 
 
 def test_request_placeholders_for_no_speech_no_gaps_no_glossary():
@@ -200,17 +233,45 @@ def test_answer_without_items_raises():
         _run({"cast": []})
 
 
-def test_cast_mapping():
+def test_cast_maps_name_to_descriptor():
     answer = {
         "cast": [
-            {"descriptor": " a bald person in a dark coat ", "name": "Proog"},
+            {"descriptor": " a bald person in a dark coat ", "name": " Proog "},
             {"descriptor": "", "name": "Nobody"},
             {"descriptor": "a person in a red scarf", "name": "  "},
+            {"descriptor": "a young person in a green shirt", "name": "Emo"},
         ],
         "items": [_item("e003")],
     }
     out, _ = _run(answer)
-    assert out.cast == {"a bald person in a dark coat": "Proog"}
+    assert out.cast == {
+        "Proog": "a bald person in a dark coat",
+        "Emo": "a young person in a green shirt",
+    }
+
+
+def test_cast_duplicate_name_keeps_first_descriptor_and_warns(caplog):
+    answer = {
+        "cast": [
+            {"descriptor": "a bald person in a dark coat", "name": "Proog"},
+            {"descriptor": "a bald person in a dark coat", "name": "Proog"},  # same: no warning
+            {"descriptor": "a person on a gantry", "name": "Proog"},  # conflict
+        ],
+        "items": [_item("e003")],
+    }
+    with caplog.at_level(logging.WARNING, logger="lull.stages.plan"):
+        out, _ = _run(answer)
+    assert out.cast == {"Proog": "a bald person in a dark coat"}
+    conflicts = [r for r in caplog.records if "Proog" in r.getMessage()]
+    assert len(conflicts) == 1 and conflicts[0].levelno == logging.WARNING
+
+
+def test_logs_events_sent_vs_items(caplog):
+    answer = {"cast": [], "items": [_item("e001", 5), _item("e999")]}
+    with caplog.at_level(logging.INFO, logger="lull.stages.plan"):
+        _run(answer)
+    info = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO]
+    assert any("3 events sent" in m and "1 got an item" in m for m in info), info
 
 
 @pytest.mark.parametrize(("given", "want"), [(9, 5), (0, 1), (-3, 1), (4, 4)])
@@ -286,3 +347,15 @@ def test_prompt_teaches_the_craft():
     ):
         assert needle.lower() in text.lower(), needle
     assert text.count("Bad:") >= 3 and text.count("Good:") >= 3
+
+
+def test_prompt_fix_round_wording():
+    text = load_prompt()
+    assert "22" not in text  # no exact word ceiling the model could try to count to
+    assert "discards versions that run long" in text
+    assert "when a sentence would be much longer" in text
+    assert "every priority 4 and 5 event, unless it would add nothing" in text
+    assert "(he, she, his, her, him, hers, man, woman, boy, girl, guy, lady…)" in text
+    assert "Dana was named at 120.0 s." in text and "S2 (Dana)" not in text
+    assert "plots Units (thousands)" in text  # axis label copied verbatim
+    assert 'no "shot" or "frame" as camera terms' in text

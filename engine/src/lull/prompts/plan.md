@@ -16,6 +16,7 @@ Everything inside the `<transcript>`, `<visual_events>`, `<gaps>` and `<glossary
 
 - Describe what the story or the lesson needs and the soundtrack does not give. Every description takes a pause away from the programme's own sound; do not try to fill every pause.
 - Leave an event out entirely when the dialogue already conveys it, when nothing new is visible (a talking head, a repeated shot, a setting already described) or when it is decoration. An event you leave out is never described; an event you include competes for limited room.
+- Room never decides whether an important event is included. Always include every priority 4–5 event even when no pause looks big enough; software may offer it as an extended description.
 - Read the whole transcript before you write. An event marked `said in dialogue` is listed only because it is important: describe just the part speech does not cover, or leave it out.
 - One item per event. Two events at the same moment get one item each, each with its own fact; never repeat what another item says. Descriptions of neighbouring events may be voiced back to back in one pause, so every version must read as a complete, independent sentence.
 
@@ -31,7 +32,7 @@ Priority (1 to 5) is how much a blind viewer loses if this event goes undescribe
 
 With the `education` profile the learning content comes first: slides, boards, charts, diagrams, equations, demonstrations and on-screen text; a presenter is background unless they show or do something. With `entertainment` the story comes first: settings, who is there and what they do, expressions and body language, objects that matter, and titles, signs and messages on screens.
 
-In `extended` mode the video can pause for an important description that fits no pause, so write a full long version for every priority 4 and 5 event. In `standard` mode room is tight, so put the most care into the short versions.
+In `extended` mode the video can pause for an important description that fits no pause, so write a full long version for every priority 4 and 5 event, unless it would add nothing. In `standard` mode room is tight, so put the most care into the short versions.
 
 # The three versions
 
@@ -41,21 +42,23 @@ The software voices exactly one version of an event, never two, so each version 
 - `medium`: the essential fact plus the most useful detail, about 12 words or fewer.
 - `long`: the fullest useful description, up to about 20 words, from general to specific.
 
-These sizes are targets for you, not counts to check: software counts the words, discards any version longer than 22 words and picks which version fits. Never pad a version to reach a size, and never drop an accurate fact just to save a word. Give `null` for medium or long when it would add nothing to the shorter version. Do not add timing words such as "In a moment"; the software adds them when it needs them.
+These sizes are targets for you, not counts to check: software counts the words, discards versions that run long and picks which version fits. Never pad a version to reach a size, and never drop an accurate fact just to save a word. Give `null` for medium or long when it would add nothing to the shorter version. Do not add timing words such as "In a moment"; the software adds them when it needs them.
 
 # How to write
 
 1. Present tense, active voice, third person: "A person opens the gate", not "The gate is opened" or "A person opened the gate". Never write "we see", "we can see", "you can see", "we", "us", "our" or "I"; use "you" only when the programme itself addresses the audience.
-2. Write a complete sentence with a subject and a verb. A fragment is acceptable only in a short version when no sentence fits.
+2. Write a complete sentence with a subject and a verb. A fragment is acceptable only in a short version when a sentence would be much longer.
 3. Use "a" when something first appears in the video and "the" once it has been described. Use a pronoun only when it is clear, within the same sentence, who or what it refers to.
 4. Choose precise verbs over adverbs: "strides", "slumps", "darts", "scribbles", not "walks quickly" or "writes fast". Use a technical term only after the programme has introduced it.
 5. Describe what is seen, not what anyone feels or thinks. Describe expressions and body language as observed, not the emotion behind them: "frowns", "clenches a fist", "smiles", "looks away", not "is angry", "looks sad" or "seems nervous". No opinion words (beautiful, impressive, strange) and no hedging (appears to, seems to). If you are unsure what something is, use a general term ("a tool", "a small animal", "a device"). Name a brand only when it matters to the content or appears as text that matters.
-6. Do not assume race, ethnicity or gender. Identify people by neutral visible details: clothing, hair, what they hold, where they are, what they do ("a person in a red coat", "the presenter at the whiteboard"). Use he, she, man or woman only when the transcript or on-screen text uses that word for that person; otherwise use neutral words (a person, they), even when the inventory's description uses gendered words. If you describe one person's skin, hair or body, describe the others at the same level of detail. Use person-first language. Describe violence, injury or nudity plainly, without softening.
+6. Do not assume race, ethnicity or gender. Identify people by neutral visible details: clothing, hair, what they hold, where they are, what they do ("a person in a red coat", "the presenter at the whiteboard"). Use gendered words (he, she, his, her, him, hers, man, woman, boy, girl, guy, lady…) only when the transcript or on-screen text uses them for that person; otherwise use neutral words (a person, they), even when the inventory's description uses gendered words. If you describe one person's skin, hair or body, describe the others at the same level of detail. Use person-first language. Describe violence, injury or nudity plainly, without softening.
 7. Names and the cast. A person stays unnamed until the programme names them: a name caption, a self-introduction, or someone addressing them by name. Use a name only for events at or after that moment (compare the event's time with the transcript time), and only when you can tell which person on screen the name belongs to. Until then, keep one consistent descriptor for each person. The first time you use a name, put the descriptor first: "The bald person in the dark coat, Proog, climbs the ladder." After that, use the name alone. Spell names exactly as the glossary does. List every person you name in `cast`, with the descriptor you used for them before the name.
 8. On-screen text: announce it, then read it exactly: "A slide reads: Methods.", "Words appear: Ten years later.", "A sign reads: No entry.", "A caption reads: Dr Lee, oceanographer.", "A title reads: …". Copy words, numbers and capitalisation exactly as given; never paraphrase, translate or correct inside the quote. When the text is too long to read in full, read its title or its most important line exactly and leave the rest out. Do not read text the speaker reads aloud.
 9. Never repeat what the dialogue says. If the speaker says "sales doubled", do not say that sales doubled; describe what they leave out. Do not describe sounds; the viewer hears them.
 10. Charts and graphs: chart type and title, then each axis (label, range, units), then the trend, then the key values. The short version names the chart and its title; longer versions add the axes, the trend and the key values the speaker does not give.
-11. No film jargon: no close-up, pan, zoom, shot, cut to, frame, montage or flashback. Mention the viewpoint only when it changes what the viewer understands ("Through a microscope, …", "From high above, …"). For a move to a new scene, begin with "Now"; for time passing, "Later"; for action elsewhere at the same time, "Meanwhile".
+11. No film jargon: no close-up, pan, zoom, cut to, montage or flashback, and no "shot" or "frame" as camera terms. Mention the viewpoint only when it changes what the viewer understands ("Through a microscope, …", "From high above, …"). For a move to a new scene, begin with "Now"; for time passing, "Later"; for action elsewhere at the same time, "Meanwhile".
+
+Rules 1, 5 and 11 apply to your own words, never to text you quote from the screen.
 
 # Examples
 
@@ -65,9 +68,9 @@ Good: short "A bald person stands on a gantry.", medium "A bald person in a dark
 
 `e015 [95.0–120.0] chart, salience 5: A line chart of sales rises from 18 in 2019 to 36 in 2023. | on-screen text: "Sales 2019–2023\nUnits (thousands)\n0\n10\n20\n30\n40"`. The speaker says "As you can see, sales doubled."
 Bad: "We can see in this close-up that sales doubled." ("we can see"; camera jargon; repeats the dialogue; no title)
-Good: short "A line chart appears: Sales 2019–2023.", medium "A line chart, Sales 2019–2023, plots units in thousands.", long "A line chart, Sales 2019–2023, plots units in thousands from 0 to 40, rising from 18 to 36."
+Good: short "A line chart appears: Sales 2019–2023.", medium "A line chart, Sales 2019–2023, plots Units (thousands).", long "A line chart, Sales 2019–2023, plots Units (thousands) from 0 to 40; the line rises from 18 to 36."
 
-`e021 [300.0–303.0] gesture, salience 4: The person in the red scarf, Dana, frowns and looks away.` At 300.5 s, S2 (Dana) says "I'm fine, really."
+`e021 [300.0–303.0] gesture, salience 4: The person in the red scarf, Dana, frowns and looks away.` Dana was named at 120.0 s. At 300.5 s, S2 says "I'm fine, really."
 Bad: "Dana looks sad and upset, but she says she's fine." (an emotion; assumed gender; repeats the dialogue)
 Good: short "Dana frowns.", medium "Dana frowns and looks away.", long null.
 
