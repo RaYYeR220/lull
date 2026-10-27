@@ -207,3 +207,70 @@ def test_an_hls_playlist_never_reaches_the_network(tmp_path, commands):
     assert hits == []
     for cmd in commands:
         assert_locked(cmd)
+
+
+# -- edge cases (Task 3 minors) ------------------------------------------------------------------
+
+
+def test_probe_reports_the_displayed_size_of_a_rotated_video(tmp_path, noaudio):
+    rotated = tmp_path / "rotated.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-display_rotation", "90",
+                    "-i", str(noaudio), "-c", "copy", str(rotated)],
+                   check=True, capture_output=True)  # fmt: skip
+    p = media.probe(rotated)
+    assert (p.width, p.height) == (1280, 720)  # stored 720x1280, shown turned a quarter
+
+
+def test_make_proxy_never_goes_above_the_requested_height_and_cleans_up(tmp_path, monkeypatch):
+    heights: list[str] = []
+
+    def fake(*args):
+        heights.append(next(a for a in args if str(a).startswith("scale=")))
+        Path(args[-1]).write_bytes(b"\0" * 2000)  # always too big
+        return None
+
+    monkeypatch.setattr(media, "_ffmpeg", fake)
+    dst = tmp_path / "p.mp4"
+    with pytest.raises(media.MediaError, match="2000 bytes"):
+        media.make_proxy(tmp_path / "in.mp4", dst, max_bytes=1000, height=360)
+    assert heights == ["scale=-2:360", "scale=-2:360", "scale=-2:360"]  # no 480 rung
+    assert not dst.exists()  # the oversize attempt is not left behind
+
+
+def test_frame_at_never_leaves_a_stale_frame(tone_slides, tmp_path):
+    dst = tmp_path / "f.jpg"
+    dst.write_bytes(b"an old frame")
+    with pytest.raises(media.MediaError):
+        media.frame_at(tone_slides, 30.0, dst)  # past the end: no frame
+    assert not dst.exists()
+
+
+def test_extract_wav_from_a_video_without_sound_is_an_error(noaudio, tmp_path):
+    with pytest.raises(media.MediaError):
+        media.extract_wav(noaudio, tmp_path / "a.wav")
+
+
+def test_paths_with_spaces_work(tone_slides, tmp_path):
+    folder = tmp_path / "a folder with spaces"
+    folder.mkdir()
+    video = folder / "my video (1).mp4"
+    shutil.copy(tone_slides, video)
+    assert media.probe(video).duration == pytest.approx(12.0, abs=0.05)
+    assert media.audio_duration(media.extract_wav(video, folder / "sound track.wav")) > 11.9
+    assert media.probe(media.cut_clip(video, folder / "a clip.mp4", 1.0, 2.0)).height == 480
+    assert media.frame_at(video, 1.0, folder / "a frame.jpg").exists()
+
+
+def test_a_variable_frame_rate_video_probes_and_cuts(tmp_path):
+    vfr = tmp_path / "vfr.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                    "-i", "testsrc2=s=160x120:r=30:d=2",
+                    "-vf", "setpts='if(lt(T,1),PTS,1/TB+(PTS-1/TB)*3)'", "-fps_mode", "vfr",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(vfr)],
+                   check=True, capture_output=True)  # fmt: skip
+    p = media.probe(vfr)
+    assert p.duration == pytest.approx(3.8, abs=0.1) and 1.0 <= p.fps <= 240.0
+    frames = media.frames_at(vfr, [(0.5, tmp_path / "a.jpg"), (3.0, tmp_path / "b.jpg")])
+    assert all(f.read_bytes()[:2] == b"\xff\xd8" for f in frames)
+    clip = media.cut_clip(vfr, tmp_path / "c.mp4", 1.0, 3.0, height=120)
+    assert media.probe(clip).duration == pytest.approx(2.0, abs=0.2)

@@ -95,7 +95,23 @@ def _fps(rate: str) -> float:
     return float(num) / d if d else 0.0
 
 
+def _rotation(stream: dict) -> int:
+    """The display rotation of a video stream in degrees (side data, or the older tag)."""
+    for side in stream.get("side_data_list") or []:
+        if "rotation" in side:
+            try:
+                return int(round(float(side["rotation"])))
+            except (TypeError, ValueError):
+                return 0
+    try:
+        return int((stream.get("tags") or {}).get("rotate", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def probe(path: Path) -> Probe:
+    """Duration, displayed size (a quarter-turned video reports its turned size), frame
+    rate, audio and container of `path`."""
     out = _run(
         [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS, "-v", "error",
          "-print_format", "json", "-show_format", "-show_streams", str(path)]
@@ -109,10 +125,13 @@ def probe(path: Path) -> Probe:
     duration = info.get("format", {}).get("duration") or video.get("duration")
     if duration is None:
         raise MediaError(f"cannot determine duration of {path}")
+    width, height = int(video["width"]), int(video["height"])
+    if _rotation(video) % 180 == 90:
+        width, height = height, width
     return Probe(
         duration=float(duration),
-        width=int(video["width"]),
-        height=int(video["height"]),
+        width=width,
+        height=height,
         fps=_fps(video.get("r_frame_rate", "0/1")),
         has_audio=audio is not None,
         video_codec=video.get("codec_name", ""),
@@ -139,7 +158,10 @@ def extract_wav(src: Path, dst: Path, rate: int = 16000) -> Path:
 
 
 def make_proxy(src: Path, dst: Path, *, max_bytes: int = 10 * 2**20, height: int = 720) -> Path:
-    attempts = [(height, 28), (height, 34), (480, 34), (360, 38)]
+    """`src` re-encoded at most `height` lines high, smaller each attempt until under
+    `max_bytes`; an attempt that never gets there leaves no file behind."""
+    attempts = list(dict.fromkeys((min(h, height), crf) for h, crf in
+                                  [(height, 28), (height, 34), (480, 34), (360, 38)]))  # fmt: skip
     last = 0
     for h, crf in attempts:
         _ffmpeg(
@@ -150,6 +172,7 @@ def make_proxy(src: Path, dst: Path, *, max_bytes: int = 10 * 2**20, height: int
         last = dst.stat().st_size
         if last < max_bytes:
             return dst
+    dst.unlink(missing_ok=True)
     raise MediaError(f"proxy still {last} bytes after all attempts (limit {max_bytes})")
 
 
@@ -174,6 +197,8 @@ def atempo(src: Path, dst: Path, factor: float) -> Path:
 
 
 def frame_at(src: Path, t: float, dst: Path) -> Path:
+    dst = Path(dst)
+    dst.unlink(missing_ok=True)  # a failed extraction must not leave an old frame looking new
     _ffmpeg("-ss", f"{t:.3f}", *input_args(src), "-frames:v", "1", "-q:v", "2", str(dst))
     if not dst.exists():
         raise MediaError(f"no frame at t={t} in {src}")
