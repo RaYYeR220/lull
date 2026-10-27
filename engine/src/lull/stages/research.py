@@ -1,10 +1,15 @@
-"""Research stage: find proper nouns / technical terms and confirm canonical spelling via Tavily."""
+"""Research stage: find proper nouns / technical terms and confirm canonical spelling via Tavily.
+
+Each step that worked can be kept by the caller (`memo`): the term list, the source page and
+every successful lookup, so a run that stopped on a failed lookup tries only that one again.
+"""
 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from importlib.resources import files
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +26,15 @@ SEARCHED_KINDS = {"person", "place", "organization", "work"}  # looked up when s
 ON_SCREEN_KINDS = {"technical"}  # looked up only when the screen shows them
 LOOKUP_FAILED = "lookup failed"
 Kind = Literal["person", "place", "organization", "work", "technical", "other"]
+# (step name, inputs, compute) -> the step's JSON-able result, from a cache or computed; a
+# step that raises is never kept
+Memo = Callable[[str, dict, Callable[[], Any]], Any]
+
+
+def fresh(name: str, inputs: dict, compute: Callable[[], Any]) -> Any:
+    """The default Memo: keeps nothing."""
+    return compute()
+
 
 TERMS_SCHEMA = {
     "type": "object",
@@ -143,12 +157,18 @@ def research(
     *,
     run_id: str,
     max_terms: int = 5,
+    memo: Memo = fresh,
 ) -> ResearchResult:
+    """The glossary: terms Lightning picks out (see _extract_terms), each looked up with
+    Tavily when there is a client. A failed lookup or source extract is recorded in `errors`
+    and degrades the entry; a spend cap still stops the stage. `memo` keeps the term list, the
+    source page and each successful lookup (steps "terms", "source" and "lookup")."""
     errors: list[str] = []
     context: str | None = None
     if tavily is not None and opts.source_url:
+        url = opts.source_url
         try:
-            pages = tavily.extract([opts.source_url], run_id=run_id)
+            pages = memo("source", {"url": url}, lambda: tavily.extract([url], run_id=run_id))
         except TavilyError as e:
             errors.append(f"source extract failed: {e}")
             pages = []
@@ -159,7 +179,12 @@ def research(
     if not words and not events and not context:
         return ResearchResult(glossary=[], skipped=tavily is None, errors=errors)
 
-    terms = _extract_terms(events, words, context, tf, run_id, max_terms)
+    inputs = {"events": events, "words": words, "context": context, "max_terms": max_terms}
+
+    def extract() -> list[list[str]]:
+        return [list(p) for p in _extract_terms(events, words, context, tf, run_id, max_terms)]
+
+    terms = [(str(t), str(k)) for t, k in memo("terms", inputs, extract)]
     if tavily is None:
         entries = [GlossaryEntry(term=t, canonical=t, note="", kind=k) for t, k in terms]
         return ResearchResult(glossary=entries, skipped=True)
@@ -167,7 +192,8 @@ def research(
     entries = []
     for t, k in terms:
         try:
-            entries.append(_entry(t, k, tavily.search(t, run_id=run_id)))
+            found = memo("lookup", {"term": t}, lambda t=t: tavily.search(t, run_id=run_id))
+            entries.append(_entry(t, k, found))
         except BudgetExceeded:
             raise
         except TavilyError as e:

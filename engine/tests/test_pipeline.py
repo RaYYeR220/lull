@@ -130,7 +130,8 @@ def test_full_run_publishes_every_output(runs):
     assert tf.roles() == ["watch", "research", "plan", "verify", "verify", "verify"]
     assert speech.calls == ["transcribe", "diarize"] + ["synthesize"] * 3
     stages = run_dir / "stages"
-    assert sorted(p.relative_to(stages).as_posix() for p in stages.rglob("*.json")) == [
+    names = sorted(p.relative_to(stages).as_posix() for p in stages.rglob("*.json"))
+    assert [n for n in names if not n.startswith("research/")] == [
         "finalize/c001.json",
         "finalize/c002.json",
         "finalize/x002.json",
@@ -139,6 +140,9 @@ def test_full_run_publishes_every_output(runs):
         "research.json",
         "schedule.json",
         "watch.json",
+    ]
+    assert [re.sub(r"-[0-9a-f]{16}", "-<key>", n) for n in names if n.startswith("research/")] == [
+        "research/terms-<key>.json"  # research's own steps (no Tavily: no lookups)
     ]
 
 
@@ -305,6 +309,7 @@ def test_provider_402_at_plan_keeps_earlier_stages_and_a_rerun_resumes(
     assert seen == ["watch", "research", "plan"]  # a 402 is never retried
     assert sorted(p.name for p in (run_dir / "stages").iterdir()) == [
         "listen.json",
+        "research",  # its steps
         "research.json",
         "watch.json",
     ]
@@ -380,6 +385,27 @@ def test_one_voice_rate_names_and_speech_flow_through_the_stages(
     assert [c.id for c in pub["extended"]] == ["x002"]
     assert pub["cues"][0].text == "A tall person, Proog, stands on a plain red screen."
     assert [g.id for g in pub["gaps"]] == ["g001", "g002"]  # the split windows
+
+
+def test_a_near_duplicate_the_plan_dropped_is_neither_placed_nor_missing(
+    tone_slides, tmp_path, fast_media, monkeypatch
+):
+    """The plan drops e003 (its short line repeats e001's at a lower priority): the schedule
+    never sees it, the report counts it with its twin, and no warning calls it undescribed."""
+    plan = copy.deepcopy(PLAN)
+    plan["items"][2].update(priority=3, short="A red screen.")
+    seen = _spy(monkeypatch, "schedule", "placement_report", "publish")
+    ledger = _ledger(tmp_path)
+    res, _, _, events = _run(tone_slides, tmp_path / "run", ledger, tf=FakeTF(ledger, plan=plan))
+    assert [e.id for e in seen["schedule"][0]["events"]] == ["e001", "e002"]
+    assert seen["placement_report"][0]["priority"] == {"e001": 4, "e002": 5}
+    assert seen["publish"][0]["duplicates"] == {"e003": "e001"}
+    kinds = [e.data["kind"] for e in events if e.type == "warning"]
+    assert "undescribed" not in kinds
+    summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    # e003 counts with e001 (c001); only e002 is missing, as fast_media makes no extended.mp4
+    assert summary["coverage"]["described"] == 2
+    assert summary["coverage"]["undescribed"] == ["e002"]
 
 
 class _Stop(Exception):
@@ -530,7 +556,7 @@ def test_introduced_before_reads_dialogue_and_earlier_descriptions():
     ]
     heard = [_cue("c001", 4.0, "Proog climbs."), _cue("c002", 3.0, 'A caption reads: "Lull".')]
     assert introduced_before(5.0, names, words, heard) == {"Emo", "Dr Smith", "Lull", "Proog"}
-    assert introduced_before(1.8, names, words, heard) == set()  # Emo ends at 2.0
+    assert introduced_before(1.8, names, words, []) == set()  # Emo ends at 2.0
     lower = [Word(text="emo", start=0.0, end=0.5), Word(text="barry's", start=0.6, end=1.0)]
     assert introduced_before(5.0, names, lower, []) == set()  # case-sensitive
 
@@ -587,6 +613,25 @@ def test_an_extended_cue_counts_only_what_was_said_before_its_freeze_point():
     assert cue_context(early, **{**common, "speech": opening}).introduced == {"Emo"}
     std = _cue("c002", 9.0, "Text.")
     assert cue_context(std, **{**common, "speech": talk}).introduced == {"Emo"}
+
+
+def test_extended_cues_that_share_a_freeze_point_are_heard_in_start_order():
+    """Two visuals inside one speech span both freeze where the speech began: the earlier
+    extended cue is voiced first in that pause, so the later one has heard it."""
+    common = _common(named={"Proog"}, proper_nouns={"Proog"}, speech=[Span(start=4.0, end=8.0)],
+                     events=[_ev("e1", 5.0, 6.0), _ev("e2", 6.0, 7.0)])  # fmt: skip
+    first = _cue("x001", 5.0, "A tall person, Proog, waves.", status="extended", gap=None,
+                 events=("e1",))  # fmt: skip
+    second = _cue("x002", 6.0, "Proog sits.", status="extended", gap=None, events=("e2",))
+    ctx = cue_context(second, **{**common, "finished": [first]})
+    assert ctx.introduced == {"Proog"}
+    # the other way round: a cue that starts later in the same pause is not heard yet
+    assert cue_context(first, **{**common, "finished": [second]}).introduced == set()
+    # a standard cue playing before the freeze point is heard; one after it is not
+    before = _cue("c001", 2.0, "Proog stands.")
+    assert cue_context(second, **{**common, "finished": [before]}).introduced == {"Proog"}
+    after = _cue("c009", 4.5, "Proog stands.")
+    assert cue_context(second, **{**common, "finished": [after]}).introduced == set()
 
 
 def test_salient_events_the_plan_left_out_are_flagged(tone_slides, tmp_path, fast_media):
@@ -663,11 +708,12 @@ def test_an_option_change_reruns_only_the_stages_that_depend_on_it(
     _, tf, _, events = _run(tone_slides, run_dir, ledger, opts=RunOptions(voice="Aria"))
     assert _cached(events) == {**dict.fromkeys(CACHED, True), "finalize": False}
     assert set(tf.roles()) == {"verify"}
-    # a source page: research again; its answer is the same, so nothing after it
+    # a source page: research again; without Tavily nobody reads it, so the term list is the
+    # kept one and nothing after research changes
     opts = RunOptions(voice="Aria", source_url="https://example.org/page")
     _, tf, _, events = _run(tone_slides, run_dir, ledger, opts=opts)
     assert _cached(events) == {**dict.fromkeys(CACHED, True), "research": False}
-    assert tf.roles() == ["research"]
+    assert tf.roles() == []
     # another voice rate: the transcript is kept, the room in every pause is not
     _, tf, speech, events = _run(tone_slides, run_dir, ledger, opts=opts, wps=2.5)
     assert "transcribe" not in speech.calls
@@ -716,6 +762,7 @@ def test_source_digest_follows_every_source_and_prompt_file(tmp_path):
         assert digest not in seen
         seen.add(digest)
     assert len(source_digest()) == 64  # the installed package
+    pipeline.engine_fingerprint.cache_clear()  # computed once per process: the files now
     assert pipeline.engine_fingerprint() == f"{lull.__version__}+{source_digest()[:16]}"
 
 
@@ -742,11 +789,61 @@ def test_research_with_lookup_errors_is_not_cached(tone_slides, tmp_path, fast_m
             run(tone_slides, tmp_path / "run", RunOptions(), tf=tf, speech=FakeSpeech(),
                 tavily=_BrokenTavily(ledger), ledger=ledger, on_event=events.append,
                 run_id="tr", wps=3.0)  # fmt: skip
-        # watch is cached the second time; research, which had errors, is not
-        assert tf.roles() == (["watch", "research"] if attempt == 0 else ["research"])
+        # watch is cached the second time; research, which had errors, is not (its term
+        # list is: only the failed lookup is tried again)
+        assert tf.roles() == (["watch", "research"] if attempt == 0 else [])
         kinds = [e.data["kind"] for e in events if e.type == "warning"]
         assert [k for k in kinds if k != "clamped_word"] == ["research_error"]
         assert not (tmp_path / "run" / "stages" / "research.json").exists()
+
+
+class _FlakyTavily:
+    """Looks "Lull" up; "Ada" fails while `ada_fails` is set (each time with a new message)."""
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+        self.searched: list[str] = []
+        self.ada_fails = True
+
+    def search(self, query, *, run_id, max_results=3):
+        self.searched.append(query)
+        if query == "Ada" and self.ada_fails:
+            raise TavilyError(f"Tavily HTTP 500 (attempt {len(self.searched)})")
+        return [{"title": f"{query} (page)", "url": f"https://example.org/{query}",
+                 "content": f"About {query}."}]  # fmt: skip
+
+    def extract(self, urls, *, run_id):
+        return []
+
+
+def test_research_resumes_with_the_lookups_that_worked(tone_slides, tmp_path, fast_media):
+    """A lookup error keeps the research stage out of the cache, but each successful lookup
+    and the term list are cached on their own: a rerun only retries what failed, and while
+    the glossary comes out the same the plan is not asked again."""
+    terms = {"terms": [{"term": "Lull", "kind": "work", "why": "the logo"},
+                       {"term": "Ada", "kind": "person", "why": "said"}]}  # fmt: skip
+    ledger = _ledger(tmp_path)
+    tavily = _FlakyTavily(ledger)
+
+    def once(**kw):
+        tf, events = FakeTF(ledger, research=terms), []
+        run(tone_slides, tmp_path / "run", RunOptions(), tf=tf, speech=FakeSpeech(),
+            tavily=tavily, ledger=ledger, on_event=events.append, run_id="tr", wps=3.0)  # fmt: skip
+        return tf.roles(), [e.data["kind"] for e in events if e.type == "warning"]
+
+    roles, kinds = once()
+    assert tavily.searched == ["Lull", "Ada"]
+    assert "research_error" in kinds and "research" in roles and "plan" in roles
+    assert not (tmp_path / "run" / "stages" / "research.json").exists()
+    roles, kinds = once()  # Ada fails again, with another message
+    assert tavily.searched == ["Lull", "Ada", "Ada"]  # Lull came from the cache
+    assert "research" not in roles and "plan" not in roles  # same terms, same glossary
+    assert "research_error" in kinds
+    tavily.ada_fails = False
+    roles, kinds = once()
+    assert tavily.searched == ["Lull", "Ada", "Ada", "Ada"]
+    assert "plan" in roles and "research_error" not in kinds  # the glossary changed
+    assert (tmp_path / "run" / "stages" / "research.json").exists()
 
 
 # -- events -------------------------------------------------------------------------------------

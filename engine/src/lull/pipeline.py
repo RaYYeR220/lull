@@ -136,11 +136,12 @@ def introduced_before(
     cutoff: float, names: Iterable[str], words: list[Word], heard: Iterable[Cue]
 ) -> set[str]:
     """The names (whole words, case-sensitive) a listener has met by `cutoff`: said in a
-    transcript word that ends before it, or read in a voiced description that starts before it.
-    On-screen text alone introduces nobody (strict I4): only a description that reads it does."""
+    transcript word that ends before it, or read in one of the `heard` descriptions (those
+    voiced before it, see heard_before). On-screen text alone introduces nobody (strict I4):
+    only a description that reads it does."""
     names = {n for n in names if n}
     texts = [" ".join(w.text for w in words if w.end < cutoff)]
-    texts += [c.text for c in heard if c.start < cutoff]
+    texts += [c.text for c in heard]
     return set().union(*(names_in(t, names) for t in texts))
 
 
@@ -150,14 +151,20 @@ def cutoff_for(cue: Cue, speech: list[Span]) -> float:
     return cue.start if cue.gap_id is not None else mixer.speech_free(cue.start, speech)
 
 
-def heard_before(cue: Cue, finished: Iterable[Cue], cutoff: float) -> list[Cue]:
-    """The finished cues a listener has heard by `cutoff`: voiced standard cues, and for an
-    extended cue the voiced extended cues as well (the extended version has both)."""
+def heard_before(cue: Cue, finished: Iterable[Cue], speech: list[Span]) -> list[Cue]:
+    """The finished cues a listener has heard when `cue` is voiced: voiced standard cues that
+    start before its cutoff, and for an extended cue also the voiced extended cues reached
+    before it (the extended version has both). Extended cues that share a freeze point are
+    voiced in start order, so the earlier one counts as heard."""
     finished = list(finished)
-    heard = mixer.voiced(finished)
+    cutoff = cutoff_for(cue, speech)
+    heard = [c for c in mixer.voiced(finished) if c.start < cutoff]
     if cue.gap_id is None:
-        heard += mixer.voiced_extended(finished)
-    return [c for c in heard if c.start < cutoff]
+        for c in mixer.voiced_extended(finished):
+            at = cutoff_for(c, speech)
+            if at < cutoff or (at == cutoff and (c.start, c.id) < (cue.start, cue.id)):
+                heard.append(c)
+    return heard
 
 
 def cue_context(
@@ -179,7 +186,7 @@ def cue_context(
     by_id = {e.id: e for e in events}
     own = sorted((by_id[i] for i in cue.event_ids if i in by_id), key=lambda e: (e.t_start, e.id))
     cutoff = cutoff_for(cue, speech)
-    heard = heard_before(cue, finished, cutoff)
+    heard = heard_before(cue, finished, speech)
     return CueContext(
         wps=wps,
         cast=dict(cast),
@@ -353,8 +360,22 @@ class _Run:
             info["events"] = len(out.events)
         return out.events
 
+    def memo(self, name: str, inputs: dict, compute: Callable[[], object]) -> object:
+        """One research step, kept under its own key (`stages/research/<step>-<key>.json`):
+        the term list, the source page and each successful lookup survive a run whose
+        research as a whole is not cached."""
+        key = self.key(f"research-{name}", inputs)
+        stage = f"research/{name}-{key[:16]}"
+        data = self.store.cached(stage, key)
+        if data is not None and "value" in data:
+            return data["value"]
+        value = compute()
+        self.store.save(stage, key, {"value": value})
+        return value
+
     def research(self, events: list[VisualEvent], words: list[Word]) -> ResearchResult:
-        """Not cached when a lookup failed: the next run tries again."""
+        """Not cached when a lookup failed: the next run tries again (only what failed: the
+        steps that worked are kept, see `memo`)."""
         with self.step("research") as info:
             inputs = {
                 "events": events,
@@ -368,7 +389,13 @@ class _Run:
                 inputs,
                 ResearchResult,
                 lambda: research(
-                    events, words, self.opts, self.tf, self.tavily, run_id=self.run_id
+                    events,
+                    words,
+                    self.opts,
+                    self.tf,
+                    self.tavily,
+                    run_id=self.run_id,
+                    memo=self.memo,
                 ),
                 keep=lambda result: not result.errors,
             )
@@ -389,7 +416,7 @@ class _Run:
                 "events": events,
                 "words": words,
                 "gaps": gaps,
-                "research": found,
+                "research": found.model_copy(update={"errors": []}),  # what the plan reads
                 "profile": self.opts.profile,
                 "mode": self.opts.mode,
                 "language": self.opts.language,
@@ -420,13 +447,17 @@ class _Run:
     def schedule(
         self, events: list[VisualEvent], planned: PlanResult, gaps: list[Gap], proper: set[str]
     ) -> list[Cue]:
-        """Placements (cached) and the cues composed from them."""
+        """Placements (cached) and the cues composed from them. Events the plan dropped as
+        near-duplicates of another are left out: their twin speaks for them."""
+        events = [e for e in events if e.id not in planned.duplicates]
 
         def compute() -> _Schedule:
             placements, extended = schedule(
                 events, planned.variants, planned.priority, gaps, wps=self.wps
             )
-            report = placement_report(placements, planned.variants, events, gaps)
+            report = placement_report(
+                placements, planned.variants, events, gaps, priority=planned.priority
+            )
             return _Schedule(placements=placements, extended=extended, report=report)
 
         with self.step("schedule") as info:
@@ -445,6 +476,7 @@ class _Run:
                 gaps,
                 extended=out.extended,
                 proper_nouns=proper,
+                priority=planned.priority,
             )
             info.update(
                 placed=len(out.placements),
@@ -703,6 +735,7 @@ def _stages(r: _Run) -> PublishResult:
             r.run_id,
             r.opts,
             speech=heard.speech,
+            duplicates=planned.duplicates,
         )
         info["files"] = len(result.files) + 1
     return result
