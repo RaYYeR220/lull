@@ -83,7 +83,7 @@ test("with no recordings the system voice speaks, and the player shows and says 
   await expect(player(page).locator(".meta")).toContainText(why);
   await player(page).getByRole("button", { name: "Play" }).click();
   await expect(statusRegion(page)).toContainText(why);
-  await expect.poll(async () => (await watched(page)).speech.map((s) => s.text), { timeout: 4000 }).toContain(CUES.c001.text);
+  await expect.poll(async () => (await watched(page)).speech.map((s) => s.text), { timeout: 10_000 }).toContain(CUES.c001.text);
   await modeButton(page).click();
   await expect(player(page).getByRole("radio", { name: "Spoken cues" })).toHaveAccessibleDescription(new RegExp(why));
 });

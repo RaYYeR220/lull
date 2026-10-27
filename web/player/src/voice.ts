@@ -157,7 +157,7 @@ export class Voice {
       const had = this.results.get(id);
       this.results.set(id, !!buf);
       if (had !== !!buf) this.onStatus?.();
-      if (!buf && this.cache.get(key) === p) this.cache.delete(key);
+      // a miss is remembered too, so the line it belongs to goes straight to the system voice
       return buf;
     });
     this.cache.set(key, p);
