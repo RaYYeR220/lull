@@ -146,7 +146,7 @@ class _Printer:
             typer.echo(f"{e.stage:<9}{d['seconds']:>7.1f} s  {cached}{_detail(e.stage, d)}")
         elif e.type == "call":
             typer.echo(
-                f"    call  {d['role']:<9} {_model(d['model']):<10} {d['tokens_in']:>8,} in "
+                f"    call  {d['role']:<9} {_model(d['model']):<13} {d['tokens_in']:>8,} in "
                 f"{d['tokens_out']:>7,} out  ${d['cost_usd']:.4f}  {d['latency_s']:.1f} s"
             )
         elif e.type == "cue":
@@ -299,13 +299,13 @@ def ledger_cmd(
         _fail(f"no calls recorded for run {run_id!r}", 1)
     typer.echo(f"run {run_id}")
     typer.echo(
-        f"  {'role':<9} {'model':<10} {'calls':>5} {'tokens in':>10} {'cached':>8} "
+        f"  {'role':<9} {'model':<13} {'calls':>5} {'tokens in':>10} {'cached':>8} "
         f"{'out':>8}  {'cost':>8}  {'seconds':>7}"
     )
     rows = summary["by_role_model"]
     for g in rows:
         typer.echo(
-            f"  {g['role']:<9} {_model(g['model']):<10} {g['calls']:>5} "
+            f"  {g['role']:<9} {_model(g['model']):<13} {g['calls']:>5} "
             f"{g['tokens_in']:>10,} {g['tokens_cached']:>8,} {g['tokens_out']:>8,}  "
             f"${g['cost_usd']:.4f}  {g['latency_s']:>7.1f}"
         )
@@ -314,7 +314,7 @@ def ledger_cmd(
     tout = sum(g["tokens_out"] for g in rows)
     seconds = sum(g["latency_s"] for g in rows)
     typer.echo(
-        f"  {'total':<9} {'':<10} {summary['calls']:>5} {tin:>10,} {cached:>8,} "
+        f"  {'total':<9} {'':<13} {summary['calls']:>5} {tin:>10,} {cached:>8,} "
         f"{tout:>8,}  ${summary['total_cost_usd']:.4f}  {seconds:>7.1f}"
     )
 
