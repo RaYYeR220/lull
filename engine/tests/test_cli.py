@@ -132,6 +132,23 @@ def test_calibrate_voice_prints_and_stores_the_rate(tmp_path, home, monkeypatch)
     assert json.loads((home / "voices.json").read_text(encoding="utf-8")) == {"Aria": 2.5}
 
 
+def test_calibrate_voice_refuses_an_implausible_rate(tmp_path, home, monkeypatch):
+    class Speech:  # 40 words in 2 s: 20 words per second
+        def synthesize(self, text, voice, dst):
+            with wave.open(str(dst), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(22050)
+                w.writeframes(b"\0\0" * 22050 * 2)
+            return Path(dst)
+
+    monkeypatch.setattr(cli, "_speech", lambda: Speech())
+    r = runner.invoke(cli.app, ["calibrate-voice", "--voice", "Aria"])
+    assert r.exit_code == 1
+    assert "20.000 words/s" in r.output and "not saved" in r.output
+    assert not (home / "voices.json").exists()
+
+
 def _call(run_id, role, model, cost):
     return CallRecord(
         run_id=run_id,

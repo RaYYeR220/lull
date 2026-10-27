@@ -9,6 +9,7 @@ Until a voice is calibrated, rates measured on the local Magpie server are used.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -30,7 +31,13 @@ REFERENCE = (
 )
 DEFAULT_WPS = {"Sofia": 3.05}  # calibrated on the local Magpie server, 2026-10-27
 FALLBACK_WPS = 2.8  # any other voice until it is calibrated
-MAX_WPS = 20.0
+MIN_WPS, MAX_WPS = 1.0, 6.0  # a plausible speaking rate; anything else is a broken measurement
+
+log = logging.getLogger(__name__)
+
+
+class CalibrationError(ValueError):
+    """The measured rate is not a plausible speaking rate; nothing was stored."""
 
 
 class Calibration(BaseModel):
@@ -44,7 +51,15 @@ def voices_path() -> Path:
     return get_settings().lull_home / "voices.json"
 
 
+def plausible(wps: object) -> bool:
+    """A number of words per second a voice can really speak (MIN_WPS..MAX_WPS)."""
+    ok = isinstance(wps, int | float) and not isinstance(wps, bool)
+    return ok and math.isfinite(wps) and MIN_WPS <= wps <= MAX_WPS
+
+
 def _load(path: Path) -> dict[str, float]:
+    """The stored rates. A file that is not a JSON object raises; an entry that is not a
+    plausible rate is skipped with a warning, so one bad voice never breaks the others."""
     if not path.exists():
         return {}
     try:
@@ -55,9 +70,9 @@ def _load(path: Path) -> dict[str, float]:
         raise ValueError(f"{path}: expected an object of voice name to words per second")
     rates: dict[str, float] = {}
     for name, wps in data.items():
-        ok = isinstance(wps, int | float) and not isinstance(wps, bool)
-        if not (ok and math.isfinite(wps) and 0 < wps < MAX_WPS):
-            raise ValueError(f"{path}: voice {name!r} has an invalid rate {wps!r}")
+        if not plausible(wps):
+            log.warning("voices: %s: voice %r has an invalid rate %r; ignored", path, name, wps)
+            continue
         rates[str(name)] = float(wps)
     return rates
 
@@ -74,7 +89,8 @@ def voice_wps(name: str, path: Path | None = None) -> tuple[float, str]:
 
 
 def calibrate(speech: SpeechClient, name: str, work: Path, path: Path | None = None) -> Calibration:
-    """Speak REFERENCE with voice `name`, measure it and store the rate in voices.json."""
+    """Speak REFERENCE with voice `name`, measure it and store the rate in voices.json.
+    A rate outside MIN_WPS..MAX_WPS raises CalibrationError and stores nothing."""
     path = path or voices_path()
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", name) or "voice"
     try:
@@ -83,6 +99,12 @@ def calibrate(speech: SpeechClient, name: str, work: Path, path: Path | None = N
         raise MediaError(f"the voice {name!r} produced no usable audio: {e}") from e
     words = count_words(REFERENCE)
     cal = Calibration(voice=name, words=words, seconds=seconds, wps=round(words / seconds, 3))
+    if not plausible(cal.wps):
+        raise CalibrationError(
+            f"the voice {name!r} read {words} words in {seconds:.2f} s = {cal.wps:.3f} words/s, "
+            f"outside {MIN_WPS:g}-{MAX_WPS:g}: not saved (is the speech server answering with "
+            "the reference text?)"
+        )
     rates = _load(path)
     rates[name] = cal.wps
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -30,7 +30,7 @@ from lull.store import file_sha256
 from lull.tavily import Tavily
 from lull.tf import LIGHTNING, ULTRA, VL, TFError, TokenFactory
 from lull.types import RunOptions
-from lull.voices import calibrate, voices_path
+from lull.voices import CalibrationError, calibrate, voices_path
 
 app = typer.Typer(
     add_completion=False,
@@ -288,7 +288,7 @@ def calibrate_voice(
     with tempfile.TemporaryDirectory(prefix="lull-calibrate-") as work:
         try:
             cal = calibrate(speech, voice, Path(work))
-        except (SpeechError, MediaError) as e:
+        except (SpeechError, MediaError, CalibrationError) as e:
             _fail(f"{type(e).__name__}: {e}", 1)
     typer.echo(
         f"{cal.voice}: {cal.words} words in {cal.seconds:.2f} s = {cal.wps:.3f} words/s "
