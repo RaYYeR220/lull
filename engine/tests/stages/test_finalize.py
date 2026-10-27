@@ -1,0 +1,675 @@
+import wave
+from pathlib import Path
+
+import pytest
+
+from lull.media import probe
+from lull.stages import finalize as fin
+from lull.stages.finalize import (
+    CueContext,
+    OverlapError,
+    assert_no_overlap,
+    compress,
+    finalize_cue,
+    introduce_names,
+    names_in,
+    overlap_report,
+)
+from lull.stages.verify import TEXT_SCHEMA, VERIFY_SCHEMA, clip_window, remove_claims, verify
+from lull.stages.voice import atempo, voice
+from lull.tf import LIGHTNING, VL
+from lull.types import Claim, Cue, Gap, RunOptions, Span, VisualEvent
+
+# -- fakes ---------------------------------------------------------------------------
+
+
+def _wav(path: Path, seconds: float, rate: int = 22050) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(b"\0\0" * round(seconds * rate))
+    return path
+
+
+class FakeSpeech:
+    """Writes a silent WAV per call: durations from a list, or from a function of the text."""
+
+    def __init__(self, durations):
+        self.durations = durations
+        self.calls: list[dict] = []
+
+    def synthesize(self, text, voice, dst):
+        self.calls.append({"text": text, "voice": voice, "dst": Path(dst)})
+        d = self.durations(text) if callable(self.durations) else self.durations.pop(0)
+        return _wav(Path(dst), d)
+
+
+class FakeTF:
+    """Answers by role: a list of canned answers, or a function of the call."""
+
+    def __init__(self, **answers):
+        self.answers = answers
+        self.calls: list[dict] = []
+
+    def json(self, model, messages, schema, **kw) -> dict:
+        call = {"model": model, "messages": messages, "schema": schema, **kw}
+        self.calls.append(call)
+        a = self.answers[kw["role"]]
+        return a(call) if callable(a) else a.pop(0)
+
+    def roles(self) -> list[str]:
+        return [c["role"] for c in self.calls]
+
+    def of(self, role: str) -> list[dict]:
+        return [c for c in self.calls if c["role"] == role]
+
+
+def _user_text(call) -> str:
+    content = next(m for m in call["messages"] if m["role"] == "user")["content"]
+    if isinstance(content, str):
+        return content
+    return "\n".join(p["text"] for p in content if p.get("type") == "text")
+
+
+def _description(call) -> str:
+    text = _user_text(call)
+    return text.split("<description>\n", 1)[1].split("\n</description>", 1)[0]
+
+
+def _claims(*pairs, at=1.0):
+    return {"claims": [{"text": t, "verdict": v, "at": at} for t, v in pairs]}
+
+
+def _supported(*texts):
+    return _claims(*((t, "supported") for t in texts))
+
+
+# -- fixtures ------------------------------------------------------------------------
+
+EV = VisualEvent(
+    id="e001", t_start=2.0, t_end=6.0, kind="action", text="A person opens a door.",
+    verbatim_text=None, salience=4, said_in_dialogue=False,
+)  # fmt: skip
+EVENTS = {"e001": EV}
+GAP = Gap(id="g001", start=1.8, end=6.2, usable_start=2.0, usable_end=6.0, capacity_words=9)
+TEXT = "A person in a red coat opens a door."
+CUE = Cue(
+    id="c001", gap_id="g001", start=2.0, end=None, text=TEXT, event_ids=["e001"],
+    status="verified", ahead=False, claims=[], audio_path=None, audio_dur=None,
+)  # fmt: skip
+CTX = CueContext(wps=2.36, cast={}, named=set(), introduced=set(), verbatim=[],
+                 proper_nouns=set())  # fmt: skip
+OPTS = RunOptions(voice="Aria")
+PROOG = "a bald person in a dark coat"
+
+
+def _wav_seconds(path: Path) -> float:
+    with wave.open(str(path), "rb") as w:
+        return w.getnframes() / w.getframerate()
+
+
+@pytest.fixture
+def video(tmp_path, monkeypatch) -> Path:
+    """A 12 s stand-in video: probe, clip cutting and audio measurement are done in Python
+    (each ffmpeg launch costs about a second here). Tests that need real media use the
+    session `tone_slides` fixture instead."""
+    from lull.media import Probe
+    from lull.stages import voice as voice_mod
+
+    def fake_cut(src, dst, start, end, *, height=480):
+        Path(dst).write_bytes(b"\0" * 16)
+        return Path(dst)
+
+    monkeypatch.setattr(fin, "probe", lambda p: Probe(12.0, 640, 360, 30.0, True))
+    monkeypatch.setattr(fin, "cut_clip", fake_cut)
+    monkeypatch.setattr(fin, "audio_duration", _wav_seconds)
+    monkeypatch.setattr(voice_mod, "audio_duration", _wav_seconds)
+    path = tmp_path / "video.mp4"
+    path.write_bytes(b"\0" * 16)
+    return path
+
+
+def _run(tmp_path, video, tf, speech, *, cue=CUE, gap=GAP, events=EVENTS, ctx=CTX):
+    work = tmp_path / "work"
+    return finalize_cue(cue, gap, events, video, work, tf, speech, OPTS, ctx, run_id="r1")
+
+
+def _cue(text=TEXT, **kw) -> Cue:
+    return CUE.model_copy(update={"text": text, **kw})
+
+
+# -- (a) the happy path ----------------------------------------------------------------
+
+
+def test_all_supported_and_short_audio_is_verified(tmp_path, tone_slides):
+    tf = FakeTF(verify=[_supported("a person", "the person wears a red coat", "opens a door")])
+    speech = FakeSpeech([3.0])
+    out = _run(tmp_path, tone_slides, tf, speech)
+    assert out.status == "verified"
+    assert out.start == GAP.usable_start
+    assert out.audio_dur == pytest.approx(3.0, abs=1e-3)
+    assert out.end == pytest.approx(out.start + out.audio_dur)
+    assert out.tempo == 1.0
+    assert out.text == TEXT
+    assert [c.verdict for c in out.claims] == ["supported"] * 3
+    assert Path(out.audio_path) == tmp_path / "work" / "audio" / "c001.wav"
+    assert speech.calls[0]["voice"] == "Aria" and speech.calls[0]["text"] == TEXT
+    assert tf.roles() == ["verify"]
+    call = tf.calls[0]
+    assert call["model"] == VL and call["schema"] == VERIFY_SCHEMA
+    assert (call["stage"], call["thinking"], call["temperature"]) == ("finalize", False, 0.2)
+    assert (call["max_tokens"], call["estimate"]) == (1500, 0.003)
+    user = next(m for m in call["messages"] if m["role"] == "user")["content"]
+    assert user[0]["type"] == "video_url"
+    assert _description(call) == TEXT
+    # the clip is cut around the cue's events: [2 - 1, 6 + 1]
+    clip = tmp_path / "work" / "verify" / "c001.mp4"
+    assert probe(clip).duration == pytest.approx(6.0, abs=0.15)
+    assert probe(clip).height == 360
+
+
+def test_claim_times_are_absolute(tmp_path, video):
+    tf = FakeTF(verify=[_claims(("a person opens a door", "supported"), at=1.5)])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert out.claims == [Claim(text="a person opens a door", verdict="supported", at=2.5)]
+
+
+# -- (b) an unsupported claim is cut, then the rest is re-verified -----------------------
+
+
+def test_not_visible_claim_is_removed_and_reverified(tmp_path, video):
+    tf = FakeTF(
+        verify=[
+            _claims(
+                ("a person", "supported"),
+                ("in a red coat", "not_visible"),
+                ("opens a door", "supported"),
+            ),  # fmt: skip
+            _supported("a person", "opens a door"),
+        ],
+        remove=[{"text": "A person opens a door."}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "verify"]
+    assert out.status == "verified"
+    assert out.text == "A person opens a door."
+    assert "1 claim removed: in a red coat" in out.note
+    rm = tf.of("remove")[0]
+    assert (rm["model"], rm["stage"], rm["thinking"]) == (LIGHTNING, "finalize", False)
+    assert rm["schema"] == TEXT_SCHEMA
+    assert "in a red coat" in _user_text(rm) and _description(rm) == TEXT
+    assert _description(tf.of("verify")[1]) == "A person opens a door."
+
+
+def test_contradicted_claim_is_removed(tmp_path, video):
+    tf = FakeTF(
+        verify=[
+            _claims(("a person", "supported"), ("a red coat", "contradicted")),
+            _supported("a person", "opens a door"),
+        ],
+        remove=[{"text": "A person opens a door."}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert out.status == "verified" and "red" not in out.text
+
+
+def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
+    """On the last round the cue is held for a person, but a contradicted claim is still cut
+    from its text; a claim that is only not visible stays for the reviewer to judge."""
+
+    def stubborn(call):  # a rewrite that removes nothing until only contradictions are listed
+        listed = _user_text(call).split("<remove>", 1)[1]
+        if "opens a door" in listed:
+            return {"text": _description(call)}
+        return {"text": "A person opens a door."}
+
+    tf = FakeTF(
+        verify=lambda call: _claims(
+            ("a red coat", "contradicted"), ("opens a door", "not_visible")
+        ),
+        remove=stubborn,
+    )
+    speech = FakeSpeech([])
+    out = _run(tmp_path, video, tf, speech)
+    assert out.status == "held"
+    assert len(tf.of("verify")) == 4
+    last = _user_text(tf.of("remove")[-1]).split("<remove>", 1)[1]
+    assert "a red coat" in last and "opens a door" not in last
+    assert out.text == "A person opens a door."
+    assert {(c.text, c.verdict) for c in out.claims} >= {("opens a door", "not_visible")}
+    assert speech.calls == []
+    assert (out.audio_path, out.audio_dur) == (None, None)
+
+
+def test_everything_removed_is_held(tmp_path, video):
+    tf = FakeTF(
+        verify=[
+            _claims(("a person in a red coat", "not_visible"), ("opens a door", "not_visible"))
+        ],
+        remove=[{"text": "  "}],
+    )
+    speech = FakeSpeech([])
+    out = _run(tmp_path, video, tf, speech)
+    assert out.status == "held" and out.text == ""
+    assert "nothing left" in out.note
+    assert speech.calls == []
+
+
+def test_removed_on_screen_text_is_not_demanded_back(tmp_path, video):
+    """A quoted sign the frames don't show is cut; R19 must not then ask for it back."""
+    ctx = CTX.model_copy(update={"verbatim": ["EXIT"]})
+    tf = FakeTF(
+        verify=[
+            _claims(('a sign reads "EXIT"', "not_visible"), ("a person opens a door", "supported")),
+            _supported("a person opens a door"),
+        ],
+        remove=[{"text": "A person opens a door."}],
+    )
+    cue = _cue('A sign reads: "EXIT". A person opens a door.')
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=cue, ctx=ctx)
+    assert tf.roles() == ["verify", "remove", "verify"]
+    assert out.status == "verified" and out.text == "A person opens a door."
+
+
+# -- (c) a little too long: speed up -------------------------------------------------------
+
+
+def test_audio_five_percent_over_gets_tempo(tmp_path, tone_slides):
+    tf = FakeTF(verify=[_supported("a person", "opens a door")])
+    out = _run(tmp_path, tone_slides, tf, FakeSpeech([4.2]))  # usable 4.0 s
+    assert out.status == "verified"
+    assert out.tempo == 1.05
+    assert Path(out.audio_path) == tmp_path / "work" / "audio" / "c001.t.wav"
+    assert out.audio_dur <= 4.0
+    assert out.audio_dur == pytest.approx(4.0, abs=0.05)  # measured, not computed
+    assert out.end == pytest.approx(out.start + out.audio_dur)
+    assert tf.roles() == ["verify"]
+
+
+# -- (d) far too long: compress, then go round again ----------------------------------------
+
+
+def test_audio_forty_percent_over_compresses(tmp_path, video, monkeypatch):
+    seen = []
+    real = fin.compress
+
+    def spy(text, target_words, keep, tf, *, run_id):
+        seen.append((text, target_words, keep))
+        return real(text, target_words, keep, tf, run_id=run_id)
+
+    monkeypatch.setattr(fin, "compress", spy)
+    long_text = "A person in a long red coat opens the wooden door of the shed."  # 14 words
+    tf = FakeTF(
+        verify=[_supported("a person", "red coat", "opens a door")] * 2,
+        compress=[{"text": "A person in a red coat opens a door."}],  # 9 words
+    )
+    speech = FakeSpeech([5.6, 3.0])  # usable 4.0 s: 40 % over
+    out = _run(tmp_path, video, tf, speech, cue=_cue(long_text))
+    assert seen == [(long_text, 9, [])]  # floor(14 * 4.0 / 5.6 * 0.95)
+    assert tf.roles() == ["verify", "compress", "verify"]
+    cmp_call = tf.of("compress")[0]
+    assert (cmp_call["model"], cmp_call["stage"], cmp_call["thinking"]) == (
+        LIGHTNING, "finalize", False,
+    )  # fmt: skip
+    assert out.status == "verified"
+    assert out.text == "A person in a red coat opens a door."
+    assert out.audio_dur == pytest.approx(3.0, abs=1e-3)
+    assert "compressed 14→9 words" in out.note
+    assert [c["text"] for c in speech.calls] == [long_text, out.text]
+
+
+def test_compress_keeps_on_screen_text_the_cue_reads(tmp_path, video, monkeypatch):
+    seen = []
+
+    def fake_compress(text, target_words, keep, tf, *, run_id):
+        seen.append(keep)
+        return 'A sign reads: "EXIT".'
+
+    monkeypatch.setattr(fin, "compress", fake_compress)
+    ctx = CTX.model_copy(update={"verbatim": ["EXIT", "Water use by sector\n2.1 million litres"]})
+    tf = FakeTF(verify=lambda call: _supported("a sign reads EXIT"))
+    cue = _cue('A sign reads: "EXIT". A person in a long red coat opens the wooden door.')
+    out = _run(tmp_path, video, tf, FakeSpeech([8.0, 2.0]), cue=cue, ctx=ctx)
+    assert seen == [["EXIT"]]
+    assert out.status == "verified"
+
+
+def test_never_fits_is_held_after_four_rounds(tmp_path, video):
+    tf = FakeTF(
+        verify=lambda call: _supported("a person opens a door"),
+        compress=lambda call: {"text": _description(call)},  # no shorter
+    )
+    speech = FakeSpeech(lambda text: 8.0)
+    out = _run(tmp_path, video, tf, speech)
+    assert out.status == "held"
+    assert len(speech.calls) == 4 and len(tf.of("compress")) == 3
+    assert "does not fit" in out.note
+    assert (out.audio_path, out.audio_dur, out.end) == (None, None, None)
+
+
+# -- (e) verification never passes ----------------------------------------------------------
+
+
+def test_verify_always_fails_is_held_after_four_rounds(tmp_path, video):
+    tf = FakeTF(
+        verify=lambda call: _claims(("a person", "supported"), ("a red coat", "not_visible")),
+        remove=lambda call: {"text": "A person in a red coat opens a door."},
+    )
+    speech = FakeSpeech([])
+    out = _run(tmp_path, video, tf, speech)
+    assert out.status == "held"
+    assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 3
+    assert "a red coat" in out.note
+    assert speech.calls == []
+    assert out.start == GAP.usable_start
+    assert {c["stage"] for c in tf.calls} == {"finalize"}
+
+
+def test_no_claims_from_the_verifier_is_held(tmp_path, video):
+    tf = FakeTF(verify=[{"claims": []}])
+    speech = FakeSpeech([])
+    out = _run(tmp_path, video, tf, speech)
+    assert out.status == "held" and speech.calls == []
+
+
+# -- lint ---------------------------------------------------------------------------------
+
+
+def test_lint_error_is_repaired(tmp_path, video):
+    bad = "We watch a person who appears to open a door."
+    tf = FakeTF(
+        repair=[{"text": "A person opens a door."}],
+        verify=[_supported("a person opens a door")],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(bad))
+    assert tf.roles() == ["repair", "verify"]
+    rep = tf.of("repair")[0]
+    assert (rep["model"], rep["stage"], rep["thinking"]) == (LIGHTNING, "finalize", False)
+    assert rep["schema"] == TEXT_SCHEMA
+    listed = _user_text(rep)
+    assert "R7-person" in listed and "R12-hedge" in listed
+    assert out.status == "verified" and out.text == "A person opens a door."
+
+
+def test_lint_error_that_survives_repair_is_held(tmp_path, video):
+    bad = "We watch a person open a door."
+    tf = FakeTF(repair=[{"text": bad}])
+    speech = FakeSpeech([])
+    out = _run(tmp_path, video, tf, speech, cue=_cue(bad))
+    assert out.status == "held"
+    assert tf.roles() == ["repair"] and speech.calls == []
+    assert "R7-person" in out.note
+    assert any(f["rule"] == "R7-person" and f["severity"] == "error" for f in out.findings)
+
+
+def test_lint_warnings_are_kept_but_do_not_block(tmp_path, video):
+    tf = FakeTF(verify=[_supported("a man", "opens a door")])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue("A man opens a door."))
+    assert out.status == "verified"
+    assert tf.roles() == ["verify"]
+    assert {"rule": "R14-gender", "severity": "warning"}.items() <= out.findings[0].items()
+    assert Cue.model_validate_json(out.model_dump_json()) == out
+
+
+def test_on_screen_text_not_read_by_the_cue_does_not_block(tmp_path, video):
+    """A slide's full text is in the inventory; the cue reads only its title (plan rule 8)."""
+    ctx = CTX.model_copy(update={"verbatim": ["Water use by sector\n2.1 million litres"]})
+    tf = FakeTF(verify=[_supported("a slide reads Water use by sector")])
+    cue = _cue("A slide reads: Water use by sector.")
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=cue, ctx=ctx)
+    assert out.status == "verified" and tf.roles() == ["verify"]
+
+
+# -- first mention of a cast name (ruling I4) -------------------------------------------------
+
+
+def test_first_mention_gets_the_descriptor(tmp_path, video):
+    ctx = CTX.model_copy(update={"cast": {"Proog": PROOG}, "named": {"Proog"}})
+    tf = FakeTF(verify=[_supported("a bald person", "in a dark coat", "climbs the ladder")])
+    cue = _cue("Proog climbs the ladder.")
+    out = _run(tmp_path, video, tf, FakeSpeech([3.0]), cue=cue, ctx=ctx)
+    want = "A bald person in a dark coat, Proog, climbs the ladder."
+    assert _description(tf.calls[0]) == want
+    assert "Proog" in _user_text(tf.calls[0]).split("<names>", 1)[1]
+    assert out.status == "verified" and out.text == want
+    assert "Proog" in out.note
+    assert names_in(out.text, {"Proog", "Emo"}) == {"Proog"}
+
+
+def test_first_mention_skipped_when_already_introduced(tmp_path, video):
+    ctx = CTX.model_copy(
+        update={"cast": {"Proog": PROOG}, "named": {"Proog"}, "introduced": {"Proog"}}
+    )
+    tf = FakeTF(verify=[_supported("climbs the ladder")])
+    cue = _cue("Proog climbs the ladder.")
+    out = _run(tmp_path, video, tf, FakeSpeech([3.0]), cue=cue, ctx=ctx)
+    assert _description(tf.calls[0]) == "Proog climbs the ladder."
+    assert out.text == "Proog climbs the ladder." and out.note is None
+
+
+def test_possessive_first_mention_is_introduced_by_repair(tmp_path, video):
+    ctx = CTX.model_copy(update={"cast": {"Proog": PROOG}, "named": {"Proog"}})
+    fixed = "The hand of a bald person in a dark coat, Proog, shakes."
+    tf = FakeTF(repair=[{"text": fixed}], verify=[_supported("a hand shakes")])
+    out = _run(tmp_path, video, tf, FakeSpeech([3.0]), cue=_cue("Proog's hand shakes."), ctx=ctx)
+    assert tf.roles() == ["repair", "verify"]
+    assert 'descriptor: "a bald person in a dark coat"' in _user_text(tf.calls[0])
+    assert out.status == "verified" and out.text == fixed
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        ("Proog climbs.", "{D}, Proog, climbs."),
+        ("Then Proog climbs.", "Then {d}, Proog, climbs."),
+        ("A door opens. Proog climbs.", "A door opens. {D}, Proog, climbs."),
+        ("A door opens for Proog.", "A door opens for {d}, Proog."),
+        ("Proog climbs. Proog waves.", "{D}, Proog, climbs. Proog waves."),
+        ("In a moment, Proog climbs.", "In a moment, {d}, Proog, climbs."),
+    ],
+)
+def test_introduce_names_inserts_once(text, want):
+    want = want.format(D="A bald person in a dark coat", d=PROOG)
+    out, introduced, inserted = introduce_names(text, {"Proog": PROOG}, set())
+    assert out == want and introduced == {"Proog"} and inserted == ["Proog"]
+
+
+def test_introduce_names_leaves_alone():
+    cast = {"Proog": "the bald person in the dark coat"}
+    done = "The bald person in the dark coat, Proog, climbs."
+    assert introduce_names(done, cast, set()) == (done, {"Proog"}, [])
+    quoted = 'A caption reads: "Proog". Proog climbs.'
+    assert introduce_names(quoted, cast, set()) == (quoted, {"Proog"}, [])
+    assert introduce_names("Proog's hand shakes.", cast, set()) == (
+        "Proog's hand shakes.",
+        set(),
+        [],
+    )
+    assert introduce_names("Proog climbs.", cast, {"Proog"}) == ("Proog climbs.", set(), [])
+    assert introduce_names("The proog climbs.", cast, set()) == ("The proog climbs.", set(), [])
+
+
+# -- extended cues ----------------------------------------------------------------------------
+
+
+def test_extended_cue_is_voiced_without_fitting(tmp_path, video):
+    cue = _cue(status="extended", gap_id=None, id="x001")
+    tf = FakeTF(verify=[_supported("a person", "opens a door")])
+    out = _run(tmp_path, video, tf, FakeSpeech([9.0]), cue=cue, gap=None)
+    assert out.status == "extended"
+    assert out.start == 2.0 and out.tempo == 1.0
+    assert out.audio_dur == pytest.approx(9.0, abs=1e-3)
+    assert out.end == pytest.approx(11.0, abs=1e-3)
+    assert tf.roles() == ["verify"]
+
+
+def test_gap_must_match_the_cue(tmp_path, video):
+    with pytest.raises(ValueError):
+        _run(tmp_path, video, FakeTF(), FakeSpeech([]), gap=None)
+    other = GAP.model_copy(update={"id": "g002"})
+    with pytest.raises(ValueError):
+        _run(tmp_path, video, FakeTF(), FakeSpeech([]), gap=other)
+    with pytest.raises(ValueError):
+        _run(tmp_path, video, FakeTF(), FakeSpeech([]), events={})
+
+
+# -- clip window --------------------------------------------------------------------------------
+
+
+def _e(t0, t1, id_="e1"):
+    return EV.model_copy(update={"id": id_, "t_start": t0, "t_end": t1})
+
+
+def test_clip_window_pads_and_clamps():
+    assert clip_window([_e(2.0, 6.0)], 30.0) == (1.0, 7.0)
+    assert clip_window([_e(0.5, 3.0)], 30.0) == (0.0, 4.0)
+    assert clip_window([_e(27.0, 29.5)], 30.0) == (26.0, 30.0)
+    assert clip_window([_e(2.0, 3.0, "a"), _e(5.0, 6.0, "b")], 30.0) == (1.0, 7.0)
+
+
+def test_clip_window_capped_at_12_s_around_the_events():
+    assert clip_window([_e(0.0, 20.0)], 30.0) == (4.0, 16.0)
+    assert clip_window([_e(10.0, 14.0, "a"), _e(30.0, 40.0, "b")], 60.0) == (19.0, 31.0)
+    assert clip_window([_e(0.0, 20.0)], 14.0) == (2.0, 14.0)  # shifted inside the video
+    assert clip_window([_e(0.0, 2.0)], 1.0) == (0.0, 1.0)
+
+
+# -- model calls on their own -------------------------------------------------------------------
+
+
+def test_verify_parses_and_offsets(tmp_path):
+    clip = tmp_path / "c.mp4"
+    clip.write_bytes(b"\0" * 16)
+    tf = FakeTF(
+        verify=[
+            {
+                "claims": [
+                    {"text": "a door", "verdict": "supported", "at": 1.0},
+                    {"text": "a cat", "verdict": "not_visible", "at": None},
+                    {"text": "  ", "verdict": "supported", "at": 0.0},
+                ]
+            }
+        ]
+    )
+    out = verify("A door. A cat.", clip, tf, run_id="r1", names={"Emo"}, offset=10.0)
+    assert out == [
+        Claim(text="a door", verdict="supported", at=11.0),
+        Claim(text="a cat", verdict="not_visible", at=None),
+    ]
+    assert "Emo" in _user_text(tf.calls[0]).split("<names>", 1)[1]
+
+
+def test_verify_rejects_an_answer_without_claims(tmp_path):
+    clip = tmp_path / "c.mp4"
+    clip.write_bytes(b"\0" * 16)
+    with pytest.raises(ValueError):
+        verify("A door.", clip, FakeTF(verify=[{"items": []}]), run_id="r1")
+
+
+def test_remove_claims_lists_the_bad_claims():
+    tf = FakeTF(remove=[{"text": "A door opens."}])
+    bad = [Claim(text="a red door", verdict="contradicted", at=1.0)]
+    assert remove_claims("A red door opens.", bad, tf, run_id="r1") == "A door opens."
+    assert "a red door" in _user_text(tf.calls[0])
+    assert tf.calls[0]["role"] == "remove"
+    assert remove_claims("A door opens.", [], tf, run_id="r1") == "A door opens."
+    assert len(tf.calls) == 1
+
+
+def test_compress_passes_target_and_keep():
+    tf = FakeTF(compress=[{"text": 'A sign reads: "EXIT".'}])
+    out = compress('A tall sign above the door reads: "EXIT".', 4, ["EXIT"], tf, run_id="r1")
+    assert out == 'A sign reads: "EXIT".'
+    call = tf.calls[0]
+    assert (call["model"], call["role"], call["stage"]) == (LIGHTNING, "compress", "finalize")
+    user = _user_text(call)
+    assert "4 words" in user and "EXIT" in user.split("<keep>", 1)[1]
+
+
+# -- voice ---------------------------------------------------------------------------------------
+
+
+def test_voice_measures_the_audio(tmp_path):
+    path, dur = voice("A door opens.", "Sofia", FakeSpeech([2.5]), tmp_path / "a" / "c.wav")
+    assert path == tmp_path / "a" / "c.wav" and dur == pytest.approx(2.5, abs=1e-3)
+
+
+def test_atempo_speeds_up_within_limit(tmp_path):
+    src = _wav(tmp_path / "s.wav", 4.2)
+    out = atempo(src, tmp_path / "t.wav", 1.05)
+    assert out == tmp_path / "t.wav"
+    assert probe_audio(out) == pytest.approx(4.0, abs=0.05)
+    for bad in (1.2, 0.9):
+        with pytest.raises(ValueError):
+            atempo(src, tmp_path / "x.wav", bad)
+
+
+def probe_audio(path: Path) -> float:
+    from lull.media import audio_duration
+
+    return audio_duration(path)
+
+
+# -- (f) the overlap gate -------------------------------------------------------------------
+
+
+def _done(id_, start, dur, *, status="verified", gap_id="g"):
+    return Cue(
+        id=id_, gap_id=gap_id, start=start, end=start + dur, text="x", event_ids=[],
+        status=status, ahead=False, claims=[], audio_path="a.wav", audio_dur=dur,
+    )  # fmt: skip
+
+
+def test_assert_no_overlap_flags_cue_crossing_speech():
+    speech = [Span(start=0.0, end=1.8), Span(start=4.8, end=6.0)]
+    with pytest.raises(OverlapError) as err:
+        assert_no_overlap([_done("c001", 2.0, 3.0)], speech)
+    assert err.value.cue_ids == ["c001"]
+    assert_no_overlap([_done("c001", 2.0, 2.7)], speech)
+
+
+def test_assert_no_overlap_ignores_held_and_extended():
+    speech = [Span(start=2.0, end=6.0)]
+    cues = [
+        _done("c001", 2.0, 3.0, status="held"),
+        _done("x001", 2.0, 3.0, status="extended", gap_id=None),
+        _done("c002", 2.0, 3.0, gap_id=None),
+    ]
+    assert_no_overlap(cues, speech)
+    with pytest.raises(OverlapError):
+        assert_no_overlap([_done("c003", 2.0, 3.0, status="edited")], speech)
+
+
+def test_assert_no_overlap_flags_two_overlapping_cues():
+    with pytest.raises(OverlapError) as err:
+        assert_no_overlap([_done("c002", 4.5, 1.5), _done("c001", 2.0, 3.0)], [])
+    assert err.value.cue_ids == ["c001", "c002"]
+    assert_no_overlap([_done("c001", 2.0, 2.5), _done("c002", 4.5, 1.5)], [])  # touching is fine
+
+
+def test_overlap_report_numbers():
+    cues = [
+        _done("c001", 2.0, 3.0),  # [2.0, 5.0]
+        _done("c002", 4.5, 1.5),  # [4.5, 6.0]: 0.5 s on c001, 0.5 s on speech
+        _done("c003", 2.0, 9.0, status="held"),
+    ]
+    rep = overlap_report(cues, [Span(start=5.5, end=7.0)])
+    assert rep["checked"] == 2
+    assert rep["speech_s"] == pytest.approx(0.5)
+    assert rep["between_cues_s"] == pytest.approx(0.5)
+    assert rep["total_s"] == pytest.approx(1.0)
+    assert rep["per_cue"] == {
+        "c001": {"speech_s": 0.0, "cues_s": 0.5},
+        "c002": {"speech_s": 0.5, "cues_s": 0.5},
+    }
+    assert rep["offending"] == ["c001", "c002"]
+    clean = overlap_report([_done("c001", 2.0, 2.0)], [Span(start=5.5, end=7.0)])
+    assert (clean["total_s"], clean["offending"]) == (0.0, [])
+
+
+def test_overlap_gate_needs_audio():
+    cue = _done("c001", 2.0, 3.0).model_copy(update={"audio_dur": None})
+    with pytest.raises(ValueError):
+        assert_no_overlap([cue], [])

@@ -101,6 +101,8 @@ class Cue(BaseModel):
     audio_path: str | None
     audio_dur: float | None
     tempo: float = 1.0
+    findings: list[dict] = Field(default_factory=list)  # lint findings, serialised
+    note: str | None = None  # why the cue is held, or what finalisation changed
 
 
 class RunOptions(BaseModel):
