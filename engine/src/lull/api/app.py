@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from lull.api.health import Health
 from lull.api.live import Live, LiveError, live_error_handler
 from lull.api.live import router as live_router
 from lull.api.settings import ApiSettings
@@ -22,32 +23,19 @@ CONTENT_TYPES = {
     ".md": "text/markdown; charset=utf-8",
     ".json": "application/json",
     ".jpg": "image/jpeg",
+    ".wav": "audio/wav",
 }
 REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:"
+CORS_METHODS = ["GET", "HEAD", "OPTIONS", "POST", "PATCH"]
 
 
-def _speech_ok() -> bool:
-    try:
-        from lull.speech import NemoSpeechHTTP
-
-        return bool(NemoSpeechHTTP.from_settings().health())
-    except Exception:
-        log.warning("speech health check failed", exc_info=True)
-        return False
-
-
-def _budget() -> dict[str, float]:
-    from lull.config import get_settings
-    from lull.ledger import Ledger, _midnight_utc
-
-    s = get_settings()
-    ledger = Ledger(path=s.lull_home / "ledger.db")
-    return {
-        "spent_today": ledger.spent(since=_midnight_utc()),
-        "cap_day": ledger.cap_day,
-        "spent_total": ledger.spent(),
-        "cap_total": ledger.cap_total,
-    }
+def file_response(target) -> FileResponse:
+    ext = target.suffix.lower()
+    ctype = CONTENT_TYPES.get(ext) or mimetypes.guess_type(target.name)[0]
+    headers = {"X-Content-Type-Options": "nosniff"}
+    if ext == ".html":
+        headers["Content-Security-Policy"] = REPORT_CSP
+    return FileResponse(target, media_type=ctype, headers=headers)
 
 
 def create_app(settings: ApiSettings | None = None) -> FastAPI:
@@ -56,19 +44,20 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     app = FastAPI(title="Lull API", version="0.1.0")
     app.state.settings = settings
     app.state.store = store
+    app.state.health = Health()
     app.state.live = Live(settings, store)
     app.add_exception_handler(LiveError, live_error_handler)
     app.include_router(live_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.origins,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_methods=CORS_METHODS,
         allow_headers=["*"],
     )
 
     @app.get("/v1/health")
     def health():
-        return {"ok": True, "speech": _speech_ok(), "budget": _budget()}
+        return app.state.health.get()
 
     @app.get("/v1/runs")
     def list_runs():
@@ -82,18 +71,13 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
             raise HTTPException(404, "run not found")
         return detail
 
-    @app.get("/v1/runs/{run_id}/files/{path:path}")
+    @app.api_route("/v1/runs/{run_id}/files/{path:path}", methods=["GET", "HEAD"])
     def get_file(run_id: str, path: str):
         found = store.find(run_id)
         target = store.servable(found[1], path) if found else None
         if target is None:
             raise HTTPException(404, "not found")
-        ext = target.suffix.lower()
-        ctype = CONTENT_TYPES.get(ext) or mimetypes.guess_type(target.name)[0]
-        headers = {"X-Content-Type-Options": "nosniff"}
-        if ext == ".html":
-            headers["Content-Security-Policy"] = REPORT_CSP
-        return FileResponse(target, media_type=ctype, headers=headers)
+        return file_response(target)
 
     return app
 

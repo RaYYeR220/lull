@@ -24,9 +24,8 @@ import os
 import re
 import secrets
 import shutil
-import tempfile
 import time
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,6 +39,7 @@ from starlette.datastructures import FormData, UploadFile
 from starlette.types import Message
 
 from lull import media
+from lull.api.clean import Scrubber, default_roots
 from lull.api.ratelimit import RateLimiter
 from lull.api.settings import ApiSettings
 from lull.api.store import RunStore
@@ -127,39 +127,6 @@ def _wait_words(seconds: int) -> str:
         return f"{n} minute{'s' if n > 1 else ''}"
     n = math.ceil(seconds / 3600)
     return f"{n} hour{'s' if n > 1 else ''}"
-
-
-# -- keeping local paths out of what visitors see ----------------------------------------------
-
-# an absolute path not inside a URL; it is replaced by its last part
-_ABS_PATH = re.compile(
-    r"(?<![\w:/.\\-])(?:[A-Za-z]:[\\/]|/)(?:[^\s'\"\\/:]+[\\/])+(?P<name>[^\s'\"\\/:,;)]*)"
-)
-
-
-class Scrubber:
-    """Takes local paths and configured secrets out of text meant for visitors: the run
-    folder and other known roots are cut off (input/clip.mp4 stays), any other absolute path
-    shrinks to its file name."""
-
-    def __init__(self, run_dir: Path, roots: Iterable[Path]) -> None:
-        forms = set()
-        for root in (run_dir, *roots):
-            for form in (str(root), root.as_posix()):
-                form = form.rstrip("/\\")
-                if len(form) > 1:
-                    forms.add(form)
-        ordered = sorted(forms, key=len, reverse=True)
-        self._roots = re.compile("|".join(re.escape(f) + r"[\\/]?" for f in ordered), re.IGNORECASE)
-        s = get_settings()
-        keys = (s.nebius_api_key, s.tavily_api_key, s.lull_speech_key)
-        self._secrets = [k for k in keys if k and len(k) >= 8]
-
-    def __call__(self, text: str) -> str:
-        for secret in self._secrets:
-            text = text.replace(secret, "***")
-        text = self._roots.sub("", text)
-        return _ABS_PATH.sub(lambda m: m.group("name"), text)
 
 
 # -- the engine --------------------------------------------------------------------------------
@@ -425,13 +392,7 @@ class Live:
         self._ledger = value
 
     def scrubber(self, run_dir: Path) -> Scrubber:
-        roots = (
-            self.settings.lull_data.absolute(),
-            get_settings().lull_home.absolute(),
-            Path.home(),
-            Path(tempfile.gettempdir()),
-        )
-        return Scrubber(run_dir.absolute(), roots)
+        return Scrubber(run_dir.absolute(), default_roots(self.settings.lull_data))
 
     def check_budget(self, run_id: str, duration: float) -> None:
         try:
