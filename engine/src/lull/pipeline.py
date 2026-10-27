@@ -497,7 +497,8 @@ def run(
     Raises BudgetExceeded (cap or provider 402), OverlapError, and any stage's own errors,
     with the stages finished so far cached.
     """
-    video, run_dir = Path(video), Path(run_dir)
+    # absolute: the cache keeps audio paths, which must hold from any working directory
+    video, run_dir = Path(video), Path(run_dir).absolute()
     emit = _Emitter(on_event)
     t0 = time.monotonic()
     state: _Run | None = None

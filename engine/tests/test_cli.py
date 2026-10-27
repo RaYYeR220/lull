@@ -89,8 +89,12 @@ def test_describe_defaults_run_id_and_output_folder(
     assert r.exit_code == 0, r.output
     assert made == {"no_research": False}
     run_id = run_id_for(tone_slides, file_sha256(tone_slides))
-    assert (tmp_path / "runs" / run_id / "manifest.json").exists()
+    run_dir = tmp_path / "runs" / run_id
+    assert (run_dir / "manifest.json").exists()
     assert "voice 'Sofia' is not calibrated" in r.output
+    # cached audio paths are absolute: a rerun from another folder still finds them
+    entry = json.loads((run_dir / "stages" / "finalize" / "c001.json").read_text("utf-8"))
+    assert Path(entry["data"]["audio_path"]) == run_dir / "work" / "audio" / "c001.wav"
 
 
 def test_describe_stops_on_the_spend_cap(tone_slides, tmp_path, home, monkeypatch):
