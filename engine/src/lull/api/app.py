@@ -12,6 +12,8 @@ from lull.api.live import Live, LiveError, live_error_handler
 from lull.api.live import router as live_router
 from lull.api.settings import ApiSettings
 from lull.api.store import RunStore
+from lull.api.studio import Studio
+from lull.api.studio import router as studio_router
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +48,10 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     app.state.store = store
     app.state.health = Health()
     app.state.live = Live(settings, store)
+    app.state.studio = Studio(settings, store, app.state.live)
     app.add_exception_handler(LiveError, live_error_handler)
     app.include_router(live_router)
+    app.include_router(studio_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.origins,
@@ -75,6 +79,14 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     def get_file(run_id: str, path: str):
         found = store.find(run_id)
         target = store.servable(found[1], path) if found else None
+        if target is None:
+            raise HTTPException(404, "not found")
+        return file_response(target)
+
+    @app.api_route("/v1/runs/{run_id}/cues/{cue_id}/audio", methods=["GET", "HEAD"])
+    def get_cue_audio(run_id: str, cue_id: str):
+        found = store.find(run_id)
+        target = store.cue_audio(found[1], cue_id) if found else None
         if target is None:
             raise HTTPException(404, "not found")
         return file_response(target)

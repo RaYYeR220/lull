@@ -289,6 +289,21 @@ class RunStore:
 
     # -- files ----------------------------------------------------------------------------------
 
+    def cue_audio(self, d: Path, cue_id: str) -> Path | None:
+        """The .wav take cues.json names for `cue_id`: relative, inside the run folder."""
+        if not CUE_ID_RE.match(cue_id):
+            return None
+        doc = _dict(self.read_json(d / CUES))
+        for key in ("cues", "extended"):
+            items = doc.get(key)
+            for cue in items if isinstance(items, list) else []:
+                if isinstance(cue, dict) and cue.get("id") == cue_id:
+                    rel = cue.get("audio_path")
+                    if not safe_rel(rel) or not rel.lower().endswith(".wav"):
+                        return None
+                    return contained_file(d, rel)
+        return None
+
     def servable(self, d: Path, rel: str) -> Path | None:
         """Resolve rel to a file that is a manifest output or a keyframe image."""
         if not safe_rel(rel):

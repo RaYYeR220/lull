@@ -17,6 +17,8 @@ class ApiSettings(BaseSettings):
     lull_web_origins: str = Field(default="", validation_alias="LULL_WEB_ORIGINS")
     # trusted proxies in front of the app (Cloud Run: 1); 0 = use the socket peer address
     lull_proxy_hops: int = Field(default=0, ge=0, validation_alias="LULL_PROXY_HOPS")
+    # local only: lets the Studio change showcase runs (they are read-only when deployed)
+    lull_showcase_editable: bool = Field(default=False, validation_alias="LULL_SHOWCASE_EDITABLE")
 
     @property
     def origins(self) -> list[str]:
