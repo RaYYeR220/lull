@@ -62,3 +62,9 @@ def test_settings_env_override_and_cache(monkeypatch):
     assert get_settings().lull_cap_run == 0.25
     assert get_settings() is get_settings()
     get_settings.cache_clear()
+
+
+def test_settings_accept_field_names(monkeypatch):
+    monkeypatch.delenv("LULL_CAP_RUN", raising=False)
+    s = Settings(_env_file=None, lull_cap_run=1.25)
+    assert s.lull_cap_run == 1.25

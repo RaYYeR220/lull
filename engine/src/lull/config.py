@@ -10,7 +10,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime settings read from the environment. Secrets are optional at import time."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", case_sensitive=False, populate_by_name=True
+    )
 
     nebius_api_key: str | None = Field(default=None, validation_alias="NEBIUS_API_KEY")
     tavily_api_key: str | None = Field(default=None, validation_alias="TAVILY_API_KEY")
