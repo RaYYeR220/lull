@@ -112,6 +112,8 @@ class Cue(BaseModel):
     findings: list[dict] = Field(default_factory=list)  # lint findings, serialised
     note: str | None = None  # why the cue is held, or what finalisation changed
     checks: list[Check] = Field(default_factory=list)  # every verification round, in order
+    parts: dict[str, str] = Field(default_factory=dict)  # event id -> the words composed for it
+    described: list[str] | None = None  # events the final text still describes (None: all)
 
 
 class RunOptions(BaseModel):

@@ -12,6 +12,7 @@ from lull.stages.finalize import (
     assert_no_overlap,
     compress,
     count_ahead,
+    described_events,
     finalize_cue,
     introduce_names,
     names_in,
@@ -1088,3 +1089,40 @@ def test_lost_ahead_follows_the_look_ahead_sentence_words_that_are_its_own():
     assert not _lost_ahead(
         "A door opens. In a moment, a woman enters.", "A door opens. In a moment, she enters."
     )
+
+
+# -- fix round 1: which events a finished line still describes (I3) ---------------------------
+
+EV2 = VisualEvent(
+    id="e002", t_start=3.0, t_end=6.0, kind="action", text="A cat sleeps on the mat.",
+    verbatim_text=None, salience=4, said_in_dialogue=False,
+)  # fmt: skip
+
+
+def test_a_line_that_lost_an_events_sentence_no_longer_describes_it(tmp_path, video):
+    parts = {"e001": "A person opens a door.", "e002": "A cat sleeps on the mat."}
+    cue = _cue("A person opens a door. A cat sleeps on the mat.", event_ids=["e001", "e002"],
+               parts=parts)  # fmt: skip
+    tf = FakeTF(
+        verify=[
+            _claims(
+                ("a person opens a door", "supported"), ("a cat sleeps on the mat", "not_visible")
+            ),
+            _supported("a person opens a door"),
+        ],  # fmt: skip
+        remove=[{"text": "A person opens a door."}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=cue,
+               events={"e001": EV, "e002": EV2})  # fmt: skip
+    assert out.status == "verified" and out.event_ids == ["e001", "e002"]
+    assert out.described == ["e001"]
+
+
+def test_described_events_follow_their_own_words_through_rewrites():
+    parts = {"e1": "Two people walk.", "e2": "Two people jump over a fence."}
+    assert described_events(parts, "Two people walk, then jump over a fence.") == ["e1", "e2"]
+    assert described_events(parts, "Two people walk.") == ["e1"]  # shared words prove nothing
+    assert described_events(parts, "They jump the fence.") == ["e2"]
+    assert described_events({"e1": "A red door opens."}, "The door swings open.") == ["e1"]
+    assert described_events({}, "Anything.") is None  # no parts: nothing to judge
+    assert described_events(parts, "") == []

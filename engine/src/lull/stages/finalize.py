@@ -352,6 +352,28 @@ def _lost_ahead(before: str, after: str) -> bool:
     return False
 
 
+def described_events(parts: dict[str, str], text: str) -> list[str] | None:
+    """The events (keys of `parts`, in order) whose own words mostly survive in `text`: at
+    least half of the content words their composed sentence has and no other one has (all of
+    its words when it has none of its own). A one-event line describes its event while it
+    says anything. None without parts (nothing to judge: every event counts)."""
+    if not parts:
+        return None
+    if not text.strip():
+        return []
+    if len(parts) == 1:
+        return list(parts)
+    words = {eid: _content(t) for eid, t in parts.items()}
+    kept = _content(text)
+    out = []
+    for eid, mine in words.items():
+        others = set().union(*(w for k, w in words.items() if k != eid))
+        own = (mine - others) or mine
+        if not own or len(own & kept) * 2 >= len(own):
+            out.append(eid)
+    return out
+
+
 # -- one cue -------------------------------------------------------------------------------------
 
 
@@ -456,8 +478,15 @@ class _Finalise:
                 "findings": [f.model_dump(mode="json") for f in self.findings],
                 "note": self._note(reason, extra),
                 "checks": list(self.checks),
+                "described": self._described(),
             }
         )
+
+    def _described(self) -> list[str] | None:
+        parts = {i: self.cue.parts[i] for i in self.cue.event_ids if i in self.cue.parts}
+        if len(parts) != len(self.cue.event_ids):
+            return None  # composed elsewhere: the line is taken to describe all of them
+        return described_events(parts, self.text)
 
     def held(self, reason: str) -> Cue:
         """Held for a person; it keeps its placement, look-ahead included."""

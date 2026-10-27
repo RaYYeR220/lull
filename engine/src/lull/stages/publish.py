@@ -172,6 +172,12 @@ def _counted(e: VisualEvent) -> bool:
     return e.salience >= SALIENT and not said_already(e)
 
 
+def _says(c: Cue) -> list[str]:
+    """The events a cue's final text still describes (all of them for a cue finalised before
+    this was recorded)."""
+    return list(c.event_ids) if c.described is None else list(c.described)
+
+
 def _in(eid: str, described: set[str], duplicates: dict[str, str]) -> bool:
     """`eid` is described, itself or through the twin the plan kept for it."""
     return eid in described or duplicates.get(eid) in described
@@ -181,17 +187,18 @@ def coverage(
     cues: Sequence[Cue], extended: Sequence[Cue], events: Sequence[VisualEvent], *,
     extended_produced: bool, duplicates: dict[str, str] | None = None,
 ) -> dict:  # fmt: skip
-    """Salient events (salience >= 4) described by a voiced standard cue, and also counting
-    voiced extended cues when the extended version exists. Events the dialogue conveys (R21)
+    """Salient events (salience >= 4) described by a voiced standard cue (an event whose
+    sentence a rewrite cut does not count, see Cue.described), and also counting voiced
+    extended cues when the extended version exists. Events the dialogue conveys (R21)
     are not counted; an event the plan dropped as a near-duplicate (`duplicates`: dropped ->
     kept) is described when its twin is. Ratios are None without salient events."""
     dup = duplicates or {}
     ordered = sorted(events, key=lambda e: (e.t_start, e.id))
     salient = [e.id for e in ordered if _counted(e)]
-    std = {i for c in mixer.voiced(cues) for i in c.event_ids}
+    std = {i for c in mixer.voiced(cues) for i in _says(c)}
     ext = set()
     if extended_produced:
-        ext = {i for c in mixer.voiced_extended(extended) for i in c.event_ids}
+        ext = {i for c in mixer.voiced_extended(extended) for i in _says(c)}
     described = [i for i in salient if _in(i, std, dup)]
     with_ext = [i for i in salient if _in(i, std | ext, dup)]
 
@@ -219,7 +226,7 @@ def f113_flags(
     dup = duplicates or {}
     spoken = mixer.voiced(cues)
     used = {c.gap_id for c in spoken}
-    described = {i for c in spoken for i in c.event_ids}
+    described = {i for c in spoken for i in _says(c)}
     candidates = sorted(
         (e for e in events if _counted(e) and not _in(e.id, described, dup)),
         key=lambda e: (e.t_start, e.id),

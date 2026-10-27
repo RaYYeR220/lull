@@ -440,6 +440,7 @@ def compose_cues(
             claims=[],
             audio_path=None,
             audio_dur=None,
+            parts={e.id: text for e, text, _ in items},
         )
         for gid, items in groups.items()  # insertion order is gap order
     ]
@@ -468,6 +469,7 @@ def compose_cues(
                 claims=[],
                 audio_path=None,
                 audio_dur=None,
+                parts={e.id: _sentence(v.text)},
             )
         )
     return cues

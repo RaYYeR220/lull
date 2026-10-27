@@ -1113,3 +1113,17 @@ def test_a_backup_left_by_a_crash_is_put_back_before_the_next_publish(tmp_path):
     assert (run / "manifest.json").read_text(encoding="utf-8") == "old manifest"
     assert (run / "report.html").read_text(encoding="utf-8") == "new report"
     assert not (run / ".publish-old-x1").exists()
+
+
+def test_coverage_and_f113_count_only_the_events_a_line_still_describes():
+    """I3: a cue that lost e2's sentence describes e1 only; a free pause during e2 is F113."""
+    events = [_ev("e1", 1.0, 3.0, salience=5), _ev("e2", 1.5, 9.0, salience=4)]
+    cue = _cue("c001", 1.0, 1.5, ev=["e1", "e2"], described=["e1"])
+    cov = coverage([cue], [], events, extended_produced=False)
+    assert (cov["described"], cov["undescribed"]) == (1, ["e2"])
+    gaps = [_gap("g001", 1.0, 3.0), _gap("g002", 5.0, 8.0)]
+    assert [(f["gap_id"], f["event_ids"]) for f in f113_flags(gaps, [cue], events)] == [
+        ("g002", ["e2"])
+    ]
+    legacy = cue.model_copy(update={"described": None})  # a cue finalised before: all events
+    assert coverage([legacy], [], events, extended_produced=False)["described"] == 2
