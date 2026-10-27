@@ -8,6 +8,7 @@ from lull.stages import finalize as fin
 from lull.stages.finalize import (
     CueContext,
     OverlapError,
+    _lost_ahead,
     assert_no_overlap,
     compress,
     count_ahead,
@@ -1050,3 +1051,40 @@ def test_overlap_gate_needs_audio():
     cue = _done("c001", 2.0, 3.0).model_copy(update={"audio_dur": None})
     with pytest.raises(ValueError):
         assert_no_overlap([cue], [])
+
+
+# -- Task 13 minors ------------------------------------------------------------------------------
+
+
+def test_a_quote_inside_a_longer_word_of_a_cut_claim_is_still_demanded(tmp_path, video):
+    """Cutting "a person exits the building" does not cut the sign "EXIT": only a quote the
+    cut claims say as a whole word stops being demanded (R19)."""
+    ctx = CTX.model_copy(update={"verbatim": ["EXIT"]})
+    tf = FakeTF(
+        verify=[
+            _claims(
+                ('a sign reads "EXIT"', "supported"), ("a person exits the building", "not_visible")
+            ),
+            _supported('a sign reads "EXIT"'),
+        ],  # fmt: skip
+        remove=[{"text": "A sign above the door."}],
+        repair=[{"text": 'A sign above the door reads: "EXIT".'}],
+    )
+    cue = _cue('A sign above the door reads: "EXIT". A person exits the building.')
+    out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=cue, ctx=ctx)
+    assert tf.roles() == ["verify", "remove", "repair", "verify"]
+    assert out.status == "verified" and '"EXIT"' in out.text
+
+
+def test_lost_ahead_follows_the_look_ahead_sentence_words_that_are_its_own():
+    """A look-ahead merged into a longer unprefixed sentence is caught (most of its own words
+    survive there), and words it shares with other sentences prove nothing."""
+    merged = (
+        "A woman enters with a lamp while light floods the hall and dust drifts as the door opens."
+    )
+    assert _lost_ahead("A door opens. In a moment, a woman enters with a lamp.", merged)
+    assert not _lost_ahead("Two people walk. In a moment, two people jump.", "Two people walk.")
+    assert _lost_ahead("Two people walk. In a moment, two people jump.", "Two people jump.")
+    assert not _lost_ahead(
+        "A door opens. In a moment, a woman enters.", "A door opens. In a moment, she enters."
+    )

@@ -328,14 +328,26 @@ def dropped_sentences(before: str, after: str, claims: Iterable[Claim]) -> list[
 
 def _lost_ahead(before: str, after: str) -> bool:
     """True when a look-ahead sentence of `before` is still in `after` without its prefix: an
-    unprefixed sentence shares at least half its content words with it (Jaccard >= 0.5)."""
-    bodies = [b for b in map(_content, _ahead_sentences(before)) if b]
+    unprefixed sentence of `after` keeps at least half of that sentence's own content words
+    (those no other sentence of `before` has; all of them when it has none of its own), even
+    when the rewrite merged it into a longer sentence."""
+    spans = split_sentences(before)
+    masked_before = _masked(before)
+    words = [_content(before[s:e]) for s, e in spans]
+    bodies = []
+    for i, (s, e) in enumerate(spans):
+        if not _AHEAD_START.match(masked_before[s:e]):
+            continue
+        others = set().union(*(w for j, w in enumerate(words) if j != i))
+        own = (words[i] - others) or words[i]
+        if own:
+            bodies.append(own)
     masked = _masked(after)
     for s, e in split_sentences(after):
         if _AHEAD_START.match(masked[s:e]):
             continue
-        words = _content(after[s:e])
-        if words and any(len(words & b) / len(words | b) >= 0.5 for b in bodies):
+        kept = _content(after[s:e])
+        if kept and any(len(kept & b) * 2 >= len(b) for b in bodies):
             return True
     return False
 
@@ -561,7 +573,7 @@ class _Finalise:
         if count_ahead(new) < count_ahead(before) and _lost_ahead(before, new):
             return self.held('a claim cut dropped "In a moment, " from a sentence it kept')
         said = " ".join(c.text.lower() for c in bad)
-        self.keep = [k for k in self.keep if k.lower() not in said]  # cut quotes only
+        self.keep = [k for k in self.keep if not _occurs(said, k.lower())]  # cut quotes only
         return None
 
     def hold_unverified(self, reason: str, bad: list[Claim], *, cut_tried: bool = False) -> Cue:
