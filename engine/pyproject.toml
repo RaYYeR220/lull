@@ -25,6 +25,7 @@ packages = ["src/lull"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["live: hits the real Token Factory API (needs LULL_LIVE=1)"]
 
 [tool.ruff]
 line-length = 100
