@@ -34,6 +34,7 @@ CONTENT_TYPES = {
 }
 REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:"
 CORS_METHODS = ["GET", "HEAD", "OPTIONS", "POST", "PATCH"]
+CORS_HEADERS = ["Authorization", "Content-Type", "Last-Event-ID"]
 
 
 def file_response(target) -> FileResponse:
@@ -69,7 +70,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.origins,
         allow_methods=CORS_METHODS,
-        allow_headers=["*"],
+        allow_headers=CORS_HEADERS,
         expose_headers=["Retry-After"],
     )
 

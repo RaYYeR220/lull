@@ -48,6 +48,7 @@ from starlette.types import Message
 from lull import media
 from lull.api import clip
 from lull.api.clean import Scrubber, default_roots
+from lull.api.owner import TOKEN_KEY, new_token
 from lull.api.ratelimit import HOUR, RateLimiter
 from lull.api.settings import ApiSettings
 from lull.api.store import PENDING, RunStore
@@ -210,6 +211,7 @@ class Job:
 
 
 Runner = Callable[[Job, Callable[[Event], None]], object]
+AfterRun = Callable[[Job], "dict | None"]  # what it returns is added to the `done` event
 
 
 def _run_pipeline(job: Job, on_event: Callable[[Event], None]) -> None:
@@ -289,7 +291,7 @@ class LiveRun:
         if raw and not raw.endswith(b"\n"):  # end the line a stopped process cut short
             self._log.write(b"\n")
         self.closed = False
-        self.done = False
+        self.done: dict | None = None  # the engine's `done`, held until after_run has run
         self.stage: str | None = None  # the last stage started
         self.error_stage: str | None = None  # the stage the engine said it failed in
 
@@ -322,10 +324,10 @@ class LiveRun:
             self.stage = ev.stage
         elif ev.type == "warning":
             data = {k: self.scrub(v) if isinstance(v, str) else v for k, v in data.items()}
-        elif ev.type == "done":
-            self.done = True
+        elif ev.type == "done":  # published by the executor once after_run has run
             data = {k: v for k, v in data.items() if k not in ("output", "manifest")}
-            data["run_id"] = self.run_id
+            self.done = {**data, "run_id": self.run_id}
+            return
         self.publish(ev.type, ev.stage, data, ev.ts)
 
     def fail(self, e: BaseException) -> None:
@@ -379,6 +381,7 @@ class Executor:
         self.active: dict[str, LiveRun] = {}
         self.wall_clock = WALL_CLOCK_S
         self.changed = changed
+        self.after_run: list[AfterRun] = []  # in the worker thread, after a run that succeeded
         self._tasks: set[asyncio.Task] = set()
 
     def _changed(self, run_dir: Path) -> None:
@@ -422,9 +425,9 @@ class Executor:
             except RuntimeError:  # the loop is closed: shutting down
                 pass
 
-        work = loop.run_in_executor(None, runner, job, on_event)
+        work = loop.run_in_executor(None, self._work, runner, job, on_event)
         try:
-            await asyncio.wait_for(asyncio.shield(work), self.wall_clock)
+            extra = await asyncio.wait_for(asyncio.shield(work), self.wall_clock)
         except TimeoutError:
             job.stop.set()  # its next model call is refused; what it reports now is dropped
             work.add_done_callback(_late(job.run_id))
@@ -438,13 +441,23 @@ class Executor:
                 log.exception("live run %s failed in %s", job.run_id, run.error_stage or run.stage)
             run.fail(e)
         else:
-            if not run.done:
-                run.publish("done", None, {"run_id": run.run_id})
+            run.publish("done", None, {**(run.done or {"run_id": run.run_id}), **extra})
         finally:  # free before the listeners hear the end, so they may start the next run
             self.lock.release()
             self.active.pop(run.run_id, None)
             run.close()
             self._changed(job.run_dir)
+
+    def _work(self, runner: Runner, job: Job, on_event: Callable[[Event], None]) -> dict:
+        """The run, then the after_run hooks (one failing is logged, never fails the run)."""
+        runner(job, on_event)
+        extra: dict = {}
+        for hook in self.after_run:
+            try:
+                extra.update(hook(job) or {})
+            except Exception:
+                log.exception("live run %s: an after-run step failed", job.run_id)
+        return extra
 
 
 def _late(run_id: str) -> Callable[[asyncio.Future], None]:
@@ -689,10 +702,12 @@ def _sample(settings: ApiSettings, sample_id: str) -> Path | None:
     return path if path.is_file() else None
 
 
-async def _accept(live: Live, request: Request, run_id: str, run_dir: Path, client: str) -> Job:
+async def _accept(
+    live: Live, request: Request, run_id: str, run_dir: Path, client: str
+) -> tuple[Job, str]:
     """Receive the form (within the upload deadline: 408), put the video in run_dir/input,
-    probe and cut it, check the spend caps and write request.json. Raises LiveError; the
-    caller then removes run_dir."""
+    probe and cut it, check the spend caps and write request.json, which keeps the sha256 of
+    the edit token returned with the job. Raises LiveError; the caller then removes run_dir."""
     try:
         with anyio.fail_after(live.upload_deadline):
             opts, video, source = await _receive(live, request, run_dir)
@@ -700,6 +715,7 @@ async def _accept(live: Live, request: Request, run_id: str, run_dir: Path, clie
         raise upload_timeout(live.upload_deadline) from None
     info = await _cut(live, run_id, video)
     live.check_budget(run_id, info.duration)
+    token, token_hash = new_token()
     _write_json(
         run_dir / REQUEST,
         {
@@ -715,9 +731,10 @@ async def _accept(live: Live, request: Request, run_id: str, run_dir: Path, clie
                 "has_audio": info.has_audio,
             },
             "client": client[:16],
+            TOKEN_KEY: token_hash,
         },
     )
-    return Job(run_id, run_dir, video, opts, info.duration, live.ledger)
+    return Job(run_id, run_dir, video, opts, info.duration, live.ledger), token
 
 
 async def _receive(
@@ -783,10 +800,11 @@ async def _frames(
     run: LiveRun | None,
     q: asyncio.Queue[dict | None] | None,
     heartbeat: float,
+    secret: dict | None = None,
 ) -> AsyncIterator[str]:
     try:
-        for ev in backlog:
-            yield _frame(ev)
+        for i, ev in enumerate(backlog):
+            yield _frame({**ev, **secret} if secret and i == 0 and ev["type"] == "run" else ev)
         if q is None:
             return
         while True:
@@ -808,9 +826,10 @@ def _sse(
     run: LiveRun | None = None,
     q: asyncio.Queue[dict | None] | None = None,
     heartbeat: float = HEARTBEAT_S,
+    secret: dict | None = None,
 ) -> StreamingResponse:
     return StreamingResponse(
-        _frames(backlog, run, q, heartbeat),
+        _frames(backlog, run, q, heartbeat, secret),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
@@ -883,7 +902,7 @@ async def create_run(request: Request) -> StreamingResponse:
     live.upload_keys.add(key)
     try:
         try:
-            job = await _accept(live, request, run_id, run_dir, key)
+            job, token = await _accept(live, request, run_id, run_dir, key)
         except LiveError as e:
             if e.status in (400, 408, 413, 422):  # read, then refused: counts against them
                 live.refusals.hit(key)
@@ -902,7 +921,8 @@ async def create_run(request: Request) -> StreamingResponse:
         live.uploading -= 1
         live.upload_keys.discard(key)
     live.limiter.hit(key)
-    return _sse(backlog, run, q, live.heartbeat)
+    # the token goes to whoever started the run, in this stream only: never stored or replayed
+    return _sse(backlog, run, q, live.heartbeat, secret={"edit_token": token})
 
 
 @router.get("/v1/runs/{run_id}/events")

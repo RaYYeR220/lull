@@ -30,6 +30,9 @@ from pipeline_fakes import CUE_TEXT, FakeSpeech, FakeTF, description
 
 RID = "live-20261027-120000-abcdef"
 RID2 = "live-20261027-120500-123456"
+TOKEN = "owner-token-of-the-run-under-test"
+OWNER_HASH = hashlib.sha256(TOKEN.encode()).hexdigest()
+AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 
 # -- the run every test starts from -------------------------------------------------------------
@@ -90,6 +93,7 @@ def template(tone_slides, tmp_path_factory) -> Path:
                 "input": "input/clip.mp4",
                 "options": {"mode": "standard", "voice": "Sofia"},
                 "video": {"duration": 12.0},
+                "edit_token_sha256": OWNER_HASH,
             }
         )
     )
@@ -171,7 +175,8 @@ def fakes(app) -> Fakes:
 
 @pytest.fixture
 def sc(app):
-    with TestClient(app) as c:
+    """A client holding the run's edit token."""
+    with TestClient(app, headers=AUTH) as c:
         yield c
 
 
@@ -397,6 +402,7 @@ def test_unknown_cue_and_unknown_run(sc, rd):
 def test_a_run_that_has_not_finished_cannot_be_edited(sc, data):
     d = data / "runs" / RID
     (d / "input").mkdir(parents=True)
+    (d / "request.json").write_text(json.dumps({"edit_token_sha256": OWNER_HASH}))
     r = patch(sc, "c001", NEW_RED)
     assert r.status_code == 409 and r.json()["error"] == "not_ready"
     assert sc.post(f"/v1/runs/{RID}/publish").status_code == 409
@@ -542,12 +548,12 @@ def test_publish_refuses_a_voiced_cue_whose_audio_is_gone(sc, rd):
 # -- who may change what ------------------------------------------------------------------------
 
 
-def _all_writes(c, run_id=RID):
+def _all_writes(c, run_id=RID, headers=None):
     return [
-        c.patch(f"/v1/runs/{run_id}/cues/c001", json={"text": NEW_RED}),
-        c.post(f"/v1/runs/{run_id}/cues/c001/approve"),
-        c.post(f"/v1/runs/{run_id}/cues/c001/hold", json={"reason": "no"}),
-        c.post(f"/v1/runs/{run_id}/publish"),
+        c.patch(f"/v1/runs/{run_id}/cues/c001", json={"text": NEW_RED}, headers=headers),
+        c.post(f"/v1/runs/{run_id}/cues/c001/approve", headers=headers),
+        c.post(f"/v1/runs/{run_id}/cues/c001/hold", json={"reason": "no"}, headers=headers),
+        c.post(f"/v1/runs/{run_id}/publish", headers=headers),
     ]
 
 
@@ -618,7 +624,7 @@ def test_the_run_being_described_is_busy_others_are_not(sc, rd, app, template, d
 def _async_patch(app, *requests):
     async def go():
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+        async with httpx.AsyncClient(transport=transport, base_url="http://t", headers=AUTH) as c:
             return await asyncio.gather(
                 *(
                     c.patch(f"/v1/runs/{rid}/cues/{cid}", json={"text": t})
@@ -857,3 +863,239 @@ def test_the_sample_hash_is_computed_once_per_file_version(template, data, monke
     with pytest.raises(studio_mod.NotEditable):
         studio_mod.source_video(d, manifest, {}, data / "samples")
     assert len(calls) == 2
+
+
+# -- the owner's edit token -----------------------------------------------------------------------
+
+
+def test_studio_changes_need_the_owner_token(app, rd):
+    before = snapshot(rd)
+    with TestClient(app) as c:
+        for headers in (
+            {},
+            {"Authorization": "Bearer nope"},
+            {"Authorization": f"Bearer {TOKEN}x"},
+            {"Authorization": f"Basic {TOKEN}"},
+            {"Authorization": TOKEN},
+        ):
+            for r in _all_writes(c, headers=headers):
+                assert r.status_code == 403, r.text
+                assert r.json()["error"] == "forbidden"
+        assert snapshot(rd) == before
+        r = c.post(f"/v1/runs/{RID}/cues/c001/approve", headers=AUTH)
+        assert r.status_code == 200
+
+
+def test_a_live_run_without_a_token_hash_cannot_be_changed(sc, rd):
+    req = json.loads((rd / "request.json").read_text(encoding="utf-8"))
+    del req["edit_token_sha256"]
+    (rd / "request.json").write_text(json.dumps(req))
+    for r in _all_writes(sc):
+        assert r.status_code == 403 and r.json()["error"] == "forbidden"
+
+
+def test_approve_and_hold_count_against_the_edit_limit(sc, rd, app):
+    for _ in range(30):
+        assert sc.post(f"/v1/runs/{RID}/cues/c001/approve").status_code == 200
+    r = sc.post(f"/v1/runs/{RID}/cues/c001/approve")  # the 31st in a minute
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    assert 1 <= int(r.headers["retry-after"]) <= 60
+    app.state.studio.limiter = RateLimiter(per_client=1, client_window=60, per_day=100)
+    assert sc.post(f"/v1/runs/{RID}/cues/c002/hold").status_code == 200
+    r = sc.post(f"/v1/runs/{RID}/cues/c002/hold")
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+
+
+# -- forks -----------------------------------------------------------------------------------------
+
+
+def _strings(obj):
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from _strings(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from _strings(v)
+
+
+def _made_in(d: Path, old: Path) -> None:
+    """The stage records of a copied run pointed back at `d`, as if it had been made there."""
+    for p in (d / "stages").rglob("*.json"):
+        text = p.read_text(encoding="utf-8")
+        for a, b in ((str(old), str(d)), (old.as_posix(), d.as_posix())):
+            text = text.replace(json.dumps(a)[1:-1], json.dumps(b)[1:-1])
+        p.write_text(text, encoding="utf-8")
+
+
+def test_fork_a_showcase_run_into_an_editable_copy(make_app, template, data, fast_media):
+    import re
+
+    src = place(template, data / "showcase")
+    _made_in(src, template)
+    before = snapshot(src)
+    app = make_app()
+    fakes = app.state.studio.clients
+    with TestClient(app) as c:  # anyone may fork: no token
+        r = c.post(f"/v1/runs/{RID}/fork")
+        assert r.status_code == 201, r.text
+        new, token = r.json()["run_id"], r.json()["edit_token"]
+        assert re.fullmatch(r"live-\d{8}-\d{6}-[0-9a-f]{6}", new) and len(token) >= 40
+        assert fakes.tf == []  # no model call
+        d = data / "runs" / new
+        assert json.loads((d / "manifest.json").read_text(encoding="utf-8"))["run_id"] == new
+        assert cues_doc(d)["cues"] == cues_doc(src)["cues"]
+        assert not (d / "events.jsonl").exists() and not (d / ".pending").exists()
+        req = json.loads((d / "request.json").read_text(encoding="utf-8"))
+        assert req["edit_token_sha256"] == hashlib.sha256(token.encode()).hexdigest()
+        assert token not in json.dumps(req)
+        assert req["source"] == {"kind": "fork", "id": RID, "name": "clip.mp4"}
+        for p in (d / "stages").rglob("*.json"):  # no record points back into the source
+            for s in _strings(json.loads(p.read_text(encoding="utf-8"))):
+                assert str(src) not in s and src.as_posix() not in s, (p, s)
+        for p in (d / "stages" / "finalize").glob("*.json"):
+            audio = json.loads(p.read_text(encoding="utf-8"))["data"].get("audio_path")
+            if audio:
+                assert Path(audio).resolve().is_relative_to(d.resolve()) and Path(audio).is_file()
+        for c_ in cues_doc(d)["cues"]:
+            assert (d / c_["audio_path"]).is_file()
+
+        assert c.get(f"/v1/runs/{new}").status_code == 200
+        assert c.get(f"/v1/runs/{new}/files/descriptions.vtt").status_code == 200
+        assert c.post(f"/v1/runs/{new}/cues/c001/approve").status_code == 403
+        auth = {"Authorization": f"Bearer {token}"}
+        r = c.patch(f"/v1/runs/{new}/cues/c001", json={"text": NEW_RED}, headers=auth)
+        assert r.status_code == 200 and r.json()["status"] == "edited", r.text
+        calls = app.state.live.ledger.calls(new)
+        assert [(x.stage, x.role) for x in calls] == [("finalize", "verify")]
+        assert c.post(f"/v1/runs/{new}/publish", headers=auth).status_code == 200
+        assert NEW_RED in (d / "descriptions.vtt").read_text(encoding="utf-8")
+        assert c.post(f"/v1/runs/{RID}/cues/c001/approve", headers=auth).status_code == 403
+    assert snapshot(src) == before
+
+
+def test_fork_refusals(make_app, template, data, fast_media):
+    place(template, data / "showcase")
+    unfinished = data / "runs" / RID2
+    (unfinished / "input").mkdir(parents=True)
+    app = make_app()
+    with TestClient(app) as c:
+        assert c.post("/v1/runs/nope/fork").status_code == 404
+        r = c.post(f"/v1/runs/{RID2}/fork")
+        assert r.status_code == 409 and r.json()["error"] == "not_ready"
+        lim = app.state.studio.fork_limiter
+        assert (lim.per_client, lim.client_window) == (5, 3600.0)
+        app.state.studio.fork_limiter = RateLimiter(per_client=1, client_window=3600, per_day=99)
+        assert c.post(f"/v1/runs/{RID}/fork").status_code == 201
+        r = c.post(f"/v1/runs/{RID}/fork")
+        assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    assert len([p for p in (data / "runs").iterdir()]) == 2  # RID2 and the one fork
+
+
+# -- the edit overlay ------------------------------------------------------------------------------
+
+
+def overrides(d: Path) -> dict:
+    return json.loads((d / "studio.json").read_text(encoding="utf-8"))["overrides"]
+
+
+def test_changes_are_kept_as_overrides(sc, rd):
+    from lull.api.studio import text_hash
+
+    patch(sc, "c001", NEW_RED)
+    sc.post(f"/v1/runs/{RID}/cues/c002/approve")
+    o1, o2 = overrides(rd)["c001"], overrides(rd)["c002"]
+    assert o1["authored"] is True and o1["text"] == NEW_RED and o1["status"] == "edited"
+    assert o1["base"] == text_hash(CUE_TEXT["c001"])
+    assert o1["audio_path"].startswith("work/edits/") and o1["audio_dur"] > 0
+    assert o2["authored"] is False and o2["status"] == "approved"
+    assert o2["base"] == text_hash(CUE_TEXT["c002"])
+    patch(sc, "c002", "The screen turns blue.")
+    o2 = overrides(rd)["c002"]
+    assert o2["authored"] is True and o2["base"] == text_hash(CUE_TEXT["c002"])  # kept
+
+
+def test_a_cache_invalidation_and_rerun_keep_the_human_edit(sc, rd):
+    patch(sc, "c001", NEW_RED)
+    sc.post(f"/v1/runs/{RID}/cues/c002/approve")
+    for cue_id in ("c001", "c002"):  # the cached results are gone
+        (rd / "stages" / "finalize" / f"{cue_id}.json").unlink()
+    ledger = Ledger(rd / "rerun.db", cap_run=0, cap_day=0, cap_total=0)
+    tf = FakeTF(ledger)
+    run_engine(rd / "input" / "clip.mp4", rd, RunOptions(), tf=tf, speech=FakeSpeech(),
+               tavily=None, ledger=ledger, run_id=RID, wps=3.0)  # fmt: skip
+    assert "verify" in tf.roles()  # the engine finalised the plan's text again ...
+    assert cue_of(rd, "c001")["text"] == CUE_TEXT["c001"]  # ... and published it
+
+    r = sc.post(f"/v1/runs/{RID}/cues/x002/approve")  # the next Studio action puts edits back
+    assert r.status_code == 200
+    c1 = cue_of(rd, "c001")
+    assert c1["text"] == NEW_RED and c1["status"] == "edited"
+    assert (rd / c1["audio_path"]).is_file()
+    assert cue_of(rd, "c002")["status"] == "approved"
+    assert stage_entry(rd, "c001")["data"]["text"] == NEW_RED  # the cache holds it again
+    assert sc.get(f"/v1/runs/{RID}").json()["dirty"] is True
+    assert sc.post(f"/v1/runs/{RID}/publish").status_code == 200
+    assert NEW_RED in (rd / "descriptions.vtt").read_text(encoding="utf-8")
+
+
+def _last_event(text: str) -> dict:
+    data = [line[6:] for line in text.splitlines() if line.startswith("data: ")]
+    return json.loads(data[-1])
+
+
+def test_edits_are_put_back_after_an_engine_run_through_the_api(sc, rd, app, template):
+    from lull.pipeline import Event
+
+    patch(sc, "c001", NEW_RED)
+    engine_cues = (template / "cues.json").read_bytes()
+    engine_manifest = (template / "manifest.json").read_bytes()
+    (rd / "manifest.json").unlink()  # a rerun that stopped before publishing
+
+    def rerun(job, on_event):  # the engine publishes its own version again
+        (job.run_dir / "cues.json").write_bytes(engine_cues)
+        (job.run_dir / "manifest.json").write_bytes(engine_manifest)
+        on_event(Event("done", None, {"run_id": job.run_id, "summary": {}}, 1.0))
+
+    app.state.live.runner = rerun
+    done = _last_event(sc.get(f"/v1/runs/{RID}/events").text)
+    assert done["type"] == "done" and done["studio_edits"] == ["c001"]
+    assert cue_of(rd, "c001")["text"] == NEW_RED
+    assert json.loads((rd / "studio.json").read_text(encoding="utf-8"))["dirty"] is True
+
+
+def test_an_approval_of_text_the_engine_has_replaced_is_not_applied(sc, rd):
+    sc.post(f"/v1/runs/{RID}/cues/c002/approve")
+    doc = cues_doc(rd)
+    doc["cues"][1].update(text="The screen turns a deeper blue.", status="verified")
+    (rd / "cues.json").write_text(json.dumps(doc))  # a rerun wrote other words for c002
+    assert sc.post(f"/v1/runs/{RID}/cues/x002/hold").status_code == 200
+    assert cue_of(rd, "c002")["status"] == "verified"
+    assert cue_of(rd, "c002")["text"] == "The screen turns a deeper blue."
+    assert overrides(rd)["c002"]["status"] == "approved"  # kept, unused
+
+
+def test_a_held_edit_keeps_the_previous_voiced_take(sc, rd, fakes):
+    def not_visible(call):
+        text = description(call["messages"])
+        return {"claims": [{"text": text, "verdict": "not_visible", "at": 0.5}]}
+
+    assert patch(sc, "c001", NEW_RED).status_code == 200
+    take = rd / cue_of(rd, "c001")["audio_path"]
+    fakes.answers = {
+        "verify": not_visible,
+        "remove": lambda call: {"text": description(call["messages"])},
+    }
+    r = patch(sc, "c001", "A red curtain falls across the stage.")
+    assert r.status_code == 200 and r.json()["status"] == "held"
+    assert take.is_file()  # the good take stays on disk ...
+    prev = overrides(rd)["c001"]["previous"]  # ... recorded as the previous voiced version
+    assert prev["text"] == NEW_RED and prev["status"] == "edited"
+    assert (rd / prev["audio_path"]).resolve() == take.resolve()
+
+    fakes.answers = {}
+    r = patch(sc, "c001", "The plain red screen stays still.")
+    assert r.status_code == 200 and r.json()["status"] == "edited"
+    assert not take.exists()  # superseded by a new voiced take
+    assert "previous" not in overrides(rd)["c001"]

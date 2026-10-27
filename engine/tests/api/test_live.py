@@ -121,7 +121,9 @@ class Script:
 # -- helpers -----------------------------------------------------------------------------------
 
 
-def parse_sse(text: str) -> list[dict]:
+def parse_sse(text: str, *, keep_token: bool = False) -> list[dict]:
+    """The events of a stream; the edit token only the POST stream carries is dropped unless
+    `keep_token`, so a stream compares with what was stored."""
     out = []
     for block in text.replace("\r\n", "\n").split("\n\n"):
         lines = [x for x in block.split("\n") if x and not x.startswith(":")]
@@ -130,6 +132,8 @@ def parse_sse(text: str) -> list[dict]:
         fields = dict(x.split(": ", 1) for x in lines)
         ev = json.loads(fields["data"])
         assert fields["event"] == ev["type"] and int(fields["id"]) == ev["seq"]
+        if not keep_token:
+            ev.pop("edit_token", None)
         out.append(ev)
     return out
 
@@ -1050,3 +1054,51 @@ def test_every_refusal_frees_the_upload_slot(lc, live, how):
     live.max_bytes = 1000
     assert post(lc, content, name=name).status_code in (413, 422)
     assert live.uploading == 0 and not live.upload_keys
+
+
+# -- the edit token ------------------------------------------------------------------------------
+
+
+def test_post_gives_the_edit_token_to_the_poster_only(lc, live, data):
+    import hashlib
+
+    events = parse_sse(post(lc).text, keep_token=True)
+    token = events[0]["edit_token"]
+    assert isinstance(token, str) and len(token) >= 40
+    assert all("edit_token" not in e for e in events[1:])
+    (d,) = run_dirs(data)
+    stored = (d / "events.jsonl").read_text("utf-8")
+    assert token not in stored and "edit_token" not in stored
+    req = json.loads((d / "request.json").read_text("utf-8"))
+    assert req["edit_token_sha256"] == hashlib.sha256(token.encode()).hexdigest()
+    assert token not in json.dumps(req)
+    replay = parse_sse(lc.get(f"/v1/runs/{d.name}/events").text, keep_token=True)
+    assert all("edit_token" not in e for e in replay)
+    again = parse_sse(post(lc).text, keep_token=True)[0]["edit_token"]
+    assert again != token
+
+
+def test_a_resumed_run_hands_out_no_token(lc, live, data):
+    d = make_unfinished(data)
+    events = parse_sse(lc.get(f"/v1/runs/{d.name}/events").text, keep_token=True)
+    assert all("edit_token" not in e for e in events)
+
+
+def test_cors_allows_the_authorization_header_and_only_the_ones_in_use(lc):
+    def preflight(headers):
+        return lc.options(
+            "/v1/runs/r1/cues/c001",
+            headers={
+                "Origin": "http://web.test",
+                "Access-Control-Request-Method": "PATCH",
+                "Access-Control-Request-Headers": headers,
+            },
+        )
+
+    r = preflight("authorization, content-type, last-event-id")
+    assert r.status_code == 200
+    allowed = r.headers["access-control-allow-headers"].lower()
+    assert {"authorization", "content-type", "last-event-id"} <= {
+        h.strip() for h in allowed.split(",")
+    }
+    assert preflight("x-something-else").status_code == 400

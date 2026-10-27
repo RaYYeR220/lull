@@ -10,28 +10,42 @@ POST /v1/runs/{id}/cues/{cue_id}/approve   verified, edited or extended (a voice
 POST /v1/runs/{id}/cues/{cue_id}/hold {reason?}   any cue -> held, the reason in its note.
 POST /v1/runs/{id}/publish   the cues as they are now through assert_no_overlap and the engine's
     publish (mix included): a new manifest, or 409 with the offending cue ids and nothing written.
+POST /v1/runs/{id}/fork   a published run (showcase or live) copied into a new live run, no
+    model call: 201 {run_id, edit_token}. Anyone may fork; forks are rate limited.
 
-Showcase runs are read-only (403) unless LULL_SHOWCASE_EDITABLE=1. A run the live executor is
-describing right now is busy (409); other runs can be edited meanwhile. Changes to one run go
-one at a time (a per-run asyncio.Lock, waited on); edits are rate limited per visitor, and
-publishing has a limit of its own. Across all runs at most MAX_EDITS edits are re-checked and
-MAX_PUBLISHES runs published at once (503 + Retry-After past that: both keep the CPU busy).
-Publishing a run with no change since it was published does nothing and answers the run.
+Who may change a run. A live run takes changes only with its owner's edit token (Authorization:
+Bearer, lull.api.owner), 403 forbidden otherwise; showcase runs are read-only (403) unless
+LULL_SHOWCASE_EDITABLE=1. A run the live executor is describing right now is busy (409); other
+runs can be edited meanwhile. Changes to one run go one at a time (a per-run asyncio.Lock,
+waited on); edits, approvals and holds are rate limited per visitor, publishing and forking have
+limits of their own. Across all runs at most MAX_EDITS edits are re-checked and MAX_PUBLISHES
+runs published at once (503 + Retry-After past that: both keep the CPU busy). Publishing a run
+with no change since it was published does nothing and answers the run.
 
 Where edits live. cues.json is the Studio's working copy of a run's cues. Every change writes,
-in this order: studio.json {"dirty": true} (the run differs from what was published), cues.json
-(atomically; audio paths relative to the run folder, as publish writes them) and the cue's
-finalize stage record, stages/finalize/<cue id>.json, with its data replaced and its key kept.
-That key is the one of the cue as the plan composed it, so an engine rerun over the folder (a
-resume, or the CLI on the same output folder) takes the person's version from the cache instead
-of finalising the plan's text again; its audio path is absolute, as the engine keeps it.
-Publishing writes every output again from cues.json and sets dirty false.
+in this order: studio.json (dirty: the run differs from what was published; and the change as an
+override, below), cues.json (atomically; audio paths relative to the run folder, as publish
+writes them) and the cue's finalize stage record, stages/finalize/<cue id>.json, with its data
+replaced and its key kept, so a rerun over the folder with the cache intact takes the person's
+version without a model call. Publishing writes every output again from cues.json and sets dirty
+false; the overrides stay.
+
+The overlay. studio.json "overrides" keeps, per cue id, the person's last change: text, status,
+note, take and check results; `base`, the hash of the engine's text it was first made on;
+`authored`, whether the person wrote the text; the start it was made at; and for a held edit
+`previous`, the last voiced version (its take stays on disk). After any engine run over the
+folder (a resume through the API, before its `done` goes out; one outside the API, such as the
+CLI, the next time the Studio loads the run) the overrides go back on top of the engine's cues
+by these rules (apply_overlay): a cue id the engine no longer has leaves its override unused;
+text the person wrote wins, keeping the engine's timing; an approval or hold of the engine's own
+text holds only while that text is unchanged. Putting edits back marks the run dirty.
 
 An edit is finalised in a folder of its own, work/edits/<cue id>-<token>/, so the take the
 published mix used is never overwritten. A failed edit (an engine error, a spend cap) leaves
-the cue and its take as they were and removes only its own folder. A held edit is stored: the
-cue is held, with the reason in its note. The take a newer voiced edit replaces is removed. At
-startup, edit folders that neither cues.json nor studio.json refers to are swept away.
+the cue and its take as they were and removes only its own folder. A held edit is stored (the
+cue is held, the reason in its note) and keeps the take it would replace, as `previous`. A newer
+voiced edit removes the takes it supersedes. At startup, edit folders that neither cues.json
+nor studio.json refers to are swept away.
 
 The engine is reached only through the adapters below (load_context, check_text, edit_context,
 finalize_edit, republish), which rebuild what finalize and publish need from the run's stage
@@ -42,6 +56,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import hashlib
 import json
 import logging
 import os
@@ -56,15 +71,19 @@ from typing import Any, TypeVar
 
 import anyio
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
-from lull.api.live import Live, LiveError, budget_message, client_ip
-from lull.api.ratelimit import DAY, RateLimiter
+from lull.api.live import Live, LiveError, budget_message, client_ip, new_run_id
+from lull.api.owner import TOKEN_KEY, holds_token, new_token
+from lull.api.ratelimit import DAY, HOUR, RateLimiter
 from lull.api.settings import ApiSettings
 from lull.api.store import (
     CUE_ID_RE,
     CUES,
+    KEYFRAME_RE,
     MANIFEST,
+    PENDING,
     STUDIO,
     RunStore,
     contained_file,
@@ -104,12 +123,14 @@ PUBLISHES_PER_MIN = 4
 PUBLISHES_PER_DAY = 500
 MAX_EDITS, MAX_PUBLISHES = 2, 1  # re-checked / published at once, across all runs
 OVERLOADED_RETRY_S = 10
+FORKS_PER_HOUR, FORKS_PER_DAY = 5, 100  # each fork copies the run's media: keep them few
 MAX_TEXT = 1000
 MAX_REASON = 300
 MAX_BODY = 64 * 1024
 APPROVABLE = ("verified", "edited", "extended")
 REQUEST, WORK, EDITS = "request.json", "work", "edits"
-READ_ONLY = "Recorded runs are read-only. Describe a video of your own to edit its cues."
+READ_ONLY = "Recorded runs are read-only. Fork one to edit a copy of your own."
+FORBIDDEN = "Only the person who started this run can change it. Fork it to edit a copy."
 DESCRIBING = "This run is still being described. Try again once it has finished."
 NOT_READY = "This run has not been published yet, so there is nothing to edit."
 OVERLAP = (
@@ -330,17 +351,114 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def mark(run_dir: Path, *, dirty: bool) -> None:
+def mark(run_dir: Path, *, dirty: bool, overrides: dict[str, dict] | None = None) -> None:
+    """studio.json: dirty or just published, and the overrides, with `overrides` merged in."""
     prev = _dict(_read_json(run_dir / STUDIO))
     if dirty:
         changes = prev.get("changes") if isinstance(prev.get("changes"), int) else 0
-        state = {"dirty": True, "changes": changes + 1, "updated": _now()}
+        state: dict[str, Any] = {"dirty": True, "changes": changes + 1, "updated": _now()}
         if isinstance(prev.get("published"), str):
             state["published"] = prev["published"]
     else:
         now = _now()
         state = {"dirty": False, "changes": 0, "updated": now, "published": now}
+    merged = {**_dict(prev.get("overrides")), **(overrides or {})}
+    if merged:
+        state["overrides"] = merged
     _write_json(run_dir / STUDIO, state)
+
+
+# -- the overlay: the person's changes, put back over any engine rerun --------------------------
+
+OVERLAY_FIELDS = ("text", "status", "note", "claims", "findings", "audio_path", "audio_dur",
+                  "tempo", "end")  # fmt: skip
+STATUS_FIELDS = ("status", "note")  # what an approval or a hold changes
+
+
+def text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def overrides_of(run_dir: Path) -> dict[str, dict]:
+    raw = _dict(_dict(_read_json(run_dir / STUDIO)).get("overrides"))
+    return {k: v for k, v in raw.items() if isinstance(v, dict)}
+
+
+def _voiced(cue: Cue) -> bool:
+    return cue.audio_path is not None and bool(cue.audio_dur) and Path(cue.audio_path).is_file()
+
+
+def override(run_dir: Path, old: Cue, new: Cue, prior: dict | None, *, authored: bool) -> dict:
+    """The overlay entry for a change from `old` to `new`; `prior` is the cue's entry so far.
+    `base` is the hash of the engine's text the first change was made on. A held edit keeps
+    the last voiced version as `previous` (its take stays on disk)."""
+    prior = prior or {}
+    data = cue_json(new, run_dir)
+    entry: dict[str, Any] = {k: data[k] for k in OVERLAY_FIELDS}
+    entry.update(
+        base=prior.get("base") or text_hash(old.text),
+        authored=bool(authored or prior.get("authored")),
+        start=new.start,
+        updated=_now(),
+    )
+    if new.status == "held" and new.audio_path is None:  # a held edit: no take of its own
+        if _voiced(old):
+            before = cue_json(old, run_dir)
+            entry["previous"] = {k: before[k] for k in OVERLAY_FIELDS}
+        elif isinstance(prior.get("previous"), dict):
+            entry["previous"] = prior["previous"]
+    elif not _voiced(new) and isinstance(prior.get("previous"), dict):
+        entry["previous"] = prior["previous"]  # an approval or hold keeps it
+    return entry
+
+
+def apply_overlay(run_dir: Path, doc: CueDoc, overrides: dict[str, dict]) -> list[str]:
+    """Put the overrides back over `doc` (the engine's cues); returns the cue ids it changed.
+
+    Precedence, cue by cue:
+    1. a cue id the engine no longer has: its override waits in studio.json, unused;
+    2. text the person wrote (authored) wins over the engine's text for that id, with its take
+       and check results; the engine's timing (start, pause, visuals) stays, and when the start
+       moved the end follows it (publish's overlap gate then judges the take);
+    3. an approval or hold of the engine's own text holds only while the engine's text is the
+       one it was made on (base); otherwise it is not applied (kept, unused).
+    """
+    changed = []
+    for cue in doc.all():
+        o = overrides.get(cue.id)
+        if o is None:
+            continue
+        if o.get("authored"):
+            fields = {k: o[k] for k in OVERLAY_FIELDS if k in o}
+            dur = fields.get("audio_dur")
+            if o.get("start") != cue.start and isinstance(dur, int | float):
+                fields["end"] = cue.start + dur
+        elif o.get("base") == text_hash(cue.text):
+            fields = {k: o[k] for k in STATUS_FIELDS if k in o}
+        else:
+            continue
+        try:
+            new = _cue_in(run_dir, {**cue_json(cue, run_dir), **fields})
+        except ValidationError:
+            log.warning("studio: the override of %s does not load", cue.id)
+            continue
+        if new != cue:
+            doc.replace(new)
+            changed.append(cue.id)
+    return changed
+
+
+def reconcile(run_dir: Path) -> tuple[CueDoc | None, list[str]]:
+    """cues.json with the overlay put back (and stored, the run marked dirty, when that
+    changed anything): after an engine rerun, the person's changes are on top again."""
+    doc = load_cues(run_dir)
+    if doc is None:
+        return None, []
+    overrides = overrides_of(run_dir)
+    changed = apply_overlay(run_dir, doc, overrides) if overrides else []
+    if changed:
+        save_change(run_dir, doc, [c for c in doc.all() if c.id in changed])
+    return doc, changed
 
 
 def save_cues(run_dir: Path, doc: CueDoc) -> None:
@@ -360,8 +478,12 @@ def sync_stage(run_dir: Path, cue: Cue) -> None:
         store.save(name, entry["key"], cue.model_dump(mode="json"))
 
 
-def save_change(run_dir: Path, doc: CueDoc, changed: list[Cue]) -> None:
-    mark(run_dir, dirty=True)
+def save_change(
+    run_dir: Path, doc: CueDoc, changed: list[Cue], overrides: dict[str, dict] | None = None
+) -> None:
+    """studio.json (dirty, the overrides) first, then cues.json, then the stage records: a
+    crash in between leaves an overlay that the next load puts back."""
+    mark(run_dir, dirty=True, overrides=overrides)
     save_cues(run_dir, doc)
     for cue in changed:
         sync_stage(run_dir, cue)
@@ -476,25 +598,28 @@ def unvoiced(doc: CueDoc) -> list[str]:
     return out
 
 
-def _tidy(run_dir: Path, work: Path, old: Cue, new: Cue | None) -> None:
-    """Remove the edit's clip, the edit folder when no take came of it, and the previous
-    edit's take."""
+def _tidy(run_dir: Path, work: Path, old: Cue, new: Cue, previous: str | None = None) -> None:
+    """After a stored edit: remove its clip and its folder when no take came of it. A voiced
+    new take supersedes the old cue's take and the `previous` one (the last voiced version of
+    a held cue), so those edit folders go; a held edit keeps them (the overlay's previous).
+    Takes outside work/edits (the engine's own) are never removed."""
     shutil.rmtree(work / "verify", ignore_errors=True)
     edits = (run_dir / WORK / EDITS).resolve()
 
-    def edit_dir(cue: Cue | None) -> Path | None:
-        if cue is None or cue.audio_path is None:
+    def edit_dir(path: str | None) -> Path | None:
+        if path is None:
             return None
-        p = Path(cue.audio_path).resolve()
+        p = (Path(path) if Path(path).is_absolute() else run_dir / path).resolve()
         if not p.is_relative_to(edits) or p == edits:
             return None
         return edits / p.relative_to(edits).parts[0]
 
-    keep = edit_dir(new)
+    keep = edit_dir(new.audio_path)
     if keep is None or keep != work.resolve():
         shutil.rmtree(work, ignore_errors=True)
-    gone = edit_dir(old)
-    if gone is not None and gone != keep:
+    if keep is None:  # held: the takes it would replace stay
+        return
+    for gone in {edit_dir(old.audio_path), edit_dir(previous)} - {None, keep}:
         shutil.rmtree(gone, ignore_errors=True)
 
 
@@ -556,9 +681,13 @@ class Studio:
         self.clients: Clients = real_clients
         self.finalizer: Callable[[EditJob], Cue] = finalize_edit
         self.publisher: Callable[[RunContext, CueDoc, Ledger], Path] = republish
+        self.fork_limiter = RateLimiter(
+            per_client=FORKS_PER_HOUR, client_window=HOUR, per_day=FORKS_PER_DAY, day_window=DAY
+        )
         self.max_edits, self.max_publishes = MAX_EDITS, MAX_PUBLISHES
         self.editing = self.publishing = 0  # across all runs, now
         self._locks: dict[str, asyncio.Lock] = {}
+        live.executor.after_run.append(self.after_run)
 
     def sweep(self) -> int:
         return sweep_edits([self.settings.runs_dir, self.settings.showcase_dir])
@@ -566,15 +695,35 @@ class Studio:
     def lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())
 
-    def writable(self, run_id: str) -> Path:
+    def writable(self, run_id: str, request: Request) -> Path:
+        """The run folder, when the request may change it: a live run with its owner's edit
+        token (403 forbidden otherwise), a showcase run only where they are editable."""
         found = self.store.find(run_id)
         if found is None:
             raise LiveError(404, "not_found", "There is no run with that id.")
         kind, run_dir = found
-        if kind == "showcase" and not self.settings.lull_showcase_editable:
-            raise LiveError(403, "read_only", READ_ONLY)
+        if kind == "showcase":
+            if not self.settings.lull_showcase_editable:
+                raise LiveError(403, "read_only", READ_ONLY)
+        elif not holds_token(run_dir, request):
+            raise LiveError(403, "forbidden", FORBIDDEN)
         self.not_described(run_id)
         return run_dir
+
+    def after_run(self, job: Any) -> dict | None:
+        """After an engine run over a folder the Studio changed: the overlay put back (in the
+        live executor's worker thread, before the run's `done` goes out)."""
+        if not overrides_of(job.run_dir):
+            return None
+        try:
+            _, changed = reconcile(job.run_dir)
+        except NotEditable:
+            log.warning("studio: %s: the cues do not load after the run", job.run_id)
+            return None
+        if not changed:
+            return None
+        self.store.invalidate(job.run_dir)
+        return {"studio_edits": changed}
 
     def not_described(self, run_id: str) -> None:
         if self.live.executor.get(run_id) is not None:
@@ -601,15 +750,19 @@ class Studio:
         except BudgetExceeded as e:
             raise LiveError(402, "budget", budget_message(e.scope), scope=e.scope) from None
 
-    def doc(self, run_dir: Path) -> CueDoc:
+    async def load(self, run_dir: Path) -> CueDoc:
+        """The run's cues with the overlay put back (an engine rerun since the last change,
+        through the CLI say, is reconciled here)."""
         if not (run_dir / MANIFEST).is_file():
             raise LiveError(409, "not_ready", NOT_READY)
         try:
-            doc = load_cues(run_dir)
+            doc, changed = await anyio.to_thread.run_sync(reconcile, run_dir)
         except NotEditable as e:
             raise not_editable(e) from None
         if doc is None:
             raise LiveError(409, "not_ready", NOT_READY)
+        if changed:
+            self.store.invalidate(run_dir)
         return doc
 
     async def context(self, run_dir: Path) -> RunContext:
@@ -618,9 +771,13 @@ class Studio:
         except NotEditable as e:
             raise not_editable(e) from None
 
-    async def save(self, run_dir: Path, doc: CueDoc, changed: list[Cue]) -> None:
+    async def save(self, run_dir: Path, doc: CueDoc, old: Cue, new: Cue, *, authored: bool) -> None:
+        """One cue changed from `old` to `new`: the overlay entry, cues.json, its stage record."""
+        prior = overrides_of(run_dir).get(new.id)
+        entry = override(run_dir, old, new, prior, authored=authored)
+        doc.replace(new)
         try:
-            await anyio.to_thread.run_sync(save_change, run_dir, doc, changed)
+            await anyio.to_thread.run_sync(save_change, run_dir, doc, [new], {new.id: entry})
         finally:
             self.store.invalidate(run_dir)
 
@@ -686,7 +843,7 @@ router = APIRouter()
 @router.patch("/v1/runs/{run_id}/cues/{cue_id}")
 async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
     studio = _studio(request)
-    run_dir = studio.writable(run_id)
+    run_dir = studio.writable(run_id, request)
     if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
     studio.check_rate(request)
@@ -698,7 +855,7 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
 
     async with studio.lock(run_id):
         studio.not_described(run_id)
-        doc = studio.doc(run_dir)
+        doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
         rc = await studio.context(run_dir)
         try:
@@ -738,21 +895,22 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
             studio.editing -= 1
         if done.status != "held":
             done = done.model_copy(update={"status": "edited"})
-        doc.replace(done)
-        await studio.save(run_dir, doc, [done])
-        await anyio.to_thread.run_sync(_tidy, run_dir, work, cue, done)
+        previous = _dict(_dict(overrides_of(run_dir).get(cue.id)).get("previous"))
+        await studio.save(run_dir, doc, cue, done, authored=True)
+        await anyio.to_thread.run_sync(_tidy, run_dir, work, cue, done, previous.get("audio_path"))
     return _view(run_dir, done)
 
 
 @router.post("/v1/runs/{run_id}/cues/{cue_id}/approve")
 async def approve_cue(run_id: str, cue_id: str, request: Request) -> dict:
     studio = _studio(request)
-    run_dir = studio.writable(run_id)
+    run_dir = studio.writable(run_id, request)
     if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
+    studio.check_rate(request)
     async with studio.lock(run_id):
         studio.not_described(run_id)
-        doc = studio.doc(run_dir)
+        doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
         if cue.status == "approved":
             return _view(run_dir, cue)
@@ -764,16 +922,15 @@ async def approve_cue(run_id: str, cue_id: str, request: Request) -> dict:
                 f"A {cue.status} cue cannot be approved. Edit it so it is checked again.",
                 cue_status=cue.status,
             )
-        cue = cue.model_copy(update={"status": "approved"})
-        doc.replace(cue)
-        await studio.save(run_dir, doc, [cue])
-    return _view(run_dir, cue)
+        new = cue.model_copy(update={"status": "approved"})
+        await studio.save(run_dir, doc, cue, new, authored=False)
+    return _view(run_dir, new)
 
 
 @router.post("/v1/runs/{run_id}/cues/{cue_id}/hold")
 async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
     studio = _studio(request)
-    run_dir = studio.writable(run_id)
+    run_dir = studio.writable(run_id, request)
     if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
     reason = (await _body(request)).get("reason")
@@ -782,9 +939,10 @@ async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
     reason = " ".join((reason or "").split())
     if len(reason) > MAX_REASON:
         raise LiveError(422, "invalid", f"A reason takes at most {MAX_REASON} characters.")
+    studio.check_rate(request)
     async with studio.lock(run_id):
         studio.not_described(run_id)
-        doc = studio.doc(run_dir)
+        doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
         if reason:
             note = f"held by a reviewer: {reason}"
@@ -792,19 +950,18 @@ async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
             note = cue.note  # already held: its reason stays
         else:
             note = "held by a reviewer"
-        cue = cue.model_copy(update={"status": "held", "note": note})
-        doc.replace(cue)
-        await studio.save(run_dir, doc, [cue])
-    return _view(run_dir, cue)
+        new = cue.model_copy(update={"status": "held", "note": note})
+        await studio.save(run_dir, doc, cue, new, authored=False)
+    return _view(run_dir, new)
 
 
 @router.post("/v1/runs/{run_id}/publish")
 async def publish_run(run_id: str, request: Request) -> dict:
     studio = _studio(request)
-    run_dir = studio.writable(run_id)
+    run_dir = studio.writable(run_id, request)
     async with studio.lock(run_id):
         studio.not_described(run_id)
-        doc = studio.doc(run_dir)
+        doc = await studio.load(run_dir)
         if not studio.store.dirty(run_dir):  # nothing changed since it was published
             return _detail(studio, run_dir)
         studio.check_rate(request, studio.publish_limiter)
@@ -841,3 +998,132 @@ def _detail(studio: Studio, run_dir: Path) -> dict:
     if detail is None:  # pragma: no cover - the run has a manifest (doc() checked)
         raise LiveError(500, "publish_failed", "Publishing wrote no manifest.")
     return detail
+
+
+# -- forks --------------------------------------------------------------------------------------
+
+
+def _copy(src: Path, dst: Path) -> None:
+    """A real copy, never a hard link: publishing the fork rewrites its outputs in place, and
+    a link would rewrite the source run's with them."""
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dst)
+
+
+def _rebase(obj: Any, src: Path, dst: Path) -> Any:
+    """`obj` (JSON data) with every absolute path into `src` pointed at the same place in
+    `dst`."""
+    if isinstance(obj, str):
+        p = Path(obj)
+        if not p.is_absolute():
+            return obj
+        try:
+            return str(dst / p.resolve().relative_to(src.resolve()))
+        except (ValueError, OSError):
+            return obj
+    if isinstance(obj, dict):
+        return {k: _rebase(v, src, dst) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_rebase(v, src, dst) for v in obj]
+    return obj
+
+
+def fork_run(src: Path, dst: Path, *, run_id: str, token_hash: str, client: str) -> None:
+    """Copy what the Studio and a new publish need from the published run `src` into the new
+    live run folder `dst`, left out of the run list until it is complete: the manifest and
+    cues.json (under the new run id), studio.json, the outputs and keyframes, the stage
+    records (absolute paths into `src` pointed at `dst`), the takes the cues and the overlay
+    use, and the source video when the run keeps it (a recorded run's is found among the
+    samples). Not events.jsonl: the fork's history starts with it. No model is called."""
+    dst.mkdir(parents=True)
+    (dst / PENDING).touch()
+    manifest = _dict(_read_json(src / MANIFEST))
+    request = _dict(_read_json(src / REQUEST))
+
+    copied: set[str] = set()
+
+    def copy(rel: Any) -> bool:
+        if rel in copied:
+            return True
+        found = contained_file(src, rel) if safe_rel(rel) else None
+        if found is not None:
+            _copy(found, dst / rel)
+            copied.add(rel)
+        return found is not None
+
+    for rel in _dict(manifest.get("outputs")):
+        if rel not in (CUES, MANIFEST):
+            copy(rel)
+    for p in sorted((src / "keyframes").glob("*.jpg")):
+        if KEYFRAME_RE.fullmatch(p.name):
+            copy(f"keyframes/{p.name}")
+    takes = _audio_paths(_read_json(src / CUES)) + _audio_paths(_read_json(src / STUDIO))
+    for rel in dict.fromkeys(takes):
+        copy(rel)
+    name = _dict(manifest.get("video")).get("name")
+    video = next(
+        (r for r in (request.get("input"), f"input/{name}" if isinstance(name, str) else None)
+         if r is not None and copy(r)),
+        None,
+    )  # fmt: skip
+    for p in sorted((src / "stages").rglob("*.json")):
+        data = _read_json(p)
+        if data is not None:
+            out = dst / p.relative_to(src)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            _write_json(out, _rebase(data, src, dst))
+    cues = _read_json(src / CUES)
+    if isinstance(cues, dict):
+        _write_json(dst / CUES, {**cues, "run_id": run_id} if "run_id" in cues else cues)
+    if (src / STUDIO).is_file():
+        _copy(src / STUDIO, dst / STUDIO)
+    options = request.get("options") if isinstance(request.get("options"), dict) else None
+    options = options or _dict(manifest.get("options"))
+    duration = _dict(manifest.get("video")).get("duration")
+    _write_json(
+        dst / REQUEST,
+        {
+            "run_id": run_id,
+            "created": _now(),
+            "source": {"kind": "fork", "id": src.name, "name": name},
+            **({"input": video} if video else {}),
+            "options": {k: options[k] for k in ("mode", "voice") if k in options},
+            "video": {"duration": duration},
+            "client": client,
+            TOKEN_KEY: token_hash,
+        },
+    )
+    _write_json(dst / MANIFEST, {**manifest, "run_id": run_id})  # last: then it is a run
+    (dst / PENDING).unlink()
+
+
+@router.post("/v1/runs/{run_id}/fork")
+async def fork(run_id: str, request: Request) -> JSONResponse:
+    """A published run (showcase or live) copied into a new live run that the caller owns:
+    {run_id, edit_token}. Anyone may fork; no model is called."""
+    studio = _studio(request)
+    found = studio.store.find(run_id)
+    if found is None:
+        raise LiveError(404, "not_found", "There is no run with that id.")
+    src = found[1]
+    studio.not_described(run_id)
+    if not (src / MANIFEST).is_file():
+        raise LiveError(409, "not_ready", NOT_READY)
+    studio.check_rate(request, studio.fork_limiter)
+    studio.check_rate(request)
+    new_id, (token, token_hash) = new_run_id(), new_token()
+    client = studio.limiter.client_key(client_ip(request, studio.settings.lull_proxy_hops))
+    dst = studio.settings.runs_dir / new_id
+    async with studio.lock(run_id):  # the source holds still while it is copied
+        try:
+            await anyio.to_thread.run_sync(
+                functools.partial(
+                    fork_run, src, dst, run_id=new_id, token_hash=token_hash, client=client[:16]
+                )
+            )
+        except Exception:
+            log.exception("studio: forking %s failed", run_id)
+            await anyio.to_thread.run_sync(lambda: shutil.rmtree(dst, ignore_errors=True))
+            raise LiveError(500, "fork_failed", "The run could not be copied.") from None
+    studio.store.invalidate()
+    return JSONResponse({"run_id": new_id, "edit_token": token}, status_code=201)
