@@ -31,9 +31,10 @@ EDIT_MAX_TOKENS = 800
 EDIT_TEMPERATURE = 0.2
 EDIT_ESTIMATE = 0.0005
 VERDICTS = ("supported", "not_visible", "contradicted")
+UNSPECIFIED = "(unspecified claim)"  # stands in for a failed claim the verifier gave no text
 
 _CLAIM_PROPS: dict = {
-    "text": {"type": "string"},
+    "text": {"type": "string", "minLength": 1},
     "verdict": {"type": "string", "enum": list(VERDICTS)},
     "at": {"anyOf": [{"type": "number"}, {"type": "null"}]},
 }
@@ -99,23 +100,27 @@ def tagged(tag: str, lines: Iterable[str]) -> str:
 def parse_claims(out: object, *, offset: float = 0.0) -> list[Claim]:
     """Claims from one verifier answer, `at` moved from clip time to video time.
 
-    A claim without text is dropped; an unknown verdict counts as not visible (never as
-    supported); a missing or non-numeric time becomes None. An answer without a `claims` list,
-    or whose claims all lack text, raises ValueError: a broken answer never passes a cue.
+    An unknown verdict counts as not visible (never as supported). A claim without text is
+    dropped only when it is supported; otherwise it stays as UNSPECIFIED, so a failed check is
+    never lost. A missing or non-numeric time becomes None. An answer without a `claims` list,
+    or whose claims all end up dropped, raises ValueError: a broken answer never passes a cue.
     """
     raw = out.get("claims") if isinstance(out, dict) else None
     if not isinstance(raw, list):
         raise ValueError("verify: model answer has no 'claims' list")
     claims: list[Claim] = []
     for n, item in enumerate(raw):
-        text = item.get("text") if isinstance(item, dict) else None
-        if not isinstance(text, str) or not text.strip():
-            log.warning("verify: dropped claim %d without text", n)
-            continue
+        item = item if isinstance(item, dict) else {}
         verdict = item.get("verdict")
         if verdict not in VERDICTS:
             log.warning("verify: claim %d has verdict %r, counted as not visible", n, verdict)
             verdict = "not_visible"
+        text = item.get("text")
+        if not isinstance(text, str) or not text.strip():
+            if verdict == "supported":
+                log.warning("verify: dropped supported claim %d without text", n)
+                continue
+            text = UNSPECIFIED
         at = item.get("at")
         ok = isinstance(at, int | float) and not isinstance(at, bool) and math.isfinite(at)
         claims.append(
@@ -126,7 +131,7 @@ def parse_claims(out: object, *, offset: float = 0.0) -> list[Claim]:
             )
         )
     if raw and not claims:
-        raise ValueError(f"verify: none of the {len(raw)} claims has text")
+        raise ValueError(f"verify: all {len(raw)} claims were supported claims without text")
     return claims
 
 

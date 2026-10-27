@@ -1,6 +1,6 @@
 """Publish: the files an institution ships, written only when the overlap gate passes.
 
-descriptions.vtt      voiced standard cues (verified or edited), cue end = start + audio length
+descriptions.vtt      voiced standard cues (verified, edited or approved), end = start + audio
 extended.vtt          voiced extended cues, each after a `NOTE extended pause=<seconds>` line
 described-audio.m4a   the programme ducked under the descriptions (see lull.stages.mix)
 described.mp4         video + "Described" track 1 + "Original" track 2
@@ -54,7 +54,8 @@ MANIFEST = "manifest.json"
 KEYFRAMES = "keyframes"
 F113_KINDS = ("on_screen_text", "scene_change", "slide", "chart")
 F113_MIN_PAUSE = 2.0  # seconds of usable pause
-REVIEWED = ("edited",)  # statuses a person has signed off (the Studio's approval adds to this)
+REVIEWED = ("edited", "approved")  # statuses a person has signed off
+STATUSES = ("verified", "edited", "approved", "held", "extended")  # counted in the summary
 TTS_NAME = "NVIDIA Magpie TTS"
 MET, REVIEW, NOT_CLAIMED = "met", "needs review", "not claimed"
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -94,8 +95,8 @@ def _vtt_cue(c: Cue) -> str:
 
 
 def to_vtt(cues: Iterable[Cue], *, language: str = "en") -> str:
-    """The standard description track: voiced (verified or edited) standard cues in time
-    order; held and extended cues are left out. No cue gives a header-only file."""
+    """The standard description track: voiced (verified, edited or approved) standard cues in
+    time order; held and extended cues are left out. No cue gives a header-only file."""
     return "\n".join([_vtt_header(language), *(_vtt_cue(c) for c in mixer.voiced(cues))])
 
 
@@ -419,7 +420,7 @@ def publish(
         if f.get("severity") == "warning"
     ]
     summary = {
-        "cues": {s: counts.get(s, 0) for s in ("verified", "edited", "held", "extended")},
+        "cues": {s: counts.get(s, 0) for s in STATUSES},
         "coverage": cov,
         "overlap_seconds": overlap["total_s"],
         "held": [{"id": c.id, "reason": c.note} for c in held],

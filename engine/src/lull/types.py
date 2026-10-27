@@ -95,7 +95,7 @@ class Cue(BaseModel):
     end: float | None
     text: str
     event_ids: list[str]
-    status: Literal["verified", "held", "edited", "extended"]
+    status: Literal["verified", "held", "edited", "extended", "approved"]
     ahead: bool
     claims: list[Claim]
     audio_path: str | None

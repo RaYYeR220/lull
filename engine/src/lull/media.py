@@ -126,6 +126,14 @@ def cut_clip(src: Path, dst: Path, start: float, end: float, *, height: int = 48
     return dst
 
 
+def atempo(src: Path, dst: Path, factor: float) -> Path:
+    """Audio `src` played `factor` times faster, pitch kept (ffmpeg atempo, 0.5..100)."""
+    if not 0.5 <= factor <= 100.0:
+        raise MediaError(f"atempo factor {factor} outside 0.5..100")
+    _ffmpeg("-i", str(src), "-filter:a", f"atempo={factor:.3f}", str(dst))
+    return dst
+
+
 def frame_at(src: Path, t: float, dst: Path) -> Path:
     _ffmpeg("-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1", "-q:v", "2", str(dst))
     if not dst.exists():

@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lull.media import MediaError, _ffmpeg, audio_duration
+from lull import media
+from lull.media import MediaError, audio_duration
 from lull.speech import SpeechClient
 
 MAX_TEMPO = 1.10  # faster than this sounds rushed
@@ -29,5 +30,4 @@ def atempo(src: Path, dst: Path, factor: float) -> Path:
     """`src` played `factor` times faster (pitch kept) into `dst`; 1.0 <= factor <= 1.10."""
     if not 1.0 <= factor <= MAX_TEMPO:
         raise ValueError(f"tempo factor {factor} outside 1.0..{MAX_TEMPO}")
-    _ffmpeg("-i", str(src), "-filter:a", f"atempo={factor:.3f}", str(dst))
-    return Path(dst)
+    return media.atempo(Path(src), Path(dst), factor)

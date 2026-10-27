@@ -45,8 +45,8 @@ FRAME_SAMPLES = 256  # the duck gain is evaluated per frame: 5.3 ms steps along 
 SILENT_LUFS = -70.0  # a mix quieter than this is silence: nothing to normalise
 AUDIO_BITRATE = "192k"
 MIN_SEGMENT = 0.1  # extended pauses closer than this to each other or to an edge are merged
-STANDARD_VOICED = ("verified", "edited")
-EXTENDED_VOICED = ("extended", "edited")
+STANDARD_VOICED = ("verified", "edited", "approved")
+EXTENDED_VOICED = ("extended", "edited", "approved")
 MP4_VIDEO = frozenset({"h264", "hevc", "av1", "mpeg4", "vp9"})
 MP4_AUDIO = frozenset({"aac", "mp3", "ac3", "eac3", "alac"})
 TTS_TAG = "Audio description voiced with synthetic speech (NVIDIA Magpie TTS)."
@@ -79,8 +79,8 @@ def _with_audio(c: Cue) -> Cue:
 
 
 def voiced(cues: Iterable[Cue]) -> list[Cue]:
-    """Standard cues that are voiced: verified or edited, with a gap, in time order. Held cues
-    are left out; a voiced status without measured audio is an error."""
+    """Standard cues that are voiced: verified, edited or approved, with a gap, in time order.
+    Held cues are left out; a voiced status without measured audio is an error."""
     out = [_with_audio(c) for c in cues if c.gap_id is not None and c.status in STANDARD_VOICED]
     return sorted(out, key=lambda c: (c.start, c.id))
 

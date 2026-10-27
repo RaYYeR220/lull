@@ -106,6 +106,18 @@ def test_to_vtt_only_voiced_standard_cues():
     assert "c002" not in out and "x001" not in out
 
 
+def test_approved_cues_are_published_and_count_as_reviewed():
+    cues = [
+        _cue("c001", 1.2, 2.9, status="approved", text="Approved line."),
+        _cue("x001", 9.0, 2.0, gap=None, status="approved", text="Approved extended line."),
+    ]
+    assert "Approved line." in to_vtt(cues)
+    assert "Approved extended line." not in to_vtt(cues)
+    assert [c.id for c in mixer.voiced(cues)] == ["c001"]
+    assert [c.id for c in mixer.voiced_extended(cues)] == ["x001"]
+    assert tts_disclosure(cues).endswith("every line was reviewed before publishing.")
+
+
 def test_to_vtt_without_cues_is_header_only():
     assert to_vtt([]) == "WEBVTT\nKind: descriptions\nLanguage: en\n"
     held = [_cue("c001", 1.0, None, status="held")]
@@ -373,7 +385,9 @@ def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
     manifest = json.loads(res.manifest.read_text(encoding="utf-8"))
     rows = {r["criterion"]: r["status"] for r in manifest["summary"]["wcag"]}
     assert rows == {"1.2.3": "needs review", "1.2.5": "needs review", "1.2.7": "not claimed"}
-    assert manifest["summary"]["cues"] == {"verified": 0, "edited": 0, "held": 1, "extended": 0}
+    assert manifest["summary"]["cues"] == {
+        "verified": 0, "edited": 0, "approved": 0, "held": 1, "extended": 0,
+    }  # fmt: skip
     assert manifest["summary"]["held"] == [{"id": "x001", "reason": "not verified"}]
     html = (run / "report.html").read_text(encoding="utf-8")
     assert "extended version not produced" in html
@@ -418,7 +432,7 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     for name, meta in m["outputs"].items():
         assert meta == {"sha256": _sha(run / name), "bytes": (run / name).stat().st_size}
     s = m["summary"]
-    assert s["cues"] == {"verified": 1, "edited": 0, "held": 1, "extended": 0}
+    assert s["cues"] == {"verified": 1, "edited": 0, "approved": 0, "held": 1, "extended": 0}
     assert s["coverage"]["described"] == 1 and s["coverage"]["salient_events"] == 2
     assert s["overlap_seconds"] == 0.0
     assert [f["gap_id"] for f in s["f113"]] == ["g002"]
