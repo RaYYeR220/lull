@@ -447,6 +447,12 @@ def frame_rate(info: Probe) -> Fraction:
     return Fraction(info.fps).limit_denominator(1001)
 
 
+def speech_free(t: float, speech: Sequence[Span]) -> float:
+    """Where an extended pause for a visual at `t` can start: `t`, or when `t` falls inside
+    speech the start of that speech (its end when the speech opens the programme)."""
+    return _speech_free(t, merge_spans(list(speech)))
+
+
 def _speech_free(t: float, talk: Sequence[Span]) -> float:
     """`t`, or when it falls inside speech the start of that speech (the end when the speech
     starts the programme): the latest instant at or before t where nobody is speaking."""

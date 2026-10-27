@@ -36,9 +36,9 @@ def test_reference_paragraph_is_forty_plain_words():
 
 def test_defaults_without_a_calibration_file(tmp_path):
     path = tmp_path / "voices.json"
-    assert voice_wps("Sofia", path) == (2.36, "default")
-    assert voice_wps("Aria", path) == (2.06, "default")
-    assert voice_wps("Leo", path) == (2.06, "fallback")  # unknown voice: the slowest known rate
+    assert voice_wps("Sofia", path) == (3.05, "default")  # measured on Magpie
+    assert voice_wps("Aria", path) == (2.8, "fallback")
+    assert voice_wps("Leo", path) == (2.8, "fallback")
 
 
 def test_calibrate_measures_and_stores_the_rate(tmp_path):
@@ -74,3 +74,12 @@ def test_default_path_is_under_lull_home(tmp_path, monkeypatch):
         assert voices.voices_path() == tmp_path / "h" / "voices.json"
     finally:
         get_settings.cache_clear()
+
+
+def test_calibrate_refuses_silent_audio(tmp_path):
+    from lull.media import MediaError
+
+    path = tmp_path / "voices.json"
+    with pytest.raises(MediaError, match="produced no usable audio"):
+        calibrate(FakeSpeech(0.0), "Sofia", tmp_path / "work", path)
+    assert not path.exists()

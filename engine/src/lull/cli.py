@@ -27,7 +27,7 @@ from lull.pipeline import Event, run, run_id_for
 from lull.speech import DEFAULT_URL, NemoSpeechHTTP, SpeechClient, SpeechError
 from lull.stages.finalize import OverlapError
 from lull.store import file_sha256
-from lull.tavily import Tavily, TavilyError
+from lull.tavily import Tavily
 from lull.tf import LIGHTNING, ULTRA, VL, TFError, TokenFactory
 from lull.types import RunOptions
 from lull.voices import calibrate, voices_path
@@ -82,6 +82,10 @@ def _clients(no_research: bool) -> tuple[Ledger, TokenFactory, SpeechClient, Tav
     speech = _speech()
     tavily = None if no_research else Tavily.from_settings(ledger)
     return ledger, tf, speech, tavily
+
+
+def _one_line(text: str) -> str:
+    return " ".join(text.split())[:500]
 
 
 def _fail(message: str, code: int) -> None:
@@ -222,35 +226,50 @@ def describe(
         typer.Option(help="Run id for the ledger and cache (default: <video stem>-<sha256[:8]>)."),
     ] = None,
 ) -> None:
-    """Describe VIDEO: audio description fitted to its pauses, verified against its frames."""
-    rid = run_id or run_id_for(video, file_sha256(video))
+    """Describe VIDEO: audio description fitted to its pauses, verified against its frames.
+
+    Exit codes: 0 published; 1 an error (one line, details in the run log); 2 bad usage;
+    3 stopped by a spend cap or the provider's balance; 4 nothing published (overlap)."""
+    sha = file_sha256(video)  # once: the run gets it too
+    rid = run_id or run_id_for(video, sha)
     out = out or Path(RUNS_DIR) / rid
     opts = RunOptions(mode=mode.value, voice=voice, source_url=source_url)
     ledger, tf, speech, tavily = _clients(no_research)
     printer = _Printer()
+    log_path = out / LOG_FILE
     typer.echo(f"describing {video.name} (run {rid}) into {out}")
     try:
-        with _log_to(out / LOG_FILE):
-            run(
-                video,
-                out,
-                opts,
-                tf=tf,
-                speech=speech,
-                tavily=tavily,
-                ledger=ledger,
-                on_event=printer,
-                run_id=rid,
-            )
+        with _log_to(log_path):
+            try:
+                run(
+                    video,
+                    out,
+                    opts,
+                    tf=tf,
+                    speech=speech,
+                    tavily=tavily,
+                    ledger=ledger,
+                    on_event=printer,
+                    run_id=rid,
+                    sha256=sha,
+                )
+            except Exception as e:  # the traceback goes to the run log, not the console
+                if not isinstance(e, BudgetExceeded | OverlapError):
+                    logging.getLogger("lull").error("describe failed", exc_info=e)
+                raise
     except BudgetExceeded as e:
-        resume = "finished stages are cached: the same command resumes once there is budget"
+        resume = "finished stages are cached: the same command resumes where it stopped"
         if e.scope == "provider":
-            _fail(f"Token Factory refused the call for lack of funds ({e}); {resume}", 2)
-        _fail(f"stopped by the {e.scope} spend cap: {e}; {resume}", 2)
+            _fail(f"Token Factory refused the call for lack of funds ({e}); top up, {resume}", 3)
+        knob = {"run": "LULL_CAP_RUN", "day": "LULL_CAP_DAY", "total": "LULL_CAP_TOTAL"}[e.scope]
+        hint = f"raise {knob}"
+        if e.scope == "run":
+            hint += " or start a fresh ledger entry with another --run-id"
+        _fail(f"stopped by the {e.scope} spend cap: {e}; {hint}; {resume}", 3)
     except OverlapError as e:
-        _fail(f"nothing published: {e}", 3)
-    except (TFError, SpeechError, TavilyError, MediaError) as e:
-        _fail(f"{type(e).__name__}: {e} (log: {out / LOG_FILE})", 1)
+        _fail(f"nothing published: {e}", 4)
+    except Exception as e:  # one line for the person
+        _fail(f"{type(e).__name__}: {_one_line(str(e))} (log: {log_path})", 1)
     finally:
         for client in (tf, tavily):
             close = getattr(client, "close", None)

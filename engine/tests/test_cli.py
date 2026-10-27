@@ -12,6 +12,7 @@ from lull import cli
 from lull.config import get_settings
 from lull.ledger import CallRecord, Ledger
 from lull.pipeline import run_id_for
+from lull.stages.finalize import OverlapError
 from lull.store import file_sha256
 from pipeline_fakes import CUE_TEXT, FakeSpeech, FakeTF
 
@@ -92,16 +93,18 @@ def test_describe_defaults_run_id_and_output_folder(
     run_dir = tmp_path / "runs" / run_id
     assert (run_dir / "manifest.json").exists()
     assert "voice 'Sofia' is not calibrated" in r.output
-    # cached audio paths are absolute: a rerun from another folder still finds them
+    # cached audio paths are relative to the run folder, wherever the command runs from
     entry = json.loads((run_dir / "stages" / "finalize" / "c001.json").read_text("utf-8"))
-    assert Path(entry["data"]["audio_path"]) == run_dir / "work" / "audio" / "c001.wav"
+    assert entry["data"]["audio_path"].startswith("work/finalize/c001-")
+    assert (run_dir / entry["data"]["audio_path"]).exists()
 
 
 def test_describe_stops_on_the_spend_cap(tone_slides, tmp_path, home, monkeypatch):
     _fake_clients(monkeypatch, _free_ledger(home, cap_run=0.01))  # 12 s needs $0.03
     r = runner.invoke(cli.app, ["describe", str(tone_slides), "--out", str(tmp_path / "o")])
-    assert r.exit_code == 2
+    assert r.exit_code == 3
     assert "spend cap" in r.output and "run cap $0.01" in r.output
+    assert "LULL_CAP_RUN" in r.output and "--run-id" in r.output
     assert not (tmp_path / "o" / "stages").exists()
 
 
@@ -168,3 +171,24 @@ def test_lull_entry_point_is_declared():
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     scripts = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["scripts"]
     assert scripts["lull"] == "lull.cli:app"
+
+
+def test_describe_hashes_the_video_once_and_reports_stops(tone_slides, tmp_path, home, monkeypatch):
+    _fake_clients(monkeypatch, _free_ledger(home))
+    seen: list[dict] = []
+    outcome: list[Exception] = [OverlapError(["c002"]), RuntimeError("boom")]
+
+    def fake_run(video, out, opts, **kw):
+        seen.append(kw)
+        raise outcome.pop(0)
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    args = ["describe", str(tone_slides), "--out", str(tmp_path / "o")]
+    r = runner.invoke(cli.app, args)
+    assert r.exit_code == 4 and "nothing published" in r.output and "c002" in r.output
+    assert seen[0]["sha256"] == file_sha256(tone_slides)  # hashed by the CLI, passed on
+    r = runner.invoke(cli.app, args)
+    assert r.exit_code == 1
+    line = next(ln for ln in r.output.splitlines() if ln.startswith("error:"))
+    assert "RuntimeError: boom" in line and str(tmp_path / "o" / "run.log") in line
+    assert "Traceback" not in r.output

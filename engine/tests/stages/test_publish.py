@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import lull
 from lull import media
 from lull.ledger import CallRecord, Ledger
 from lull.media import MediaError, Probe, loudness_profile
@@ -547,7 +548,7 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     assert s["cost_per_min"] == pytest.approx(0.0081)
     by = {(g["role"], g["model"]): g for g in s["calls_by_role_model"]}
     assert by[("verify", SUPER)]["calls"] == 2
-    assert m["versions"]["engine"] == "0.1.0"
+    assert m["versions"]["engine"] == lull.__version__
     assert m["versions"]["models"] == sorted([SUPER, LIGHT])
     assert m["options"]["voice"] == "Sofia"
 

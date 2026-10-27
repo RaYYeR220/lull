@@ -18,6 +18,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from lull.config import get_settings
+from lull.media import MediaError
 from lull.speech import SpeechClient
 from lull.stages.plan import count_words
 from lull.stages.voice import voice
@@ -27,8 +28,8 @@ REFERENCE = (
     "boat, look out over the water, and smile. Gulls circle above the masts while a crew "
     "unloads wooden crates onto the pier."
 )
-DEFAULT_WPS = {"Sofia": 2.36, "Aria": 2.06}  # measured on Magpie, 2026-10-27
-FALLBACK_WPS = min(DEFAULT_WPS.values())  # an unknown voice: the slowest known rate is safest
+DEFAULT_WPS = {"Sofia": 3.05}  # calibrated on the local Magpie server, 2026-10-27
+FALLBACK_WPS = 2.8  # any other voice until it is calibrated
 MAX_WPS = 20.0
 
 
@@ -63,7 +64,7 @@ def _load(path: Path) -> dict[str, float]:
 
 def voice_wps(name: str, path: Path | None = None) -> tuple[float, str]:
     """(words per second, source) for voice `name`; source is "calibrated" (voices.json),
-    "default" (a measured built-in rate) or "fallback" (unknown voice, slowest known rate)."""
+    "default" (a rate measured on the development server) or "fallback" (any other voice)."""
     rates = _load(path or voices_path())
     if name in rates:
         return rates[name], "calibrated"
@@ -76,7 +77,10 @@ def calibrate(speech: SpeechClient, name: str, work: Path, path: Path | None = N
     """Speak REFERENCE with voice `name`, measure it and store the rate in voices.json."""
     path = path or voices_path()
     safe = re.sub(r"[^A-Za-z0-9_-]", "_", name) or "voice"
-    _, seconds = voice(REFERENCE, name, speech, Path(work) / f"calibrate-{safe}.wav")
+    try:
+        _, seconds = voice(REFERENCE, name, speech, Path(work) / f"calibrate-{safe}.wav")
+    except MediaError as e:
+        raise MediaError(f"the voice {name!r} produced no usable audio: {e}") from e
     words = count_words(REFERENCE)
     cal = Calibration(voice=name, words=words, seconds=seconds, wps=round(words / seconds, 3))
     rates = _load(path)
