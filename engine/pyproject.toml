@@ -14,6 +14,9 @@ dependencies = [
     "jinja2>=3.1",
 ]
 
+[project.scripts]
+lull = "lull.cli:app"
+
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.5"]
 

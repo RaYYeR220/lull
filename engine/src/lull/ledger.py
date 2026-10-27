@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import threading
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from lull.config import get_settings
+
+log = logging.getLogger(__name__)
 
 # model -> (input, cached input, output) USD per 1M tokens
 PRICES: dict[str, tuple[float, float, float]] = {
@@ -92,6 +96,7 @@ class Ledger:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._subscribers: list[Callable[[CallRecord], None]] = []
         self._db = sqlite3.connect(path, check_same_thread=False, timeout=30)
         with self._lock:
             self._db.execute("PRAGMA journal_mode=WAL")
@@ -106,6 +111,25 @@ class Ledger:
                 [d[c] for c in _COLS],
             )
             self._db.commit()
+            subscribers = list(self._subscribers)
+        for fn in subscribers:  # outside the lock: a subscriber may read the ledger
+            try:
+                fn(rec)
+            except Exception:
+                log.exception("ledger: a subscriber failed on a %s call", rec.role)
+
+    def subscribe(self, fn: Callable[[CallRecord], None]) -> Callable[[], None]:
+        """Call `fn` with every record once it is stored (on the recording thread); returns a
+        function that unsubscribes. A subscriber that raises is logged, never fatal."""
+        with self._lock:
+            self._subscribers.append(fn)
+
+        def unsubscribe() -> None:
+            with self._lock:
+                if fn in self._subscribers:
+                    self._subscribers.remove(fn)
+
+        return unsubscribe
 
     def spent(self, *, run_id: str | None = None, since: float | None = None) -> float:
         where, args = [], []
@@ -142,6 +166,18 @@ class Ledger:
                 f"SELECT {','.join(_COLS)} FROM calls WHERE run_id = ? ORDER BY id", (run_id,)
             ).fetchall()
         return [CallRecord(*r) for r in rows]
+
+    def runs(self) -> list[dict]:
+        """Every run in the ledger, most recent activity first: calls, cost, first/last time."""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT run_id, COUNT(*), SUM(cost_usd), MIN(ts), MAX(ts) FROM calls"
+                " GROUP BY run_id ORDER BY MAX(ts) DESC, run_id"
+            ).fetchall()
+        return [
+            {"run_id": r[0], "calls": r[1], "cost_usd": r[2], "first_ts": r[3], "last_ts": r[4]}
+            for r in rows
+        ]
 
     def summary(self, run_id: str) -> dict:
         with self._lock:

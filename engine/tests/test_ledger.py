@@ -189,3 +189,42 @@ def test_threaded_writes(tmp_path):
     [t.start() for t in ts]
     [t.join() for t in ts]
     assert len(led.calls("r1")) == 100
+
+
+def test_subscribers_see_every_record_after_it_is_stored(tmp_path):
+    led = mk(tmp_path)
+    seen: list[tuple[CallRecord, float]] = []
+    unsubscribe = led.subscribe(lambda r: seen.append((r, led.spent(run_id=r.run_id))))
+    led.record(rec("r1", cost=0.25))
+    led.record(rec("r2", cost=0.5))
+    # each subscriber runs after the row is committed: spent() already includes it
+    assert [(r.run_id, spent) for r, spent in seen] == [("r1", 0.25), ("r2", 0.5)]
+    unsubscribe()
+    led.record(rec("r1", cost=1.0))
+    assert len(seen) == 2
+    unsubscribe()  # twice is harmless
+
+
+def test_a_failing_subscriber_does_not_lose_the_record(tmp_path, caplog):
+    led = mk(tmp_path)
+
+    def boom(r):
+        raise RuntimeError("ui went away")
+
+    led.subscribe(boom)
+    led.record(rec("r1", cost=0.1))
+    assert led.spent(run_id="r1") == pytest.approx(0.1)
+    assert "ui went away" in caplog.text
+
+
+def test_runs_lists_each_run_with_calls_cost_and_times(tmp_path):
+    led = mk(tmp_path)
+    led.record(rec("a", cost=0.1, ts=100.0))
+    led.record(rec("b", cost=0.2, ts=200.0))
+    led.record(rec("a", cost=0.3, ts=300.0))
+    runs = led.runs()
+    assert [r["run_id"] for r in runs] == ["a", "b"]  # most recent activity first
+    a = runs[0]
+    assert (a["calls"], a["first_ts"], a["last_ts"]) == (2, 100.0, 300.0)
+    assert a["cost_usd"] == pytest.approx(0.4)
+    assert mk(tmp_path / "empty").runs() == []
