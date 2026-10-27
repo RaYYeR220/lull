@@ -475,6 +475,11 @@ def test_missing_priority_falls_back_to_salience():
         ("It rains.", None, "In a moment, it rains."),
         ("Ice covers the lake.", None, "In a moment, ice covers the lake."),
         ("A U.S. flag waves.", None, "In a moment, a U.S. flag waves."),
+        # curly or straight apostrophes match either spelling of a proper noun
+        ("O’Brien waves.", {"O’Brien"}, "In a moment, O’Brien waves."),
+        ("O’Brien waves.", {"O'Brien"}, "In a moment, O’Brien waves."),
+        ("O'Brien waves.", {"O’Brien"}, "In a moment, O'Brien waves."),
+        ("O’Brien’s dog barks.", {"O’Brien"}, "In a moment, O’Brien’s dog barks."),
     ],
 )
 def test_ahead_prefix_and_casing(text, proper, expected):

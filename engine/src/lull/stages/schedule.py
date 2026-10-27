@@ -357,11 +357,13 @@ def _lower_first(text: str, proper_nouns: set[str]) -> str:
     first = text.split(maxsplit=1)[0].replace("’", "'").rstrip(",;:!?")
     letters = re.sub(r"'s$", "", first).replace(".", "").replace("'", "")
     word = re.match(r"\w+", first)
+    names = {n.replace("’", "'") for n in proper_nouns}  # either apostrophe matches
     if (
         first in _FIRST_PERSON
         or (len(letters) >= 2 and letters.isalpha() and letters.isupper())
-        or first.rstrip(".") in proper_nouns
-        or (word and word.group() in proper_nouns)
+        or first.rstrip(".") in names
+        or re.sub(r"'s$", "", first.rstrip(".")) in names
+        or (word and word.group() in names)
     ):
         return text
     return text[0].lower() + text[1:]
