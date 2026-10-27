@@ -311,13 +311,14 @@ def _tokens(text: str) -> set[str]:
 
 
 def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanResult:
-    """The plan without items that repeat an earlier one (ruling, Task 16).
+    """The plan without items that repeat another (ruling, Task 16).
 
-    Items are taken in visual start order; one whose short variant has a token Jaccard of at
-    least DUP_JACCARD with an item kept less than DUP_WINDOW_S earlier is a near-duplicate of
-    it. The higher priority stays (the earlier one on a tie); the other loses its variants and
-    priority and is recorded in `duplicates` as dropped -> kept, so coverage can count it with
-    its twin.
+    Two items are near-duplicates when their short lines (else their first variants) have a
+    token Jaccard of at least DUP_JACCARD and their visuals start at most DUP_WINDOW_S apart.
+    Items are kept highest priority first (the earlier visual on a tie); an item alike to one
+    already kept is dropped and recorded in `duplicates` as dropped -> kept, so every twin is
+    within DUP_WINDOW_S of what it stands for (no chains) and coverage can count it with it.
+    A dropped item loses its variants and priority.
     """
     by_id = {e.id: e for e in events}
     words: dict[str, set[str]] = {}
@@ -326,29 +327,21 @@ def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanR
             words[v.event_id] = _tokens(v.text)
     order = sorted(
         (by_id[eid] for eid in result.priority if eid in by_id and eid in words),
-        key=lambda e: (e.t_start, e.id),
+        key=lambda e: (-result.priority[e.id], e.t_start, e.id),
     )
     kept: list[VisualEvent] = []
     dup: dict[str, str] = dict(result.duplicates)
     for e in order:
-        twin = next(
-            (
-                k
-                for k in reversed(kept)
-                if e.t_start - k.t_start <= DUP_WINDOW_S + _EPS
-                and _jaccard(words[e.id], words[k.id]) >= DUP_JACCARD - _EPS
-            ),
-            None,
-        )
-        if twin is None:
-            kept.append(e)
-        elif result.priority[e.id] > result.priority[twin.id]:
-            kept.remove(twin)
-            kept.append(e)
-            dup = {d: (e.id if k == twin.id else k) for d, k in dup.items()}
-            dup[twin.id] = e.id
+        alike = [
+            k
+            for k in kept
+            if abs(e.t_start - k.t_start) <= DUP_WINDOW_S + _EPS
+            and _jaccard(words[e.id], words[k.id]) >= DUP_JACCARD - _EPS
+        ]
+        if alike:  # the closest kept twin
+            dup[e.id] = min(alike, key=lambda k: (abs(e.t_start - k.t_start), k.t_start)).id
         else:
-            dup[e.id] = twin.id
+            kept.append(e)
     if not dup:
         return result
     log.info("plan: dropped near-duplicate items %s", ", ".join(f"{d}~{k}" for d, k in dup.items()))

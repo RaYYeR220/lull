@@ -456,3 +456,21 @@ def test_near_duplicates_need_similar_short_lines_within_30_s():
     result, _ = _run(answer, events=events)
     assert result.duplicates == {"e025": "e024"}
     assert set(result.priority) == {"e020", "e021", "e022", "e023", "e024", "e026"}
+
+
+def test_near_duplicates_never_chain_past_30_s():
+    """M1: a dropped item always points at a kept twin within 30 s. Three alike lines 25 s
+    apart with rising priority keep the first and the last; the middle one goes to the last."""
+    events = [_ev("e030", 0.0, 1.0, sal=4), _ev("e031", 25.0, 26.0, sal=4),
+              _ev("e032", 50.0, 51.0, sal=4)]  # fmt: skip
+    answer = {"cast": [], "items": [
+        _item("e030", 2, "Snow falls on the empty square."),
+        _item("e031", 3, "Snow falls on the empty square."),
+        _item("e032", 4, "Snow falls on the empty square."),
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=events)
+    assert result.duplicates == {"e031": "e032"}
+    assert set(result.priority) == {"e030", "e032"}
+    by_id = {e.id: e for e in events}
+    for dropped, kept in result.duplicates.items():
+        assert abs(by_id[dropped].t_start - by_id[kept].t_start) <= 30.0
