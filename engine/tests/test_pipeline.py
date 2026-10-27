@@ -916,3 +916,22 @@ def test_a_compose_error_is_reported_as_the_schedule_stage(
             tavily=None, ledger=ledger, on_event=events.append, run_id="te", wps=3.0)  # fmt: skip
     assert (events[-1].type, events[-1].stage) == ("error", "schedule")
     assert ("stage_end", "schedule") not in [(e.type, e.stage) for e in events]
+
+
+def test_source_digest_reads_only_source_files_with_unix_line_ends(tmp_path):
+    """M2: only .py .md .html .json .txt files count, and CRLF reads as LF, so a checkout
+    with Windows line ends or a stray editor file never changes the fingerprint."""
+    pkg = tmp_path / "lull"
+    (pkg / "prompts").mkdir(parents=True)
+    (pkg / "a.py").write_bytes(b"x = 1\ny = 2\n")
+    (pkg / "prompts" / "plan.md").write_bytes(b"Describe.\n")
+    first = source_digest(pkg)
+    (pkg / "a.py").write_bytes(b"x = 1\r\ny = 2\r\n")
+    assert source_digest(pkg) == first
+    for junk in ("a.py.bak", "notes.swp", ".DS_Store", "big.bin"):
+        (pkg / junk).write_bytes(b"junk")
+    assert source_digest(pkg) == first
+    for kept in ("data.json", "words.txt", "page.html"):
+        (pkg / kept).write_text("{}", encoding="utf-8")
+        assert source_digest(pkg) != first
+        first = source_digest(pkg)

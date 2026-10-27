@@ -97,7 +97,7 @@ def run_id_for(video: Path, sha256: str) -> str:
     return f"{Path(video).stem}-{sha256[:8]}"
 
 
-_COMPILED = (".pyc", ".pyo")
+SOURCE_SUFFIXES = (".py", ".md", ".html", ".json", ".txt")  # what the engine is made of
 
 
 def _source_files(root: Path | Traversable, prefix: str = "") -> Iterator[tuple[str, bytes]]:
@@ -106,14 +106,14 @@ def _source_files(root: Path | Traversable, prefix: str = "") -> Iterator[tuple[
         if item.is_dir():
             if item.name != "__pycache__":
                 yield from _source_files(item, rel + "/")
-        elif not item.name.endswith(_COMPILED):
-            yield rel, item.read_bytes()
+        elif item.name.endswith(SOURCE_SUFFIXES):
+            yield rel, item.read_bytes().replace(b"\r\n", b"\n")
 
 
 def source_digest(root: Path | Traversable | None = None) -> str:
-    """sha256 over the relative path and contents of every file of the package at `root`
-    (default: the installed lull package): code, prompts and templates, in path order;
-    compiled caches are left out."""
+    """sha256 over the relative path and contents of every source file (SOURCE_SUFFIXES) of
+    the package at `root` (default: the installed lull package): code, prompts and templates,
+    in path order, line ends read as LF; compiled caches and other files are left out."""
     root = root if root is not None else files("lull")
     h = hashlib.sha256()
     for rel, data in sorted(_source_files(root)):
