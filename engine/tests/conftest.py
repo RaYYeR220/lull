@@ -32,3 +32,16 @@ def noaudio(tmp_path_factory: pytest.TempPathFactory) -> Path:
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", str(out),
     )  # fmt: skip
     return out
+
+
+@pytest.fixture(scope="session")
+def loud_burst(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """6 s, quiet 440 Hz hum (about -32 dBFS) with a 24 dB louder burst at 2.0-3.0 s."""
+    out = tmp_path_factory.mktemp("media") / "loud_burst.mp4"
+    _ffmpeg(
+        "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=25:d=6",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+        "-af", "volume=0.04,volume=16:enable='between(t,2,3)'",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-t", "6", str(out),
+    )  # fmt: skip
+    return out
