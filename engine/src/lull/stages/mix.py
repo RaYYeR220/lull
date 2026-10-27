@@ -38,7 +38,7 @@ from typing import NamedTuple
 
 from pydantic import BaseModel
 
-from lull.media import MediaError, Probe, _bin, _run, probe
+from lull.media import MediaError, Probe, _bin, _run, input_args, probe
 from lull.timeline import merge_spans
 from lull.types import Cue, Span
 
@@ -239,9 +239,9 @@ def measure_levels(video: Path, info: Probe, cues: Sequence[Cue]) -> Levels:
     if info.has_audio:
         chains.append(f"[0:a:0]{_PROGRAMME_IN},ebur128=framelog=verbose[l0]")
         labels += "[l0]"
-    cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", "-i", str(Path(video).resolve())]
+    cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", *input_args(Path(video).resolve())]
     for i, p in enumerate(inputs, start=1):
-        cmd += ["-i", p]
+        cmd += input_args(p)
         chains.append(f"[{i}:a:0]{_CUE_IN},ebur128=framelog=verbose[l{i}]")
         labels += f"[l{i}]"
     graph = ";".join(chains) + f";{labels}concat=n={len(chains)}:v=0:a=1[all]"
@@ -355,9 +355,9 @@ def _premix(
     graph = _premix_graph(programme, duck_filter(duck_cues), [(t, g) for t, _, g in placements])
     graph_file.write_text(graph, encoding="utf-8")
     cwd, inputs = _relative([p for _, p, _ in placements])
-    cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", "-i", str(video.resolve())]
+    cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", *input_args(video.resolve())]
     for p in inputs:
-        cmd += ["-i", p]
+        cmd += input_args(p)
     cmd += [
         "-/filter_complex", str(graph_file.resolve()),
         "-map", "[out]", "-c:a", "pcm_f32le", str(wav.resolve()),
@@ -421,7 +421,7 @@ def mix(
         keep = ["-c:a:1", "copy"] if info.audio_codec in MP4_AUDIO else _aac("a:1")
         cmd = [
             _bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-            "-i", str(video.resolve()), "-i", str(premix),
+            *input_args(video.resolve()), *input_args(premix),
             "-filter_complex", graph,
             "-map", "[a1]", *_aac(), *_track(0, "Described", lang), *_disclose(bool(spoken)),
             "-movflags", "+faststart", str(ad_audio),
@@ -591,7 +591,7 @@ def extended_video(
         )
         _run(
             [_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-             "-i", str(video.resolve()), "-i", str(premix),
+             *input_args(video.resolve()), *input_args(premix),
              "-/filter_complex", str(graph_file),
              "-map", "[v]", "-map", "[a]",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",

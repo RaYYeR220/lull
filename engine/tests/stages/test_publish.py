@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 import lull
+from locks import assert_locked
 from lull import media
 from lull.ledger import CallRecord, Ledger
 from lull.media import MediaError, Probe, loudness_profile
@@ -630,9 +631,29 @@ def published(tmp_path_factory):
         _cue("x002", 4.0, 0.71, gap=None, status="extended", ev=["e4"], audio=str(wavs["x002"])),
     ]
     run = root / "run"
-    res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1", RunOptions(),
-                  speech=SPEECH)  # fmt: skip
-    return {"video": video, "run": run, "res": res, "root": root}
+    commands: list[list[str]] = []
+    real = subprocess.run
+
+    def spy(cmd, *args, **kwargs):
+        commands.append([str(c) for c in cmd])
+        return real(cmd, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(media.subprocess, "run", spy)
+        res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1",
+                      RunOptions(), speech=SPEECH)  # fmt: skip
+    return {"video": video, "run": run, "res": res, "root": root, "commands": commands}
+
+
+def test_publish_reads_every_input_as_a_local_file(published):
+    """The probe, levels, mix, extended version and keyframes all open their inputs with
+    -protocol_whitelist file,pipe (E-sec)."""
+    ffmpeg = [c for c in published["commands"] if Path(c[0]).stem.lower() == "ffmpeg"]
+    assert len(ffmpeg) >= 4  # levels, premix + mix, premix + extended, keyframes
+    for cmd in published["commands"]:
+        if "-version" in cmd:
+            continue  # the version check reads no file
+        assert_locked(cmd)
 
 
 def _streams(path: Path) -> tuple[list[dict], float]:

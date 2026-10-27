@@ -13,6 +13,7 @@ import pytest
 from lull import pipeline
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, CallRecord, Ledger
+from lull.media import MediaError
 from lull.pipeline import (
     Event,
     budget_estimate,
@@ -224,6 +225,30 @@ def test_budget_estimate_and_check_before_any_stage(tone_slides, tmp_path):
         _run(tone_slides, tmp_path / "run", ledger, speech=speech, run_id="tb")
     assert err.value.scope == "run"  # 0.03 spent + 0.03 estimate > 0.05
     assert speech.calls == [] and not (tmp_path / "run" / "stages").exists()
+
+
+@pytest.mark.parametrize("kind", ["concat", "hls"])
+def test_a_crafted_container_stops_the_run_before_any_stage(tone_slides, tmp_path, kind):
+    """An upload named .mp4 that is a concat list or an HLS playlist is refused right after the
+    probe: no stage starts, no service is called, nothing is cached (E-sec)."""
+    shutil.copy(tone_slides, tmp_path / "real.mp4")
+    evil = tmp_path / "evil.mp4"
+    body = (
+        "ffconcat version 1.0\nfile real.mp4\nduration 12.0\n"
+        if kind == "concat"
+        else "#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\nhttp://169.254.169.254/x\n"
+        "#EXT-X-ENDLIST\n"
+    )
+    evil.write_text(body, encoding="utf-8")
+    ledger = _ledger(tmp_path)
+    speech, tf, events = FakeSpeech(), FakeTF(ledger), []
+    with pytest.raises(MediaError):
+        run(evil, tmp_path / "run", RunOptions(), tf=tf, speech=speech, tavily=None,
+            ledger=ledger, on_event=events.append, run_id="evil", wps=3.0)  # fmt: skip
+    assert [e.type for e in events] == ["error"]
+    assert events[0].stage is None and events[0].data["kind"] == "MediaError"
+    assert tf.calls == [] and speech.calls == []
+    assert not (tmp_path / "run").exists()
 
 
 def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> TokenFactory:

@@ -1,4 +1,10 @@
-"""Thin ffmpeg/ffprobe wrappers used by the audio-description pipeline."""
+"""Thin ffmpeg/ffprobe wrappers used by the audio-description pipeline.
+
+Every input file is opened with `-protocol_whitelist file,pipe` (`input_args`): ffmpeg sniffs a
+file's format from its bytes, so an upload named .mp4 that is really an HLS playlist or a concat
+list must not be able to make it fetch a URL or read another local file. The pipeline also
+refuses any container but MP4/MOV, Matroska and WebM right after probing (`assert_safe_container`).
+"""
 
 from __future__ import annotations
 
@@ -14,6 +20,14 @@ from pathlib import Path
 import numpy as np
 
 _FLOOR_DB = -120.0
+SAFE_PROTOCOLS = "file,pipe"
+SAFE_CONTAINERS = frozenset({"mov", "mp4", "m4a", "3gp", "3g2", "mj2", "matroska", "webm"})
+# demuxers that open other files or URLs, or are not media files at all: never accepted, even
+# next to an allowed name
+UNSAFE_CONTAINERS = frozenset(
+    {"hls", "applehttp", "concat", "ffconcat", "image2", "image2pipe", "lavfi", "tee", "sdp",
+     "rtp", "rtsp", "dash", "data", "subfile", "playlist"}
+)  # fmt: skip
 
 
 class MediaError(RuntimeError):
@@ -29,6 +43,7 @@ class Probe:
     has_audio: bool
     video_codec: str = ""
     audio_codec: str | None = None
+    format_name: str = ""  # ffprobe's demuxer names, comma-separated ("mov,mp4,m4a,3gp,3g2,mj2")
 
 
 def _bin(name: str) -> str:
@@ -48,6 +63,27 @@ def _run(cmd: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProc
         raise MediaError(f"could not run {cmd[0]}: {e}") from e
 
 
+def input_args(path: Path | str) -> list[str]:
+    """`-i path` for ffmpeg, locked to local files: no URL, no other protocol."""
+    return ["-protocol_whitelist", SAFE_PROTOCOLS, "-i", str(path)]
+
+
+def assert_safe_container(info: Probe) -> None:
+    """Raise MediaError unless the probed file is MP4/MOV, Matroska or WebM.
+
+    ffprobe names a demuxer by all its aliases ("mov,mp4,m4a,3gp,3g2,mj2"); one allowed name is
+    enough, but an HLS playlist, a concat list, an image sequence, lavfi and the like are
+    refused whatever else they are called.
+    """
+    names = {n.strip().lower() for n in info.format_name.split(",") if n.strip()}
+    if names & SAFE_CONTAINERS and not names & UNSAFE_CONTAINERS:
+        return
+    raise MediaError(
+        f"unsupported container {info.format_name or 'unknown'!r}: only MP4/MOV, Matroska and "
+        "WebM video files are accepted"
+    )
+
+
 def _ffmpeg(*args: str) -> subprocess.CompletedProcess[bytes]:
     return _run([_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", *args])
 
@@ -60,8 +96,8 @@ def _fps(rate: str) -> float:
 
 def probe(path: Path) -> Probe:
     out = _run(
-        [_bin("ffprobe"), "-v", "error", "-print_format", "json",
-         "-show_format", "-show_streams", str(path)]
+        [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS, "-v", "error",
+         "-print_format", "json", "-show_format", "-show_streams", str(path)]
     )  # fmt: skip
     info = json.loads(out.stdout)
     streams = info.get("streams", [])
@@ -80,13 +116,14 @@ def probe(path: Path) -> Probe:
         has_audio=audio is not None,
         video_codec=video.get("codec_name", ""),
         audio_codec=None if audio is None else audio.get("codec_name", ""),
+        format_name=str(info.get("format", {}).get("format_name") or ""),
     )
 
 
 def audio_duration(path: Path) -> float:
     out = _run(
-        [_bin("ffprobe"), "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=nw=1:nk=1", str(path)]
+        [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS, "-v", "error",
+         "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)]
     )  # fmt: skip
     try:
         return float(out.stdout.decode().strip())
@@ -95,7 +132,7 @@ def audio_duration(path: Path) -> float:
 
 
 def extract_wav(src: Path, dst: Path, rate: int = 16000) -> Path:
-    _ffmpeg("-i", str(src), "-vn", "-ac", "1", "-ar", str(rate), "-c:a", "pcm_s16le", str(dst))
+    _ffmpeg(*input_args(src), "-vn", "-ac", "1", "-ar", str(rate), "-c:a", "pcm_s16le", str(dst))
     return dst
 
 
@@ -104,7 +141,7 @@ def make_proxy(src: Path, dst: Path, *, max_bytes: int = 10 * 2**20, height: int
     last = 0
     for h, crf in attempts:
         _ffmpeg(
-            "-i", str(src), "-an", "-vf", f"scale=-2:{h}",
+            *input_args(src), "-an", "-vf", f"scale=-2:{h}",
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
             "-crf", str(crf), "-movflags", "+faststart", str(dst),
         )  # fmt: skip
@@ -118,7 +155,7 @@ def cut_clip(src: Path, dst: Path, start: float, end: float, *, height: int = 48
     if end <= start:
         raise MediaError(f"invalid clip range {start}..{end}")
     _ffmpeg(
-        "-ss", f"{start:.3f}", "-i", str(src), "-t", f"{end - start:.3f}",
+        "-ss", f"{start:.3f}", *input_args(src), "-t", f"{end - start:.3f}",
         "-vf", f"scale=-2:{height}", "-c:v", "libx264", "-preset", "veryfast",
         "-pix_fmt", "yuv420p", "-crf", "28", "-c:a", "aac", "-b:a", "96k",
         "-movflags", "+faststart", str(dst),
@@ -130,12 +167,12 @@ def atempo(src: Path, dst: Path, factor: float) -> Path:
     """Audio `src` played `factor` times faster, pitch kept (ffmpeg atempo, 0.5..100)."""
     if not 0.5 <= factor <= 100.0:
         raise MediaError(f"atempo factor {factor} outside 0.5..100")
-    _ffmpeg("-i", str(src), "-filter:a", f"atempo={factor:.3f}", str(dst))
+    _ffmpeg(*input_args(src), "-filter:a", f"atempo={factor:.3f}", str(dst))
     return dst
 
 
 def frame_at(src: Path, t: float, dst: Path) -> Path:
-    _ffmpeg("-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1", "-q:v", "2", str(dst))
+    _ffmpeg("-ss", f"{t:.3f}", *input_args(src), "-frames:v", "1", "-q:v", "2", str(dst))
     if not dst.exists():
         raise MediaError(f"no frame at t={t} in {src}")
     return dst
@@ -149,7 +186,7 @@ def frames_at(src: Path, shots: list[tuple[float, Path]], *, batch: int = 16) ->
         chunk = [(t, Path(d)) for t, d in shots[i : i + batch]]
         args: list[str] = []
         for t, _ in chunk:
-            args += ["-ss", f"{t:.3f}", "-i", str(src)]
+            args += ["-ss", f"{t:.3f}", *input_args(src)]
         for j, (_, dst) in enumerate(chunk):
             dst.unlink(missing_ok=True)
             args += ["-map", f"{j}:v:0", "-frames:v", "1", "-q:v", "2", str(dst)]
@@ -166,7 +203,7 @@ _PTS = re.compile(r"pts_time:(\d+(?:\.\d+)?)")
 
 def scene_cuts(src: Path, threshold: float = 0.3) -> list[float]:
     proc = _run(
-        [_bin("ffmpeg"), "-hide_banner", "-nostats", "-i", str(src), "-an",
+        [_bin("ffmpeg"), "-hide_banner", "-nostats", *input_args(src), "-an",
          "-vf", f"select='gt(scene,{threshold})',showinfo", "-f", "null", "-"]
     )  # fmt: skip
     return sorted(float(m) for m in _PTS.findall(proc.stderr.decode("utf-8", "replace")))

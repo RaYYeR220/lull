@@ -1,8 +1,8 @@
 """The pipeline: every stage in order, each cached, spend checked first, progress as events.
 
-    probe -> spend check -> listen -> find_gaps + split_gaps -> watch -> research -> plan
-    -> schedule + compose_cues -> finalize (standard cues in time order, then extended cues)
-    -> assert_no_overlap -> publish (mix included)
+    probe + container check -> spend check -> listen -> find_gaps + split_gaps -> watch
+    -> research -> plan -> schedule + compose_cues -> finalize (standard cues in time order,
+    then extended cues) -> assert_no_overlap -> publish (mix included)
 
 One voice rate (words per second, calibrated per voice; see lull.voices) times everything: the
 gap capacities, the windows split_gaps cuts and the scheduler's sentence deadlines. Each
@@ -602,6 +602,7 @@ def run(
     state: _Run | None = None
     try:
         info = media.probe(video)
+        media.assert_safe_container(info)  # before anything else reads it (E-sec)
         sha = sha256 or file_sha256(video)
         run_id = run_id or run_id_for(video, sha)
         if wps is None:
