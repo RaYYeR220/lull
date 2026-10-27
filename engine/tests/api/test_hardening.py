@@ -383,3 +383,44 @@ def test_health_does_not_hold_its_lock_across_the_speech_probe(monkeypatch):
     finally:
         gate.set()
         t.join(10)
+
+
+# -- the scrubber: every form of a root, whatever comes before it ---------------------------------
+
+
+def _win_scrubber():
+    from lull.api.clean import Scrubber
+
+    return Scrubber(
+        Path(r"C:\Users\egori\data\runs\r1"), [Path(r"C:\Users\egori"), Path("/home/app")]
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        r"error:C:\Users\egori\secret\x.log",
+        r"\?\C:\Users\egori\secret\x.log",
+        "file:///C:/Users/egori/secret/x.log",
+        "x-/home/app/secret/x.log",
+        "see c:/users/EGORI/secret/x.log",
+        "msys /c/Users/egori/secret/x.log",
+        r"a.C:\Users\egori\secret\x.log",
+    ],
+)
+def test_scrubber_cuts_every_form_of_a_root(text):
+    out = _win_scrubber()(text)
+    assert "x.log" in out
+    assert "egori" not in out.lower() and "/home/app" not in out
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://example.org/data/report.html", "https://cdn.example.com/tmp/clip.mp4"],
+)
+def test_scrubber_keeps_urls_whole_even_with_a_root_inside(url):
+    from lull.api.clean import Scrubber
+
+    s = Scrubber(Path("/data/runs/r1"), [Path("/data"), Path("/tmp")])
+    assert s(f"fetched {url} (404)") == f"fetched {url} (404)"
+    assert s(url) == url
