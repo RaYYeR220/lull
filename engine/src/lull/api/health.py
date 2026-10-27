@@ -69,17 +69,19 @@ class Health:
         self._cached: tuple[float, dict] | None = None
 
     def get(self) -> dict:
+        """The cached answer, or a fresh one. The lock guards the cache only: a slow speech
+        probe never makes other callers wait (two may probe at once when the cache is cold)."""
         with self._lock:
-            now = self.clock()
-            if self._cached is not None and now < self._cached[0]:
+            if self._cached is not None and self.clock() < self._cached[0]:
                 return self._cached[1]
-            s = get_settings()
-            body = {
-                "ok": True,
-                "speech": speech_ok(),
-                "budget": ledger_budget(
-                    s.lull_home / "ledger.db", cap_day=s.lull_cap_day, cap_total=s.lull_cap_total
-                ),
-            }
-            self._cached = (now + self.ttl, body)
-            return body
+        s = get_settings()
+        body = {
+            "ok": True,
+            "speech": speech_ok(),
+            "budget": ledger_budget(
+                s.lull_home / "ledger.db", cap_day=s.lull_cap_day, cap_total=s.lull_cap_total
+            ),
+        }
+        with self._lock:
+            self._cached = (self.clock() + self.ttl, body)
+        return body

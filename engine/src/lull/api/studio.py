@@ -13,7 +13,10 @@ POST /v1/runs/{id}/publish   the cues as they are now through assert_no_overlap 
 
 Showcase runs are read-only (403) unless LULL_SHOWCASE_EDITABLE=1. A run the live executor is
 describing right now is busy (409); other runs can be edited meanwhile. Changes to one run go
-one at a time (a per-run asyncio.Lock, waited on); edits are rate limited per visitor.
+one at a time (a per-run asyncio.Lock, waited on); edits are rate limited per visitor, and
+publishing has a limit of its own. Across all runs at most MAX_EDITS edits are re-checked and
+MAX_PUBLISHES runs published at once (503 + Retry-After past that: both keep the CPU busy).
+Publishing a run with no change since it was published does nothing and answers the run.
 
 Where edits live. cues.json is the Studio's working copy of a run's cues. Every change writes,
 in this order: studio.json {"dirty": true} (the run differs from what was published), cues.json
@@ -25,8 +28,10 @@ of finalising the plan's text again; its audio path is absolute, as the engine k
 Publishing writes every output again from cues.json and sets dirty false.
 
 An edit is finalised in a folder of its own, work/edits/<cue id>-<token>/, so the take the
-published mix used is never overwritten: a failed or held edit leaves the cue and its audio as
-they were, and the take a newer edit replaces is removed.
+published mix used is never overwritten. A failed edit (an engine error, a spend cap) leaves
+the cue and its take as they were and removes only its own folder. A held edit is stored: the
+cue is held, with the reason in its note. The take a newer voiced edit replaces is removed. At
+startup, edit folders that neither cues.json nor studio.json refers to are swept away.
 
 The engine is reached only through the adapters below (load_context, check_text, edit_context,
 finalize_edit, republish), which rebuild what finalize and publish need from the run's stage
@@ -36,6 +41,7 @@ records the way lull.pipeline does.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import os
@@ -94,6 +100,10 @@ M = TypeVar("M", bound=BaseModel)
 EDIT_ESTIMATE = 0.01  # USD the spend check reserves for one edit
 EDITS_PER_MIN = 30
 EDITS_PER_DAY = 2000
+PUBLISHES_PER_MIN = 4
+PUBLISHES_PER_DAY = 500
+MAX_EDITS, MAX_PUBLISHES = 2, 1  # re-checked / published at once, across all runs
+OVERLOADED_RETRY_S = 10
 MAX_TEXT = 1000
 MAX_REASON = 300
 MAX_BODY = 64 * 1024
@@ -178,6 +188,20 @@ def _wps(voice: str) -> float:
         return FALLBACK_WPS
 
 
+@functools.lru_cache(maxsize=64)
+def _sha_of(path: str, mtime_ns: int, size: int) -> str:
+    return file_sha256(Path(path))
+
+
+def sample_sha256(path: Path) -> str:
+    """The file's sha256, hashed once per version of it (path, mtime, size)."""
+    st = path.stat()
+    return _sha_of(str(path), st.st_mtime_ns, st.st_size)
+
+
+sample_sha256.cache_clear = _sha_of.cache_clear  # type: ignore[attr-defined]
+
+
 def source_video(run_dir: Path, manifest: dict, request: dict, samples_dir: Path) -> Path:
     """The video the run described: its upload (request.json), else input/<name>, else the
     sample of that name when its sha256 matches the manifest's."""
@@ -190,7 +214,7 @@ def source_video(run_dir: Path, manifest: dict, request: dict, samples_dir: Path
         if (found := contained_file(run_dir, f"input/{name}")) is not None:
             return found
         sample = samples_dir / name
-        if isinstance(sha, str) and sample.is_file() and file_sha256(sample) == sha:
+        if isinstance(sha, str) and sample.is_file() and sample_sha256(sample) == sha:
             return sample
     raise NotEditable("its source video is not kept")
 
@@ -474,21 +498,70 @@ def _tidy(run_dir: Path, work: Path, old: Cue, new: Cue | None) -> None:
         shutil.rmtree(gone, ignore_errors=True)
 
 
+def _audio_paths(obj: Any) -> list[str]:
+    """Every "audio_path" string anywhere in `obj` (JSON data)."""
+    if isinstance(obj, dict):
+        found = [v for k, v in obj.items() if k == "audio_path" and isinstance(v, str)]
+        return found + [p for v in obj.values() for p in _audio_paths(v)]
+    if isinstance(obj, list):
+        return [p for v in obj for p in _audio_paths(v)]
+    return []
+
+
+def sweep_edits(roots: list[Path]) -> int:
+    """Remove the work/edits/* folders of the runs under `roots` that neither cues.json nor
+    studio.json refers to (takes left by a crash mid-edit). Run before serving: an edit in
+    progress would look the same. Returns how many folders went."""
+    removed = 0
+    for root in roots:
+        for edits in root.glob(f"*/{WORK}/{EDITS}"):
+            run_dir = edits.parent.parent
+            refs = _audio_paths(_read_json(run_dir / CUES)) + _audio_paths(
+                _read_json(run_dir / STUDIO)
+            )
+            used = set()
+            for ref in refs:
+                p = Path(ref) if Path(ref).is_absolute() else run_dir / ref
+                try:
+                    rel = p.resolve().relative_to(edits.resolve())
+                except ValueError:
+                    continue
+                if rel.parts:
+                    used.add(rel.parts[0])
+            for d in edits.iterdir():
+                if d.is_dir() and d.name not in used:
+                    shutil.rmtree(d, ignore_errors=True)
+                    removed += 1
+    return removed
+
+
 # -- the Studio's state -------------------------------------------------------------------------
 
 
 class Studio:
-    """The editing routes' state. Tests swap `clients`, `finalizer`, `publisher`, `limiter`."""
+    """The editing routes' state. Tests swap `clients`, `finalizer`, `publisher`, the limiters
+    and the caps."""
 
     def __init__(self, settings: ApiSettings, store: RunStore, live: Live) -> None:
         self.settings, self.store, self.live = settings, store, live
         self.limiter = RateLimiter(
             per_client=EDITS_PER_MIN, client_window=60.0, per_day=EDITS_PER_DAY, day_window=DAY
         )
+        self.publish_limiter = RateLimiter(
+            per_client=PUBLISHES_PER_MIN,
+            client_window=60.0,
+            per_day=PUBLISHES_PER_DAY,
+            day_window=DAY,
+        )
         self.clients: Clients = real_clients
         self.finalizer: Callable[[EditJob], Cue] = finalize_edit
         self.publisher: Callable[[RunContext, CueDoc, Ledger], Path] = republish
+        self.max_edits, self.max_publishes = MAX_EDITS, MAX_PUBLISHES
+        self.editing = self.publishing = 0  # across all runs, now
         self._locks: dict[str, asyncio.Lock] = {}
+
+    def sweep(self) -> int:
+        return sweep_edits([self.settings.runs_dir, self.settings.showcase_dir])
 
     def lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())
@@ -507,9 +580,10 @@ class Studio:
         if self.live.executor.get(run_id) is not None:
             raise LiveError(409, "busy", DESCRIBING, headers={"Retry-After": "60"})
 
-    def check_rate(self, request: Request) -> None:
-        key = self.limiter.client_key(client_ip(request, self.settings.lull_proxy_hops))
-        stop = self.limiter.retry_after(key)
+    def check_rate(self, request: Request, limiter: RateLimiter | None = None) -> None:
+        limiter = limiter or self.limiter
+        key = limiter.client_key(client_ip(request, self.settings.lull_proxy_hops))
+        stop = limiter.retry_after(key)
         if stop is not None:
             limit, wait = stop
             message = (
@@ -519,7 +593,7 @@ class Studio:
                 f"{max(1, round(wait / 3600))} h."
             )
             raise LiveError(429, "rate_limited", message, headers={"Retry-After": str(wait)})
-        self.limiter.hit(key)
+        limiter.hit(key)
 
     def check_budget(self, run_id: str) -> None:
         try:
@@ -556,6 +630,15 @@ class Studio:
 
 def not_editable(e: NotEditable) -> LiveError:
     return LiveError(409, "not_editable", f"This run cannot be edited: {e}.")
+
+
+def overloaded() -> LiveError:
+    return LiveError(
+        503,
+        "overloaded",
+        "The Studio is busy with other changes. Try again in a few seconds.",
+        headers={"Retry-After": str(OVERLOADED_RETRY_S)},
+    )
 
 
 def no_cue() -> LiveError:
@@ -635,19 +718,24 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
                 findings=[f.model_dump(mode="json") for f in findings],
             )
         studio.check_budget(rc.run_id)
+        if studio.editing >= studio.max_edits:
+            raise overloaded()
 
         work = run_dir / WORK / EDITS / f"{cue.id}-{secrets.token_hex(4)}"
         job = EditJob(rc, cue, text, ctx, work, studio.live.ledger, studio.clients)
+        studio.editing += 1
         try:
             done = await anyio.to_thread.run_sync(studio.finalizer, job)
-        except BudgetExceeded as e:
-            await anyio.to_thread.run_sync(_tidy, run_dir, work, cue, None)
+        except BudgetExceeded as e:  # only this edit's folder goes: the stored take stays
+            await anyio.to_thread.run_sync(lambda: shutil.rmtree(work, ignore_errors=True))
             raise LiveError(402, "budget", budget_message(e.scope), scope=e.scope) from None
         except Exception as e:
             log.exception("studio: the edit of %s/%s failed", run_id, cue.id)
-            await anyio.to_thread.run_sync(_tidy, run_dir, work, cue, None)
+            await anyio.to_thread.run_sync(lambda: shutil.rmtree(work, ignore_errors=True))
             message = f"The edit could not be checked: {studio.scrub(run_dir, str(e))}"
             raise LiveError(502, "engine", message) from None
+        finally:
+            studio.editing -= 1
         if done.status != "held":
             done = done.model_copy(update={"status": "edited"})
         doc.replace(done)
@@ -668,7 +756,8 @@ async def approve_cue(run_id: str, cue_id: str, request: Request) -> dict:
         cue = _cue(doc, cue_id)
         if cue.status == "approved":
             return _view(run_dir, cue)
-        if cue.status not in APPROVABLE or cue.audio_path is None or not cue.audio_dur:
+        voiced = cue.audio_path is not None and cue.audio_dur and Path(cue.audio_path).is_file()
+        if cue.status not in APPROVABLE or not voiced:
             raise LiveError(
                 409,
                 "invalid_transition",
@@ -713,10 +802,12 @@ async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
 async def publish_run(run_id: str, request: Request) -> dict:
     studio = _studio(request)
     run_dir = studio.writable(run_id)
-    studio.check_rate(request)
     async with studio.lock(run_id):
         studio.not_described(run_id)
         doc = studio.doc(run_dir)
+        if not studio.store.dirty(run_dir):  # nothing changed since it was published
+            return _detail(studio, run_dir)
+        studio.check_rate(request, studio.publish_limiter)
         rc = await studio.context(run_dir)
         missing = unvoiced(doc)
         if missing:
@@ -726,6 +817,9 @@ async def publish_run(run_id: str, request: Request) -> dict:
                 "Nothing was published: these cues have lost their audio. Edit them again.",
                 cue_ids=missing,
             )
+        if studio.publishing >= studio.max_publishes:
+            raise overloaded()
+        studio.publishing += 1
         try:
             await anyio.to_thread.run_sync(studio.publisher, rc, doc, studio.live.ledger)
         except OverlapError as e:
@@ -735,10 +829,15 @@ async def publish_run(run_id: str, request: Request) -> dict:
             message = f"Publishing failed: {studio.scrub(run_dir, str(e))}"
             raise LiveError(500, "publish_failed", message) from None
         finally:
+            studio.publishing -= 1
             studio.store.invalidate(run_dir)
         await anyio.to_thread.run_sync(lambda: mark(run_dir, dirty=False))
         studio.store.invalidate(run_dir)
+        return _detail(studio, run_dir)  # read under the lock: no change can slip in
+
+
+def _detail(studio: Studio, run_dir: Path) -> dict:
     detail = studio.store.detail(run_dir)
-    if detail is None:  # pragma: no cover - publish just wrote the manifest
+    if detail is None:  # pragma: no cover - the run has a manifest (doc() checked)
         raise LiveError(500, "publish_failed", "Publishing wrote no manifest.")
     return detail

@@ -1,7 +1,12 @@
+"""The Lull API. Run it as one process (uvicorn --workers 1): the live executor, the upload
+and Studio caps, the rate limits and the per-run edit locks are in memory."""
+
 from __future__ import annotations
 
 import logging
 import mimetypes
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,7 +48,15 @@ def file_response(target) -> FileResponse:
 def create_app(settings: ApiSettings | None = None) -> FastAPI:
     settings = settings or ApiSettings()
     store = RunStore(settings)
-    app = FastAPI(title="Lull API", version="0.1.0")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        swept = app.state.studio.sweep()  # before serving: no edit is in progress yet
+        if swept:
+            log.info("startup: removed %d edit folders nothing refers to", swept)
+        yield
+
+    app = FastAPI(title="Lull API", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.store = store
     app.state.health = Health()

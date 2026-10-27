@@ -201,6 +201,11 @@ def snapshot(d: Path) -> dict[str, str]:
     }
 
 
+def make_dirty(d: Path) -> None:
+    """As if the Studio had changed the run: publish then does real work."""
+    (d / "studio.json").write_text(json.dumps({"dirty": True, "changes": 1}))
+
+
 def patch(c, cue_id, text, run_id=RID):
     return c.patch(f"/v1/runs/{run_id}/cues/{cue_id}", json={"text": text})
 
@@ -463,6 +468,7 @@ def test_an_engine_held_cue_cannot_be_approved(sc, rd):
 @pytest.mark.parametrize("gone", ["stages/listen.json", "stages/watch.json", "input/clip.mp4"])
 def test_a_run_missing_its_records_cannot_be_edited(sc, rd, gone, fakes):
     (rd / gone).unlink()
+    make_dirty(rd)
     before = snapshot(rd)
     r = patch(sc, "c001", NEW_RED)
     assert r.status_code == 409 and r.json()["error"] == "not_editable"
@@ -503,6 +509,7 @@ def test_publish_refuses_an_overlap_with_speech_and_writes_nothing(sc, rd):
     c2 = doc["cues"][1]
     c2.update(audio_dur=6.0, end=c2["start"] + 6.0)  # runs into "Bye." at 11.2 s
     (rd / "cues.json").write_text(json.dumps(doc))
+    make_dirty(rd)
     before = snapshot(rd)
     r = sc.post(f"/v1/runs/{RID}/publish")
     assert r.status_code == 409
@@ -515,6 +522,7 @@ def test_publish_refuses_a_cue_past_its_pause(sc, rd):
     c1 = doc["cues"][0]
     c1.update(audio_dur=4.6, end=c1["start"] + 4.6)  # past g001's usable end, before speech
     (rd / "cues.json").write_text(json.dumps(doc))
+    make_dirty(rd)
     before = snapshot(rd)
     r = sc.post(f"/v1/runs/{RID}/publish")
     assert r.status_code == 409 and r.json()["cue_ids"] == ["c001"]
@@ -523,6 +531,7 @@ def test_publish_refuses_a_cue_past_its_pause(sc, rd):
 
 def test_publish_refuses_a_voiced_cue_whose_audio_is_gone(sc, rd):
     (rd / "work" / "audio" / "c002.wav").unlink()
+    make_dirty(rd)
     before = snapshot(rd)
     r = sc.post(f"/v1/runs/{RID}/publish")
     assert r.status_code == 409
@@ -683,3 +692,168 @@ def test_cue_model_round_trips_through_cues_json(rd):
     for c in doc["cues"] + doc["extended"]:
         Cue.model_validate(c)
     assert [c["text"] for c in doc["cues"]] == [CUE_TEXT["c001"], CUE_TEXT["c002"]]
+
+
+# -- a failed edit keeps the take; caps on the work the Studio does --------------------------------
+
+
+@pytest.mark.parametrize("failure", ["engine", "budget"])
+def test_a_failed_edit_keeps_the_current_take(sc, rd, app, failure):
+    first = patch(sc, "c001", NEW_RED)
+    assert first.status_code == 200
+    take = rd / cue_of(rd, "c001")["audio_path"]
+    assert take.is_file()
+
+    def fails(job):
+        job.work.mkdir(parents=True, exist_ok=True)
+        (job.work / "partial.wav").write_bytes(b"RIFF")
+        if failure == "budget":
+            raise BudgetExceeded("day")
+        raise RuntimeError("speech server fell over")
+
+    app.state.studio.finalizer = fails
+    r = patch(sc, "c001", "The plain red screen stays still.")
+    assert r.status_code == (402 if failure == "budget" else 502)
+    assert take.is_file()  # the stored take is untouched
+    assert cue_of(rd, "c001")["text"] == NEW_RED
+    assert [p.name for p in (rd / "work" / "edits").iterdir()] == [take.parent.parent.name]
+    audio = sc.get(first.json()["audio_url"])
+    assert audio.status_code == 200 and audio.content == take.read_bytes()
+    assert sc.post(f"/v1/runs/{RID}/cues/c001/approve").json()["status"] == "approved"
+
+
+def test_approve_needs_the_take_on_disk(sc, rd):
+    (rd / "work" / "audio" / "c001.wav").unlink()
+    r = sc.post(f"/v1/runs/{RID}/cues/c001/approve")
+    assert r.status_code == 409 and r.json()["error"] == "invalid_transition"
+    assert cue_of(rd, "c001")["status"] == "verified"
+
+
+def _in_thread(fn):
+    out: dict = {}
+    t = threading.Thread(target=lambda: out.setdefault("r", fn()))
+    t.start()
+    return t, out
+
+
+def test_edits_past_the_cpu_cap_are_503(sc, rd, app, template, data):
+    place(template, data / "runs", RID2)
+    studio = app.state.studio
+    assert studio.max_edits == 2
+    studio.max_edits = 1
+    entered, gate = threading.Event(), threading.Event()
+
+    def slow(job):
+        entered.set()
+        assert gate.wait(10)
+        return job.cue.model_copy(update={"text": job.text, "status": "verified"})
+
+    studio.finalizer = slow
+    t, out = _in_thread(lambda: patch(sc, "c001", NEW_RED))
+    try:
+        assert entered.wait(10)
+        r = patch(sc, "c001", NEW_RED, run_id=RID2)  # another run: only the cap stops it
+        assert r.status_code == 503 and r.json()["error"] == "overloaded"
+        assert int(r.headers["retry-after"]) > 0
+    finally:
+        gate.set()
+        t.join(10)
+    assert out["r"].status_code == 200
+    assert studio.editing == 0
+    assert patch(sc, "c001", NEW_RED, run_id=RID2).status_code == 200
+
+
+def test_one_publish_at_a_time_503(sc, rd, app, template, data):
+    place(template, data / "runs", RID2)
+    studio = app.state.studio
+    assert studio.max_publishes == 1
+    make_dirty(rd)
+    make_dirty(data / "runs" / RID2)
+    entered, gate = threading.Event(), threading.Event()
+    real = studio.publisher
+
+    def slow(rc, doc, ledger):
+        entered.set()
+        assert gate.wait(10)
+        return real(rc, doc, ledger)
+
+    studio.publisher = slow
+    t, out = _in_thread(lambda: sc.post(f"/v1/runs/{RID}/publish"))
+    try:
+        assert entered.wait(10)
+        r = sc.post(f"/v1/runs/{RID2}/publish")
+        assert r.status_code == 503 and r.json()["error"] == "overloaded"
+    finally:
+        gate.set()
+        t.join(10)
+    assert out["r"].status_code == 200 and studio.publishing == 0
+
+
+def test_publish_has_its_own_rate_limit(sc, rd, app):
+    studio = app.state.studio
+    lim = studio.publish_limiter
+    assert (lim.per_client, lim.client_window) == (4, 60.0)
+    studio.publish_limiter = RateLimiter(per_client=2, client_window=60, per_day=1000)
+    for cue in ("c001", "c002"):
+        assert sc.post(f"/v1/runs/{RID}/cues/{cue}/hold").status_code == 200
+        assert sc.post(f"/v1/runs/{RID}/publish").status_code == 200
+    sc.post(f"/v1/runs/{RID}/cues/x002/hold")
+    r = sc.post(f"/v1/runs/{RID}/publish")
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    assert 1 <= int(r.headers["retry-after"]) <= 60
+
+
+def test_publish_with_nothing_changed_is_a_no_op(sc, rd, app):
+    def never(rc, doc, ledger):
+        raise AssertionError("published although nothing changed")
+
+    app.state.studio.publisher = never
+    before = snapshot(rd)
+    r = sc.post(f"/v1/runs/{RID}/publish")
+    assert r.status_code == 200
+    assert r.json()["dirty"] is False and r.json()["manifest"]["run_id"] == RID
+    assert snapshot(rd) == before
+
+
+# -- the sweep, the sample hash ------------------------------------------------------------------
+
+
+def test_startup_sweeps_edit_folders_nothing_refers_to(make_app, rd):
+    edits = rd / "work" / "edits"
+    for name in ("c001-live", "c002-prev", "c002-dead"):
+        (edits / name / "audio").mkdir(parents=True)
+        (edits / name / "audio" / f"{name[:4]}.wav").write_bytes(b"RIFF")
+    doc = cues_doc(rd)
+    doc["cues"][0]["audio_path"] = "work/edits/c001-live/audio/c001.wav"
+    (rd / "cues.json").write_text(json.dumps(doc))
+    studio_state = {
+        "dirty": True,
+        "overrides": {"c002": {"previous": {"audio_path": "work/edits/c002-prev/audio/c002.wav"}}},
+    }
+    (rd / "studio.json").write_text(json.dumps(studio_state))
+    with TestClient(make_app()):
+        pass
+    assert sorted(p.name for p in edits.iterdir()) == ["c001-live", "c002-prev"]
+
+
+def test_the_sample_hash_is_computed_once_per_file_version(template, data, monkeypatch):
+    from lull.api import studio as studio_mod
+
+    d = place(template, data / "showcase")
+    (data / "samples").mkdir(parents=True)
+    sample = data / "samples" / "clip.mp4"
+    shutil.copyfile(d / "input" / "clip.mp4", sample)
+    shutil.rmtree(d / "input")
+    manifest = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
+    calls = []
+    real = studio_mod.file_sha256
+    monkeypatch.setattr(studio_mod, "file_sha256", lambda p: calls.append(p) or real(p))
+    studio_mod.sample_sha256.cache_clear()
+    for _ in range(3):
+        assert studio_mod.source_video(d, manifest, {}, data / "samples") == sample
+    assert len(calls) == 1
+    with open(sample, "ab") as f:
+        f.write(b"x")
+    with pytest.raises(studio_mod.NotEditable):
+        studio_mod.source_video(d, manifest, {}, data / "samples")
+    assert len(calls) == 2

@@ -313,3 +313,73 @@ def test_api_uses_no_private_ledger_helpers():
     root = Path(lull.api.__file__).parent
     for src in root.glob("*.py"):
         assert "_midnight_utc" not in src.read_text(encoding="utf-8"), src.name
+
+
+# -- the scrubber: roots only at path boundaries, never inside URLs --------------------------------
+
+
+def _scrubber():
+    from lull.api.clean import Scrubber
+
+    return Scrubber(Path("/data/runs/r1"), [Path("/data"), Path("/tmp"), Path("/root")])
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "see https://example.org/data/report.html for more",
+        "fetched https://cdn.example.com/tmp/clip.mp4 (404)",
+        "https://example.org/root/x and http://h.test/data",
+    ],
+)
+def test_scrubber_leaves_urls_alone(text):
+    assert _scrubber()(text) == text
+
+
+def test_scrubber_cuts_roots_only_at_path_boundaries():
+    s = _scrubber()
+    assert s("failed: /data/runs/r1/input/clip.mp4: bad") == "failed: input/clip.mp4: bad"
+    assert s("see '/tmp/lull-x.log'") == "see 'lull-x.log'"
+    assert s("open /database/table.db") == "open table.db"  # not "base/table.db"
+    assert s("in /rooted/thing.txt now") == "in thing.txt now"  # not "ed/thing.txt"
+    assert s("(/data)") == "()"
+
+
+def test_names_only_scrubber_keeps_urls_in_titles():
+    from lull.api.clean import Scrubber
+
+    s = Scrubber(Path("/data"), [Path("/data"), Path("/tmp")], names_only=True)
+    assert s("https://example.org/data/clip.mp4") == "https://example.org/data/clip.mp4"
+    assert s("/data/runs/r1/input/clip.mp4") == "clip.mp4"
+
+
+# -- /v1/health does not make callers wait on a slow speech probe ---------------------------------
+
+
+def test_health_does_not_hold_its_lock_across_the_speech_probe(monkeypatch):
+    import threading
+
+    from lull.api import health as health_mod
+
+    entered, gate = threading.Event(), threading.Event()
+    calls = []
+
+    def probe():
+        calls.append(1)
+        if len(calls) == 1:
+            entered.set()
+            assert gate.wait(10)
+        return True
+
+    monkeypatch.setattr(health_mod, "speech_ok", probe)
+    h = health_mod.Health(ttl=0.0)
+    t = threading.Thread(target=h.get)
+    t.start()
+    try:
+        assert entered.wait(10)
+        done = threading.Event()
+        threading.Thread(target=lambda: (h.get(), done.set())).start()
+        assert done.wait(2), "a second caller waited for the first one's speech probe"
+    finally:
+        gate.set()
+        t.join(10)
