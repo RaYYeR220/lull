@@ -1,6 +1,7 @@
 import hashlib
 import json
 import math
+import shutil
 import subprocess
 import wave
 from fractions import Fraction
@@ -995,3 +996,120 @@ def test_the_reason_the_extended_version_failed_names_no_local_path(
                   _ledger(tmp_path), "r1", RunOptions(), speech=[])  # fmt: skip
     reason = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]["extended_error"]
     assert reason == ("ffmpeg failed (exit 1): premix.wav: Invalid data; x001.wav missing; a.mp4")
+
+
+# -- fix round 1: rollback during the move, one publisher at a time ---------------------------
+
+
+def _tree(root: Path) -> tuple[dict[str, bytes], list[str]]:
+    """Every file's bytes and every entry's name (empty folders included)."""
+    return _snapshot(root), sorted(p.relative_to(root).as_posix() for p in root.rglob("*"))
+
+
+def _publish_args(tmp_path: Path):
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0)]
+    events = [_ev("e1", 2.0, 4.0, kind="slide", salience=5)]
+    return video, (events, gaps, None, _ledger(tmp_path), "r1", RunOptions())
+
+
+def test_a_failure_while_moving_the_outputs_in_rolls_everything_back(
+    tmp_path, fake_media, monkeypatch
+):
+    """I2: the old outputs move to a backup folder, the new ones move in, the backup goes only
+    after success. A move that fails at any point puts every old file back in place."""
+    from lull.stages import publish as pub
+
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")]
+    other = [_cue("c001", 2.0, 1.2, ev=["e1"], text="Another line.", audio="y.wav")]
+    real = pub._move
+    failed_at = []
+    for n in range(1, 40):
+        publish(run, video, cues, [], *args, speech=[])  # a good publish to fall back to
+        before = _tree(run)
+        calls = {"n": 0}
+
+        def flaky(src, dst, _n=n, _calls=calls):
+            _calls["n"] += 1
+            if _calls["n"] == _n:
+                raise OSError(f"disk said no on move {_n}")
+            return real(src, dst)
+
+        monkeypatch.setattr(pub, "_move", flaky)
+        try:
+            publish(run, video, other, [], *args, speech=[])
+        except OSError:
+            failed_at.append(n)
+            assert _tree(run) == before, f"not rolled back after a failure on move {n}"
+        else:
+            break  # n is past the last move: the publish went through
+        finally:
+            monkeypatch.setattr(pub, "_move", real)
+    assert len(failed_at) >= 10  # the backup moves and the moves in were all tried
+    assert "Another line." in (run / "descriptions.vtt").read_text(encoding="utf-8")
+
+
+def test_publishes_of_one_run_take_turns(tmp_path, fake_media, monkeypatch):
+    """M6: a publish holds run_dir/.publish.lock (created exclusively); another one waits for
+    it instead of clearing the first one's staging folder."""
+    import threading
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_POLL_S", 0.05)
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    lock.write_text("someone else", encoding="utf-8")
+    busy = run / ".publish-busy"  # the other publish's staging folder
+    busy.mkdir()
+
+    def finish() -> None:
+        time.sleep(0.4)
+        shutil.rmtree(busy)
+        lock.unlink()
+
+    t = threading.Thread(target=finish)
+    t0 = time.monotonic()
+    t.start()
+    publish(run, video, [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")], [], *args, speech=[])
+    t.join()
+    assert time.monotonic() - t0 >= 0.35  # it waited its turn
+    assert (run / "manifest.json").exists() and not lock.exists()
+
+
+def test_a_stale_publish_lock_is_broken(tmp_path, fake_media, caplog):
+    import os
+    import time
+
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    lock.write_text("crashed", encoding="utf-8")
+    old = time.time() - 11 * 60
+    os.utime(lock, (old, old))
+    (run / ".publish-crashed").mkdir()  # its staging folder
+    with caplog.at_level("WARNING", logger="lull.stages.publish"):
+        publish(run, video, [], [], *args, speech=[])
+    assert "stale" in caplog.text
+    assert not lock.exists() and not (run / ".publish-crashed").exists()
+
+
+def test_a_backup_left_by_a_crash_is_put_back_before_the_next_publish(tmp_path):
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    (run / ".publish-old-x1").mkdir(parents=True)
+    (run / ".publish-old-x1" / "manifest.json").write_text("old manifest", encoding="utf-8")
+    (run / ".publish-old-x1" / "report.html").write_text("old report", encoding="utf-8")
+    (run / "report.html").write_text("new report", encoding="utf-8")  # already moved in
+    pub._recover(run)
+    assert (run / "manifest.json").read_text(encoding="utf-8") == "old manifest"
+    assert (run / "report.html").read_text(encoding="utf-8") == "new report"
+    assert not (run / ".publish-old-x1").exists()

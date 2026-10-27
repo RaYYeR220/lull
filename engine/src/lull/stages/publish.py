@@ -19,9 +19,12 @@ manifest.json         sha256 and size of every file above, the run summary and v
 The gate treats speech and everything outside the gaps' usable windows (speech guards,
 protected sound) as off limits: a voiced standard cue that reaches into it, or into another
 cue, stops publishing before any file is written. Publishing is all or nothing: every output
-is written into a staging folder (`.publish-*`) inside the run directory and moved into place
-only once the manifest is written too; a failure on the way leaves the previous outputs as
-they were. Every status in the report is computed here;
+is written into a staging folder (`.publish-*`) inside the run directory; only once the
+manifest is written too do the old outputs move into a backup folder (`.publish-old-*`) and
+the new ones move in, and the backup is deleted only after the last move. A failure at any
+point, moves included, puts the previous outputs back as they were. One publish runs per run
+directory at a time (`.publish.lock`, created exclusively; a lock older than 10 minutes is
+taken to be left by a crash and broken). Every status in the report is computed here;
 "met" is printed only when every published line was reviewed by a person, and reads "met
 (automated checks)" until then.
 """
@@ -35,8 +38,10 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
@@ -78,6 +83,10 @@ _LOCAL_PATH = re.compile(  # C:\dir\file, \\host\share\file, /dir/file -> file
     r"([^\s;,'\"<>|:\\/]*)"
 )
 STAGING = ".publish-"
+BACKUP = ".publish-old-"  # the previous outputs while the new ones move in
+LOCK = ".publish.lock"
+LOCK_STALE_S = 600.0  # a lock this old was left by a crash
+LOCK_POLL_S = 0.2
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
 OUTPUTS = frozenset(
     {
@@ -408,10 +417,55 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
+@contextmanager
+def _lock(run_dir: Path) -> Iterator[None]:
+    """Hold run_dir/.publish.lock while publishing: wait while another publish holds it, and
+    break it when it is older than LOCK_STALE_S (its publisher crashed)."""
+    path = run_dir / LOCK
+    while True:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                age = time.time() - path.stat().st_mtime
+            except FileNotFoundError:
+                continue  # released in between
+            if age > LOCK_STALE_S:
+                log.warning("publish: breaking a stale lock (%.0f s old) in %s", age, run_dir)
+                path.unlink(missing_ok=True)
+                continue
+            time.sleep(LOCK_POLL_S)
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(f"{os.getpid()} {time.time():.0f}\n")
+        break
+    try:
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def _move(src: Path, dst: Path) -> None:
+    os.replace(src, dst)
+
+
+def _recover(run_dir: Path) -> None:
+    """Put back what a publish that crashed while moving had moved aside: each backed-up
+    output whose place is empty returns; the backup folder goes once it is empty."""
+    for backup in sorted(p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith(BACKUP)):
+        for item in sorted(backup.iterdir()):
+            if not (run_dir / item.name).exists():
+                _move(item, run_dir / item.name)
+        log.warning("publish: an interrupted publish left %s; its outputs were put back where "
+                    "missing", backup.name)  # fmt: skip
+        shutil.rmtree(backup, ignore_errors=True)
+
+
 def _clear_temp(run_dir: Path) -> None:
-    """Temp and staging folders a crashed run left behind."""
+    """Temp and staging folders a crashed run left behind (only ever called under the lock,
+    so no other publish is using them)."""
     for p in run_dir.iterdir():
-        if p.is_dir() and p.name.startswith(_TEMP_DIRS):
+        if p.is_dir() and p.name.startswith(_TEMP_DIRS) and not p.name.startswith(BACKUP):
             shutil.rmtree(p, ignore_errors=True)
 
 
@@ -424,26 +478,37 @@ def _previous(run_dir: Path) -> set[str]:
     return {str(name).split("/")[0] for name in outputs} & OUTPUTS
 
 
-def _remove(path: Path) -> None:
-    if path.is_dir():
-        shutil.rmtree(path)
-    elif path.exists():
-        path.unlink()
-
-
 def _commit(staging: Path, run_dir: Path, names: Iterable[str]) -> None:
-    """Move the staged outputs over the old ones (keyframes/ as a whole), the manifest last,
-    then remove what the previous publish made and this one did not."""
-    tops = {name.split("/")[0] for name in names}
-    stale = (_previous(run_dir) | OUTPUTS) - tops
-    for top in sorted(tops):
-        src, dst = staging / top, run_dir / top
-        if src.is_dir():
-            _remove(dst)
-        os.replace(src, dst)
-    os.replace(staging / MANIFEST, run_dir / MANIFEST)
-    for top in sorted(stale):
-        _remove(run_dir / top)
+    """Swap the staged outputs in: every old output (what the previous manifest lists, any
+    name publish owns, and the manifest) moves into a backup folder, then the new outputs move
+    in (keyframes/ as a whole), the manifest last. A failure on any move moves the new ones
+    back out and the old ones back in; the backup is deleted only after success."""
+    tops = sorted({name.split("/")[0] for name in names})
+    old = sorted(_previous(run_dir) | OUTPUTS | set(tops) | {MANIFEST})
+    backup = run_dir / (BACKUP + staging.name[len(STAGING) :])
+    backup.mkdir()
+    saved: list[str] = []
+    placed: list[str] = []
+    try:
+        for name in old:
+            if (run_dir / name).exists():
+                _move(run_dir / name, backup / name)
+                saved.append(name)
+        for name in [*tops, MANIFEST]:
+            _move(staging / name, run_dir / name)
+            placed.append(name)
+    except BaseException:
+        try:
+            for name in reversed(placed):
+                _move(run_dir / name, staging / name)
+            for name in reversed(saved):
+                _move(backup / name, run_dir / name)
+        except OSError:
+            log.exception("publish: could not undo the move; the old outputs are in %s", backup)
+            raise
+        shutil.rmtree(backup, ignore_errors=True)
+        raise
+    shutil.rmtree(backup, ignore_errors=True)
     shutil.rmtree(staging, ignore_errors=True)
 
 
@@ -546,17 +611,19 @@ def publish(
 
     info = media.probe(video)
     run_dir.mkdir(parents=True, exist_ok=True)
-    _clear_temp(run_dir)
-    staging = Path(tempfile.mkdtemp(dir=run_dir, prefix=STAGING))
-    try:
-        out = _stage(
-            staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
-            run_id, opts, speech, duplicates, overlap,
-        )  # fmt: skip
-        _commit(staging, run_dir, out)
-    except BaseException:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise
+    with _lock(run_dir):
+        _recover(run_dir)
+        _clear_temp(run_dir)
+        staging = Path(tempfile.mkdtemp(dir=run_dir, prefix=STAGING))
+        try:
+            out = _stage(
+                staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
+                run_id, opts, speech, duplicates, overlap,
+            )  # fmt: skip
+            _commit(staging, run_dir, out)
+        except BaseException:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
     files = {name: run_dir / name for name in out}
     log.info("publish: %d files in %s", len(files) + 1, run_dir)
     return PublishResult(files=files, manifest=run_dir / MANIFEST)
