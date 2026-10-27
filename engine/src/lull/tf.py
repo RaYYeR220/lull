@@ -213,8 +213,16 @@ class TokenFactory:
         cached = int(cached)
         self.ledger.record(
             CallRecord(
-                run_id=run_id, stage=stage, role=role, provider="tokenfactory", model=model,
-                tokens_in=tin, tokens_cached=cached, tokens_out=tout, latency_s=latency,
-                cost_usd=cost_of(model, tin, cached, tout), ts=time.time(),
+                run_id=run_id,
+                stage=stage,
+                role=role,
+                provider="tokenfactory",
+                model=model,
+                tokens_in=tin,
+                tokens_cached=cached,
+                tokens_out=tout,
+                latency_s=latency,
+                cost_usd=cost_of(model, tin, cached, tout),
+                ts=time.time(),
             )  # fmt: skip
         )

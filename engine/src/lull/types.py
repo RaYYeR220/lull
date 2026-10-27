@@ -52,8 +52,15 @@ class Shot(BaseModel):
 
 
 EventKind = Literal[
-    "setting", "person", "action", "on_screen_text", "slide",
-    "chart", "object", "scene_change", "gesture",
+    "setting",
+    "person",
+    "action",
+    "on_screen_text",
+    "slide",
+    "chart",
+    "object",
+    "scene_change",
+    "gesture",
 ]
 
 

@@ -25,9 +25,7 @@ def merge_spans(spans: list[Span], join_within: float = 0.0) -> list[Span]:
     return out
 
 
-def speech_spans(
-    words: list[Word], turns: list[Turn], join_within: float = 0.25
-) -> list[Span]:
+def speech_spans(words: list[Word], turns: list[Turn], join_within: float = 0.25) -> list[Span]:
     """Union of word spans and diarized turns, merged across tiny pauses."""
     spans = [Span(start=w.start, end=w.end) for w in words]
     spans += [Span(start=t.start, end=t.end) for t in turns]

@@ -25,8 +25,9 @@ class Settings(BaseSettings):
     lull_cap_total: float = Field(default=35.00, validation_alias="LULL_CAP_TOTAL")
 
     # Ledger and voice calibration files live here.
-    lull_home: Path = Field(default_factory=lambda: Path.home() / ".lull",
-                            validation_alias="LULL_HOME")
+    lull_home: Path = Field(
+        default_factory=lambda: Path.home() / ".lull", validation_alias="LULL_HOME"
+    )
 
 
 @lru_cache
