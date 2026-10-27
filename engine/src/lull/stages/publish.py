@@ -8,7 +8,8 @@ described.mp4         video + "Described" track 1 + "Original" track 2
 extended.mp4          the extended version, when an extended cue is voiced (a failure to make
                       it is reported, not fatal)
 cues.json             every cue, held ones included, for the Studio (audio paths relative to
-                      the run directory)
+                      the run directory; extended cues with their freeze point), the pauses
+                      (the windows the scheduler filled) and the speech spans
 script.md             the description script: timecode, status, text, claims, findings, note
 report.html           WCAG status, coverage, overlap with speech, held cues, F113 flags,
                       reviewer warnings, research glossary, model calls and cost, TTS disclosure
@@ -17,7 +18,10 @@ manifest.json         sha256 and size of every file above, the run summary and v
 
 The gate treats speech and everything outside the gaps' usable windows (speech guards,
 protected sound) as off limits: a voiced standard cue that reaches into it, or into another
-cue, stops publishing before any file is written. Every status in the report is computed here;
+cue, stops publishing before any file is written. Publishing is all or nothing: every output
+is written into a staging folder (`.publish-*`) inside the run directory and moved into place
+only once the manifest is written too; a failure on the way leaves the previous outputs as
+they were. Every status in the report is computed here;
 "met" is printed only when every published line was reviewed by a person, and reads "met
 (automated checks)" until then.
 """
@@ -30,6 +34,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 from collections import Counter
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
@@ -68,7 +73,21 @@ TTS_NAME = mixer.TTS_NAME
 MET, MET_AUTOMATED = "met", "met (automated checks)"
 REVIEW, NOT_CLAIMED = "needs review", "not claimed"
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
-_TEMP_DIRS = (".mix-", ".extended-")
+STAGING = ".publish-"
+_TEMP_DIRS = (".mix-", ".extended-", STAGING)
+OUTPUTS = frozenset(
+    {
+        STANDARD_VTT,
+        EXTENDED_VTT,
+        CUES_JSON,
+        SCRIPT,
+        REPORT,
+        KEYFRAMES,
+        mixer.AD_AUDIO,
+        mixer.AD_VIDEO,
+        mixer.EXTENDED_VIDEO,
+    }
+)  # fmt: skip  (top-level names publish owns, besides the manifest)
 _EPS = 1e-9
 
 
@@ -380,14 +399,43 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
-def _clear_stale(run_dir: Path) -> None:
-    """Outputs a rerun may not write again (extended.mp4, keyframes) and temp dirs a crashed
-    run left behind; the other outputs are always overwritten."""
-    (run_dir / mixer.EXTENDED_VIDEO).unlink(missing_ok=True)
-    shutil.rmtree(run_dir / KEYFRAMES, ignore_errors=True)
+def _clear_temp(run_dir: Path) -> None:
+    """Temp and staging folders a crashed run left behind."""
     for p in run_dir.iterdir():
         if p.is_dir() and p.name.startswith(_TEMP_DIRS):
             shutil.rmtree(p, ignore_errors=True)
+
+
+def _previous(run_dir: Path) -> set[str]:
+    """Top-level names the previous publish listed in its manifest (none when unreadable)."""
+    try:
+        outputs = json.loads((run_dir / MANIFEST).read_bytes().decode("utf-8"))["outputs"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+    return {str(name).split("/")[0] for name in outputs} & OUTPUTS
+
+
+def _remove(path: Path) -> None:
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+def _commit(staging: Path, run_dir: Path, names: Iterable[str]) -> None:
+    """Move the staged outputs over the old ones (keyframes/ as a whole), the manifest last,
+    then remove what the previous publish made and this one did not."""
+    tops = {name.split("/")[0] for name in names}
+    stale = (_previous(run_dir) | OUTPUTS) - tops
+    for top in sorted(tops):
+        src, dst = staging / top, run_dir / top
+        if src.is_dir():
+            _remove(dst)
+        os.replace(src, dst)
+    os.replace(staging / MANIFEST, run_dir / MANIFEST)
+    for top in sorted(stale):
+        _remove(run_dir / top)
+    shutil.rmtree(staging, ignore_errors=True)
 
 
 def _keyframes(
@@ -412,8 +460,10 @@ def _by_time(cues: Iterable[Cue]) -> list[Cue]:
     return sorted(cues, key=lambda c: (c.start, c.id))
 
 
-def _cue_json(c: Cue, run_dir: Path) -> dict:
+def _cue_json(c: Cue, run_dir: Path, freeze_at: dict[str, float] | None = None) -> dict:
     data = c.model_dump(mode="json")
+    if freeze_at and c.id in freeze_at:
+        data["freeze_at"] = round(freeze_at[c.id], 6)
     if c.audio_path is not None:
         try:
             rel = os.path.relpath(Path(c.audio_path).resolve(), run_dir.resolve())
@@ -464,10 +514,11 @@ def publish(
     speech: list[Span],
     duplicates: dict[str, str] | None = None,
 ) -> PublishResult:
-    """Write every output into `run_dir` (see the module doc). Raises OverlapError, writing
-    nothing, when a voiced standard cue overlaps speech, a guard, protected sound or another
-    cue. `speech` is the listen stage's speech spans; `duplicates` the events the plan dropped
-    as near-duplicates of another (dropped -> kept), counted as described with their twin."""
+    """Write every output into `run_dir` (see the module doc), all or nothing. Raises
+    OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
+    protected sound or another cue; any other failure leaves the previous outputs untouched.
+    `speech` is the listen stage's speech spans; `duplicates` the events the plan dropped as
+    near-duplicates of another (dropped -> kept), counted as described with their twin."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -483,11 +534,36 @@ def publish(
         "outside_pauses_s": overlap_report(cues, outside)["speech_s"],
         "total_s": gate["total_s"],
     }
-    spoken, spoken_ext = mixer.voiced(cues), mixer.voiced_extended(extended)
 
     info = media.probe(video)
     run_dir.mkdir(parents=True, exist_ok=True)
-    _clear_stale(run_dir)
+    _clear_temp(run_dir)
+    staging = Path(tempfile.mkdtemp(dir=run_dir, prefix=STAGING))
+    try:
+        out = _stage(
+            staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
+            run_id, opts, speech, duplicates, overlap,
+        )  # fmt: skip
+        _commit(staging, run_dir, out)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    files = {name: run_dir / name for name in out}
+    log.info("publish: %d files in %s", len(files) + 1, run_dir)
+    return PublishResult(files=files, manifest=run_dir / MANIFEST)
+
+
+def _stage(
+    run_dir: Path, final: Path, video: Path, info: media.Probe, cues: list[Cue],
+    extended: list[Cue], events: list[VisualEvent], gaps: list[Gap],
+    research: ResearchResult | None, ledger: Ledger, run_id: str, opts: RunOptions,
+    speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
+) -> dict[str, Path]:  # fmt: skip
+    """Every output written into the staging folder `run_dir` (paths inside the outputs are
+    relative to `final`, where they will live); returns the outputs by published name, the
+    manifest left out."""
+    everything = cues + extended
+    spoken, spoken_ext = mixer.voiced(cues), mixer.voiced_extended(extended)
     out: dict[str, Path] = {}
     levels = mixer.measure_levels(video, info, spoken + spoken_ext)
     mixed = mixer.mix(video, cues, run_dir, info=info, language=opts.language, levels=levels)
@@ -567,8 +643,10 @@ def publish(
     cue_data = {
         "run_id": run_id,
         "language": language,
-        "cues": [_cue_json(c, run_dir) for c in _by_time(cues)],
-        "extended": [_cue_json(c, run_dir) for c in _by_time(extended)],
+        "cues": [_cue_json(c, final) for c in _by_time(cues)],
+        "extended": [_cue_json(c, final, freeze_at) for c in _by_time(extended)],
+        "gaps": [g.model_dump(mode="json") for g in sorted(gaps, key=lambda g: g.usable_start)],
+        "speech": [s.model_dump(mode="json") for s in merge_spans(speech)],
     }
     out[CUES_JSON] = _write(
         run_dir / CUES_JSON, json.dumps(cue_data, indent=2, ensure_ascii=False) + "\n"
@@ -605,6 +683,5 @@ def publish(
         "summary": summary,
         "versions": {"engine": lull.__version__, "models": models, "tts": TTS_NAME},
     }
-    path = _write(run_dir / MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
-    log.info("publish: %d files in %s", len(out) + 1, run_dir)
-    return PublishResult(files=out, manifest=path)
+    _write(run_dir / MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
+    return out

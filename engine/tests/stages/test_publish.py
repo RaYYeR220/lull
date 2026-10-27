@@ -638,6 +638,96 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     assert "x001\n00:00:30.000 --> 00:00:31.000\n" in ext_vtt  # written regardless
 
 
+def test_cues_json_carries_the_timeline_the_studio_and_the_site_draw(tmp_path, fake_media):
+    """cues.json also holds the pauses (the windows the scheduler filled), the speech spans
+    and, for each voiced extended cue, its freeze point."""
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0), _gap("g002", 20.0, 23.0)]
+    events = [_ev("e1", 2.0, 4.0), _ev("e2", 11.0, 12.0)]
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")]
+    ext = [_cue("x002", 11.0, 1.0, gap=None, status="extended", ev=["e2"], audio="x.wav"),
+           _cue("x003", 13.0, None, gap=None, status="held", ev=["e2"])]  # fmt: skip
+    speech = [Span(start=0.0, end=1.8), Span(start=10.0, end=12.5)]
+    run = tmp_path / "run"
+    publish(run, video, cues, ext, events, gaps, None, _ledger(tmp_path), "r1", RunOptions(),
+            speech=speech)  # fmt: skip
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    assert data["gaps"] == [g.model_dump(mode="json") for g in gaps]
+    assert data["speech"] == [{"start": 0.0, "end": 1.8}, {"start": 10.0, "end": 12.5}]
+    assert [(c["id"], c.get("freeze_at")) for c in data["extended"]] == [
+        ("x002", 10.0), ("x003", None)  # x002 waits for the speech under its visual
+    ]  # fmt: skip
+    assert "freeze_at" not in data["cues"][0]
+
+
+def _snapshot(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def test_a_failed_publish_leaves_the_previous_outputs_untouched(tmp_path, fake_media, monkeypatch):
+    """Publish is atomic: everything is written into a staging folder first and moved into
+    place only when every output and the manifest are done."""
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0)]
+    events = [_ev("e1", 2.0, 4.0, kind="slide", salience=5)]
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio=str(tmp_path / "c001.wav"))]
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended", ev=["e1"],
+                audio=str(tmp_path / "x001.wav"))]  # fmt: skip
+    run = tmp_path / "run"
+    args = (events, gaps, None, _ledger(tmp_path), "r1", RunOptions())
+    published = publish(run, video, cues, ext, *args, speech=[])
+    before = _snapshot(run)
+    assert "manifest.json" in before and "cues.json" in before and "keyframes/c001.jpg" in before
+
+    def broken_mix(*a, **kw):
+        raise MediaError("ffmpeg failed (exit 1): the mix broke")
+
+    monkeypatch.setattr(mixer, "mix", broken_mix)
+    other = [_cue("c001", 2.0, 1.2, ev=["e1"], text="Another line.", audio="y.wav")]
+    with pytest.raises(MediaError, match="the mix broke"):
+        publish(run, video, other, [], *args, speech=[])
+    assert _snapshot(run) == before  # byte for byte, nothing added or removed
+    assert published.manifest.read_bytes() == before["manifest.json"]
+
+
+def test_a_new_publish_replaces_the_outputs_and_drops_the_ones_it_no_longer_makes(
+    tmp_path, fake_media, monkeypatch
+):
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0)]
+    events = [_ev("e1", 2.0, 4.0, kind="slide", salience=5)]
+    run = tmp_path / "run"
+    args = (events, gaps, None, _ledger(tmp_path), "r1", RunOptions())
+    (run / "notes.txt").parent.mkdir(parents=True)
+    (run / "notes.txt").write_text("mine", encoding="utf-8")  # not an output: left alone
+
+    def with_extended(video, cues_extended, out_dir, **kw):
+        if not cues_extended:
+            return None
+        dst = out_dir / mixer.EXTENDED_VIDEO
+        dst.write_bytes(b"extended")
+        return dst
+
+    monkeypatch.setattr(mixer, "extended_video", with_extended)
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended", ev=["e1"], audio="x.wav")]
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")]
+    first = publish(run, video, cues, ext, *args, speech=[])
+    assert (run / "extended.mp4").exists() and "extended.mp4" in first.files
+    assert sorted(p.name for p in (run / "keyframes").iterdir()) == ["c001.jpg", "x001.jpg"]
+    second = publish(run, video, cues, [], *args, speech=[])
+    assert not (run / "extended.mp4").exists() and "extended.mp4" not in second.files
+    assert sorted(p.name for p in (run / "keyframes").iterdir()) == ["c001.jpg"]
+    assert (run / "notes.txt").read_text(encoding="utf-8") == "mine"
+    assert [p.name for p in run.iterdir() if p.name.startswith(".")] == []
+    m = json.loads(second.manifest.read_text(encoding="utf-8"))
+    assert set(m["outputs"]) == set(second.files)
+    for name, path in second.files.items():
+        assert path == run / name and path.exists()
+
+
 # -- real ffmpeg -----------------------------------------------------------------------------
 
 PROGRAMME_HZ = 440.0
