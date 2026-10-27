@@ -3,6 +3,7 @@ import json
 import math
 import subprocess
 import wave
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -934,3 +935,63 @@ def test_published_files_match_manifest(published):
     assert "NOTE extended pause=0.530\n\nx001\n00:00:00.600 --> 00:00:01.130\n" in ext_vtt
     assert "NOTE extended pause=0.710\n\nx002\n00:00:03.600 --> 00:00:04.310\n" in ext_vtt
     assert [p.name for p in run.iterdir() if p.name.startswith(".")] == []  # no temp dirs left
+
+
+# -- Task 14 minors ------------------------------------------------------------------------------
+
+
+def test_a_freeze_pulled_back_from_the_end_never_lands_in_speech():
+    """The last freeze is kept MIN_SEGMENT inside the video; when that moves it into speech it
+    goes back to where the speech starts."""
+    speech = [Span(start=9.7, end=9.95)]
+    ext = [_cue("x001", 9.98, 0.4, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, speech=speech)
+    assert frame == 242  # 9.68 s, just before the speech; 9.88 s would be mid-word
+    assert not any(sp.start < frame / 25 < sp.end for sp in speech)
+
+
+def test_the_frame_rate_comes_from_the_probed_fraction():
+    ntsc = Probe(10.0, 640, 360, 29.97, True, "h264", "aac", fps_rational="30000/1001")
+    assert mixer.frame_rate(ntsc) == Fraction(30000, 1001)  # the float would give 2997/100
+    assert mixer.frame_rate(Probe(10.0, 640, 360, 29.97, True, "h264")) == Fraction(2997, 100)
+    odd = Probe(10.0, 640, 360, 25.0, True, "h264", fps_rational="0/0")
+    assert mixer.frame_rate(odd) == 25
+
+
+def test_probe_keeps_the_frame_rate_fraction(tone_slides):
+    assert media.probe(tone_slides).fps_rational == "30/1"
+
+
+def test_a_mix_without_a_voiced_line_is_titled_as_the_original(tmp_path):
+    video = tmp_path / "v.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                    "-i", "color=c=gray:s=160x90:r=25:d=2", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=2", "-c:v", "libx264", "-pix_fmt",
+                    "yuv420p", "-c:a", "aac", "-t", "2", str(video)],
+                   check=True, capture_output=True)  # fmt: skip
+    held = [_cue("c001", 0.5, None, status="held")]
+    res = mixer.mix(video, held, tmp_path / "out")
+    for path in (res.ad_audio, res.ad_video):
+        streams, _ = _streams(path)
+        titles = [s["tags"]["handler_name"] for s in streams if s["codec_type"] == "audio"]
+        assert titles[0] == "Original (no description)", (path.name, titles)
+        assert "Described" not in titles
+
+
+def test_the_reason_the_extended_version_failed_names_no_local_path(
+    tmp_path, fake_media, monkeypatch
+):
+    def broken(video, cues_extended, out_dir, **kw):
+        raise MediaError(
+            r"ffmpeg failed (exit 1): C:\Users\someone\runs\talk\.extended-x1\premix.wav:"
+            " Invalid data; /home/someone/runs/talk/work/x001.wav missing; \\\\host\\share\\a.mp4"
+        )
+
+    monkeypatch.setattr(mixer, "extended_video", broken)
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended", audio="x.wav")]
+    res = publish(tmp_path / "run", video, [], ext, [_ev("e1", 2.0, 4.0)], [], None,
+                  _ledger(tmp_path), "r1", RunOptions(), speech=[])  # fmt: skip
+    reason = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]["extended_error"]
+    assert reason == ("ffmpeg failed (exit 1): premix.wav: Invalid data; x001.wav missing; a.mp4")

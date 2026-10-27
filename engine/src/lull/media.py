@@ -45,6 +45,7 @@ class Probe:
     audio_codec: str | None = None
     format_name: str = ""  # ffprobe's demuxer names, comma-separated ("mov,mp4,m4a,3gp,3g2,mj2")
     audio_streams: int = 0
+    fps_rational: str = ""  # the nominal frame rate as ffprobe gives it ("30000/1001")
 
 
 def _bin(name: str) -> str:
@@ -138,6 +139,7 @@ def probe(path: Path) -> Probe:
         audio_codec=None if audio is None else audio.get("codec_name", ""),
         format_name=str(info.get("format", {}).get("format_name") or ""),
         audio_streams=sum(s.get("codec_type") == "audio" for s in streams),
+        fps_rational=str(video.get("r_frame_rate") or ""),
     )
 
 

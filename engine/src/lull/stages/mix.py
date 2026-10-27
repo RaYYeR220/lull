@@ -69,6 +69,7 @@ MP4_VIDEO = frozenset({"h264", "hevc", "av1", "mpeg4", "vp9"})
 MP4_AUDIO = frozenset({"aac", "mp3", "ac3", "eac3", "alac"})
 TTS_NAME = "NVIDIA Magpie TTS"
 TTS_TAG = f"Audio description voiced with synthetic speech ({TTS_NAME})."
+NO_DESCRIPTION = "Original (no description)"  # the track title when no line is voiced
 EVEN_SCALE = "scale=trunc(iw/2)*2:trunc(ih/2)*2"  # libx264 with yuv420p needs even sizes
 LANG3 = {
     "en": "eng", "de": "deu", "fr": "fra", "es": "spa", "it": "ita", "pt": "por", "nl": "nld",
@@ -419,14 +420,15 @@ def mix(
         graph = f"[1:a]{_normalise(stats)},aresample={RATE},asplit=2[a1][a2]"
         original = ["-map", "0:a:0"] if info.has_audio else []
         keep = ["-c:a:1", "copy"] if info.audio_codec in MP4_AUDIO else _aac("a:1")
+        title = "Described" if spoken else NO_DESCRIPTION  # never claim what is not there
         cmd = [
             _bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
             *input_args(video.resolve()), *input_args(premix),
             "-filter_complex", graph,
-            "-map", "[a1]", *_aac(), *_track(0, "Described", lang), *_disclose(bool(spoken)),
+            "-map", "[a1]", *_aac(), *_track(0, title, lang), *_disclose(bool(spoken)),
             "-movflags", "+faststart", str(ad_audio),
             "-map", "0:v:0", "-map", "[a2]", *original, *_video_codec(info), *_aac("a:0"),
-            *(keep if info.has_audio else []), *_track(0, "Described", lang),
+            *(keep if info.has_audio else []), *_track(0, title, lang),
             *(_track(1, "Original", lang) if info.has_audio else []),
             "-disposition:a:0", "default", *(["-disposition:a:1", "0"] if info.has_audio else []),
             *_disclose(bool(spoken)), "-movflags", "+faststart", str(ad_video),
@@ -440,7 +442,15 @@ def mix(
 
 
 def frame_rate(info: Probe) -> Fraction:
-    """The constant frame rate the extended version is made at (the source's nominal rate)."""
+    """The constant frame rate the extended version is made at: the source's nominal rate,
+    exactly as ffprobe gives it when it is a usable fraction (30000/1001), else from the
+    float."""
+    try:
+        exact = Fraction(info.fps_rational) if info.fps_rational else None
+    except (ValueError, ZeroDivisionError):
+        exact = None
+    if exact is not None and 1 <= exact <= 240:
+        return exact
     if not 1.0 <= info.fps <= 240.0:
         log.warning("mix: frame rate %.3f is implausible; using %s", info.fps, FALLBACK_FPS)
         return FALLBACK_FPS
@@ -499,6 +509,9 @@ def freeze_points(
             if s.start < t < s.start + s.audio_dur:
                 t, later = s.start + s.audio_dur, True
         n = min(max(frame(t, later), 0), last)
+        for a, b in busy:  # kept inside the video: back out of speech it was moved into
+            if a < n / fps < b:
+                n = max(0, math.floor(a * fps + 1e-6))
         n = 0 if n < min_frames else n
         if groups and n - groups[-1][0] < min_frames:
             groups[-1][1].append(c)

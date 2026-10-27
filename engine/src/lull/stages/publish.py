@@ -73,6 +73,10 @@ TTS_NAME = mixer.TTS_NAME
 MET, MET_AUTOMATED = "met", "met (automated checks)"
 REVIEW, NOT_CLAIMED = "needs review", "not claimed"
 _SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+_LOCAL_PATH = re.compile(  # C:\dir\file, \\host\share\file, /dir/file -> file
+    r"(?:\b[A-Za-z]:[\\/]|\\\\|(?<![\w.])/)(?:[^\s;,'\"<>|:\\/]+[\\/])+"
+    r"([^\s;,'\"<>|:\\/]*)"
+)
 STAGING = ".publish-"
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
 OUTPUTS = frozenset(
@@ -394,6 +398,11 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def scrub_paths(text: str) -> str:
+    """`text` with every local path cut to its file name: a report may travel."""
+    return _LOCAL_PATH.sub(lambda m: m.group(1), text)
+
+
 def _write(path: Path, text: str) -> Path:
     path.write_bytes(text.encode("utf-8"))  # LF on every platform
     return path
@@ -577,7 +586,7 @@ def _stage(
     except MediaError as e:
         log.warning("publish: extended version failed, publishing without it: %s", e)
         (run_dir / mixer.EXTENDED_VIDEO).unlink(missing_ok=True)
-        ext_video, ext_error = None, _one_line(e)[:300]
+        ext_video, ext_error = None, scrub_paths(_one_line(e))[:300]
     if ext_video is not None:
         out[mixer.EXTENDED_VIDEO] = ext_video
     out.update(_keyframes(video, everything, events, run_dir, info.duration))
