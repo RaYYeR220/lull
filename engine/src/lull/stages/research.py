@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from importlib.resources import files
 
 from pydantic import BaseModel, Field
 
-from lull.tavily import Tavily
+from lull.ledger import BudgetExceeded
+from lull.tavily import Tavily, TavilyError
 from lull.tf import LIGHTNING, TokenFactory
 from lull.types import RunOptions, VisualEvent, Word
 
@@ -14,7 +16,7 @@ TRANSCRIPT_CHARS = 6000
 CONTEXT_CHARS = 1500
 NOTE_CHARS = 200
 MAX_SOURCES = 3
-HINT_CHARS = 80
+LOOKUP_FAILED = "lookup failed"
 
 TERMS_SCHEMA = {
     "type": "object",
@@ -52,6 +54,7 @@ class ResearchResult(BaseModel):
     glossary: list[GlossaryEntry]
     skipped: bool  # True when no Tavily client was available: nothing was looked up
     source_context: str | None = None
+    errors: list[str] = Field(default_factory=list)
 
 
 def _system_prompt() -> str:
@@ -59,14 +62,18 @@ def _system_prompt() -> str:
 
 
 def _material(events: list[VisualEvent], words: list[Word], context: str | None) -> str:
+    nl = "\n"
     transcript = " ".join(w.text for w in words)[:TRANSCRIPT_CHARS]
-    verbatim = [e.verbatim_text for e in events if e.verbatim_text]
-    parts = [f"TRANSCRIPT:\n{transcript or '(none)'}"]
-    parts.append("ON-SCREEN TEXT:\n" + ("\n".join(verbatim) if verbatim else "(none)"))
-    parts.append("EVENTS:\n" + ("\n".join(e.text for e in events) if events else "(none)"))
+    verbatim = nl.join(e.verbatim_text for e in events if e.verbatim_text)
+    described = nl.join(e.text for e in events)
+    parts = [
+        f"<transcript>{nl}{transcript}{nl}</transcript>",
+        f"<on_screen_text>{nl}{verbatim}{nl}</on_screen_text>",
+        f"<visual_events>{nl}{described}{nl}</visual_events>",
+    ]
     if context:
-        parts.append(f"SOURCE PAGE CONTEXT:\n{context}")
-    return "\n\n".join(parts)
+        parts.append(f"<source_page>{nl}{context}{nl}</source_page>")
+    return (nl + nl).join(parts)
 
 
 def _extract_terms(
@@ -92,13 +99,12 @@ def _extract_terms(
 
 
 def _canonical(term: str, results: list[dict]) -> str:
-    if not results:
-        return term
-    top = results[0]
-    for text in (top.get("title") or "", top.get("content") or ""):
-        i = text.lower().find(term.lower())
-        if i >= 0:
-            return text[i : i + len(term)]
+    pat = re.compile(r"(?<!\w)" + re.escape(term) + r"(?!\w)", re.IGNORECASE)
+    for r in results[:MAX_SOURCES]:
+        for text in (r.get("title") or "", r.get("content") or ""):
+            m = pat.search(text)
+            if m:
+                return m.group(0)
     return term
 
 
@@ -118,22 +124,33 @@ def research(
     run_id: str,
     max_terms: int = 8,
 ) -> ResearchResult:
+    errors: list[str] = []
     context: str | None = None
-    hint = ""
     if tavily is not None and opts.source_url:
-        pages = tavily.extract([opts.source_url], run_id=run_id)
+        try:
+            pages = tavily.extract([opts.source_url], run_id=run_id)
+        except TavilyError as e:
+            errors.append(f"source extract failed: {e}")
+            pages = []
         raw = ((pages[0].get("raw_content") or "") if pages else "").strip()
         if raw:
             context = raw[:CONTEXT_CHARS]
-            hint = raw.splitlines()[0][:HINT_CHARS].strip()
+
+    if not words and not events and not context:
+        return ResearchResult(glossary=[], skipped=tavily is None, errors=errors)
 
     terms = _extract_terms(events, words, context, tf, run_id, max_terms)
     if tavily is None:
         entries = [GlossaryEntry(term=t, canonical=t, note="", sources=[]) for t in terms]
-        return ResearchResult(glossary=entries, skipped=True, source_context=None)
+        return ResearchResult(glossary=entries, skipped=True)
 
     entries = []
     for t in terms:
-        query = f"{t} {hint}".strip()
-        entries.append(_entry(t, tavily.search(query, run_id=run_id)))
-    return ResearchResult(glossary=entries, skipped=False, source_context=context)
+        try:
+            entries.append(_entry(t, tavily.search(t, run_id=run_id)))
+        except BudgetExceeded:
+            raise
+        except TavilyError as e:
+            errors.append(f"search failed for {t!r}: {e}")
+            entries.append(GlossaryEntry(term=t, canonical=t, note=LOOKUP_FAILED, sources=[]))
+    return ResearchResult(glossary=entries, skipped=False, source_context=context, errors=errors)

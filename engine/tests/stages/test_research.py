@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from lull.ledger import TAVILY_CREDIT_USD, Ledger
+from lull.ledger import TAVILY_CREDIT_USD, BudgetExceeded, Ledger
 from lull.stages.research import GlossaryEntry, ResearchResult, research
 from lull.tavily import Tavily, TavilyError
 from lull.types import RunOptions, VisualEvent, Word
@@ -196,3 +196,93 @@ def test_canonical_casing_from_results(tmp_path):
     tv, _ = _tavily(tmp_path, h)
     res = research(_ev(), WORDS, RunOptions(), FakeTF(["proog"]), tv, run_id="r")
     assert res.glossary[0].canonical == "Proog"
+
+
+@pytest.mark.parametrize(
+    ("term", "title", "content"),
+    [("Emo", "Emotion in film", "emotional"), ("AI", "Fresh rain", "it was raining")],
+)
+def test_canonical_rejects_substring(tmp_path, term, title, content):
+    def h(req):
+        return httpx.Response(
+            200, json={"results": [{"title": title, "url": "https://x.test/", "content": content}]}
+        )
+
+    tv, _ = _tavily(tmp_path, h)
+    res = research(_ev(), WORDS, RunOptions(), FakeTF([term]), tv, run_id="r")
+    assert res.glossary[0].canonical == term
+
+
+def test_canonical_falls_through_to_later_result(tmp_path):
+    def h(req):
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"title": "Emotion", "url": "https://a.test/", "content": "none"},
+                    {"title": "Meet EMO the robot", "url": "https://b.test/", "content": "x"},
+                ]
+            },
+        )
+
+    tv, _ = _tavily(tmp_path, h)
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["Emo"]), tv, run_id="r")
+    assert res.glossary[0].canonical == "EMO"
+
+
+def test_empty_input_no_calls(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    tf = FakeTF(["X"])
+    res = research([], [], RunOptions(), tf, tv, run_id="r")
+    assert res.glossary == [] and res.skipped is False and not tf.calls and not seen
+    res = research([], [], RunOptions(), tf, None, run_id="r")
+    assert res.glossary == [] and res.skipped is True and not tf.calls
+
+
+def test_untrusted_tags_and_term_only_query(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    tf = FakeTF(["Proog"])
+    research(_ev(), WORDS, RunOptions(source_url="https://src.test/p"), tf, tv, run_id="r")
+    msgs = tf.calls[0]["messages"]
+    user = msgs[1]["content"]
+    for tag in ("transcript", "on_screen_text", "visual_events", "source_page"):
+        assert f"<{tag}>" in user and f"</{tag}>" in user
+    assert "ignore" in msgs[0]["content"].lower() and "<transcript>" in msgs[0]["content"]
+    assert seen[1][1]["query"] == "Proog"
+
+
+def test_extract_failure_degrades(tmp_path):
+    def h(req):
+        if req.url.path == "/extract":
+            return httpx.Response(400, text="nope")
+        return _handler([])(req)
+
+    tv, _ = _tavily(tmp_path, h)
+    res = research(
+        _ev(), WORDS, RunOptions(source_url="https://s.test/"), FakeTF(["Proog"]), tv, run_id="r"
+    )
+    assert res.source_context is None and len(res.errors) == 1 and "extract" in res.errors[0]
+    assert res.glossary[0].sources
+
+
+def test_search_failure_degrades(tmp_path):
+    def h(req):
+        if json.loads(req.content)["query"] == "Bad":
+            return httpx.Response(400, text="nope")
+        return _handler([])(req)
+
+    tv, _ = _tavily(tmp_path, h)
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["Bad", "Proog"]), tv, run_id="r")
+    assert res.glossary[0] == GlossaryEntry(
+        term="Bad", canonical="Bad", note="lookup failed", sources=[]
+    )
+    assert res.glossary[1].sources and len(res.errors) == 1
+
+
+def test_budget_exceeded_propagates(tmp_path):
+    ledger = Ledger(tmp_path / "b.db", cap_run=0.001, cap_day=0, cap_total=0)
+    tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler([])))
+    with pytest.raises(BudgetExceeded):
+        research(_ev(), WORDS, RunOptions(), FakeTF(["Proog"]), tv, run_id="r")
