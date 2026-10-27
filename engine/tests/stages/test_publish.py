@@ -10,7 +10,7 @@ import pytest
 
 from lull import media
 from lull.ledger import CallRecord, Ledger
-from lull.media import loudness_profile
+from lull.media import MediaError, Probe, loudness_profile
 from lull.stages import mix as mixer
 from lull.stages.finalize import OverlapError
 from lull.stages.mix import duck_filter
@@ -24,7 +24,7 @@ from lull.stages.publish import (
     wcag_status,
 )
 from lull.stages.research import GlossaryEntry, ResearchResult
-from lull.types import Claim, Cue, Gap, RunOptions, VisualEvent
+from lull.types import Claim, Cue, Gap, RunOptions, Span, VisualEvent
 
 SUPER = "nvidia/Nemotron-3.5-Super-VL"
 LIGHT = "nvidia/Nemotron-3_5-Lightning"
@@ -177,20 +177,77 @@ def test_held_cues_are_never_mixed_even_with_audio():
     ] == ["x001"]
 
 
-def test_extended_pauses_wait_for_a_standard_cue_and_merge_close_cues():
+INFO_25 = Probe(10.0, 640, 360, 25.0, True, "h264", "aac")
+
+
+def _freezes(ext, **kw):
+    fps, freezes = mixer.freeze_points(ext, INFO_25, **kw)
+    assert fps == 25
+    return [(f.frame, f.frames, [c.id for c in f.cues]) for f in freezes]
+
+
+def test_extended_freezes_wait_for_a_standard_cue_and_merge_close_cues():
     std = [_cue("c001", 3.5, 1.0)]  # speaks 3.5-4.5
     ext = [
-        _cue("x001", 0.02, 1.0, gap=None, status="extended"),  # at the very start -> 0
-        _cue("x002", 4.0, 2.0, gap=None, status="extended"),  # inside c001 -> after it
-        _cue("x003", 4.55, 1.0, gap=None, status="extended"),  # within 0.1 s of x002's pause
+        _cue("x001", 0.02, 1.0, gap=None, status="extended"),  # at the very start -> frame 0
+        _cue("x002", 4.0, 2.0, gap=None, status="extended"),  # inside c001 -> after it (4.52)
+        _cue("x003", 4.55, 1.0, gap=None, status="extended"),  # within 0.1 s of x002's freeze
         _cue("x004", 30.0, 1.0, gap=None, status="extended"),  # past the end -> clamped
     ]
-    groups = mixer._pauses(ext, 10.0, std)
-    assert [(t, [c.id for c in g]) for t, g in groups] == [
-        (0.0, ["x001"]), (4.5, ["x002", "x003"]), (9.9, ["x004"])
+    assert _freezes(ext, standard=std) == [
+        (0, 25, ["x001"]), (113, 75, ["x002", "x003"]), (247, 25, ["x004"])
     ]  # fmt: skip
-    segs = mixer._segments([t for t, _ in groups], [1.0, 3.0, 1.0])
-    assert segs == [(0.0, 4.5, 1.0), (4.5, 9.9, 3.0), (9.9, None, 1.0)]
+
+
+def test_extended_freezes_snap_to_speech_free_frames_and_whole_frame_pauses():
+    speech = [Span(start=0.0, end=0.83), Span(start=2.013, end=3.0), Span(start=6.0, end=6.5)]
+    ext = [
+        _cue("x001", 0.5, 0.53, gap=None, status="extended"),  # speech from 0 -> its end
+        _cue("x002", 2.5, 0.71, gap=None, status="extended"),  # mid-word -> before 2.013
+        _cue("x003", 5.0, 1.0, gap=None, status="extended"),  # already speech-free
+        _cue("x004", 6.5, 0.2, gap=None, status="extended"),  # at a span's end: speech-free
+    ]
+    got = _freezes(ext, speech=speech)
+    # x001: 0.83 -> frame 21 (0.84: moved later, so rounded up, out of the speech)
+    # x002: 2.013 -> frame 50 (2.00, down); x004: 6.5 -> 6.48 is speech, so frame 163 (6.52)
+    # pauses: 0.53 s -> 14 frames, 0.71 s -> 18 frames (rounded up to whole frames)
+    assert got == [(21, 14, ["x001"]), (50, 18, ["x002"]), (125, 25, ["x003"]),
+                   (163, 5, ["x004"])]  # fmt: skip
+    for frame, _, _ in got:
+        t = frame / 25
+        assert not any(sp.start < t < sp.end for sp in speech), f"freeze at {t} is mid-speech"
+
+
+def test_cue_gain_levels_cues_to_the_programme_within_bounds():
+    assert mixer.cue_target(-30.0) == -27.0  # a quiet programme: cues no quieter than -27
+    assert mixer.cue_target(-20.0) == -20.0
+    assert mixer.cue_target(-8.0) == -16.0  # a loud one: cues no louder than -16
+    assert mixer.cue_gain(-20.0, -10.0) == pytest.approx(-10.0)
+    assert mixer.cue_gain(-30.0, -12.0) == pytest.approx(-15.0)
+    assert mixer.cue_gain(-20.0, -70.0) == 0.0  # silence is not amplified
+    assert mixer.cue_gain(-20.0, -65.0) == 30.0  # gains are bounded
+
+
+def test_final_gain_is_linear_or_limited_never_dynamic(caplog):
+    stats = {"input_i": -30.0, "input_thresh": -40.0, "input_lra": 5.0, "input_tp": -15.0}
+    linear = mixer._normalise(stats)
+    assert linear.startswith("loudnorm=I=-24:TP=-2:LRA=11:measured_I=-30.00")
+    assert linear.endswith(":linear=true")
+    peaky = stats | {"input_tp": -6.0}  # +6 dB of gain would put the true peak at 0 dBFS
+    with caplog.at_level("WARNING", logger="lull.stages.mix"):
+        limited = mixer._normalise(peaky)
+    assert limited == "volume=6.00dB,alimiter=limit=0.7499:level=0:latency=1"
+    assert "cannot stay linear" in caplog.text
+    wide = stats | {"input_lra": 15.0}  # loudnorm would turn dynamic and undo the ducking
+    assert mixer._normalise(wide).startswith("volume=6.00dB,alimiter")
+    assert mixer._normalise(stats | {"input_i": -70.0}) == "anull"
+
+
+def test_ffmpeg_major_version():
+    assert mixer.ffmpeg_major("ffmpeg version 8.1.1-full_build-www.gyan.dev Copyright") == 8
+    assert mixer.ffmpeg_major("ffmpeg version n7.0.2 Copyright (c) 2000-2024") == 7
+    assert mixer.ffmpeg_major("ffmpeg version 6.1.1-3ubuntu5 Copyright") == 6
+    assert mixer.ffmpeg_major("ffmpeg version N-113456-gabcdef Copyright") is None
 
 
 def test_duck_filter_without_cues_passes_audio_through():
@@ -208,7 +265,7 @@ def test_f113_flags_crafted_case():
         _gap("g002", 8.0, 9.5),  # empty but under 2 s
         _gap("g003", 12.0, 15.0),  # used by a voiced cue
         _gap("g004", 18.0, 21.0),  # empty, on-screen text of salience 3 only
-        _gap("g005", 24.0, 27.0),  # empty, salient but an action (not text/scene/slide/chart)
+        _gap("g005", 24.0, 27.0),  # empty, a salient action of any kind counts too -> flag
         _gap("g006", 30.0, 33.0),  # empty, chart already described by c003
         _gap("g007", 36.0, 39.0),  # its only cue is held -> empty, scene change -> flag
     ]
@@ -228,10 +285,11 @@ def test_f113_flags_crafted_case():
         _cue("c004", 36.0, None, gap="g007", status="held", ev=["e7"]),
     ]
     flags = f113_flags(gaps, cues, events)
-    assert [f["gap_id"] for f in flags] == ["g001", "g007"]
+    assert [f["gap_id"] for f in flags] == ["g001", "g005", "g007"]
     assert flags[0]["event_ids"] == ["e1"]
     assert flags[0]["start"] == 2.0 and flags[0]["end"] == 5.0 and flags[0]["seconds"] == 3.0
-    assert flags[1]["event_ids"] == ["e7", "e8"]
+    assert flags[1]["event_ids"] == ["e5"]
+    assert flags[2]["event_ids"] == ["e7", "e8"]
 
 
 def test_coverage_counts_salient_events_in_voiced_cues():
@@ -259,7 +317,7 @@ def test_coverage_counts_salient_events_in_voiced_cues():
 
 def _wcag(**kw) -> dict[str, dict]:
     args = {"standard": 3, "extended_produced": False, "held": 0, "overlap_s": 0.0,
-            "f113": 0} | kw  # fmt: skip
+            "f113": 0, "reviewed": True} | kw  # fmt: skip
     return {row["criterion"]: row for row in wcag_status(**args)}
 
 
@@ -270,6 +328,21 @@ def test_wcag_all_met_when_every_check_passes():
     assert "described.mp4" in rows["1.2.5"]["via"] and "G78" in rows["1.2.5"]["via"]
     assert "extended.mp4" in rows["1.2.7"]["via"] and "G8" in rows["1.2.7"]["via"]
     assert all(rows[c]["reasons"] == [] for c in rows)
+
+
+def test_wcag_says_automated_checks_until_every_line_is_reviewed():
+    rows = _wcag(extended_produced=True, reviewed=False)
+    assert [rows[c]["status"] for c in ("1.2.3", "1.2.5", "1.2.7")] == [
+        "met (automated checks)"
+    ] * 3
+    rows = _wcag(reviewed=False, held=1)  # a failing check still reads "needs review"
+    assert rows["1.2.5"]["status"] == "needs review"
+
+
+def test_wcag_states_why_the_extended_version_is_missing():
+    rows = _wcag(extended_error="libx264 failed")
+    assert rows["1.2.7"]["status"] == "not claimed"
+    assert rows["1.2.7"]["reasons"] == ["extended version not produced: libx264 failed"]
 
 
 def test_wcag_needs_review_on_overlap_f113_or_held():
@@ -307,8 +380,13 @@ def test_tts_disclosure_says_reviewed_only_when_every_cue_was_edited():
     mixed = edited + [_cue("c002", 3.0, 1.0, status="verified")]
     assert tts_disclosure(mixed).endswith("lines are awaiting review.")
     assert "NVIDIA Magpie TTS" in tts_disclosure(mixed)
-    held_too = edited + [_cue("c003", 5.0, None, status="held")]
-    assert tts_disclosure(held_too).endswith("lines are awaiting review.")
+    held_too = edited + [_cue("c003", 5.0, None, status="held")]  # held lines are not published
+    assert tts_disclosure(held_too).endswith("every line was reviewed before publishing.")
+    approved = [_cue("c001", 1.0, 1.0, status="approved"),
+                _cue("x001", 9.0, 1.0, gap=None, status="edited")]  # fmt: skip
+    assert tts_disclosure(approved).endswith("every line was reviewed before publishing.")
+    unreviewed_ext = approved + [_cue("x002", 12.0, 1.0, gap=None, status="extended")]
+    assert tts_disclosure(unreviewed_ext).endswith("lines are awaiting review.")
     assert tts_disclosure([]) == "No description was voiced in this run."
     assert tts_disclosure([_cue("c004", 5.0, None, status="held")]) == (
         "No description was voiced in this run."
@@ -332,6 +410,9 @@ def fake_media(monkeypatch):
 
     def fake_extended(video, cues_extended, out_dir, **kw):
         calls["extended"].append([c.id for c in cues_extended])
+        if calls.get("extended_fails"):
+            (out_dir / mixer.EXTENDED_VIDEO).write_bytes(b"half")
+            raise MediaError("ffmpeg failed (exit 1): libx264 exploded")
         return None
 
     def fake_frames(src, shots, **kw):
@@ -340,7 +421,11 @@ def fake_media(monkeypatch):
             Path(d).write_bytes(b"\xff\xd8jpg")
         return [Path(d) for _, d in shots]
 
+    def fake_levels(video, info, cues):
+        return mixer.Levels(programme=-23.0, cues={str(c.audio_path): -20.0 for c in cues})
+
     monkeypatch.setattr(media, "probe", lambda p: media.Probe(60.0, 640, 360, 25.0, True, "h264"))
+    monkeypatch.setattr(mixer, "measure_levels", fake_levels)
     monkeypatch.setattr(mixer, "mix", fake_mix)
     monkeypatch.setattr(mixer, "extended_video", fake_extended)
     monkeypatch.setattr(media, "frames_at", fake_frames)
@@ -356,10 +441,14 @@ def test_publish_refuses_on_overlap_and_writes_nothing(tmp_path, fake_media):
         _cue("c002", 8.0, 2.4, gap="g002"),  # runs 0.4 s past its pause into speech
     ]
     run_dir = tmp_path / "run"
+    args = ([_ev("e1", 2, 4)], gaps, None, _ledger(tmp_path), "r1", RunOptions())
     with pytest.raises(OverlapError) as err:
-        publish(run_dir, video, cues, [], [_ev("e1", 2, 4)], gaps, None, _ledger(tmp_path), "r1",
-                RunOptions())  # fmt: skip
+        publish(run_dir, video, cues, [], *args, speech=[])
     assert err.value.cue_ids == ["c002"]
+    # speech the gaps do not show (inside a usable window) is checked too
+    with pytest.raises(OverlapError) as err:
+        publish(run_dir, video, cues[:1], [], *args, speech=[Span(start=4.0, end=4.2)])
+    assert err.value.cue_ids == ["c001"]
     assert not run_dir.exists()
     assert fake_media["mix"] == [] and fake_media["frames"] == []
 
@@ -370,9 +459,15 @@ def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
     video.write_bytes(b"video bytes")
     events = [_ev("e1", 10.0, 14.0, kind="slide", salience=5, text="A slide titled Results.")]
     ext = [_cue("x001", 10.0, None, gap=None, status="held", ev=["e1"], note="not verified")]
-    res = publish(tmp_path / "run", video, [], ext, events, [], None, _ledger(tmp_path), "r1",
-                  RunOptions())  # fmt: skip
     run = tmp_path / "run"
+    (run / "keyframes").mkdir(parents=True)  # left by an earlier run of the same directory
+    (run / "keyframes" / "c009.jpg").write_bytes(b"old")
+    (run / "extended.mp4").write_bytes(b"old")
+    (run / ".mix-old").mkdir()
+    res = publish(run, video, [], ext, events, [], None, _ledger(tmp_path), "r1", RunOptions(),
+                  speech=[Span(start=0.0, end=60.0)])  # fmt: skip
+    assert not (run / "extended.mp4").exists() and not (run / ".mix-old").exists()
+    assert sorted(p.name for p in (run / "keyframes").iterdir()) == ["x001.jpg"]
     assert (run / "descriptions.vtt").read_text(encoding="utf-8") == (
         "WEBVTT\nKind: descriptions\nLanguage: en\n"
     )
@@ -405,25 +500,29 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     ]
     finding = {"rule": "R14-gender", "message": "gendered word 'man'", "span": [2, 5],
                "severity": "warning"}  # fmt: skip
+    audio = tmp_path / "run" / "work" / "audio" / "c001.wav"
     cues = [
         _cue("c001", 2.0, 2.5, text="A man & <a> slide.", ev=["e1"], findings=[finding],
-             claims=[Claim(text="a slide", verdict="supported", at=2.5)],
-             note="descriptor added for Proog"),
+             claims=[Claim(text="a\nslide", verdict="supported", at=2.5)],
+             note="descriptor added\nfor Proog", audio=str(audio)),
         _cue("c002", 20.0, None, gap="g002", status="held", ev=["e2"],
              note="not verified after 4 rounds: a caption (not visible)"),
     ]  # fmt: skip
     research = ResearchResult(
         glossary=[GlossaryEntry(term="proog", canonical="Proog", note="a character",
-                                sources=["https://example.org/proog"])],
+                                sources=["https://example.org/proog", "javascript:alert(1)"])],
         skipped=False,
     )  # fmt: skip
-    res = publish(tmp_path / "run", video, cues, [], events, gaps, research, _ledger(tmp_path),
-                  "r1", RunOptions(voice="Sofia"))  # fmt: skip
+    fake_media["extended_fails"] = True
+    ext = [_cue("x001", 30.0, 1.0, gap=None, status="extended", ev=["e2"])]
+    res = publish(tmp_path / "run", video, cues, ext, events, gaps, research, _ledger(tmp_path),
+                  "r1", RunOptions(voice="Sofia"), speech=[Span(start=0.0, end=1.8)])  # fmt: skip
     run = tmp_path / "run"
     names = set(res.files)
     assert {"descriptions.vtt", "extended.vtt", "cues.json", "script.md", "report.html",
             "described-audio.m4a", "described.mp4", "keyframes/c001.jpg",
-            "keyframes/c002.jpg"} == names  # fmt: skip
+            "keyframes/c002.jpg", "keyframes/x001.jpg"} == names  # fmt: skip
+    assert not (run / "extended.mp4").exists()  # the failed extended version is not shipped
     m = json.loads(res.manifest.read_text(encoding="utf-8"))
     assert res.manifest == run / "manifest.json"
     assert m["run_id"] == "r1"
@@ -432,9 +531,17 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     for name, meta in m["outputs"].items():
         assert meta == {"sha256": _sha(run / name), "bytes": (run / name).stat().st_size}
     s = m["summary"]
-    assert s["cues"] == {"verified": 1, "edited": 0, "approved": 0, "held": 1, "extended": 0}
+    assert s["cues"] == {"verified": 1, "edited": 0, "approved": 0, "held": 1, "extended": 1}
     assert s["coverage"]["described"] == 1 and s["coverage"]["salient_events"] == 2
     assert s["overlap_seconds"] == 0.0
+    assert s["overlap"] == {"speech_s": 0.0, "between_cues_s": 0.0, "outside_pauses_s": 0.0,
+                            "total_s": 0.0}  # fmt: skip
+    assert s["extended_produced"] is False and "libx264 exploded" in s["extended_error"]
+    rows = {r["criterion"]: r for r in s["wcag"]}
+    assert rows["1.2.7"]["status"] == "not claimed"
+    assert "libx264 exploded" in rows["1.2.7"]["reasons"][0]
+    assert s["reviewed"] is False
+    assert s["levels"] == {"programme_lufs": -23.0, "cue_target_lufs": -23.0}
     assert [f["gap_id"] for f in s["f113"]] == ["g002"]
     assert s["cost_usd"] == pytest.approx(0.0081)
     assert s["cost_per_min"] == pytest.approx(0.0081)
@@ -448,11 +555,13 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     assert "A man &amp; &lt;a&gt; slide." in html and "<a> slide" not in html
     assert "R14-gender" in html and "gendered word" in html
     assert "not verified after 4 rounds" in html
-    assert "https://example.org/proog" in html and "Proog" in html
-    assert "0.000" in html  # overlap seconds
+    assert '<a href="https://example.org/proog">' in html and "Proog" in html
+    assert "javascript:alert(1)" in html and 'href="javascript' not in html  # text, not a link
+    assert "overlap with speech" in html and "0.000" in html
     assert "awaiting review" in html and "NVIDIA Magpie TTS" in html
     assert "needs review" in html and "not claimed" in html
     assert "http" not in html.replace("https://example.org/proog", "")  # self-contained
+    assert "libx264 exploded" in html
 
     script = (run / "script.md").read_text(encoding="utf-8")
     assert "00:00:02.000" in script and "verified" in script and "held" in script
@@ -461,93 +570,140 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     assert "|" not in script  # no tables
 
     data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
-    assert [c["id"] for c in data["cues"]] == ["c001", "c002"] and data["extended"] == []
+    assert [c["id"] for c in data["cues"]] == ["c001", "c002"]
+    assert [c["id"] for c in data["extended"]] == ["x001"]
+    assert data["cues"][0]["audio_path"] == "work/audio/c001.wav"  # relative to the run
+    ext_vtt = (run / "extended.vtt").read_text(encoding="utf-8")
+    assert "x001\n00:00:30.000 --> 00:00:31.000\n" in ext_vtt  # written regardless
 
 
 # -- real ffmpeg -----------------------------------------------------------------------------
 
 PROGRAMME_HZ = 440.0
 CUE_HZ = 3000.0
+FPS = 25
+FRAME = 1 / FPS
+# A quiet programme (about -29 LUFS: the -27 floor for cues then sits 2 LU above it) and loud
+# cues (about +2 LUFS before levelling).
+PROGRAMME_VOLUME = 0.43
+CUE_AMP = 0.9
+SPEECH = [Span(start=0.61, end=1.3), Span(start=3.6, end=4.3)]
 
 
 @pytest.fixture(scope="module")
 def published(tmp_path_factory):
-    """One real publish on a 6 s fixture: a verified 1 s cue at 2.0 s, a held cue and a 1 s
-    extended cue at 4.0 s."""
+    """One real publish on a 6 s, 25 fps fixture.
+
+    c001 (verified, 1 s) at 2.0 s; c002 held; x001 (0.53 s) for a visual at 1.0 s and x002
+    (0.71 s) for one at 4.0 s, both mid-speech: they freeze at 0.60 s and 3.60 s, for 14 and
+    18 frames (0.56 s, 0.72 s). Extended timeline: x001 at 0.60, c001 at 2.56, x002 at 4.16,
+    7.28 s in all.
+    """
     root = tmp_path_factory.mktemp("publish")
     video = root / "fixture.mp4"
     subprocess.run(
         ["ffmpeg", "-y", "-loglevel", "error",
-         "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=25:d=6",
-         "-f", "lavfi", "-i", f"sine=frequency={PROGRAMME_HZ}:duration=6",
+         "-f", "lavfi", "-i", f"color=c=gray:s=320x180:r={FPS}:d=6",
+         "-f", "lavfi", "-i",
+         f"sine=frequency={PROGRAMME_HZ}:duration=6,volume={PROGRAMME_VOLUME}",
          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-t", "6", str(video)],
         check=True, capture_output=True,
     )  # fmt: skip
-    std_wav = _sine_wav(root / "c001.wav", 1.0, CUE_HZ, 0.25)
-    ext_wav = _sine_wav(root / "x001.wav", 1.0, CUE_HZ, 0.25)
+    wavs = {
+        name: _sine_wav(root / f"{name}.wav", dur, CUE_HZ, CUE_AMP)
+        for name, dur in (("c001", 1.0), ("x001", 0.53), ("x002", 0.71))
+    }
     gaps = [_gap("g001", 2.0, 3.5), _gap("g002", 4.6, 5.8)]
     events = [
         _ev("e1", 1.5, 3.5, kind="slide", salience=5),
         _ev("e2", 4.6, 5.5, kind="action", salience=4),
-        _ev("e3", 3.8, 4.4, kind="on_screen_text", salience=5),
+        _ev("e3", 1.0, 1.4, kind="on_screen_text", salience=5),
+        _ev("e4", 4.0, 4.4, kind="on_screen_text", salience=5),
     ]
     cues = [
-        _cue("c001", 2.0, 1.0, ev=["e1"], audio=str(std_wav)),
+        _cue("c001", 2.0, 1.0, ev=["e1"], audio=str(wavs["c001"])),
         _cue("c002", 4.6, None, gap="g002", status="held", ev=["e2"], note="not verified"),
     ]
-    ext = [_cue("x001", 4.0, 1.0, gap=None, status="extended", ev=["e3"], audio=str(ext_wav))]
+    ext = [
+        _cue("x001", 1.0, 0.53, gap=None, status="extended", ev=["e3"], audio=str(wavs["x001"])),
+        _cue("x002", 4.0, 0.71, gap=None, status="extended", ev=["e4"], audio=str(wavs["x002"])),
+    ]
     run = root / "run"
-    res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1", RunOptions())
+    res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1", RunOptions(),
+                  speech=SPEECH)  # fmt: skip
     return {"video": video, "run": run, "res": res, "root": root}
 
 
 def _streams(path: Path) -> tuple[list[dict], float]:
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries",
-         "stream=codec_type,codec_name:stream_tags:stream_disposition=default:format=duration",
-         "-of", "json", str(path)],
+         "stream=codec_type,codec_name,duration:stream_tags:stream_disposition=default"
+         ":format=duration", "-of", "json", str(path)],
         check=True, capture_output=True,
     )  # fmt: skip
     info = json.loads(out.stdout)
     return info["streams"], float(info["format"]["duration"])
 
 
-def _mean_db(profile, windows) -> float:
-    vals = [db for t, db in profile if any(a <= t and t + 0.1 <= b for a, b in windows)]
+def _mean_db(profile, windows, hop=0.1) -> float:
+    vals = [db for t, db in profile if any(a <= t and t + hop <= b for a, b in windows)]
     power = sum(10 ** (v / 10) for v in vals) / len(vals)
     return 10 * math.log10(power)
 
 
-def _bands(src: Path, root: Path) -> tuple[Path, Path, dict]:
-    """The programme band (<1 kHz), the cue band (>2 kHz) as 16-bit WAVs, and the loudness of
-    the whole signal, from one ffmpeg run."""
+def _onset(profile, after: float, *, drop_db: float = 20.0) -> float:
+    """The first window at or after `after` within `drop_db` of the loudest window."""
+    peak = max(db for _, db in profile)
+    return next(t for t, db in profile if t >= after and db >= peak - drop_db)
+
+
+def _analyse(src: Path, root: Path, windows=()) -> tuple[Path, Path, dict, list[float]]:
+    """The programme band (<1 kHz) and the cue band (>2 kHz) as 16-bit WAVs, the loudness of
+    the whole signal and the integrated loudness of each (start, end) window, in one run."""
     lo, hi = root / f"{src.stem}.lo.wav", root / f"{src.stem}.hi.wav"
-    proc = subprocess.run(
-        ["ffmpeg", "-y", "-hide_banner", "-nostats", "-i", str(src), "-filter_complex",
-         "[0:a]asplit=3[a][b][c];[a]lowpass=f=1000,lowpass=f=1000[lo];"
-         "[b]highpass=f=2000,highpass=f=2000[hi];[c]ebur128=peak=true:framelog=verbose[r]",
-         "-map", "[lo]", "-ac", "1", "-c:a", "pcm_s16le", str(lo),
-         "-map", "[hi]", "-ac", "1", "-c:a", "pcm_s16le", str(hi),
-         "-map", "[r]", "-f", "null", "-"],
-        check=True, capture_output=True,
-    )  # fmt: skip
-    return lo, hi, mixer._loudness_stats(proc.stderr.decode("utf-8", "replace"))
+    n = 3 + len(windows)
+    graph = [f"[0:a]asplit={n}[a][b][c]" + "".join(f"[w{k}]" for k in range(len(windows))),
+             "[a]lowpass=f=1000,lowpass=f=1000[lo]", "[b]highpass=f=2000,highpass=f=2000[hi]",
+             "[c]ebur128=peak=true:framelog=verbose[r]"]  # fmt: skip
+    graph += [
+        f"[w{k}]atrim=start={a}:end={b},ebur128=framelog=verbose[r{k}]"
+        for k, (a, b) in enumerate(windows)
+    ]
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-nostats", "-i", str(src),
+           "-filter_complex", ";".join(graph),
+           "-map", "[lo]", "-ac", "1", "-c:a", "pcm_s16le", str(lo),
+           "-map", "[hi]", "-ac", "1", "-c:a", "pcm_s16le", str(hi),
+           "-map", "[r]", "-f", "null", "-"]  # fmt: skip
+    for k in range(len(windows)):
+        cmd += ["-map", f"[r{k}]", "-f", "null", "-"]
+    proc = subprocess.run(cmd, check=True, capture_output=True)
+    blocks = mixer._summaries(proc.stderr.decode("utf-8", "replace"))
+    whole = mixer._parse(blocks[0])
+    return lo, hi, whole, [mixer._parse(b, ["input_i"])["input_i"] for b in blocks[1:]]
 
 
-def test_mix_ducks_the_programme_under_the_cue(published):
-    lo, hi, loud = _bands(published["run"] / "described-audio.m4a", published["root"])
-    assert loud["input_i"] == pytest.approx(-24.0, abs=0.5)  # loudnorm I=-24
+def test_mix_levels_and_ducks_the_programme_under_the_cue(published):
+    inside, outside = (2.1, 2.9), (3.5, 5.7)
+    lo, hi, loud, (cue_lufs, programme_lufs) = _analyse(
+        published["run"] / "described-audio.m4a", published["root"], [inside, outside]
+    )
+    assert loud["input_i"] == pytest.approx(-24.0, abs=0.5)  # normalised to -24 LUFS
     assert loud["input_tp"] <= -2.0
     with wave.open(str(lo), "rb") as w:
         assert w.getframerate() == 48000
         assert w.getnframes() / w.getframerate() == pytest.approx(6.0, abs=0.1)
-    inside, outside = [(2.1, 2.9)], [(0.3, 1.5), (3.5, 5.7)]
     programme = loudness_profile(lo)
-    drop = _mean_db(programme, outside) - _mean_db(programme, inside)
-    print(f"programme {drop:.2f} dB quieter under the cue")
+    drop = _mean_db(programme, [(0.3, 1.5), outside]) - _mean_db(programme, [inside])
+    print(f"programme {drop:.2f} dB quieter under the cue; cue window {cue_lufs:.1f} LUFS, "
+          f"programme {programme_lufs:.1f} LUFS")  # fmt: skip
     assert 8.0 <= drop <= 12.0, f"programme {drop:.1f} dB quieter under the cue"
     voice = loudness_profile(hi)
-    assert _mean_db(voice, inside) - _mean_db(voice, outside) >= 30.0  # the cue is placed
+    assert _mean_db(voice, [inside]) - _mean_db(voice, [outside]) >= 30.0  # the cue is placed
+    # the loud cue was levelled to the quiet programme (R5)
+    assert abs(cue_lufs - programme_lufs) <= 3.0
+    m = json.loads(published["res"].manifest.read_text(encoding="utf-8"))
+    assert m["summary"]["levels"]["programme_lufs"] == pytest.approx(-29.0, abs=1.0)
+    assert m["summary"]["levels"]["cue_target_lufs"] == -27.0
 
 
 def test_described_mp4_has_described_and_original_tracks(published):
@@ -561,22 +717,29 @@ def test_described_mp4_has_described_and_original_tracks(published):
     assert [s["disposition"]["default"] for s in audio] == [1, 0]
 
 
-def test_extended_mp4_freezes_for_the_extended_cue(published):
+def test_extended_mp4_stays_in_sync_across_two_pauses(published):
     res = published["res"]
     assert "extended.mp4" in res.files
-    streams, duration = _streams(res.files["extended.mp4"])
-    assert duration == pytest.approx(7.0, abs=0.15)
+    streams, _ = _streams(res.files["extended.mp4"])
     assert [s["codec_type"] for s in streams] == ["video", "audio"]
     assert streams[1]["tags"]["handler_name"] == "Described (extended)"
-    # programme 0-4 s, a 1 s pause for x001 at 4.0, then the programme's 4-6 s at 5-7 s
-    lo, hi, loud = _bands(res.files["extended.mp4"], published["root"])
+    expected = 6.0 + 14 * FRAME + 18 * FRAME  # 7.28 s: pauses rounded up to whole frames
+    v_dur, a_dur = (float(s["duration"]) for s in streams)
+    assert v_dur == pytest.approx(expected, abs=FRAME)
+    assert a_dur == pytest.approx(v_dur, abs=FRAME)
+    print(f"extended: video {v_dur:.3f} s, audio {a_dur:.3f} s, expected {expected:.3f} s")
+
+    lo, hi, loud, _ = _analyse(res.files["extended.mp4"], published["root"])
     assert loud["input_i"] == pytest.approx(-24.0, abs=0.5)
-    programme, voice = loudness_profile(lo), loudness_profile(hi)
-    pause, before, after, std = [(4.1, 4.9)], [(0.3, 1.5)], [(5.2, 6.8)], [(2.1, 2.9)]
-    assert _mean_db(programme, after) - _mean_db(programme, pause) >= 30.0  # silent pause
-    assert _mean_db(programme, before) - _mean_db(programme, std) >= 8.0  # still ducked
-    assert _mean_db(voice, pause) - _mean_db(voice, after) >= 30.0  # x001 in the pause
-    assert _mean_db(voice, std) - _mean_db(voice, before) >= 30.0  # c001 where it was
+    voice = loudness_profile(hi, hop=0.005)
+    for target in (0.60, 2.56, 4.16):  # x001, c001 (moved by x001's pause), x002
+        onset = _onset(voice, target - 0.3)
+        print(f"extended: cue wanted at {target:.2f} s, starts at {onset:.3f} s")
+        assert onset == pytest.approx(target, abs=FRAME), f"cue at {onset}, wanted {target}"
+    programme = loudness_profile(lo)
+    playing = _mean_db(programme, [(1.25, 2.3), (5.0, 7.1)])
+    for pause in ((0.65, 1.1), (4.2, 4.8)):  # the programme is silent while the picture holds
+        assert playing - _mean_db(programme, [pause]) >= 30.0
 
 
 def test_published_files_match_manifest(published):
@@ -584,7 +747,8 @@ def test_published_files_match_manifest(published):
     m = json.loads(res.manifest.read_text(encoding="utf-8"))
     assert set(m["outputs"]) == set(res.files)
     for name in ("described-audio.m4a", "described.mp4", "extended.mp4", "keyframes/c001.jpg",
-                 "keyframes/c002.jpg", "keyframes/x001.jpg", "descriptions.vtt"):  # fmt: skip
+                 "keyframes/c002.jpg", "keyframes/x001.jpg", "keyframes/x002.jpg",
+                 "descriptions.vtt"):  # fmt: skip
         path = run / name
         assert m["outputs"][name] == {"sha256": _sha(path), "bytes": path.stat().st_size}
     for name in ("keyframes/c001.jpg", "keyframes/x001.jpg"):
@@ -595,4 +759,7 @@ def test_published_files_match_manifest(published):
     assert m["video"]["duration"] == pytest.approx(6.0, abs=0.1)
     vtt = (run / "descriptions.vtt").read_text(encoding="utf-8")
     assert "c001\n00:00:02.000 --> 00:00:03.000\n" in vtt
-    assert "NOTE extended pause=1.000" in (run / "extended.vtt").read_text(encoding="utf-8")
+    ext_vtt = (run / "extended.vtt").read_text(encoding="utf-8")
+    assert "NOTE extended pause=0.530\n\nx001\n00:00:00.600 --> 00:00:01.130\n" in ext_vtt
+    assert "NOTE extended pause=0.710\n\nx002\n00:00:03.600 --> 00:00:04.310\n" in ext_vtt
+    assert [p.name for p in run.iterdir() if p.name.startswith(".")] == []  # no temp dirs left
