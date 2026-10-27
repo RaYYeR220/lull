@@ -7,6 +7,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from lull.api.live import Live, LiveError, live_error_handler
+from lull.api.live import router as live_router
 from lull.api.settings import ApiSettings
 from lull.api.store import RunStore
 
@@ -54,6 +56,9 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     app = FastAPI(title="Lull API", version="0.1.0")
     app.state.settings = settings
     app.state.store = store
+    app.state.live = Live(settings, store)
+    app.add_exception_handler(LiveError, live_error_handler)
+    app.include_router(live_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.origins,
