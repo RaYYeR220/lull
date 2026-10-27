@@ -72,6 +72,8 @@ HEARTBEAT_S = 15.0
 BUSY_RETRY_S = 60
 MAX_UPLOADS = 2  # uploads received and checked at once
 UPLOADS_RETRY_S = 15
+UPLOAD_DEADLINE_S = 60.0  # to receive and store the whole body
+FORM_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
 REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
 WALL_CLOCK_S = 600.0
 
@@ -126,6 +128,24 @@ def uploads_busy() -> LiveError:
         "uploads_busy",
         "Other videos are being uploaded right now. Try again in a few seconds.",
         headers={"Retry-After": str(UPLOADS_RETRY_S)},
+    )
+
+
+def one_upload() -> LiveError:
+    return LiveError(
+        429,
+        "one_upload_at_a_time",
+        "Your previous upload is still being received. Wait for it to finish.",
+        headers={"Retry-After": str(UPLOADS_RETRY_S)},
+    )
+
+
+def upload_timeout(seconds: float) -> LiveError:
+    return LiveError(
+        408,
+        "timeout",
+        f"The upload did not arrive within {seconds:g} s. Try a smaller file or a faster "
+        "connection.",
     )
 
 
@@ -458,7 +478,9 @@ class Live:
         self.max_bytes = MAX_UPLOAD_BYTES
         self.max_seconds = MAX_SECONDS
         self.max_uploads = MAX_UPLOADS
-        self.uploading = 0
+        self.upload_deadline = UPLOAD_DEADLINE_S
+        self.uploading = 0  # uploads being received and checked now
+        self.upload_keys: set[str] = set()  # whose
         self._ledger: Ledger | None = None
 
     @property
@@ -668,8 +690,40 @@ def _sample(settings: ApiSettings, sample_id: str) -> Path | None:
 
 
 async def _accept(live: Live, request: Request, run_id: str, run_dir: Path, client: str) -> Job:
-    """Read and check the form, put the video in run_dir/input, probe it, check the spend
-    caps and write request.json. Raises LiveError; the caller then removes run_dir."""
+    """Receive the form (within the upload deadline: 408), put the video in run_dir/input,
+    probe and cut it, check the spend caps and write request.json. Raises LiveError; the
+    caller then removes run_dir."""
+    try:
+        with anyio.fail_after(live.upload_deadline):
+            opts, video, source = await _receive(live, request, run_dir)
+    except TimeoutError:
+        raise upload_timeout(live.upload_deadline) from None
+    info = await _cut(live, run_id, video)
+    live.check_budget(run_id, info.duration)
+    _write_json(
+        run_dir / REQUEST,
+        {
+            "run_id": run_id,
+            "created": datetime.now(UTC).isoformat(timespec="seconds"),
+            "source": source,
+            "input": f"{INPUT}/{video.name}",
+            "options": {"mode": opts.mode, "voice": opts.voice},
+            "video": {
+                "duration": info.duration,
+                "width": info.width,
+                "height": info.height,
+                "has_audio": info.has_audio,
+            },
+            "client": client[:16],
+        },
+    )
+    return Job(run_id, run_dir, video, opts, info.duration, live.ledger)
+
+
+async def _receive(
+    live: Live, request: Request, run_dir: Path
+) -> tuple[RunOptions, Path, dict[str, Any]]:
+    """The form read and checked, its video (upload or sample) stored in run_dir/input."""
     form = await _read_form(request, live.max_bytes)
     try:
         opts = _options(form)
@@ -697,27 +751,7 @@ async def _accept(live: Live, request: Request, run_id: str, run_dir: Path, clie
             source = {"kind": "sample", "id": sample, "name": path.name}
     finally:
         await form.close()
-
-    info = await _cut(live, run_id, video)
-    live.check_budget(run_id, info.duration)
-    _write_json(
-        run_dir / REQUEST,
-        {
-            "run_id": run_id,
-            "created": datetime.now(UTC).isoformat(timespec="seconds"),
-            "source": source,
-            "input": f"{INPUT}/{video.name}",
-            "options": {"mode": opts.mode, "voice": opts.voice},
-            "video": {
-                "duration": info.duration,
-                "width": info.width,
-                "height": info.height,
-                "has_audio": info.has_audio,
-            },
-            "client": client[:16],
-        },
-    )
-    return Job(run_id, run_dir, video, opts, info.duration, live.ledger)
+    return opts, video, source
 
 
 def _resume_job(live: Live, run_id: str, run_dir: Path) -> Job:
@@ -815,28 +849,43 @@ def list_samples(request: Request) -> list[dict[str, str]]:
     return [{"id": p.stem} for p in paths]
 
 
+def _check_headers(request: Request, limit: int) -> None:
+    """A Content-Length, when sent, within the limit (413); a form body (422)."""
+    length = request.headers.get("content-length")
+    if length is not None:
+        if not length.strip().isdigit():
+            raise LiveError(400, "invalid", "The Content-Length header is not a number.")
+        if int(length) > limit + FORM_SLACK:
+            raise too_large(limit)
+    ctype = request.headers.get("content-type", "").lower()
+    if ctype and not ctype.startswith(FORM_TYPES):
+        raise LiveError(422, "invalid", "Send the video as multipart/form-data.")
+
+
 @router.post("/v1/runs")
 async def create_run(request: Request) -> StreamingResponse:
     live = _live(request)
     key = live.limiter.client_key(client_ip(request, live.settings.lull_proxy_hops))
     if live.executor.busy:
         raise busy()
-    if live.uploading >= live.max_uploads:
-        raise uploads_busy()
     live.check_rate(key)
     live.check_refusals(key)
-    length = request.headers.get("content-length", "")
-    if length.isdigit() and int(length) > live.max_bytes + FORM_SLACK:
-        raise too_large(live.max_bytes)
+    _check_headers(request, live.max_bytes)
+    # the slots, only for a request whose headers hold up
+    if key in live.upload_keys:
+        raise one_upload()
+    if live.uploading >= live.max_uploads:
+        raise uploads_busy()
 
     run_id = new_run_id()
     run_dir = live.settings.runs_dir / run_id
     live.uploading += 1
+    live.upload_keys.add(key)
     try:
         try:
             job = await _accept(live, request, run_id, run_dir, key)
         except LiveError as e:
-            if e.status in (400, 413, 422):  # read, then refused: counts against the visitor
+            if e.status in (400, 408, 413, 422):  # read, then refused: counts against them
                 live.refusals.hit(key)
             raise
         # checked again with the claim, in one step: the upload took a while
@@ -851,6 +900,7 @@ async def create_run(request: Request) -> StreamingResponse:
         raise
     finally:
         live.uploading -= 1
+        live.upload_keys.discard(key)
     live.limiter.hit(key)
     return _sse(backlog, run, q, live.heartbeat)
 

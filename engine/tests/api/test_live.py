@@ -687,12 +687,18 @@ def test_concurrent_uploads_are_bounded_503(lc, live, data):
     entered, gate = threading.Event(), threading.Event()
     live.max_uploads = 1
     live.probe = gated_probe(entered, gate)
+    live.settings.lull_proxy_hops = 1
+    files = {"file": ("clip.mp4", b"fake video", "video/mp4")}
+
+    def upload(ip):
+        return lc.post("/v1/runs", files=files, headers={"X-Forwarded-For": ip})
+
     out: dict = {}
-    t = threading.Thread(target=lambda: out.setdefault("r", post(lc)))
+    t = threading.Thread(target=lambda: out.setdefault("r", upload("1.1.1.1")))
     t.start()
     try:
         assert entered.wait(10)
-        r = post(lc)
+        r = upload("2.2.2.2")  # another visitor: only the global cap stops it
         assert r.status_code == 503
         assert r.json()["error"] == "uploads_busy" and r.json()["message"]
         assert int(r.headers["retry-after"]) > 0
@@ -910,3 +916,137 @@ def test_resume_with_a_damaged_request_json_is_404(lc, live, data, body):
     r = lc.get(f"/v1/runs/{d.name}/events")
     assert r.status_code == 404 and r.json()["error"] == "not_found"
     assert live.runner.jobs == []
+
+
+# -- the upload gate: a deadline, one upload per visitor, the slot after the headers ------------
+
+
+def _asgi_post_stalling(app, *, client=("testclient", 50000)) -> tuple[int, dict]:
+    """POST /v1/runs whose body stops arriving after its first bytes."""
+    import asyncio
+
+    head = b'--b\r\nContent-Disposition: form-data; name="file"; filename="a.mp4"\r\n\r\nxx'
+
+    async def call():
+        sent = False
+
+        async def receive():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": head, "more_body": True}
+            await asyncio.sleep(30)
+            return {"type": "http.disconnect"}
+
+        out: list = []
+
+        async def send(message):
+            out.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/v1/runs",
+            "raw_path": b"/v1/runs",
+            "root_path": "",
+            "query_string": b"",
+            "headers": [
+                (b"host", b"t"),
+                (b"content-type", b"multipart/form-data; boundary=b"),
+            ],
+            "client": client,
+            "server": ("t", 80),
+            "state": {},
+        }
+        await asyncio.wait_for(app(scope, receive, send), 10)
+        return out
+
+    messages = asyncio.run(call())
+    start = next(m for m in messages if m["type"] == "http.response.start")
+    body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.response.body")
+    return start["status"], json.loads(body)
+
+
+def test_a_stalled_body_times_out_408_and_frees_the_slot(app, live, data):
+    live.upload_deadline = 0.3
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+    status, body = _asgi_post_stalling(app)
+    assert status == 408 and body["error"] == "timeout" and body["message"]
+    assert live.uploading == 0 and not live.upload_keys
+    assert run_dirs(data) == []
+    with TestClient(app) as c:
+        r = post(c)  # the stall counted as a refused upload
+        assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+
+
+def test_one_upload_at_a_time_per_visitor(lc, live):
+    live.settings.lull_proxy_hops = 1
+    entered, gate = threading.Event(), threading.Event()
+    live.probe = gated_probe(entered, gate)
+    a, b = {"X-Forwarded-For": "1.1.1.1"}, {"X-Forwarded-For": "2.2.2.2"}
+    files = {"file": ("a.mp4", b"x", "video/mp4")}
+    t = threading.Thread(target=lambda: lc.post("/v1/runs", files=files, headers=a))
+    t.start()
+    try:
+        assert entered.wait(10)
+        r = lc.post("/v1/runs", files=files, headers=a)
+        assert r.status_code == 429 and r.json()["error"] == "one_upload_at_a_time"
+        assert int(r.headers["retry-after"]) > 0
+        other = lc.post("/v1/runs", files={"file": ("a.avi", b"x", "video/x")}, headers=b)
+        assert other.status_code == 422 and other.json()["error"] == "format"  # it got in
+    finally:
+        gate.set()
+        t.join(10)
+    assert live.uploading == 0 and not live.upload_keys
+
+
+def test_bad_headers_are_refused_before_taking_a_slot(lc, live):
+    live.settings.lull_proxy_hops = 1
+    live.max_uploads = 1
+    entered, gate = threading.Event(), threading.Event()
+    live.probe = gated_probe(entered, gate)
+    files = {"file": ("a.mp4", b"x", "video/mp4")}
+    t = threading.Thread(
+        target=lambda: lc.post("/v1/runs", files=files, headers={"X-Forwarded-For": "1.1.1.1"})
+    )
+    t.start()
+    try:
+        assert entered.wait(10)  # the one slot is taken
+        big = lc.post(
+            "/v1/runs",
+            content=b"x",
+            headers={
+                "X-Forwarded-For": "2.2.2.2",
+                "content-type": "multipart/form-data; boundary=b",
+                "content-length": str(31 * 2**20),
+            },
+        )
+        assert big.status_code == 413  # not 503: the headers were checked first
+        odd = lc.post(
+            "/v1/runs",
+            content=b"{}",
+            headers={"X-Forwarded-For": "3.3.3.3", "content-type": "application/json"},
+        )
+        assert odd.status_code == 422 and odd.json()["error"] == "invalid"
+        full = lc.post("/v1/runs", files=files, headers={"X-Forwarded-For": "4.4.4.4"})
+        assert full.status_code == 503
+    finally:
+        gate.set()
+        t.join(10)
+    assert live.uploading == 0 and not live.upload_keys
+
+
+@pytest.mark.parametrize("how", ["file_size", "format", "too_long", "unreadable"])
+def test_every_refusal_frees_the_upload_slot(lc, live, how):
+    content, name = {
+        "file_size": (b"x" * 1500, "a.mp4"),
+        "format": (b"x", "a.avi"),
+        "too_long": (b"DUR=500;", "a.mp4"),
+        "unreadable": (b"BAD", "a.mp4"),
+    }[how]
+    live.max_bytes = 1000
+    assert post(lc, content, name=name).status_code in (413, 422)
+    assert live.uploading == 0 and not live.upload_keys
