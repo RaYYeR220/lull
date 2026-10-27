@@ -16,6 +16,7 @@ TRANSCRIPT_CHARS = 6000
 CONTEXT_CHARS = 1500
 NOTE_CHARS = 200
 MAX_SOURCES = 3
+NAMED_KINDS = {"person", "place", "organization", "work", "technical"}
 LOOKUP_FAILED = "lookup failed"
 
 TERMS_SCHEMA = {
@@ -88,11 +89,16 @@ def _extract_terms(
         run_id=run_id, stage="research", role="research",
         thinking=False, max_tokens=1500, temperature=0.2, estimate=0.002,
     )  # fmt: skip
+    evidence = [" ".join(w.text for w in words)]
+    evidence += [e.verbatim_text for e in events if e.verbatim_text]
     seen: set[str] = set()
     terms: list[str] = []
     for item in out.get("terms") or []:
         term = str(item.get("term", "")).strip()
-        if term and term.lower() not in seen:
+        if not term or item.get("kind") not in NAMED_KINDS or term.lower() in seen:
+            continue
+        pat = re.compile(r"(?<!\w)" + re.escape(term) + r"(?!\w)", re.IGNORECASE)
+        if any(pat.search(t) for t in evidence):
             seen.add(term.lower())
             terms.append(term)
     return terms[:max_terms]

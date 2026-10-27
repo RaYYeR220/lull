@@ -10,13 +10,14 @@ from lull.types import RunOptions, VisualEvent, Word
 
 
 class FakeTF:
-    def __init__(self, terms: list[str]):
+    def __init__(self, terms: list[str], kind: str = "person"):
         self.terms = terms
+        self.kind = kind
         self.calls: list[dict] = []
 
     def json(self, model, messages, schema, **kw):
         self.calls.append({"model": model, "messages": messages, "kw": kw})
-        return {"terms": [{"term": t, "kind": "other", "why": "x"} for t in self.terms]}
+        return {"terms": [{"term": t, "kind": self.kind, "why": "x"} for t in self.terms]}
 
 
 def _ev() -> list[VisualEvent]:
@@ -34,7 +35,8 @@ def _ev() -> list[VisualEvent]:
     ]
 
 
-WORDS = [Word(text="Proog", start=0.0, end=0.5), Word(text="and", start=0.5, end=0.7)]
+_SAID = "Proog and Emo met A1 B2 C3 D4 Bad X AI"
+WORDS = [Word(text=t, start=i * 0.5, end=i * 0.5 + 0.4) for i, t in enumerate(_SAID.split())]
 
 
 def _tavily(tmp_path, handler, sleep=lambda s: None):
@@ -286,3 +288,49 @@ def test_budget_exceeded_propagates(tmp_path):
     tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler([])))
     with pytest.raises(BudgetExceeded):
         research(_ev(), WORDS, RunOptions(), FakeTF(["Proog"]), tv, run_id="r")
+
+
+def test_descriptors_dropped_no_searches(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    res = research(
+        _ev(), WORDS, RunOptions(), FakeTF(["metal walkway", "bald man"]), tv, run_id="r"
+    )
+    assert res.glossary == [] and seen == []
+
+
+def test_event_text_is_not_evidence(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["title card"]), tv, run_id="r")
+    assert res.glossary == [] and seen == []
+
+
+def test_spoken_name_kept(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    words = [Word(text="Emo", start=0, end=1)]
+    res = research([], words, RunOptions(), FakeTF(["Emo"]), tv, run_id="r")
+    assert [e.term for e in res.glossary] == ["Emo"] and len(seen) == 1
+
+
+def test_verbatim_only_kept(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    res = research(_ev(), [], RunOptions(), FakeTF(["Elephants Dream"], "work"), tv, run_id="r")
+    assert [e.term for e in res.glossary] == ["Elephants Dream"] and len(seen) == 1
+
+
+def test_kind_other_dropped(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["Proog"], "other"), tv, run_id="r")
+    assert res.glossary == [] and seen == []
+
+
+def test_filter_before_max_terms(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    tf = FakeTF(["junk one", "junk two", "junk three", "Proog", "Emo"])
+    res = research(_ev(), WORDS, RunOptions(), tf, tv, run_id="r", max_terms=2)
+    assert [e.term for e in res.glossary] == ["Proog", "Emo"] and len(seen) == 2
