@@ -70,7 +70,7 @@ def test_describe_prints_progress_and_a_summary(
     assert re.search(
         rf"^\s+cue\s+c001\s+verified\s+0:01\.8\b.*{re.escape(CUE_TEXT['c001'])}", r.output, re.M
     )
-    assert "! the recogniser stretched 'Bye.'" in r.output
+    assert "! the recogniser stretched 'Ada.'" in r.output
     assert re.search(r"^\s*cues\s+2 verified, 0 held, 1 extended$", r.output, re.M)
     assert re.search(r"^\s*overlap\s+0\.000 s$", r.output, re.M)
     assert re.search(r"^\s*cost\s+\$0\.\d{4}\b", r.output, re.M)

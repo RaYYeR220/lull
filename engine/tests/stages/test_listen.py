@@ -137,17 +137,20 @@ def test_clamp_words_stretched_word_from_elephants_dream():
     assert any(g.usable_start <= 18.1 and g.usable_end >= 35.7 for g in gaps)
 
 
-def test_clamp_words_bounds():
-    long_word = "internationalisation"  # 20 chars: 2.05 s would be allowed, capped at 1.5
+def test_clamp_words_leaves_plausible_words_alone():
+    """Only implausible words are cut: longer than max(2.0 s, 0.25 s per character)."""
+    long_word = "internationalisation"  # 20 chars: implausible only beyond 5.0 s
     words = [
-        Word(text="a", start=0.0, end=0.9),  # 0.34 s allowed, floor 0.3 does not bind
-        Word(text="I", start=1.0, end=1.2),  # short and plausible
-        Word(text=long_word, start=2.0, end=4.0),
-        Word(text=long_word, start=5.0, end=6.5),  # exactly the cap: kept
+        Word(text="world.", start=38.48, end=39.38),  # 0.9 s sentence-final word: untouched
+        Word(text="see.", start=6.64, end=7.76),  # 1.12 s drawn out: untouched
+        Word(text="a", start=10.0, end=12.0),  # exactly 2.0 s: untouched
+        Word(text="a", start=13.0, end=15.5),  # 2.5 s: cut to 0.34 s
+        Word(text=long_word, start=20.0, end=24.9),  # 4.9 s for 20 chars: untouched
+        Word(text=long_word, start=30.0, end=35.5),  # 5.5 s: cut to the 1.5 s cap
     ]
     out, clamped = clamp_words(words)
-    assert [round(w.end, 3) for w in out] == [0.34, 1.2, 3.5, 6.5]
-    assert [c.text for c in clamped] == ["a", long_word]
+    assert [round(w.end, 3) for w in out] == [39.38, 7.76, 12.0, 13.34, 24.9, 31.5]
+    assert [(c.text, c.start) for c in clamped] == [("a", 13.0), (long_word, 30.0)]
     assert clamp_words([]) == ([], [])
 
 

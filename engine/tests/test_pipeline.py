@@ -155,7 +155,7 @@ def test_run_reports_stages_calls_cues_warnings_and_done(runs):
     assert cues[0]["audio_dur"] == pytest.approx(2.0, abs=0.01) and cues[0]["note"] is None
     warnings = [e.data for e in events if e.type == "warning"]
     clamped = [w for w in warnings if w["kind"] == "clamped_word"]
-    assert [(w["text"], w["end"], w["clamped_end"]) for w in clamped] == [("Bye.", 11.95, 11.81)]
+    assert [(w["text"], w["end"], w["clamped_end"]) for w in clamped] == [("Ada.", 3.5, 1.6)]
     assert all(w["message"] for w in warnings)
     assert [w["kind"] for w in warnings if w["kind"] != "clamped_word"] == ["research_skipped"]
     done = events[-1]
@@ -333,7 +333,7 @@ def test_one_voice_rate_names_and_speech_flow_through_the_stages(
     assert ctx["c002"].introduced == {"Ada", "Lull", "Proog"}
     assert ctx["x002"].introduced == set()  # at 0.3 s nothing was said, shown or described yet
     pub = seen["publish"][0]
-    assert pub["speech"] == [Span(start=0.3, end=1.6), Span(start=11.2, end=11.81)]
+    assert pub["speech"] == [Span(start=0.3, end=1.6), Span(start=11.2, end=11.95)]
     assert [c.id for c in pub["cues"]] == ["c001", "c002"]
     assert [c.id for c in pub["extended"]] == ["x002"]
     assert pub["cues"][0].text == "A tall person, Proog, stands on a plain red screen."
