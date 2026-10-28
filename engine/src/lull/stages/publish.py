@@ -535,10 +535,8 @@ def _lock(run_dir: Path) -> Iterator[None]:
     path = run_dir / LOCK
     while not _take(path):
         if path.exists() and _breakable(path):
-            log.warning("publish: breaking a stale lock (%s) in %s",
-                        path.read_text(encoding="utf-8", errors="replace").strip(),
-                        run_dir)  # fmt: skip
-            path.unlink(missing_ok=True)
+            log.warning("publish: breaking a stale lock in %s", run_dir)
+            path.unlink(missing_ok=True)  # another waiter may have broken it first
             continue
         time.sleep(LOCK_POLL_S)
     stop = threading.Event()
