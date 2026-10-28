@@ -266,6 +266,7 @@ export type RefusalCode =
   | "busy"
   | "too_large"
   | "format"
+  | "unsupported"
   | "too_long"
   | "unreadable"
   | "rate_limited"
@@ -299,6 +300,7 @@ export const API_REFUSALS: ReadonlySet<string> = new Set([
   "busy",
   "too_large",
   "format",
+  "unsupported",
   "too_long",
   "unreadable",
   "rate_limited",
@@ -330,6 +332,7 @@ const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
   busy: "Another description is running. Try again in a minute, or open a recorded run.",
   too_large: "This file is over 30 MB. Live descriptions take files up to 30 MB.",
   format: "Send an mp4, mov, webm or mkv video.",
+  unsupported: "Live descriptions take a plain video: one picture, up to 1080p, with its sound.",
   too_long: "Live descriptions take videos up to 60 s (samples up to 45 s).",
   unreadable: "This file could not be read as a video.",
   rate_limited: "You have reached the limit of live descriptions for now.",

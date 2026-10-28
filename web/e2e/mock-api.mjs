@@ -261,9 +261,8 @@ const server = createServer(async (req, res) => {
 });
 
 /**
- * The API's samples as GET /v1/samples serves them (engine/samples/samples.json, the fields
- * it keeps). ed45 and tos45 are the API's own entries; bbb45's is a stand-in in the same shape
- * until the API ships it. Sorted by id, as the API lists them.
+ * The API's samples as GET /v1/samples serves them: its engine/samples/samples.json entries
+ * (bbb45, ed45, tos45), the fields it keeps, sorted by id.
  */
 const SAMPLES = JSON.parse(readFileSync(new URL("./fixtures/api-samples.json", import.meta.url), "utf8"));
 

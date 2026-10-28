@@ -80,6 +80,9 @@
     "unreadable": [
       422
     ],
+    "unsupported": [
+      422
+    ],
     "uploads_busy": [
       503
     ]

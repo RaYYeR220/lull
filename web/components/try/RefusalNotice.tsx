@@ -26,6 +26,7 @@ const HEADINGS: Record<NoticeKind, string> = {
   busy: "Another description is running.",
   too_large: "This file is too large.",
   format: "Lull can’t take this file type.",
+  unsupported: "Lull can’t take this video as it is.",
   too_long: "This video is too long.",
   unreadable: "This file couldn’t be read as a video.",
   rate_limited: "You’ve reached the live limit for now.",

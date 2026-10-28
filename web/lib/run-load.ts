@@ -4,7 +4,7 @@
  * with the owner's edit token when this browser holds it, and the recorded run of the same
  * clip when there is one (it lends what the API keeps no copy of).
  */
-import { isAbort, readEditToken } from "./api";
+import { isAbort, readEditToken, samples, type Sample } from "./api";
 import { lookupRun, type DoneDetail } from "./api-runs";
 import { clipOf, fromApi, type RunData, type RunFile } from "./run-data";
 import { LAYOUT, parseShowcase, showcaseUrl } from "./showcase-schema.mjs";
@@ -40,12 +40,27 @@ type LoadOpts = {
   signal?: AbortSignal;
 };
 
+/** The API's samples, asked once per page (a run of one is titled and credited as it is). */
+let sampleList: Promise<Sample[]> | null = null;
+async function sampleOf(id: string | null, signal?: AbortSignal): Promise<Sample | null> {
+  if (!id) return null;
+  sampleList ??= samples().catch(() => {
+    sampleList = null;
+    return [];
+  });
+  const list = await sampleList;
+  if (signal?.aborted) throw signal.reason;
+  return list.find((s) => s.id === id) ?? null;
+}
+
 /** A done run's data, ready for the pages; built again from a fresh detail by `build`. */
 export async function buildRun(id: string, detail: DoneDetail, opts: LoadOpts): Promise<RunData> {
   // the recorded run itself (opened through the API), or the one this run is a copy or sample of
   const entry = opts.clip && opts.clip.id === id ? opts.clip : clipOf(detail, opts.index);
   const clip = entry ? (opts.clip?.id === entry.id ? opts.clip : await fetchShowcase(entry.id, opts.signal)) : null;
-  return fromApi(id, detail, { clip, clipFiles: opts.clipFiles, audioVersion: opts.audioVersion, filesVersion: opts.filesVersion });
+  // a run of one of the API's samples (or a copy of one): its title, credit and licence
+  const sample = clip ? null : await sampleOf(detail.source?.sampleId ?? null, opts.signal);
+  return fromApi(id, detail, { clip, sample, clipFiles: opts.clipFiles, audioVersion: opts.audioVersion, filesVersion: opts.filesVersion });
 }
 
 /**

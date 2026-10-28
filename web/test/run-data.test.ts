@@ -135,6 +135,14 @@ describe("a run from the API", () => {
     expect(run.borrowed).toBeNull();
   });
 
+  it("a run of one of the API's samples is titled and credited as the sample is, licence included", () => {
+    const sample = { id: "ed45", title: "Elephants Dream (excerpt)", duration: 44.917, credit: "Orange Open Movie Team / Blender Foundation, elephantsdream.org", licence: "CC BY 2.5", licenceUrl: "https://creativecommons.org/licenses/by/2.5/", sourceUrl: null, excerpt: "1:00-1:44.9" };
+    const run = fromApi("r1", detail({ name: "ed45.mp4", source: { kind: "sample", sample_id: "ed45" } }), { sample });
+    expect(run.title).toBe("Elephants Dream (excerpt)");
+    expect(run.credit).toBe("Orange Open Movie Team / Blender Foundation, elephantsdream.org, CC BY 2.5");
+    expect(run.file).toBe("ed45.mp4");
+  });
+
   it("orders and names lines, ends a voiced one at its take and leaves a held one open", () => {
     const run = fromApi("r1", detail({ gaps: [{ id: "g1", start: 1.8, end: 6, capacity: 12 }] }));
     expect(run.cues.map((c) => [c.id, c.label])).toEqual([

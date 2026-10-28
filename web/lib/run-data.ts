@@ -4,7 +4,7 @@
  * cues.json and its files). The watch, live-run and studio pages read only this. Every field
  * comes from the run's own data; what a source doesn't have is null and the pages leave it out.
  */
-import type { CueStatus, LintFinding } from "./api";
+import type { CueStatus, LintFinding, Sample } from "./api";
 import { cueAudioPattern, runFileUrl, type ApiClaim, type ApiCue, type ManifestSummary, type DoneDetail, type RunDetail } from "./api-runs";
 import { LAYOUT, showcaseUrl } from "./showcase-schema.mjs";
 import type { Showcase, ShowcaseIndexEntry, ShowcaseWord } from "./showcase-schema.mjs";
@@ -257,6 +257,8 @@ export function fromApi(
   detail: DoneDetail,
   opts: {
     clip?: Showcase | null;
+    /** The API's sample this run (or the run it copies) described: its title, credit and licence. */
+    sample?: Sample | null;
     clipFiles?: RunFile[];
     /** Bumped after an edit: the cue recordings are fetched afresh. */
     audioVersion?: number;
@@ -323,8 +325,9 @@ export function fromApi(
   return {
     id,
     source: "api",
-    title: clip?.title ?? detail.title ?? manifest.video.name ?? id,
-    credit: clip?.credit ?? null,
+    title: clip?.title ?? opts.sample?.title ?? detail.title ?? manifest.video.name ?? id,
+    // a licensed clip is credited wherever it plays: the recorded run's credit, or the sample's with its licence
+    credit: clip?.credit ?? (opts.sample && (opts.sample.credit || opts.sample.licence) ? [opts.sample.credit, opts.sample.licence].filter(Boolean).join(", ") : null),
     file: manifest.video.name,
     duration,
     loudness,

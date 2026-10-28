@@ -208,6 +208,7 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":182.4,"summary":{"cu
       { status: 409, code: "busy", when: "Another description is running: one at a time.", retryAfter: true },
       { status: 413, code: "too_large", when: "The file is over 30 MB." },
       { status: 422, code: "format", when: "Not an mp4, mov, webm or mkv." },
+      { status: 422, code: "unsupported", when: "More work than a live run takes: a picture over 1080p, more than one picture, too many sound tracks, or a track besides picture and sound." },
       { status: 422, code: "too_long", when: "Over 60 s (a sample: 45 s)." },
       { status: 422, code: "unreadable", when: "The file can't be read as a video." },
       { status: 422, code: "invalid", when: "Neither or both of file and sample; an unknown mode or voice." },
