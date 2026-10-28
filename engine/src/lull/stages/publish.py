@@ -968,6 +968,7 @@ def publish(
     words: list[Word] | None = None,
     reviewer: dict[str, list[str]] | None = None,
     verify: bool = True,
+    watch_windows_split: int = 0,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
@@ -1011,7 +1012,7 @@ def publish(
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
                 run_id, opts, speech, duplicates, overlap, priority, since, words or [],
-                reviewer or {}, verify,
+                reviewer or {}, verify, watch_windows_split,
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -1068,7 +1069,7 @@ def _stage(
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
     priority: dict[str, int] | None = None, since: float | None = None,
     words: list[Word] | None = None, reviewer: dict[str, list[str]] | None = None,
-    verify: bool = True,
+    verify: bool = True, watch_windows_split: int = 0,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
@@ -1155,6 +1156,7 @@ def _stage(
     summary = {
         "cues": {s: counts.get(s, 0) for s in STATUSES},
         "for_reviewer": for_reviewer,
+        "watch_windows_split": watch_windows_split,  # cut off by the token limit: in halves
         "coverage": cov,
         "repetitive": judged,  # watch-salient, rated 1-2 by the plan: not counted
         "overlap_seconds": overlap["total_s"],

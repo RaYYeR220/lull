@@ -122,7 +122,12 @@ def _detail(stage: str, d: dict) -> str:
         )
         return text + (f", {d['clamped']} stretched words clamped" if d["clamped"] else "")
     if stage == "watch":
-        return f"{d['events']} visual events"
+        split = d.get("windows_split") or 0
+        return f"{d['events']} visual events" + (
+            f", {split} window{'s' * (split != 1)} split in halves (answer cut off)"
+            if split
+            else ""
+        )
     if stage == "research":
         text = f"{d['terms']} terms" + (" (not looked up)" if d["skipped"] else "")
         return text + (f", {d['errors']} lookup errors" if d["errors"] else "")

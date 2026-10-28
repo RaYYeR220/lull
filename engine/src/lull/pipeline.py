@@ -80,6 +80,7 @@ class Event:
 
 class _Events(BaseModel):
     events: list[VisualEvent]
+    windows_split: int = 0  # watch windows cut off by the token limit and watched in halves
 
 
 class _Schedule(BaseModel):
@@ -263,6 +264,7 @@ class _Run:
     info: media.Probe | None = None  # the probed video: frame rate and length for freezes
     undescribed: list[str] = field(default_factory=list)  # salient, and the plan wrote nothing
     verify: bool = True  # False only with LULL_NO_VERIFY (the evaluation's ablation)
+    windows_split: int = 0  # watch windows whose answer was cut off and watched in halves
 
     @property
     def store(self) -> Store:
@@ -363,24 +365,25 @@ class _Run:
     def watch(self, words: list[Word]) -> list[VisualEvent]:
         with self.step("watch") as info:
             inputs = {"words": words, "profile": self.opts.profile}
-            out = self.cached(
-                info,
-                "watch",
-                inputs,
-                _Events,
-                lambda: _Events(
-                    events=watch(
-                        self.video,
-                        self.work,
-                        words,
-                        self.tf,
-                        run_id=self.run_id,
-                        profile=self.opts.profile,
-                        memo=self.memo_in("watch"),
-                    )
-                ),
-            )
+
+            def compute() -> _Events:
+                splits: list[str] = []
+                events = watch(
+                    self.video,
+                    self.work,
+                    words,
+                    self.tf,
+                    run_id=self.run_id,
+                    profile=self.opts.profile,
+                    memo=self.memo_in("watch"),
+                    splits=splits,
+                )
+                return _Events(events=events, windows_split=len(splits))
+
+            out = self.cached(info, "watch", inputs, _Events, compute)
             info["events"] = len(out.events)
+            info["windows_split"] = out.windows_split
+        self.windows_split = out.windows_split
         return out.events
 
     def memo_in(self, stage: str) -> Callable[[str, dict, Callable[[], object]], object]:
@@ -805,6 +808,7 @@ def _stages(r: _Run, started: float | None = None) -> PublishResult:
                 "undescribed": list(r.undescribed),
             },  # fmt: skip
             verify=r.verify,
+            watch_windows_split=r.windows_split,
         )
         info["files"] = len(result.files) + 1
     return result

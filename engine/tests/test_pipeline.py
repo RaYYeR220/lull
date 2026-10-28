@@ -116,6 +116,7 @@ def test_full_run_publishes_every_output(runs):
     manifest = json.loads(res.manifest.read_text(encoding="utf-8"))
     assert manifest["run_id"] == "t1"
     summary = manifest["summary"]
+    assert summary["watch_windows_split"] == 0
     assert summary["cues"] == {
         "verified": 2,
         "edited": 0,
@@ -289,8 +290,13 @@ def test_a_crafted_container_stops_the_run_before_any_stage(tone_slides, tmp_pat
     assert not (tmp_path / "run").exists()
 
 
-def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> TokenFactory:
-    """The real client against a fake server that answers 402 to the plan call."""
+def _token_factory(
+    ledger: Ledger, seen: list[str], *, fail_plan: bool, cut_off_watch: bool = False
+) -> TokenFactory:
+    """The real client against a fake server that answers 402 to the plan call, or (with
+    `cut_off_watch`) cuts the first watch answer off at its token limit, both times the client
+    asks, then answers the window's two halves (split at the 6 s cut) with their events."""
+    watched = [0]
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -298,6 +304,22 @@ def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> Token
         seen.append(fmt["name"])
         if fmt["name"] == "plan" and fail_plan:
             return httpx.Response(402, json={"error": "insufficient balance"})
+        if fmt["name"] == "watch" and cut_off_watch:
+            watched[0] += 1
+            if watched[0] <= 2:
+                return httpx.Response(200, json={
+                    "choices": [{"message": {"content": '{"events": [{"t_st'},
+                                 "finish_reason": "length"}],
+                    "usage": {"prompt_tokens": 1000, "completion_tokens": 100},
+                })  # fmt: skip
+            late = watched[0] == 4  # the second half, [6, 12]
+            half = [{**e, "t_start": e["t_start"] - 6 * late, "t_end": e["t_end"] - 6 * late}
+                    for e in WATCH["events"] if (e["t_start"] >= 6) == late]  # fmt: skip
+            return httpx.Response(200, json={
+                "choices": [{"message": {"content": json.dumps({"events": half})},
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 100},
+            })  # fmt: skip
         if fmt["name"] == "finalize":
             props = fmt["schema"]["properties"]
             msgs = body["messages"]
@@ -318,6 +340,20 @@ def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> Token
         )
 
     return TokenFactory("k", ledger, transport=httpx.MockTransport(handler), sleep=lambda s: None)
+
+
+def test_a_watch_answer_cut_off_is_watched_in_halves_and_the_split_is_in_the_manifest(
+    tone_slides, tmp_path, fast_media
+):
+    ledger = _ledger(tmp_path)
+    seen: list[str] = []
+    tf = _token_factory(ledger, seen, fail_plan=False, cut_off_watch=True)
+    res, _, _, events = _run(tone_slides, tmp_path / "run", ledger, tf=tf, run_id="tcut")
+    assert seen[:4] == ["watch"] * 4  # the window (and its retry), then its two halves
+    ends = _ends(events)
+    assert ends["watch"]["events"] == 3 and ends["watch"]["windows_split"] == 1
+    summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert summary["watch_windows_split"] == 1
 
 
 def test_provider_402_at_plan_keeps_earlier_stages_and_a_rerun_resumes(
