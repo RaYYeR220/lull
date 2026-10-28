@@ -15,18 +15,29 @@ OUT_DIR gets
 
 showcase.json: {id, title, credit, duration, loudness (dBFS of the original audio per 100 ms,
 floor -120, 1 decimal), speech [[start, end]...], gaps [{id, start, end, capacity}] (the
-usable windows the scheduler filled), cues [{id, start, end, text, status, ahead}] (the
-published standard and extended cues; an extended cue starts at its freeze point; end = start +
-its audio), words [{t, s, e}], audio {original, described}, cueAudioBase, verifyExample {cueId,
-cue, claims [{text, verdict}]}, costUsd}.
+usable windows the scheduler filled), cues [{id, start, end, text, status, ahead, extended}]
+(the published standard and extended cues; an extended cue starts at its freeze point; end =
+start + its audio; a held cue is listed too, with `note` (why it was held), the pause it would
+have filled as start/end (an extended one: its visual's start, twice), `claims` (its failed
+claims with their verdicts, from its last check when its text was withheld), and no audio: it
+is in no description track), words [{t, s, e}], audio {original, described}, cueAudioBase,
+verifyExample {cueId, cue, claims [{text, verdict}]}, costUsd, summary}.
+
+summary is what the report says about the run: counts (cues by status), coverage
+{importantEvents, described, ratio, describedWithExtended, ratioWithExtended, undescribed},
+repetitive [{id, text}] (salient events the plan judged repetitive), f113 [{gapId, start,
+end, eventIds}], overlapSeconds, wcag [{criterion, level, name, status, blockers}], models (the
+model ids, web search left out),
+spend {modelUsdThisRun, webSearchesThisRun, webSearchListUsdThisRun (notional, not charged),
+modelUsdAllRunsOfRunId}. A run published before these were recorded gives empty values.
 
 The verify example is the first published cue whose verification history shows a claim the
 frames did not support (it was cut before the cue was voiced): its draft as first checked and
 every verdict on it. Without one it is the first verified cue with its claims.
 
-costUsd is the run's summary cost: what the ledger holds for its run id, every run under that
-run id (describe with a fresh --run-id to show one run's cost). A reused OUT_DIR loses the cue
-audio and keyframes of an earlier export.
+costUsd is the model spend of the attempt that published (summary.spend has every run under
+the run id beside it). A reused OUT_DIR loses the cue audio and keyframes of an earlier
+export.
 """
 
 from __future__ import annotations
@@ -82,6 +93,82 @@ def _r(x: float) -> float:
     return round(float(x), 3)
 
 
+def run_summary(manifest: dict) -> dict:
+    """The showcase's `summary` (see the module doc) from the manifest publish wrote."""
+    s = manifest.get("summary") or {}
+    cov = s.get("coverage") or {}
+    spend = s.get("spend") or {}
+    return {
+        "counts": dict(s.get("cues") or {}),
+        "coverage": {
+            "importantEvents": cov.get("important_events", cov.get("salient_events")),
+            "described": cov.get("described"),
+            "ratio": cov.get("ratio"),
+            "describedWithExtended": cov.get("described_with_extended"),
+            "ratioWithExtended": cov.get("ratio_with_extended"),
+            "undescribed": list(cov.get("undescribed") or []),
+        },
+        "repetitive": [
+            {"id": r.get("id"), "text": r.get("text")} for r in s.get("repetitive") or []
+        ],  # fmt: skip
+        "f113": [
+            {
+                "gapId": f.get("gap_id"),
+                "start": f.get("start"),
+                "end": f.get("end"),
+                "eventIds": list(f.get("event_ids") or []),
+            }
+            for f in s.get("f113") or []
+        ],  # fmt: skip
+        "overlapSeconds": s.get("overlap_seconds"),
+        "wcag": [
+            {
+                "criterion": w.get("criterion"),
+                "level": w.get("level"),
+                "name": w.get("name"),
+                "status": w.get("status"),
+                "blockers": list(w.get("reasons") or []),
+            }
+            for w in s.get("wcag") or []
+        ],  # fmt: skip
+        "models": [
+            m
+            for m in (manifest.get("versions") or {}).get("models") or []
+            if not str(m).startswith("tavily")
+        ],  # the web search is not a model
+        "spend": {
+            "modelUsdThisRun": spend.get("model_usd_this_run", s.get("cost_usd")),
+            "webSearchesThisRun": spend.get("tavily_searches_this_run"),
+            "webSearchListUsdThisRun": spend.get("tavily_notional_usd_this_run"),
+            "modelUsdAllRunsOfRunId": spend.get("model_usd_all_runs"),
+        },
+    }
+
+
+def _held(published: dict) -> list[dict]:
+    """The held cues, for a page that shows what was held and why: the pause a standard one
+    would have filled (an extended one: its visual's start), its text and its note."""
+    gaps = {g["id"]: g for g in published.get("gaps") or []}
+    out = []
+    for entry in (published.get("cues") or []) + (published.get("extended") or []):
+        try:
+            c = Cue.model_validate(entry)
+        except ValidationError as e:
+            raise ShowcaseError(f"cues.json holds a cue that does not load: {e}") from e
+        if c.status != "held":
+            continue
+        g = gaps.get(c.gap_id) if c.gap_id is not None else None
+        start = float(g["usable_start"]) if g else c.start
+        end = float(g["usable_end"]) if g else c.start
+        claims = c.claims or (c.checks[-1].claims if c.checks else [])
+        failed = [{"text": k.text, "verdict": k.verdict} for k in claims
+                  if k.verdict != "supported"]  # fmt: skip
+        out.append({"id": c.id, "start": _r(start), "end": _r(end), "text": c.text,
+                    "status": "held", "ahead": c.ahead, "extended": c.gap_id is None,
+                    "note": c.note or "", "claims": failed})  # fmt: skip
+    return out
+
+
 def _cues(entries: list[dict], voiced) -> list[tuple[Cue, dict]]:
     try:
         pairs = [(Cue.model_validate(e), e) for e in entries]
@@ -129,8 +216,9 @@ def _loudness(wav: Path | None, duration: float) -> list[float]:
     return out + [FLOOR_DB] * (n - len(out))
 
 
-def _ffmpeg(*args: str) -> None:
-    media._run([media._bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", *args])
+def _ffmpeg(*args: str, seconds: float | None = None) -> None:
+    media._run([media._bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", *args],
+               timeout=media.ffmpeg_timeout(seconds))  # fmt: skip
 
 
 def _video(src: Path, info: media.Probe, dst: Path) -> bool:
@@ -142,6 +230,7 @@ def _video(src: Path, info: media.Probe, dst: Path) -> bool:
         *media.input_args(src), "-map", "0:v:0", *sound,
         "-vf", f"scale=-2:'{height}'", "-c:v", "libx264", "-preset", "veryfast",
         "-crf", str(VIDEO_CRF), "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst),
+        seconds=info.duration,
     )  # fmt: skip
     return original is not None
 
@@ -152,11 +241,15 @@ def export_showcase(
 ) -> Path:  # fmt: skip
     """Write the showcase files for the finished run in `run_dir` into `out_dir` (see the
     module doc) and return the path of showcase.json. Raises ShowcaseError when `run_dir` is
-    not a finished run or `out_dir` is the run folder itself (checked before anything is
-    written or removed), MediaError when its media cannot be read."""
+    not a finished run or `out_dir` is the run folder, inside it or contains it (checked
+    before anything is written or removed), MediaError when its media cannot be read."""
     run_dir, out_dir = Path(run_dir).absolute(), Path(out_dir).absolute()
-    if out_dir.resolve() == run_dir.resolve():  # it would clear the run's own keyframes
-        raise ShowcaseError("the output folder is the run folder itself: export somewhere else")
+    out_r, run_r = out_dir.resolve(), run_dir.resolve()
+    if out_r == run_r or run_r in out_r.parents or out_r in run_r.parents:
+        # inside it, it would land in the run; around it, clearing audio/ could reach in
+        raise ShowcaseError(
+            "the output folder is the run folder, inside it or around it: export somewhere else"
+        )
     manifest = _json(run_dir / "manifest.json")
     published = _json(run_dir / "cues.json")
     listen = _json(run_dir / STAGES_DIR / "listen.json").get("data") or {}
@@ -176,6 +269,7 @@ def export_showcase(
         start = c.start if c.gap_id is not None else float(entry.get("freeze_at", c.start))
         rows.append((start, c))
     rows.sort(key=lambda r: (r[0], r[1].id))
+    held = _held(published)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     for folder in (AUDIO_DIR, KEYFRAMES):  # nothing from an earlier export lingers
@@ -184,7 +278,8 @@ def export_showcase(
     video = out_dir / VIDEO
     has_sound = _video(described, info, video)
     with tempfile.TemporaryDirectory(prefix="lull-showcase-") as tmp:
-        wav = media.extract_wav(video, Path(tmp) / "original.wav") if has_sound else None
+        wav = (media.extract_wav(video, Path(tmp) / "original.wav", seconds=duration)
+               if has_sound else None)  # fmt: skip
         loudness = _loudness(wav, duration)
     for name in COPIED:
         shutil.copyfile(run_dir / name, out_dir / name)
@@ -195,8 +290,8 @@ def export_showcase(
         src = src if src.is_absolute() else run_dir / src
         if not src.exists():
             raise ShowcaseError(f"the audio of cue {c.id} is missing ({Path(c.audio_path).name})")
-        _ffmpeg(*media.input_args(src), "-vn", "-ac", "1", "-c:a", "aac", "-b:a", CUE_AUDIO,
-                str(out_dir / AUDIO_DIR / f"{c.id}.m4a"))  # fmt: skip
+        _ffmpeg(*media.wav_input_args(src), "-vn", "-ac", "1", "-c:a", "aac", "-b:a", CUE_AUDIO,
+                str(out_dir / AUDIO_DIR / f"{c.id}.m4a"), seconds=c.audio_dur)  # fmt: skip
 
     data = {
         "id": id or run_dir.name,
@@ -214,17 +309,22 @@ def export_showcase(
             }
             for g in published.get("gaps") or []
         ],  # fmt: skip
-        "cues": [
-            {
-                "id": c.id,
-                "start": _r(start),
-                "end": _r(start + c.audio_dur),
-                "text": c.text,
-                "status": c.status,
-                "ahead": c.ahead,
-            }
-            for start, c in rows
-        ],  # fmt: skip
+        "cues": sorted(
+            [
+                {
+                    "id": c.id,
+                    "start": _r(start),
+                    "end": _r(start + c.audio_dur),
+                    "text": c.text,
+                    "status": c.status,
+                    "ahead": c.ahead,
+                    "extended": c.gap_id is None,  # the picture holds while it plays
+                }
+                for start, c in rows
+            ]
+            + held,
+            key=lambda c: (c["start"], c["id"]),
+        ),
         "words": [
             {"t": w["text"], "s": _r(w["start"]), "e": _r(w["end"])}
             for w in listen.get("words") or []
@@ -233,6 +333,7 @@ def export_showcase(
         "cueAudioBase": f"{AUDIO_DIR}/",
         "verifyExample": verify_example(run_dir, [c for _, c in rows]),
         "costUsd": round(float((manifest.get("summary") or {}).get("cost_usd") or 0.0), 6),
+        "summary": run_summary(manifest),
     }
     path = out_dir / SHOWCASE
     path.write_bytes((json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))

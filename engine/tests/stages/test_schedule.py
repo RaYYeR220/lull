@@ -38,7 +38,7 @@ def _pl(eid, length, gid, ahead=False):
 
 
 def _objective(placements, priority):
-    """The brief's objective: sum of priority x weight, minus 1 per ahead placement."""
+    """The objective: sum of priority x weight, minus 1 per ahead placement."""
     return sum(priority[p.event_id] * WEIGHTS[p.variant] - p.ahead for p in placements)
 
 
@@ -97,7 +97,7 @@ def _random_instance(rng: random.Random):
 INSTANCES = [_random_instance(random.Random(1000 + k)) for k in range(30)]
 
 
-# -- the brief's cases ----------------------------------------------------------------
+# -- worked cases ----------------------------------------------------------------
 
 
 def test_compose_joins_one_gap_in_time_order_and_prefixes_ahead():
@@ -150,7 +150,7 @@ def test_long_too_big_for_the_gap_so_both_events_get_their_short():
 
 
 def test_a_brief_visual_is_not_voiced_after_a_long_sentence_ends_it():
-    """Reviewer's case: A (9-30 s, 20 words) sorts first in gap 10-20, so B (10.5-11 s) would
+    """A (9-30 s, 20 words) sorts first in gap 10-20, so B (10.5-11 s) would
     start about 8.5 s in, long after it ended; only one of them may use the gap."""
     events = [_ev("e001", 9.0, 30.0), _ev("e002", 10.5, 11.0, sal=4)]
     variants = [_var("e001", "long", 20), _var("e002", "short", 4)]
@@ -174,8 +174,8 @@ def test_a_brief_visual_that_starts_first_is_voiced_first():
 
 
 def test_a_visual_ending_within_a_word_of_the_gap_start_is_not_placed():
-    # floor((10.4 - 10.0) x 2.36) - 1 < 0: not even the first word would land in time
-    events = [_ev("e001", 9.0, 10.4)]
+    # floor((10.3 - 10.0) x 2.8) - 1 < 0: not even the first word would land in time
+    events = [_ev("e001", 9.0, 10.3)]
     variants = [_var("e001", "short", 2)]
     gaps = [_gap("g001", 10.0, 20.0, 30)]
     for run in (schedule, schedule_greedy):
@@ -217,7 +217,7 @@ def test_ahead_window_is_bounded_by_lead():
 
 
 def test_no_speech_video_does_not_over_describe():
-    """Review Focus 1: one gap over the whole 30 s video, one low-priority event."""
+    """One gap over the whole 30 s video, one low-priority event."""
     events = [_ev("e001", 3.0, 8.0, sal=2)]
     variants = [_var("e001", "short", 5), _var("e001", "medium", 10), _var("e001", "long", 18)]
     gaps = [_gap("g001", 0.2, 29.8, 88)]
@@ -232,7 +232,7 @@ def test_no_speech_video_does_not_over_describe():
 
 
 def test_continuous_speech_leaves_only_extended_candidates():
-    """Review Focus 2: no gaps -> no placements, every salience >= 4 event is a candidate."""
+    """No gaps -> no placements, every salience >= 4 event is a candidate."""
     events = [_ev("e001", 30.0, 32.0, sal=5), _ev("e002", 4.0, 6.0, sal=4),
               _ev("e003", 10.0, 12.0, sal=3)]  # fmt: skip
     variants = [_var(e.id, "short", 4) for e in events]
@@ -242,10 +242,10 @@ def test_continuous_speech_leaves_only_extended_candidates():
 
 
 def test_extended_candidates_follow_the_plan_priority_not_the_first_guess():
-    """Live csc_intro: the inventory rated 42 one-second shots salience 4; the plan, seeing the
-    whole video, rated most of them priority 1, yet each one stopped the video. Only what the
-    plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and stays
-    undescribed, which the pipeline reports)."""
+    """A fast-cut intro: the inventory rated 42 one-second shots salience 4; the plan, seeing
+    the whole video, rated most of them priority 1, yet each one stopped the video. Only what
+    the plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and
+    stays undescribed, which the pipeline reports)."""
     events = [_ev("e001", 1.0, 2.0, sal=4), _ev("e002", 2.0, 3.0, sal=3),
               _ev("e003", 3.0, 4.0, sal=5), _ev("e004", 4.0, 5.0, sal=4)]  # fmt: skip
     variants = [_var(e, "short", 4) for e in ("e001", "e002", "e003")]
@@ -596,11 +596,11 @@ def test_placement_report_summarises_use_of_the_gaps():
     assert empty["utilisation"] == 0.0 and empty["placed"] == [] and empty["gaps"] == []
 
 
-# -- what may be placed, what may stop the video (Task 16) ------------------------------------
+# -- what may be placed, what may stop the video ------------------------------------
 
 
 def test_standard_placement_needs_priority_two():
-    """Ruling (Task 16): a priority-1 line never fills spare room."""
+    """A priority-1 line never fills spare room."""
     events = [_ev("e001", 1.0, 9.0, sal=4), _ev("e002", 1.0, 9.0, sal=4)]
     variants = [_var("e001", "short", 3), _var("e002", "short", 3)]
     gaps = [_gap("g001", 2.0, 8.0, 18)]
@@ -631,3 +631,48 @@ def test_events_the_dialogue_conveys_never_stop_the_video():
     for run in (schedule, schedule_greedy):
         assert run([said, loud], [], {}, []) == ([], ["e002"])
     assert placement_report([], [], [said, loud], [])["unplaced_salient"] == ["e002"]
+
+
+# -- what scheduling may never do to the measures -----------------------------------------------
+
+
+def _voiced(cues):
+    return [c.model_copy(update={"status": "verified", "audio_path": "a.wav", "audio_dur": 2.0})
+            for c in cues]  # fmt: skip
+
+
+def test_a_minor_visual_never_takes_a_pause_an_important_one_left_empty():
+    """An important visual (priority 4) whose only line is too long for its 6 s window leaves
+    the window empty: F113 flags it. No scheduling choice puts a priority-1 line there and
+    makes the flag go while the important visual is still undescribed."""
+    from lull.stages.publish import coverage, f113_flags
+
+    important = _ev("e001", 10.0, 16.0, sal=5)
+    minor = _ev("e002", 11.0, 15.0, sal=2)
+    variants = [_var("e001", "short", 18), _var("e002", "short", 5)]
+    gaps = [_gap("g001", 10.0, 16.0, 16)]
+    prio = {"e001": 4, "e002": 1}
+    for run in (schedule, schedule_greedy):
+        placements, _ = run([important, minor], variants, prio, gaps)
+        assert placements == []
+        cues = _voiced(compose_cues(placements, variants, [important, minor], gaps, extended=[]))
+        assert len(f113_flags(gaps, cues, [important, minor], priority=prio)) == 1
+        cov = coverage(cues, [], [important, minor], extended_produced=False, priority=prio)
+        assert (cov["important_events"], cov["described"]) == (1, 0)
+
+
+def test_a_long_stretch_without_speech_is_not_filled_with_minor_visuals():
+    """30 s without speech in 6 s windows, one important visual and nine priority-1 ones: the
+    important one is described, the minor ones are not."""
+    from lull.types import Gap
+
+    events = [_ev("e001", 1.0, 5.0, sal=5)] + [
+        _ev(f"e{i:03d}", 1.0 + 3 * i, 4.0 + 3 * i, sal=2) for i in range(2, 11)
+    ]
+    variants = [_var("e001", "short", 6)] + [_var(e.id, "short", 4) for e in events[1:]]
+    big = Gap(id="g001", start=0.0, end=30.2, usable_start=0.2, usable_end=30.0,
+              capacity_words=82)  # fmt: skip
+    gaps = split_gaps([big], max_window=6.0, breath=0.3, wps=2.8)
+    prio = {"e001": 4, **{e.id: 1 for e in events[1:]}}
+    placements, _ = schedule(events, variants, prio, gaps, wps=2.8)
+    assert [p.event_id for p in placements] == ["e001"]

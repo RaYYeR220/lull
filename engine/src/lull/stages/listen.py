@@ -115,7 +115,7 @@ def listen(video: Path, work: Path, speech: SpeechClient, *, wps: float) -> List
             has_audio=False,
         )
     work.mkdir(parents=True, exist_ok=True)
-    wav = extract_wav(video, work / "audio16k.wav")
+    wav = extract_wav(video, work / "audio16k.wav", seconds=info.duration)
     words, clamped = clamp_words(speech.transcribe(wav))
     turns = speech.diarize(wav)
     words = assign_speakers(words, turns)

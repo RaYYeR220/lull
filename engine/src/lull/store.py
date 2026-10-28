@@ -14,9 +14,22 @@ import logging
 import os
 import re
 import tempfile
+from collections.abc import Callable
 from pathlib import Path, PurePath
+from typing import Any
 
 from pydantic import BaseModel
+
+# (step name, inputs, compute) -> the step's JSON-able result, from a cache or computed; a
+# step that raises is never kept. A stage that pays for several model calls takes one, so a
+# failure late in the stage does not make a rerun pay again for the calls that worked.
+Memo = Callable[[str, dict, Callable[[], Any]], Any]
+
+
+def fresh(name: str, inputs: dict, compute: Callable[[], Any]) -> Any:
+    """The default Memo: keeps nothing."""
+    return compute()
+
 
 log = logging.getLogger(__name__)
 

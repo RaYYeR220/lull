@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import get_args
 
 from lull.media import cut_clip, make_proxy, probe, scene_cuts
-from lull.tf import MAX_VIDEO_BYTES, VL, TokenFactory, video_part
+from lull.store import Memo, fresh
+from lull.tf import MAX_VIDEO_BYTES, VL, TFUnusable, TokenFactory, video_part
 from lull.types import EventKind, Span, VisualEvent, Word
 
 log = logging.getLogger(__name__)
@@ -33,6 +34,11 @@ FOLD_GAP_S = 1.5  # within one window, same-kind look-alikes this close are one 
 CUT_SLACK_S = 0.5  # a scene cut this soon after the later event starts still separates them
 SAID_AROUND_S = 5.0  # dialogue this close to an event can be what conveys it
 SAID_SHARE = 0.3  # ... when it says at least this share of the event's content words
+SPLIT_NEAR_S = (
+    10.0  # a window cut off by the token limit splits at a scene cut this near its middle
+)
+MAX_SPLITS = 2  # ... at most twice (into quarters); still cut off then, the stage fails
+SECONDS_PER_EVENT = 2.0  # the answer is asked for at most one event per this many seconds
 MAX_TOKENS = 6000
 TEMPERATURE = 0.6
 ESTIMATE = 0.01
@@ -47,6 +53,8 @@ _WORD = re.compile(r"\w+")
 # words that say nothing about what is on screen: they never show the dialogue conveys it
 _SAID_STOP = _STOP | frozenset(
     "he she him her his hers it its they them their we us our you your i me my "
+    "himself herself itself themselves myself yourself ourselves yourselves "
+    "can could will would shall should may might must "
     "s t ll re ve d m "
     "is are was were be been being am has have had do does did "
     "this that these those".split()
@@ -120,6 +128,16 @@ def plan_windows(
         start = end - overlap
 
 
+def split_span(span: Span, cuts: list[float]) -> tuple[Span, Span]:
+    """The two halves of `span`: split at the scene cut nearest its middle when one lies within
+    SPLIT_NEAR_S of it (ties go to the earlier), else at the middle."""
+    mid = (span.start + span.end) / 2
+    near = [c for c in cuts
+            if span.start < c < span.end and abs(c - mid) <= SPLIT_NEAR_S + _EPS]  # fmt: skip
+    at = min(near, key=lambda c: (abs(c - mid), c)) if near else mid
+    return Span(start=span.start, end=at), Span(start=at, end=span.end)
+
+
 # -- transcript ------------------------------------------------------------------------
 
 
@@ -157,9 +175,12 @@ def _line(run: list[Word], span: Span) -> str:
 
 def _user_text(span: Span, words: list[Word], profile: str) -> str:
     length = f"{span.dur:.1f}"
+    most = max(1, int(span.dur // SECONDS_PER_EVENT))
     return (
         f"Clip length: {length} s. Give every time in seconds from the start of this clip, "
         f"0 to {length}.\n"
+        f"List at most {most} events (one per {SECONDS_PER_EVENT:g} s of clip at most): one "
+        f"event for what stays on screen, never one per frame.\n"
         f"Profile: {profile}\n\n"
         f"Transcript (clip seconds):\n{transcript_slice(words, span)}"
     )
@@ -237,10 +258,10 @@ def _cut_between(a: VisualEvent, b: VisualEvent, cuts: list[float]) -> bool:
 
 
 def fold_window(events: list[VisualEvent], cuts: list[float] = ()) -> list[VisualEvent]:
-    """One window's events with near-duplicates folded (ruling, Task 16): an event joins the
+    """One window's events with near-duplicates folded: an event joins the
     last event of its kind when the token Jaccard of their text (or on-screen text) is at least
     MERGE_JACCARD, it starts at most FOLD_GAP_S after that one ends and no scene cut lies
-    between them (ruling R3; `cuts` in the events' time). The model sometimes reports one shot
+    between them (`cuts` in the events' time). The model sometimes reports one shot
     as per-second slices; folded, they span the union and keep the higher salience (see
     _combine)."""
     cuts = sorted(cuts)
@@ -294,7 +315,7 @@ def merge_events(
             (-sim, abs(g.ev.t_start - e.t_start), gi, ei)
             for gi, g in enumerate(pool)
             for ei, e in enumerate(shifted)
-            if (sim := _match(g.ev, e, span)) is not None
+            if (sim := _match(g.ev, e, span, cuts)) is not None
         )
         used_g: set[int] = set()
         used_e: set[int] = set()
@@ -311,7 +332,8 @@ def merge_events(
 
 
 def _overlap(a: Span, b: Span) -> bool:
-    return a.start < b.end and b.start < a.end
+    """Windows that share time, or touch: the halves of a window split in two (see watch)."""
+    return a.start <= b.end and b.start <= a.end
 
 
 def _tokens(s: str | None) -> set[str]:
@@ -322,12 +344,18 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b) if a and b else 0.0
 
 
-def _match(a: VisualEvent, b: VisualEvent, span: Span) -> float | None:
-    """Similarity when `b` (from window `span`) is the same thing as earlier `a`, else None."""
+def _match(a: VisualEvent, b: VisualEvent, span: Span, cuts: list[float] = ()) -> float | None:
+    """Similarity when `b` (from window `span`) is the same thing as earlier `a`, else None.
+    An event is carried across the window edge only when no scene cut lies between the two
+    (a window split at a cut ends one shot where the next begins)."""
     if a.kind != b.kind:
         return None
     near = abs(a.t_start - b.t_start) <= MERGE_DT + _EPS
-    carried = a.t_end >= span.start - MERGE_DT - _EPS and b.t_start <= span.start + MERGE_DT + _EPS
+    carried = (
+        a.t_end >= span.start - MERGE_DT - _EPS
+        and b.t_start <= span.start + MERGE_DT + _EPS
+        and not _cut_between(a, b, cuts)
+    )
     if not (near or carried):
         return None
     sim = _similarity(a, b)
@@ -357,11 +385,12 @@ def _combine(a: VisualEvent, b: VisualEvent) -> VisualEvent:
 
 
 def confirm_said(events: list[VisualEvent], words: list[Word]) -> list[VisualEvent]:
-    """Ruling R1: an event keeps the model's said_in_dialogue only when at least SAID_SHARE of
+    """An event keeps the model's said_in_dialogue only when at least SAID_SHARE of
     its content words are said within SAID_AROUND_S of it; otherwise the flag is cleared (an
-    undescribed visual is worse than a repeated one). Content words leave out pronouns, the
-    fragments of contractions and possessives, be/have/do forms and this/that/these/those as
-    well as the usual stopwords. The flag is never set here."""
+    undescribed visual is worse than a repeated one). Content words leave out pronouns
+    (reflexive ones too), the fragments of contractions and possessives, be/have/do forms,
+    modal verbs and this/that/these/those as well as the usual stopwords. The flag is never
+    set here."""
     out = []
     for e in events:
         if e.said_in_dialogue:
@@ -381,9 +410,17 @@ def confirm_said(events: list[VisualEvent], words: list[Word]) -> list[VisualEve
 
 
 def watch(
-    video: Path, work: Path, words: list[Word], tf: TokenFactory, *, run_id: str, profile: str
-) -> list[VisualEvent]:
-    """Inventory the visual events of `video` in absolute seconds, windows sent one by one."""
+    video: Path, work: Path, words: list[Word], tf: TokenFactory, *, run_id: str, profile: str,
+    memo: Memo = fresh, splits: list[str] | None = None,
+) -> list[VisualEvent]:  # fmt: skip
+    """Inventory the visual events of `video` in absolute seconds, windows sent one by one.
+    `memo` keeps each window's answer once it parses ("window"), so a failure on a later
+    window does not make the next attempt pay for the earlier ones again.
+
+    A window whose answer is cut off by the token limit (TFUnusable, after the client's retry
+    with twice the tokens) is watched again as two halves (split_span), each of which may be
+    halved once more; a quarter still cut off fails the stage (TFUnusable, naming it), so no
+    partial inventory is ever returned. Each split is logged and listed in `splits`."""
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r} (expected one of {PROFILES})")
     info = probe(video)
@@ -391,27 +428,48 @@ def watch(
     windows = plan_windows(info.duration, cuts)
     clips = work / "watch"
     clips.mkdir(parents=True, exist_ok=True)
+
+    def look(i: int, span: Span, depth: int, tag: str) -> list[tuple[Span, list[VisualEvent]]]:
+        text = _user_text(span, words, profile)
+        name = f"w{i:03d}{tag}"
+
+        def ask() -> dict:
+            clip = cut_clip(video, clips / f"{name}.mp4", span.start, span.end,
+                            height=CLIP_HEIGHT)  # fmt: skip
+            if clip.stat().st_size > CLIP_MAX_BYTES:
+                clip = make_proxy(clip, clips / f"{name}_proxy.mp4", max_bytes=CLIP_MAX_BYTES,
+                                  height=CLIP_HEIGHT)  # fmt: skip
+            messages = [
+                {"role": "system", "content": load_prompt()},
+                {"role": "user", "content": [video_part(clip), {"type": "text", "text": text}]},
+            ]
+            out = tf.json(
+                VL, messages, EVENT_SCHEMA,
+                run_id=run_id, stage="watch", role="watch", thinking=False,
+                max_tokens=MAX_TOKENS, temperature=TEMPERATURE, estimate=ESTIMATE,
+            )  # fmt: skip
+            parse_events(out, span.dur, window=i)  # an answer that does not parse is not kept
+            return out
+
+        inputs = {"start": span.start, "end": span.end, "text": text, "prompt": load_prompt()}
+        where = f"window {i} ({span.start:.1f}-{span.end:.1f} s)"
+        try:
+            out = memo("window", inputs, ask)
+        except TFUnusable as e:
+            if depth >= MAX_SPLITS:
+                raise TFUnusable(
+                    f"watch: {where} was still cut off by the token limit after {MAX_SPLITS} "
+                    f"splits ({e})"
+                ) from e
+            first, second = split_span(span, cuts)
+            note = f"{where} split at {first.end:.1f} s"
+            log.warning("watch: %s: the answer was cut off by the token limit", note)
+            if splits is not None:
+                splits.append(note)
+            return look(i, first, depth + 1, tag + "a") + look(i, second, depth + 1, tag + "b")
+        return [(span, parse_events(out, span.dur, window=i))]
+
     per_window: list[tuple[Span, list[VisualEvent]]] = []
     for i, span in enumerate(windows):
-        clip = cut_clip(video, clips / f"w{i:03d}.mp4", span.start, span.end, height=CLIP_HEIGHT)
-        if clip.stat().st_size > CLIP_MAX_BYTES:
-            clip = make_proxy(
-                clip, clips / f"w{i:03d}_proxy.mp4", max_bytes=CLIP_MAX_BYTES, height=CLIP_HEIGHT
-            )
-        messages = [
-            {"role": "system", "content": load_prompt()},
-            {
-                "role": "user",
-                "content": [
-                    video_part(clip),
-                    {"type": "text", "text": _user_text(span, words, profile)},
-                ],
-            },
-        ]
-        out = tf.json(
-            VL, messages, EVENT_SCHEMA,
-            run_id=run_id, stage="watch", role="watch", thinking=False,
-            max_tokens=MAX_TOKENS, temperature=TEMPERATURE, estimate=ESTIMATE,
-        )  # fmt: skip
-        per_window.append((span, parse_events(out, span.dur, window=i)))
+        per_window += look(i, span, 0, "")
     return confirm_said(merge_events(per_window, cuts), words)

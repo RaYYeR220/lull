@@ -11,10 +11,11 @@ from lull.stages.watch import (
     merge_events,
     parse_events,
     plan_windows,
+    split_span,
     transcript_slice,
     watch,
 )
-from lull.tf import VL
+from lull.tf import VL, TFUnusable
 from lull.types import Span, VisualEvent, Word
 
 
@@ -160,7 +161,7 @@ def test_merge_keeps_distinct_events():
 
 
 def test_merge_folds_near_duplicates_within_one_window():
-    """Ruling (Task 16): one shot reported as per-second slices becomes one event."""
+    """One shot reported as per-second slices becomes one event."""
     w = _span(30, 130)
     tag = "#CLIMATECHAMPIONS"
     per_window = [(w, [
@@ -452,7 +453,7 @@ def test_watch_returns_absolute_times(two_window_video: Path, tmp_path: Path):
     assert (out[1].t_start, out[1].t_end) == pytest.approx((103.5, 104.5), abs=0.05)
     assert (out[2].t_start, out[2].t_end) == pytest.approx((114.0, 119.0), abs=0.05)
     assert all(0 <= e.t_start <= e.t_end <= 125.5 for e in out)
-    assert out[2].said_in_dialogue is False  # R1: nobody says "blue field" near 114-119 s
+    assert out[2].said_in_dialogue is False  # nobody says "blue field" near 114-119 s
 
 
 def test_watch_raises_when_a_window_answer_is_all_malformed(two_window_video: Path, tmp_path: Path):
@@ -481,7 +482,7 @@ def test_watch_no_speech_and_proxy_fallback(
     assert "entertainment" in _user_text(fake.calls[1])
 
 
-# -- fix round 1: rulings R1 and R3 ------------------------------------------------------------
+# -- said in dialogue; scene cuts keep look-alikes apart ------------------------------------------
 
 
 def _w(text, start, end=None):
@@ -489,7 +490,7 @@ def _w(text, start, end=None):
 
 
 def test_said_in_dialogue_is_kept_only_when_the_words_are_said_near_it():
-    """R1: the model's flag stands only when at least 30 % of the event's content words are
+    """The model's flag stands only when at least 30 % of the event's content words are
     said within 5 s of it; the code never sets the flag itself."""
     words = [_w("Safe", 0.2), _w("here.", 0.7), _w("Water", 30.0), _w("use", 30.5),
              _w("by", 31.0), _w("sector", 31.5), _w("is", 32.0), _w("high.", 32.5)]  # fmt: skip
@@ -508,12 +509,12 @@ def test_said_in_dialogue_is_kept_only_when_the_words_are_said_near_it():
 
 
 def test_the_fold_never_crosses_a_scene_cut():
-    """R3: a cut between two look-alike events keeps them apart (the pipeline fixture's red
+    """A cut between two look-alike events keeps them apart (the pipeline fixture's red
     and blue screens are a Jaccard-0.5 pair one second apart)."""
     w = _span(0, 12)
     pair = [_ve(0.0, 6.0, "setting", "A plain red screen."),
             _ve(7.0, 12.0, "setting", "A plain blue screen.")]  # fmt: skip
-    assert len(merge_events([(w, pair)])) == 1  # no cut known: ruling B1 folds them
+    assert len(merge_events([(w, pair)])) == 1  # no cut known: they fold
     assert len(merge_events([(w, pair)], cuts=[6.0])) == 2
     slices = [_ve(9.0, 10.0, "on_screen_text", "Tag #A on black", verb="#A"),
               _ve(10.0, 11.0, "on_screen_text", "Tag #A on black", verb="#A")]  # fmt: skip
@@ -521,7 +522,7 @@ def test_the_fold_never_crosses_a_scene_cut():
     assert len(merge_events([(_span(30, 130), slices)], cuts=[40.0])) == 2  # absolute times
 
 
-# -- Task 17 ------------------------------------------------------------------------------------
+# -- words that prove nothing about the dialogue --------------------------------------------------
 
 
 def test_said_in_dialogue_ignores_pronouns_fragments_and_auxiliaries():
@@ -533,3 +534,136 @@ def test_said_in_dialogue_ignores_pronouns_fragments_and_auxiliaries():
     said = _ve(2.0, 4.0, "action", "She hands him the key; that is fine, he was told.",
                said=True)  # fmt: skip
     assert confirm_said([said], words)[0].said_in_dialogue is True  # fine + told: 2 of 4
+
+
+def test_said_in_dialogue_ignores_reflexives_and_modals():
+    words = [_w("He", 1.0), _w("could", 1.3), _w("do", 1.6), _w("it", 1.9), _w("himself.", 2.2)]
+    event = _ve(2.0, 4.0, "action", "He could see himself in the mirror.", said=True)
+    assert confirm_said([event], words)[0].said_in_dialogue is False
+
+
+def test_each_window_that_worked_is_kept_when_a_later_one_fails(two_window_video, tmp_path):
+    """A model error on window 2 stops watch, but window 1's answer was kept (memo): the next
+    attempt asks for window 2 only."""
+    from lull.tf import TFError
+
+    kept: dict = {}
+
+    def memo(name, inputs, compute):
+        key = (name, repr(sorted(inputs.items())))
+        if key not in kept:
+            kept[key] = compute()
+        return kept[key]
+
+    good = [{"events": [_ev(2.0, 5.0, "setting", "a plain red screen", sal=2)]},
+            {"events": [_ev(20.0, 25.0, "object", "a blue field fills the frame")]}]  # fmt: skip
+
+    class Fails(FakeTF):
+        def json(self, model, messages, schema, **kw):
+            if len(self.calls) == 1:
+                self.calls.append(kw)
+                raise TFError("HTTP 503 after retries")
+            return super().json(model, messages, schema, **kw)
+
+    first = Fails([good[0]])
+    with pytest.raises(TFError):
+        watch(two_window_video, tmp_path, [], first, run_id="r", profile="education", memo=memo)
+    again = FakeTF([good[1]])
+    out = watch(two_window_video, tmp_path, [], again, run_id="r", profile="education", memo=memo)
+    assert len(again.calls) == 1 and "31.0" in _user_text(again.calls[0])  # window 2 only
+    assert [e.text for e in out] == ["a plain red screen", "a blue field fills the frame"]
+
+
+# -- a window whose answer is cut off by the token limit is watched in halves --------------------
+
+
+class CutOff(FakeTF):
+    """Answers like FakeTF, but the first `cut` calls (or every call) are cut off by the token
+    limit, as the client reports it after its retry with twice the tokens."""
+
+    def __init__(self, responses, cut=1, *, always=False):
+        super().__init__(responses)
+        self.cut, self.always = cut, always
+
+    def json(self, model, messages, schema, **kw):
+        if self.always or self.cut > 0:
+            self.cut -= 1
+            self.calls.append({"model": model, "messages": messages, "schema": schema, **kw})
+            raise TFUnusable("truncated: finish_reason=length or empty content after retry "
+                             "with max_tokens=12000")  # fmt: skip
+        return super().json(model, messages, schema, **kw)
+
+
+def _length(call) -> str:
+    return _user_text(call).split("Clip length: ", 1)[1].split(" s.", 1)[0]
+
+
+@pytest.mark.parametrize(
+    "cuts, at",
+    [([], 52.0), ([45.0], 45.0), ([41.0], 52.0), ([47.0, 57.0], 47.0), ([50.0, 55.0], 50.0),
+     ([104.0], 52.0)],
+    ids=["no-cut", "cut-near", "cut-too-far", "tie-to-earlier", "nearest", "cut-at-the-edge"],
+)  # fmt: skip
+def test_a_window_splits_at_the_scene_cut_nearest_its_middle_within_10_s(cuts, at):
+    a, b = split_span(_span(0, 104), cuts)
+    assert (a.start, a.end, b.start, b.end) == (0, at, at, 104)
+
+
+def test_a_window_cut_off_by_the_token_limit_is_watched_in_two_halves(two_window_video, tmp_path):
+    fake = CutOff([
+        {"events": [_ev(2.0, 5.0, "setting", "a plain red screen", sal=2)]},  # [0, 52]
+        {"events": [_ev(10.0, 12.0, "action", "a red flash fills the frame")]},  # [52, 104]
+        {"events": [_ev(20.0, 25.0, "object", "a blue field fills the frame")]},  # [94, 125]
+    ])  # fmt: skip
+    splits: list[str] = []
+    out = watch(two_window_video, tmp_path, [], fake, run_id="r", profile="education",
+                splits=splits)  # fmt: skip
+    assert [_length(c) for c in fake.calls] == ["104.0", "52.0", "52.0", "31.0"]
+    assert [(e.id, e.text, round(e.t_start, 1)) for e in out] == [
+        ("e001", "a plain red screen", 2.0), ("e002", "a red flash fills the frame", 62.0),
+        ("e003", "a blue field fills the frame", 114.0),
+    ]  # fmt: skip
+    assert splits == ["window 0 (0.0-104.0 s) split at 52.0 s"]
+
+
+def test_a_window_still_cut_off_in_quarters_fails_the_stage(two_window_video, tmp_path):
+    """Halved twice and still cut off: the stage fails with a clear error, and no answer is
+    kept for it (nothing partial stands in for the inventory)."""
+    kept: dict = {}
+
+    def memo(name, inputs, compute):
+        key = (name, repr(sorted(inputs.items())))
+        if key not in kept:
+            kept[key] = compute()
+        return kept[key]
+
+    fake = CutOff([], always=True)
+    with pytest.raises(
+        TFUnusable, match=r"window 0 \(0\.0-26\.0 s\) was still cut off .* 2 splits"
+    ):
+        watch(two_window_video, tmp_path, [], fake, run_id="r", profile="education", memo=memo)
+    assert [_length(c) for c in fake.calls] == ["104.0", "52.0", "26.0"]
+    assert kept == {}
+
+
+def test_the_answer_is_asked_for_at_most_one_event_per_2_s(two_window_video, tmp_path):
+    fake = FakeTF([{"events": []}, {"events": []}])
+    watch(two_window_video, tmp_path, [], fake, run_id="r", profile="education")
+    assert "List at most 52 events" in _user_text(fake.calls[0])  # 104 s
+    assert "List at most 15 events" in _user_text(fake.calls[1])  # 31 s
+
+
+def test_merge_carries_an_event_across_the_split_between_two_halves():
+    per_window = [(_span(0, 52), [_ve(40, 52, "setting", "a plain red room")]),
+                  (_span(52, 104), [_ve(0, 10, "setting", "a plain red room")])]  # fmt: skip
+    [e] = merge_events(per_window)
+    assert (e.t_start, e.t_end) == (40, 62)
+
+
+def test_merge_never_carries_an_event_across_a_scene_cut_between_two_halves():
+    """Halves split at a scene cut: what follows the cut is another shot, even when it reads
+    alike ("plain red screen" / "plain blue screen")."""
+    per_window = [(_span(0, 6), [_ve(0, 6, "setting", "a plain red screen")]),
+                  (_span(6, 12), [_ve(1, 6, "setting", "a plain blue screen")])]  # fmt: skip
+    assert len(merge_events(per_window, [6.0])) == 2
+    assert len(merge_events(per_window)) == 1  # no cut: carried across, as before

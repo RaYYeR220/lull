@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import re
 import time
@@ -41,7 +42,9 @@ def _fake_clients(monkeypatch, ledger: Ledger) -> dict:
 
 
 def _free_ledger(home: Path, **caps) -> Ledger:
-    return Ledger(home / "ledger.db", **{"cap_run": 0, "cap_day": 0, "cap_total": 0, **caps})
+    return Ledger(
+        home / "ledger.db", **{"cap_run": None, "cap_day": None, "cap_total": None, **caps}
+    )
 
 
 def test_describe_prints_progress_and_a_summary(
@@ -74,7 +77,7 @@ def test_describe_prints_progress_and_a_summary(
     assert "! the recogniser stretched 'Ada.'" in r.output
     assert re.search(r"^\s*cues\s+2 verified, 0 held, 1 extended$", r.output, re.M)
     assert re.search(r"^\s*overlap\s+0\.000 s$", r.output, re.M)
-    assert re.search(r"^\s*cost\s+\$0\.\d{4}\b", r.output, re.M)
+    assert re.search(r"^\s*model spend\s+\$0\.\d{4} this run\b", r.output, re.M), r.output
     assert re.search(rf"^\s*output\s+{re.escape(str(out))}$", r.output, re.M)
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["run_id"] == "demo"
@@ -209,3 +212,68 @@ def test_describe_hashes_the_video_once_and_reports_stops(tone_slides, tmp_path,
     line = next(ln for ln in r.output.splitlines() if ln.startswith("error:"))
     assert "RuntimeError: boom" in line and str(tmp_path / "o" / "run.log") in line
     assert "Traceback" not in r.output
+
+
+def test_describe_takes_the_content_profile_and_says_english_only(
+    tone_slides, tmp_path, home, monkeypatch
+):
+    _fake_clients(monkeypatch, _free_ledger(home))
+    seen = {}
+
+    def fake_run(video, out, opts, **kw):
+        seen["opts"] = opts
+        raise OverlapError(["c001"])  # stop right after the options are built
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    r = runner.invoke(cli.app, ["describe", str(tone_slides), "--out", str(tmp_path / "o"),
+                                "--profile", "entertainment", "--mode", "extended"])  # fmt: skip
+    assert r.exit_code == 4
+    assert (seen["opts"].profile, seen["opts"].mode, seen["opts"].language) == (
+        "entertainment", "extended", "en"
+    )  # fmt: skip
+    r = runner.invoke(cli.app, ["describe", str(tone_slides), "--profile", "cinema"])
+    assert r.exit_code == 2
+    raw = runner.invoke(cli.app, ["describe", "--help"], terminal_width=200).output
+    text = " ".join(re.sub(r"[─-╿]", " ", raw).split())  # box drawing aside
+    assert "education" in text and "entertainment" in text
+    assert "English" in text  # descriptions are written in English only
+    assert "full long versions" in text  # what extended mode changes
+
+
+def test_ledger_totals_are_model_spend_and_searches_are_counted_apart(home):
+    """A web search is recorded at its list price but never charged: the run list and a run's
+    total give model spend, and the searches get a line of their own."""
+    ledger = _free_ledger(home)
+    ledger.record(_call("r1", "plan", "nvidia/Nemotron-3-Ultra-550b-a55b", 0.0158))
+    search = _call("r1", "research", "tavily-search", 0.008)
+    ledger.record(
+        dataclasses.replace(search, provider="tavily", tokens_in=0, tokens_cached=0, tokens_out=0)
+    )
+    r = runner.invoke(cli.app, ["ledger"])
+    assert re.search(r"^\s*r1\s+2 calls\s+\$0\.0158", r.output, re.M), r.output
+    r = runner.invoke(cli.app, ["ledger", "--run", "r1"])
+    assert r.exit_code == 0, r.output
+    assert re.search(r"^\s*total\s+2\b.*\$0\.0158", r.output, re.M), r.output
+    assert re.search(r"^\s*searches\s+1\b.*not charged.*\$0\.0080", r.output, re.M), r.output
+
+
+def test_an_empty_no_verify_setting_means_verification_on(monkeypatch):
+    from lull import config
+
+    for value, off in (("", False), ("0", False), ("1", True), ("true", True)):
+        monkeypatch.setenv("LULL_NO_VERIFY", value)
+        config.get_settings.cache_clear()
+        try:
+            assert config.get_settings().lull_no_verify is off, value
+        finally:
+            config.get_settings.cache_clear()
+
+
+def test_the_summaries_count_unverified_cues():
+    from lull.cli import _detail
+
+    line = _detail("finalize", {"verified": 0, "held": 1, "extended": 0, "unverified": 3})
+    assert line == "0 verified, 1 held, 0 extended, 3 unverified"
+    assert _detail("finalize", {"verified": 2, "held": 0, "extended": 1}) == (
+        "2 verified, 0 held, 1 extended"
+    )

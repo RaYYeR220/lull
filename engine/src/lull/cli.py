@@ -3,7 +3,9 @@
 
 Settings come from the environment or a .env file: NEBIUS_API_KEY, TAVILY_API_KEY (optional),
 LULL_SPEECH_URL (default http://127.0.0.1:8089), LULL_SPEECH_KEY, LULL_HOME (ledger and voice
-rates, default ~/.lull) and the LULL_CAP_* spend caps.
+rates, default ~/.lull), the LULL_CAP_RUN / LULL_CAP_DAY / LULL_CAP_TOTAL model spend caps in
+USD and the LULL_TAVILY_RUN / LULL_TAVILY_DAY web search caps (a count). A cap of 0 refuses
+everything; "none" switches it off.
 """
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ from lull.pipeline import Event, run, run_id_for
 from lull.showcase import ShowcaseError, export_showcase
 from lull.speech import DEFAULT_URL, NemoSpeechHTTP, SpeechClient, SpeechError
 from lull.stages.finalize import OverlapError
+from lull.stages.watch import PROFILES
 from lull.store import file_sha256
 from lull.tavily import Tavily
 from lull.tf import LIGHTNING, ULTRA, VL, TFError, TokenFactory
@@ -49,6 +52,9 @@ LOG_FILE = "run.log"
 class Mode(StrEnum):
     standard = "standard"
     extended = "extended"
+
+
+Profile = StrEnum("Profile", {p: p for p in PROFILES})  # the content profiles the prompts know
 
 
 @app.callback()
@@ -116,7 +122,12 @@ def _detail(stage: str, d: dict) -> str:
         )
         return text + (f", {d['clamped']} stretched words clamped" if d["clamped"] else "")
     if stage == "watch":
-        return f"{d['events']} visual events"
+        split = d.get("windows_split") or 0
+        return f"{d['events']} visual events" + (
+            f", {split} window{'s' * (split != 1)} split in halves (answer cut off)"
+            if split
+            else ""
+        )
     if stage == "research":
         text = f"{d['terms']} terms" + (" (not looked up)" if d["skipped"] else "")
         return text + (f", {d['errors']} lookup errors" if d["errors"] else "")
@@ -131,7 +142,8 @@ def _detail(stage: str, d: dict) -> str:
             f"{used:.0%} of the room used"
         )
     if stage == "finalize":
-        return f"{d['verified']} verified, {d['held']} held, {d['extended']} extended"
+        line = f"{d['verified']} verified, {d['held']} held, {d['extended']} extended"
+        return line + (f", {d['unverified']} unverified" if d.get("unverified") else "")
     if stage == "publish":
         return f"{d['files']} files"
     return ""
@@ -173,11 +185,12 @@ def _print_summary(summary: dict, seconds: float, out: Path) -> None:
     typer.echo(f"done in {seconds:.1f} s")
     typer.echo(
         f"  cues      {cues['verified']} verified, {cues['held']} held, {cues['extended']} extended"
+        + (f", {cues['unverified']} unverified" if cues.get("unverified") else "")
     )
     for h in summary.get("held", []):
         typer.echo(f"  held      {h['id']}: {h['reason']}")
     typer.echo(f"  overlap   {summary['overlap_seconds']:.3f} s")
-    typer.echo(f"  cost      ${summary['cost_usd']:.4f}")
+    typer.echo(f"  model spend ${summary['cost_usd']:.4f} this run")
     typer.echo(f"  output    {out}")
 
 
@@ -214,9 +227,20 @@ def describe(
         Path | None,
         typer.Option(help="Output folder (default: runs/<run id> under the current folder)."),
     ] = None,
-    mode: Annotated[Mode, typer.Option(help="standard, or extended (the video may pause).")] = (
-        Mode.standard
-    ),
+    mode: Annotated[
+        Mode,
+        typer.Option(
+            help="standard, or extended: the plan writes full long versions for the extended "
+            "track. Both modes also build extended.mp4 when a salient visual fits no pause."
+        ),
+    ] = Mode.standard,
+    profile: Annotated[
+        Profile,
+        typer.Option(
+            help="What matters most: education (slides, charts, on-screen text) or "
+            "entertainment (action, people, setting)."
+        ),  # fmt: skip
+    ] = Profile.education,
     voice: Annotated[str, typer.Option(help="Magpie TTS voice.")] = "Sofia",
     source_url: Annotated[
         str | None, typer.Option(help="A page about the video, read for names and terms.")
@@ -230,13 +254,14 @@ def describe(
     ] = None,
 ) -> None:
     """Describe VIDEO: audio description fitted to its pauses, verified against its frames.
+    Descriptions are written and voiced in English only.
 
     Exit codes: 0 published; 1 an error (one line, details in the run log); 2 bad usage;
     3 stopped by a spend cap or the provider's balance; 4 nothing published (overlap)."""
     sha = file_sha256(video)  # once: the run gets it too
     rid = run_id or run_id_for(video, sha)
     out = out or Path(RUNS_DIR) / rid
-    opts = RunOptions(mode=mode.value, voice=voice, source_url=source_url)
+    opts = RunOptions(mode=mode.value, profile=profile.value, voice=voice, source_url=source_url)
     ledger, tf, speech, tavily = _clients(no_research)
     printer = _Printer()
     log_path = out / LOG_FILE
@@ -299,22 +324,34 @@ def calibrate_voice(
     )
 
 
+def _cap(cap: float | None, *, money: bool = True) -> str:
+    if cap is None:
+        return "no cap"
+    return f"cap ${cap:.2f}" if money else f"cap {cap}"
+
+
 @app.command("ledger")
 def ledger_cmd(
     run_id: Annotated[str | None, typer.Option("--run", help="Show one run's calls.")] = None,
 ) -> None:
-    """Model and search spend: every run, or one run by role and model."""
+    """Model spend and web searches: every run, or one run by role and model."""
     led = _ledger()
     if run_id is None:
-        midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        today, total = led.spent(since=midnight.timestamp()), led.spent()
+        midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        today, total = led.spent(since=midnight), led.spent()
         typer.echo(
-            f"spent     today ${today:.4f} (cap ${led.cap_day:.2f}), "
-            f"total ${total:.4f} (cap ${led.cap_total:.2f})"
+            f"model     today ${today:.4f} ({_cap(led.cap_day)}), "
+            f"total ${total:.4f} ({_cap(led.cap_total)})"
+        )
+        typer.echo(
+            f"searches  today {led.searches(since=midnight)} ({_cap(led.tavily_day, money=False)})"
         )
         for r in led.runs():
             when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["last_ts"]))
-            typer.echo(f"  {r['run_id']:<32} {r['calls']:>4} calls  ${r['cost_usd']:.4f}  {when}")
+            searched = f", {r['searches']} searches" if r["searches"] else ""
+            typer.echo(
+                f"  {r['run_id']:<32} {r['calls']:>4} calls  ${r['cost_usd']:.4f}  {when}{searched}"
+            )
         return
     summary = led.summary(run_id)
     if not summary["calls"]:
@@ -337,8 +374,14 @@ def ledger_cmd(
     seconds = sum(g["latency_s"] for g in rows)
     typer.echo(
         f"  {'total':<9} {'':<13} {summary['calls']:>5} {tin:>10,} {cached:>8,} "
-        f"{tout:>8,}  ${summary['total_cost_usd']:.4f}  {seconds:>7.1f}"
+        f"{tout:>8,}  ${summary['model_cost_usd']:.4f}  {seconds:>7.1f}  (model spend)"
     )
+    if summary["searches"]:
+        listed = summary["total_cost_usd"] - summary["model_cost_usd"]
+        typer.echo(
+            f"  {'searches':<9} {summary['searches']} web searches, counted, not charged "
+            f"(${listed:.4f} at list price)"
+        )
 
 
 @app.command("export-showcase")
@@ -355,8 +398,9 @@ def export_showcase_cmd(
     original sound, the described audio, the description tracks, each cue's audio and the
     keyframes.
 
-    costUsd is the ledger total of every run under that run id; describe with a fresh
-    --run-id to show the cost of one run."""
+    costUsd is the model spend of the attempt that published the run; showcase.json's
+    summary.spend gives it beside the model spend of every run under the run id and the web
+    searches."""
     try:
         path = export_showcase(run_dir, out_dir, id=id, title=title, credit=credit)
     except (ShowcaseError, MediaError) as e:
@@ -364,7 +408,9 @@ def export_showcase_cmd(
     data = json.loads(path.read_text(encoding="utf-8"))
     files = sum(1 for p in Path(out_dir).rglob("*") if p.is_file())
     typer.echo(
-        f"{data['id']}: {len(data['cues'])} cues, {len(data['gaps'])} pauses, "
+        f"{data['id']}: {sum(c['status'] != 'held' for c in data['cues'])} cues "
+        f"({sum(c['status'] == 'held' for c in data['cues'])} held listed), "
+        f"{len(data['gaps'])} pauses, "
         f"{data['duration']:.1f} s, ${data['costUsd']:.4f}; {files} files in {out_dir} "
         f"({path.name})"
     )

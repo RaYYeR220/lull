@@ -351,7 +351,7 @@ def test_prompt_teaches_the_craft():
     assert text.count("Bad:") >= 3 and text.count("Good:") >= 3
 
 
-def test_prompt_fix_round_wording():
+def test_prompt_sets_no_word_ceiling_and_asks_for_short_versions():
     text = load_prompt()
     assert "22" not in text  # no exact word ceiling the model could try to count to
     assert "discards versions that run long" in text
@@ -408,7 +408,7 @@ def test_prompt_asks_for_an_item_per_event():
     assert "Leave an event out entirely" not in text
 
 
-# -- near-duplicate items (ruling, Task 16) ---------------------------------------------------
+# -- near-duplicate items ---------------------------------------------------
 
 
 RUNS = [
@@ -459,7 +459,7 @@ def test_near_duplicates_need_similar_short_lines_within_30_s():
 
 
 def test_near_duplicates_never_chain_past_30_s():
-    """M1: a dropped item always points at a kept twin within 30 s. Three alike lines 25 s
+    """A dropped item always points at a kept twin within 30 s. Three alike lines 25 s
     apart with rising priority keep the first and the last; the middle one goes to the last."""
     events = [_ev("e030", 0.0, 1.0, sal=4), _ev("e031", 25.0, 26.0, sal=4),
               _ev("e032", 50.0, 51.0, sal=4)]  # fmt: skip
@@ -474,3 +474,56 @@ def test_near_duplicates_never_chain_past_30_s():
     by_id = {e.id: e for e in events}
     for dropped, kept in result.duplicates.items():
         assert abs(by_id[dropped].t_start - by_id[kept].t_start) <= 30.0
+
+
+def test_numbered_or_differently_quoted_lines_are_never_near_duplicates():
+    """Step 1/2/3 slides, years, chapter numbers and different quoted text are different
+    content even when the template-like short lines share most words."""
+    slides = [
+        _ev("e040", 0.0, 4.0, "slide", "A slide.", sal=5, verb="Step 1"),
+        _ev("e041", 5.0, 9.0, "slide", "A slide.", sal=5, verb="Step 2"),
+        _ev("e042", 10.0, 14.0, "slide", "A slide.", sal=5, verb="Step 3"),
+        _ev("e043", 15.0, 16.0, "chart", "A chart.", sal=4),
+        _ev("e044", 17.0, 18.0, "chart", "A chart.", sal=4),
+        _ev("e045", 19.0, 20.0, "slide", "A title.", sal=4),
+        _ev("e046", 21.0, 22.0, "slide", "A title.", sal=4),
+        _ev("e047", 23.0, 24.0, "on_screen_text", "A sign.", sal=4),
+        _ev("e048", 25.0, 26.0, "on_screen_text", "A sign.", sal=4),
+        _ev("e049", 27.0, 28.0, "slide", "A slide.", sal=4, verb="Step 3"),  # repeats e042
+    ]  # fmt: skip
+    answer = {"cast": [], "items": [
+        _item("e040", 4, 'A slide reads: "Step 1".'),
+        _item("e041", 4, 'A slide reads: "Step 2".'),
+        _item("e042", 4, 'A slide reads: "Step 3".'),
+        _item("e043", 3, "Sales for 2019 rise sharply."),
+        _item("e044", 3, "Sales for 2020 rise sharply."),
+        _item("e045", 3, "The title Chapter One appears."),
+        _item("e046", 3, "The title Chapter Two appears."),
+        _item("e047", 3, 'A sign reads "Exit" above the door.'),
+        _item("e048", 3, 'A sign reads "Enter" above the door.'),
+        _item("e049", 2, 'A slide reads: "Step 3".'),
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=slides)
+    assert result.duplicates == {"e049": "e042"}  # the same step shown again: still a repeat
+
+
+def test_a_failed_second_call_keeps_the_first_answer(caplog):
+    """The first answer is paid for: a model error on the second call (asked for the events
+    it left out) keeps it, and the rest are flagged, instead of failing the stage."""
+    from lull.tf import TFError
+
+    first = {"cast": [], "items": [_item("e001")]}
+
+    class Flaky(FakeTF):
+        def json(self, model, messages, schema, **kw):
+            if self.calls:
+                self.calls.append(kw)
+                raise TFError("HTTP 503 after retries")
+            return super().json(model, messages, schema, **kw)
+
+    fake = Flaky([first])
+    with caplog.at_level(logging.WARNING, logger="lull.stages.plan"):
+        out = plan(EVENTS, WORDS, GAPS, RESEARCH, OPTS, fake, run_id="r1")
+    assert len(fake.calls) == 2
+    assert out.priority == {"e001": 3} and out.unanswered == ["e003"]
+    assert "second answer" in caplog.text

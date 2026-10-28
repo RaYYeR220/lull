@@ -89,6 +89,12 @@
   <p class="note">“met (automated checks)” means the engine’s checks pass; no person has
   approved every published line yet.</p>
   {% endif %}
+  {% if wcag | selectattr("status", "equalto", "met (no visual information beyond the soundtrack)") | list %}
+  <p class="note">“met (no visual information beyond the soundtrack)” means the inventory found no
+  salient visual event and the plan rated none important: the soundtrack already carries the
+  programme’s information, so it needs no description (G203). A person should confirm that
+  nothing on screen matters.</p>
+  {% endif %}
 </section>
 
 <section>
@@ -98,16 +104,16 @@
     <div class="stat"><b>{{ extended_count }}</b><span>extended descriptions voiced</span></div>
     <div class="stat"><b>{{ summary.cues.held }}</b><span>held for review</span></div>
     <div class="stat"><b>{% if summary.coverage.ratio is none %}n/a{% else %}{{ "%.0f" | format(summary.coverage.ratio * 100) }}%{% endif %}</b>
-      <span>coverage: {{ summary.coverage.described }} of {{ summary.coverage.important_events }} important events described</span></div>
+      <span>coverage: {{ summary.coverage.described }} of {{ summary.coverage.important_events | default(summary.coverage.salient_events) }} important events described</span></div>
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.speech_s) }} s</b><span>overlap with speech</span></div>
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.between_cues_s) }} s</b><span>overlap between descriptions</span></div>
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.outside_pauses_s) }} s</b><span>outside the usable pauses (speech guards, protected sound)</span></div>
     <div class="stat"><b>{{ summary.f113 | length }}</b><span>unused pauses (F113)</span></div>
-    <div class="stat"><b>${{ "%.4f" | format(summary.cost_usd) }}</b><span>model cost{% if summary.cost_per_min is not none %}, ${{ "%.4f" | format(summary.cost_per_min) }} per minute{% endif %}</span></div>
+    <div class="stat"><b>${{ "%.4f" | format(summary.cost_usd) }}</b><span>Model spend, this run{% if summary.cost_per_min is not none %} (${{ "%.4f" | format(summary.cost_per_min) }} per minute){% endif %}{% if summary.spend is defined %}; ${{ "%.4f" | format(summary.spend.model_usd_all_runs) }} over all runs under run id {{ run_id }}; {{ summary.spend.tavily_searches_this_run }} web search{% if summary.spend.tavily_searches_this_run != 1 %}es{% endif %} this run (Tavily: counted, not charged){% endif %}{% if summary.spend_from_cache | default(false) %}. Every stage of this attempt came from the cache: this is the spend of the attempt that made these outputs{% endif %}</span></div>
   </div>
   {% if summary.extended_produced %}
   <p class="note">With the extended version: {{ summary.coverage.described_with_extended }} of
-  {{ summary.coverage.important_events }} important events described.</p>
+  {{ summary.coverage.important_events | default(summary.coverage.salient_events) }} important events described.</p>
   {% else %}
   <p class="note">extended version not produced{% if summary.extended_error %}: {{ summary.extended_error }}{% endif %}.</p>
   {% endif %}
@@ -116,9 +122,9 @@
   {% if summary.coverage.undescribed %}
   <p class="note">Important events not described: {{ summary.coverage.undescribed | join(", ") }}.</p>
   {% endif %}
-  {% if summary.repetitive %}
+  {% if summary.repetitive | default([]) %}
   <p class="note">Not counted, judged repetitive by the planner:</p>
-  <ul>{% for e in summary.repetitive %}<li>{{ e.id }}: {{ e.text }}</li>{% endfor %}</ul>
+  <ul>{% for e in summary.repetitive | default([]) %}<li>{{ e.id }}: {{ e.text }}</li>{% endfor %}</ul>
   {% endif %}
 </section>
 
@@ -155,6 +161,19 @@
 
 <section>
   <h2>For the reviewer</h2>
+  {% set fr = summary.for_reviewer | default({}) %}
+  {% if fr.plan_unanswered | default([]) %}
+  <p>The plan wrote nothing for {{ fr.plan_unanswered | length }} salient event{{ '' if fr.plan_unanswered | length == 1 else 's' }}, even when asked again:</p>
+  <ul class="plain">
+  {% for e in fr.plan_unanswered %}<li><code>{{ e.id }}</code> {{ e.text }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if fr.undescribed | default([]) %}
+  <p>{{ fr.undescribed | length }} salient event{{ ' has' if fr.undescribed | length == 1 else 's have' }} no description in either track:</p>
+  <ul class="plain">
+  {% for e in fr.undescribed %}<li><code>{{ e.id }}</code> {{ e.text }}</li>{% endfor %}
+  </ul>
+  {% endif %}
   {% if warnings %}
   <ul class="plain">
   {% for w in warnings %}
@@ -184,6 +203,9 @@
   {% elif research is not none and not research.skipped %}
   <p>No term needed a lookup.</p>
   {% endif %}
+  {% if research is not none and research.notes | default([]) %}
+  <ul class="reasons">{% for n in research.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+  {% endif %}
   {% if research is not none and research.errors %}
   <ul class="reasons">{% for e in research.errors %}<li>{{ e }}</li>{% endfor %}</ul>
   {% endif %}
@@ -199,10 +221,10 @@
     {% for c in calls %}
       <tr><td>{{ c.role }}</td><td><code>{{ c.model }}</code></td><td class="num">{{ c.calls }}</td>
         <td class="num">{{ c.tokens_in }}</td><td class="num">{{ c.tokens_cached }}</td><td class="num">{{ c.tokens_out }}</td>
-        <td class="num">{{ "%.4f" | format(c.cost_usd) }}</td><td class="num">{{ "%.1f" | format(c.latency_s) }}</td></tr>
+        <td class="num">{% if c.model.startswith('tavily') %}not charged{% else %}{{ "%.4f" | format(c.cost_usd) }}{% endif %}</td><td class="num">{{ "%.1f" | format(c.latency_s) }}</td></tr>
     {% endfor %}
     </tbody>
-    <tfoot><tr><th colspan="6">Total{% if summary.cost_per_min is not none %} (${{ "%.4f" | format(summary.cost_per_min) }} per minute of video){% endif %}</th>
+    <tfoot><tr><th colspan="6">Model spend, this run{% if summary.cost_per_min is not none %} (${{ "%.4f" | format(summary.cost_per_min) }} per minute of video){% endif %}</th>
       <th class="num">{{ "%.4f" | format(summary.cost_usd) }}</th><th></th></tr></tfoot>
   </table>
   {% else %}

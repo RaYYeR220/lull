@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import wave
 from pathlib import Path
@@ -50,6 +51,24 @@ def _claim(text, verdict="supported", at=1.0):
     return {"text": text, "verdict": verdict, "at": at}
 
 
+SUMMARY = {
+    "cues": {"verified": 2, "edited": 0, "approved": 0, "held": 1, "extended": 1},
+    "coverage": {"important_events": 4, "salient_events": 4, "described": 2, "ratio": 0.5,
+                 "described_with_extended": 3, "ratio_with_extended": 0.75,
+                 "undescribed": ["e009"], "repetitive": 1, "watch_salient": 5},
+    "repetitive": [{"id": "e007", "text": "The same logo again."}],
+    "overlap_seconds": 0.0,
+    "f113": [{"gap_id": "g002", "start": 2.2, "end": 4.4, "seconds": 2.2,
+              "event_ids": ["e009"], "events": [{"id": "e009", "kind": "slide", "text": "x"}]}],
+    "cost_usd": 0.0123,
+    "spend": {"model_usd_this_run": 0.0123, "tavily_searches_this_run": 2,
+              "tavily_notional_usd_this_run": 0.016, "model_usd_all_runs": 0.05},
+    "wcag": [{"criterion": "1.2.5", "level": "AA", "name": "Audio Description (Prerecorded)",
+              "status": "needs review", "via": "described.mp4",
+              "reasons": ["1 description held for review"]}],
+}  # fmt: skip
+
+
 @pytest.fixture(scope="module")
 def run_dir(tmp_path_factory) -> Path:
     """A finished run, as publish leaves it: 4 s 1280x720 with a 440 Hz programme 0-2 s then
@@ -87,7 +106,9 @@ def run_dir(tmp_path_factory) -> Path:
         "cues": [
             _cue("c001", 0.5, 1.0, "A red door opens.", audio=audio["c001"],
                  claims=[_claim("A red door opens.")]),
-            _cue("c002", 2.2, None, "A dog barks.", gap="g002", status="held"),
+            _cue("c002", 2.2, None, "A dog barks.", gap="g002", status="held",
+                 note="not verified after 2 repairs: a dog barks (not visible)",
+                 claims=[_claim("a dog is there"), _claim("a dog barks", "not_visible", None)]),
             _cue("c004", 3.0, 0.8, "In a moment, a sign appears.", gap="g003",
                  audio=audio["c004"], claims=[_claim("A sign appears.", at=3.5)], ahead=True),
         ],
@@ -106,8 +127,9 @@ def run_dir(tmp_path_factory) -> Path:
         "speech": [{"start": 0.0, "end": 0.3}, {"start": 1.7, "end": 2.0}],
     }  # fmt: skip
     (root / "cues.json").write_text(json.dumps(cues), encoding="utf-8")
+    models = ["vl-model", "text-model", "tavily-search"]  # the ledger lists the web search too
     manifest = {"run_id": "talk-1234abcd", "video": {"name": "talk.mp4", "duration": DURATION},
-                "summary": {"cost_usd": 0.0123}}  # fmt: skip
+                "summary": SUMMARY, "versions": {"models": models}}  # fmt: skip
     (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     stages = root / "stages"
     (stages / "finalize").mkdir(parents=True)
@@ -140,7 +162,7 @@ def test_showcase_json_has_exactly_the_site_schema(exported):
     _, data = exported
     assert list(data) == [
         "id", "title", "credit", "duration", "loudness", "speech", "gaps", "cues", "words",
-        "audio", "cueAudioBase", "verifyExample", "costUsd",
+        "audio", "cueAudioBase", "verifyExample", "costUsd", "summary",
     ]  # fmt: skip
     assert (data["id"], data["title"], data["credit"]) == (
         "talk-1234abcd", "talk", "Blender Foundation (CC BY)"
@@ -167,6 +189,7 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "text": "A red door opens.",
             "status": "verified",
             "ahead": False,
+            "extended": False,
         },
         {
             "id": "x003",
@@ -175,6 +198,18 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "text": "Words appear: Lull.",
             "status": "extended",
             "ahead": False,
+            "extended": True,
+        },
+        {
+            "id": "c002",
+            "start": 2.2,
+            "end": 2.7,
+            "text": "A dog barks.",
+            "status": "held",
+            "ahead": False,
+            "extended": False,
+            "note": "not verified after 2 repairs: a dog barks (not visible)",
+            "claims": [{"text": "a dog barks", "verdict": "not_visible"}],
         },
         {
             "id": "c004",
@@ -183,8 +218,30 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "text": "In a moment, a sign appears.",
             "status": "verified",
             "ahead": True,
+            "extended": False,
         },
-    ]  # fmt: skip  (held c002 is not published; x003 sits at its freeze point)
+    ]  # fmt: skip  (x003 sits at its freeze point; held c002 has its reason, no audio)
+
+
+def test_the_run_summary_comes_with_the_showcase(exported):
+    """What the report says about the run, for the page: coverage of the important events
+    (with the extended version too), what the plan judged repetitive, F113 pauses, overlap,
+    the counts, the WCAG statuses with what blocks them, the models and the spend."""
+    _, data = exported
+    assert data["summary"] == {
+        "counts": {"verified": 2, "edited": 0, "approved": 0, "held": 1, "extended": 1},
+        "coverage": {"importantEvents": 4, "described": 2, "ratio": 0.5,
+                     "describedWithExtended": 3, "ratioWithExtended": 0.75,
+                     "undescribed": ["e009"]},
+        "repetitive": [{"id": "e007", "text": "The same logo again."}],
+        "f113": [{"gapId": "g002", "start": 2.2, "end": 4.4, "eventIds": ["e009"]}],
+        "overlapSeconds": 0.0,
+        "wcag": [{"criterion": "1.2.5", "level": "AA", "name": "Audio Description (Prerecorded)",
+                  "status": "needs review", "blockers": ["1 description held for review"]}],
+        "models": ["vl-model", "text-model"],
+        "spend": {"modelUsdThisRun": 0.0123, "webSearchesThisRun": 2,
+                  "webSearchListUsdThisRun": 0.016, "modelUsdAllRunsOfRunId": 0.05},
+    }  # fmt: skip
 
 
 def test_the_verify_example_keeps_the_first_draft_and_its_verdicts(exported):
@@ -273,8 +330,9 @@ def test_without_a_draft_that_lost_a_claim_the_first_verified_cue_is_the_example
 
 
 def test_a_folder_that_is_not_a_finished_run_is_refused(tmp_path):
+    (tmp_path / "run").mkdir()
     with pytest.raises(ShowcaseError, match="manifest.json"):
-        export_showcase(tmp_path, tmp_path / "out")
+        export_showcase(tmp_path / "run", tmp_path / "out")
 
 
 def test_export_showcase_command(run_dir, tmp_path):
@@ -290,11 +348,11 @@ def test_export_showcase_command(run_dir, tmp_path):
     assert r.exit_code == 1 and "manifest.json" in r.output
 
 
-# -- fix round 1 -------------------------------------------------------------------------------
+# -- reuse and local files ------------------------------------------------------------------------
 
 
 def test_a_reused_folder_keeps_no_old_cue_audio_or_keyframes(run_dir, tmp_path):
-    """M3: the cue audio and keyframes of an earlier export do not linger."""
+    """The cue audio and keyframes of an earlier export do not linger."""
     out = tmp_path / "site"
     for name in ("audio/c099.m4a", "keyframes/c099.jpg"):
         (out / name).parent.mkdir(parents=True, exist_ok=True)
@@ -306,29 +364,29 @@ def test_a_reused_folder_keeps_no_old_cue_audio_or_keyframes(run_dir, tmp_path):
 
 
 def test_every_showcase_input_is_locked_to_local_files(run_dir, tmp_path, monkeypatch):
-    """M7: the export's probe and ffmpeg calls read local files only, like the pipeline's."""
+    """The export's probe and ffmpeg calls read local files only, like the pipeline's."""
     seen: list[list[str]] = []
-    real = media.subprocess.run
+    real = media._exec
 
     def spy(cmd, *args, **kwargs):
         seen.append([str(c) for c in cmd])
         return real(cmd, *args, **kwargs)
 
-    monkeypatch.setattr(media.subprocess, "run", spy)
+    monkeypatch.setattr(media, "_exec", spy)
     export_showcase(run_dir, tmp_path / "site")
     assert len(seen) >= 5  # probe, video, sound, 3 cue files
     for cmd in seen:
         assert_locked(cmd)
 
 
-def test_the_command_says_the_cost_is_per_run_id():
-    """M4: costUsd is what the ledger holds for the run id, every run under it."""
+def test_the_command_says_what_the_cost_is():
+    """costUsd is the model spend of the run that published; summary.spend holds the rest."""
     r = CliRunner().invoke(cli.app, ["export-showcase", "--help"], terminal_width=200)
     text = " ".join(r.output.split())
-    assert r.exit_code == 0 and "costUsd" in text and "every run under that run id" in text
+    assert r.exit_code == 0 and "costUsd" in text and "model spend of the attempt" in text
 
 
-# -- Task 17 ------------------------------------------------------------------------------------
+# -- where the export may write -------------------------------------------------------------------
 
 
 def test_exporting_into_the_run_folder_itself_is_refused_before_anything_goes(run_dir):
@@ -337,3 +395,47 @@ def test_exporting_into_the_run_folder_itself_is_refused_before_anything_goes(ru
         with pytest.raises(ShowcaseError, match="run folder"):
             export_showcase(run_dir, out)
     assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*")) == before
+
+
+def test_exporting_inside_the_run_folder_or_around_it_is_refused(run_dir):
+    before = sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*"))
+    for out in (run_dir / "site", run_dir / "keyframes" / "x", run_dir.parent):
+        with pytest.raises(ShowcaseError, match="run folder"):
+            export_showcase(run_dir, out)
+    assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*")) == before
+    assert not (run_dir / "site").exists()
+
+
+def test_held_cues_come_with_their_reason_but_no_audio(exported, run_dir):
+    """A recorded-run page shows what was held and why: the held cue is listed with its note
+    and the pause it would have filled, has no audio file, is in no description track, and
+    the counts stay as published."""
+    out, data = exported
+    held = [c for c in data["cues"] if c["status"] == "held"]
+    assert [c["id"] for c in held] == ["c002"]
+    assert not (out / "audio" / "c002.m4a").exists()
+    for name in ("descriptions.vtt", "extended.vtt"):
+        assert "c002" not in (out / name).read_text(encoding="utf-8")
+    assert data["summary"]["counts"] == SUMMARY["cues"]
+    assert data["verifyExample"]["cueId"] != "c002"
+
+
+def test_a_held_cue_whose_text_was_withheld_shows_the_claims_of_its_last_check(run_dir, tmp_path):
+    """The text of a held cue can be withheld (a contradicted claim that could not be cut):
+    it publishes no claim, so the export takes the failed claims from its last check."""
+    data = json.loads((run_dir / "cues.json").read_text(encoding="utf-8"))
+    withheld = dict(
+        data["cues"][1],
+        text="",
+        claims=[],
+        note="text withheld",
+        checks=[{"text": "A dog barks.", "claims": [_claim("a dog barks", "contradicted", 2.4)]}],
+    )
+    copy = tmp_path / "run"
+    shutil.copytree(run_dir, copy)
+    (copy / "cues.json").write_text(
+        json.dumps({**data, "cues": [data["cues"][0], withheld, data["cues"][2]]}),
+        encoding="utf-8")  # fmt: skip
+    out = json.loads(export_showcase(copy, tmp_path / "site").read_text(encoding="utf-8"))
+    [held] = [c for c in out["cues"] if c["status"] == "held"]
+    assert held["claims"] == [{"text": "a dog barks", "verdict": "contradicted"}]

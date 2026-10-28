@@ -116,7 +116,7 @@ def test_split_gaps_takes_the_window_and_breath():
     assert split_gaps([], wps=3.0) == []
 
 
-# -- boundaries (Task 2 minors) ------------------------------------------------------------------
+# -- boundaries ------------------------------------------------------------------
 
 
 def test_usable_windows_round_inward_and_capacity_follows_the_rounded_window():
@@ -163,3 +163,35 @@ def test_split_gaps_needs_a_window_longer_than_its_breath():
     for window, breath in ((0.3, 0.3), (0.2, 0.3), (0.0, 0.0)):
         with pytest.raises(ValueError, match="max_window"):
             split_gaps([g], max_window=window, breath=breath, wps=3.0)
+
+
+# -- speech edges come from the words ------------------------------------------------------------
+
+
+def test_speech_edges_come_from_words_and_turns_only_add_wordless_speech():
+    """Where the recogniser heard words, they bound the speech: a diarised turn that bridges a
+    pause between sentences or starts early never widens it. A turn without any word in it (a
+    laugh, singing) still counts as speech."""
+    words = [Word(text="One.", start=1.0, end=2.0), Word(text="Two.", start=3.9, end=5.0)]
+    turns = [Turn(speaker=0, start=0.7, end=5.4), Turn(speaker=1, start=8.0, end=9.0)]
+    assert speech_spans(words, turns) == [
+        Span(start=1.0, end=2.0), Span(start=3.9, end=5.0), Span(start=8.0, end=9.0)
+    ]  # fmt: skip
+    [g] = [g for g in find_gaps(speech_spans(words, turns), 7.0) if g.start == 2.0]
+    assert g.usable_end - g.usable_start == pytest.approx(1.9 - 2 * 0.2)  # the pause survives
+
+
+def test_one_default_voice_rate_everywhere():
+    """A direct caller that passes no rate gets the same one from every function: the rate of
+    a voice that is not calibrated yet."""
+    import inspect
+
+    from lull import timeline, types, voices
+    from lull.stages import schedule
+
+    rate = timeline.UNCALIBRATED_WPS
+    assert schedule.WPS == voices.FALLBACK_WPS == rate
+    assert inspect.signature(find_gaps).parameters["wps"].default == rate
+    for f in (schedule.schedule, schedule.schedule_greedy):
+        assert inspect.signature(f).parameters["wps"].default == rate
+    assert not hasattr(types, "Shot")  # nothing used it

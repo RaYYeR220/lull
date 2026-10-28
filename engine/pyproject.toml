@@ -2,6 +2,7 @@
 name = "lull"
 version = "0.2.0"
 description = "Audio description engine: gap-fitted, frame-verified descriptions for prerecorded video."
+readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = [
@@ -29,7 +30,10 @@ packages = ["src/lull"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["live: hits the real Token Factory API (needs LULL_LIVE=1)"]
+markers = [
+    "live: hits the real Token Factory API (needs LULL_LIVE=1)",
+    "strict_split: a finalize test that runs the claim-split check as it is",
+]
 
 [tool.ruff]
 line-length = 100

@@ -1,8 +1,9 @@
 """Publish: the files an institution ships, written only when the overlap gate passes.
 
 descriptions.vtt      voiced standard cues (verified, edited or approved), end = start + audio
-extended.vtt          voiced extended cues at their freeze points (speech-free, frame-aligned),
-                      each after a `NOTE extended pause=<seconds>` line
+extended.vtt          voiced extended cues at their freeze points (the first sentence boundary
+                      after the visual, frame-aligned), each after a `NOTE extended
+                      pause=<seconds>` line
 described-audio.m4a   the programme ducked under the descriptions (see lull.stages.mix)
 described.mp4         video + "Described" track 1 + "Original" track 2
 extended.mp4          the extended version, when an extended cue is voiced (a failure to make
@@ -23,22 +24,26 @@ is written into a staging folder (`.publish-*`) inside the run directory; only o
 manifest is written too do the old outputs move into a backup folder (`.publish-old-*`) and
 the new ones move in, and the backup is deleted only after the last move. A failure at any
 point, moves included, puts the previous outputs back as they were. One publish runs per run
-directory at a time: it holds `.publish.lock` (created exclusively, holding its pid and host)
-and touches it every LOCK_HEARTBEAT_S while it works. Another publish waits for it, and breaks
-it only when it has gone quiet (no heartbeat for LOCK_QUIET_S) and either its publisher no
-longer runs on this host or it is older than LOCK_STALE_S (a publisher that hung, or one on
-another host). Every status in the report is computed here;
+directory at a time: it holds `.publish.lock` (created exclusively, holding its pid, host and
+a random token) and touches it every LOCK_HEARTBEAT_S while it works; the heartbeat and the
+release act only while the file still holds its token. Another publish waits for it, and
+breaks it only when it has gone quiet (no heartbeat for LOCK_QUIET_S) and either its
+publisher no longer runs on this host or it is older than LOCK_STALE_S (a publisher that
+hung, or one on another host); one breaker at a time sets it aside, judges it there and
+removes it (see _break). Every status in the report is computed here;
 "met" is printed only when every published line was reviewed by a person, and reads "met
 (automated checks)" until then.
 """
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import socket
 import tempfile
@@ -64,7 +69,7 @@ from lull.stages.plan import said_already
 from lull.stages.research import ResearchResult
 from lull.stages.schedule import SALIENT
 from lull.timeline import complement, merge_spans
-from lull.types import Cue, Gap, RunOptions, Span, VisualEvent
+from lull.types import Cue, Gap, RunOptions, Span, VisualEvent, Word
 
 log = logging.getLogger(__name__)
 
@@ -76,10 +81,12 @@ REPORT = "report.html"
 MANIFEST = "manifest.json"
 KEYFRAMES = "keyframes"
 F113_MIN_PAUSE = 2.0  # seconds of usable pause
-MIN_COVERAGE = 0.8  # important events described, for 1.2.5 / 1.2.7 to be met (ruling, Task 16)
-IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is owed (Task 17)
+MIN_COVERAGE = 0.8  # important events described, for 1.2.5 / 1.2.7 to be met
+IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is owed
+MAX_DEMOTED = 0.25  # share of the watch-salient events the plan may judge repetitive
+MET_NOTHING_VISUAL = "met (no visual information beyond the soundtrack)"  # G203
 REVIEWED = ("edited", "approved")  # statuses a person has signed off
-STATUSES = ("verified", "edited", "approved", "held", "extended")  # counted in the summary
+STATUSES = ("verified", "edited", "approved", "held", "extended", "unverified")  # counted
 TTS_NAME = mixer.TTS_NAME
 MET, MET_AUTOMATED = "met", "met (automated checks)"
 REVIEW, NOT_CLAIMED = "needs review", "not claimed"
@@ -95,6 +102,9 @@ LOCK_HEARTBEAT_S = 60.0  # a publish touches its lock this often
 LOCK_QUIET_S = 150.0  # no touch for this long: the lock is stale ...
 LOCK_STALE_S = 600.0  # ... and breakable when its publisher is gone, or it is this old
 LOCK_POLL_S = 0.2
+LOCK_CREATE_TRIES = 50  # a lock file that cannot be created (or removed) this many times: stop
+BREAKING_STALE_S = 30.0  # a breaker's marker this old was left by a crash
+OWNER_RECHECK_S = 0.05  # a lock that cannot be read is looked at once more after this
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
 OUTPUTS = frozenset(
     {
@@ -110,6 +120,10 @@ OUTPUTS = frozenset(
     }
 )  # fmt: skip  (top-level names publish owns, besides the manifest)
 _EPS = 1e-9
+
+
+class PublishError(ValueError):
+    """The run folder holds files publish did not write under the names it writes."""
 
 
 class PublishResult(BaseModel):
@@ -176,7 +190,7 @@ def outside_pauses(gaps: Sequence[Gap], cues: Sequence[Cue]) -> list[Span]:
 
 
 def important(e: VisualEvent, priority: dict[str, int] | None = None) -> bool:
-    """Whether a description is owed for `e` (ruling, Task 17): the plan rates it priority 3
+    """Whether a description is owed for `e`: the plan rates it priority 3
     or more; an event the plan gave no priority counts when the watch rated it salience 4 or
     more. Events the dialogue already conveys (R21) never count."""
     if said_already(e):
@@ -242,6 +256,7 @@ def coverage(
         "ratio_with_extended": ratio(len(with_ext)),
         "undescribed": [i for i in salient if i not in with_ext],
         "repetitive": [e.id for e in repetitive(events, priority)],
+        "watch_salient": sum(e.salience >= SALIENT and not said_already(e) for e in events),
     }
 
 
@@ -304,9 +319,31 @@ def _missing(cov: dict | None, key: str) -> list[str]:
     return [f"{_n(n, 'important event')} undescribed ({done} of {total} described)"]
 
 
+def _planner(cov: dict | None) -> list[str]:
+    """Why the plan's ratings block a pass: it judged more than
+    MAX_DEMOTED of the watch-salient events repetitive, or rated nothing important although the
+    watch saw salient events."""
+    if not cov or cov.get("watch_salient") is None:
+        return []  # a summary from before these were recorded
+    salient, demoted = cov["watch_salient"], len(cov.get("repetitive") or [])
+    out = []
+    if salient and demoted > MAX_DEMOTED * salient + _EPS:
+        out.append(f"{demoted} of {salient} salient events judged repetitive by the planner "
+                   f"(limit {MAX_DEMOTED * 100:.0f} %)")  # fmt: skip
+    if salient and not cov.get("important_events"):
+        out.append("no event was rated important")
+    return out
+
+
+def _nothing_visual(cov: dict | None) -> bool:
+    """No important and no salient event at all: the soundtrack carries everything (G203)."""
+    return bool(cov) and cov.get("watch_salient") == 0 and not cov.get("important_events")
+
+
 def wcag_status(
     *, standard: int, extended_produced: bool, held: int, overlap_s: float, f113: int,
     reviewed: bool = False, extended_error: str | None = None, coverage: dict | None = None,
+    verified: bool = True,
 ) -> list[dict]:  # fmt: skip
     """1.2.3, 1.2.5 and 1.2.7 as met / met (automated checks) / needs review / not claimed,
     with what meets them and why not.
@@ -318,9 +355,16 @@ def wcag_status(
     not depend on coverage. 1.2.7 is claimed only for extended.mp4, on the same checks with
     extended descriptions counted (a held cue or an unused pause is missing from it too). A
     pass reads "met" only when every published line was reviewed by a person.
+
+    The plan's ratings cannot buy a pass: 1.2.5 and 1.2.7 need review when the plan judged
+    more than MAX_DEMOTED of the watch-salient events repetitive, or rated nothing important
+    while the watch saw salient events. With no important and no salient event at all (a
+    talking head: the soundtrack holds all the information, G203) all three read
+    MET_NOTHING_VISUAL unless another check fails.
     """
+    nothing_visual = _nothing_visual(coverage)
     blockers = []
-    if standard == 0 and not extended_produced:
+    if standard == 0 and not extended_produced and not nothing_visual:
         blockers.append(
             "no description is voiced in the standard track and no extended version was produced"
         )
@@ -333,13 +377,20 @@ def wcag_status(
         )
     if held:
         blockers.append(f"{_n(held, 'description')} held for review")
+    if not verified:  # the evaluation's ablation: nothing was checked against the frames
+        blockers.append("claim verification was off for this run (LULL_NO_VERIFY)")
     passed = MET if reviewed else MET_AUTOMATED
+    if nothing_visual:
+        passed = MET_NOTHING_VISUAL
     status = passed if not blockers else REVIEW
     only_extended = standard == 0 and extended_produced
-    blockers_125 = blockers + _missing(
-        coverage, "described_with_extended" if only_extended else "described"
+    planner = _planner(coverage)
+    blockers_125 = (
+        blockers
+        + _missing(coverage, "described_with_extended" if only_extended else "described")
+        + planner
     )
-    blockers_127 = blockers + _missing(coverage, "described_with_extended")
+    blockers_127 = blockers + _missing(coverage, "described_with_extended") + planner
     ad = []
     if standard:
         ad.append("described.mp4 and described-audio.m4a (G173 described version, "
@@ -350,7 +401,13 @@ def wcag_status(
         ["extended.vtt"] if extended_produced else []
     )
     via_123 = ", ".join([*texts, "script.md"]) + (f", with {' and '.join(ad)}" if ad else "")
-    if extended_produced:
+    if nothing_visual:
+        g203 = "the soundtrack carries all the information (G203)"
+        via_123 = f"{via_123}; {g203}"
+        ad.append(g203)
+    if nothing_visual and not extended_produced:
+        row_127 = (passed if not blockers_127 else REVIEW, ad[-1], blockers_127)
+    elif extended_produced:
         row_127 = (passed if not blockers_127 else REVIEW,
                    "extended.mp4 (G8 extended audio description) and extended.vtt",
                    blockers_127)  # fmt: skip
@@ -387,11 +444,13 @@ def tts_disclosure(cues: Sequence[Cue]) -> str:
 # -- script --------------------------------------------------------------------------------------
 
 
-def _script_entry(c: Cue) -> list[str]:
+def _script_entry(c: Cue, visual: float | None = None) -> list[str]:
     when = timecode(c.start)
     if c.audio_dur is not None and c.status != "held":
         when += f" to {timecode(c.start + c.audio_dur)}"
     lines = [f"- {when} · {c.id} · {c.status}", f"  - Text: {_one_line(c.text)}"]
+    if visual is not None and abs(visual - c.start) > 1e-6:
+        lines.append(f"  - The picture holds here for a visual from {timecode(visual)}")
     if c.claims:
         claims = "; ".join(
             f"{_one_line(k.text)} — {k.verdict.replace('_', ' ')}"
@@ -410,13 +469,17 @@ def _script_entry(c: Cue) -> list[str]:
     return lines
 
 
-def _entries(cues: Sequence[Cue], empty: str) -> list[str]:
+def _entries(cues: Sequence[Cue], empty: str, visual: dict[str, float] | None = None) -> list[str]:
     ordered = sorted(cues, key=lambda c: (c.start, c.id))
-    return [line for c in ordered for line in _script_entry(c)] or [empty]
+    seen = visual or {}
+    return [line for c in ordered for line in _script_entry(c, seen.get(c.id))] or [empty]
 
 
 def script_md(video_name: str, cues: Sequence[Cue], extended: Sequence[Cue], opts: RunOptions,
-              disclosure: str) -> str:  # fmt: skip
+              disclosure: str, visual: dict[str, float] | None = None) -> str:  # fmt: skip
+    """The description script. Extended cues come at the time the tracks give them (publish
+    passes them moved to their freeze points), with `visual` the time each one's visual
+    starts."""
     out = [
         f"# Audio description script: {video_name}",
         "",
@@ -430,7 +493,7 @@ def script_md(video_name: str, cues: Sequence[Cue], extended: Sequence[Cue], opt
         "",
         "## Extended descriptions (the video pauses for these)",
         "",
-        *_entries(extended, "No extended description."),
+        *_entries(extended, "No extended description.", visual),
     ]
     return "\n".join(out) + "\n"
 
@@ -505,9 +568,72 @@ def _breakable(path: Path) -> bool:
     return host == socket.gethostname() and not _alive(pid)
 
 
-def _take(path: Path) -> bool:
-    """Create the lock file with this process's pid and host; False when it exists. A lock
-    that cannot be written is not left behind."""
+def _owner(path: Path) -> str | None:
+    """The token the lock file at `path` holds (None when it is gone or unreadable)."""
+    try:
+        fields = path.read_text(encoding="utf-8").split()
+    except OSError:
+        return None
+    return fields[3] if len(fields) >= 4 else None
+
+
+def _ours(path: Path, token: str) -> bool:
+    """Whether the lock at `path` still holds `token`; a lock that cannot be read (a moment
+    of not found) is read once more after OWNER_RECHECK_S before the answer is no."""
+    owner = _owner(path)
+    if owner is None:
+        time.sleep(OWNER_RECHECK_S)
+        owner = _owner(path)
+    return owner == token
+
+
+def _break(path: Path) -> bool:
+    """Break the lock at `path` if it may be broken, and say whether this call did.
+
+    One waiter breaks at a time: it must first create `<lock>.breaking` exclusively (two
+    renames of one file can both report success on Windows, so the rename alone does not
+    pick a winner; a marker older than BREAKING_STALE_S is a crashed breaker's and goes).
+    The lock is then renamed aside to `<lock>.broken-<token>`, judged there and removed, so
+    what is judged is exactly what is deleted; a lock that turns out fresh is put back unless
+    a new one was taken meanwhile."""
+    marker = path.with_name(path.name + ".breaking")
+    try:
+        os.close(os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        try:
+            if time.time() - marker.stat().st_mtime > BREAKING_STALE_S:
+                marker.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    try:
+        aside = path.with_name(f"{path.name}.broken-{secrets.token_hex(8)}")
+        try:
+            os.rename(path, aside)
+        except OSError:
+            return False  # gone already: released, or broken just before
+        if _breakable(aside):
+            aside.unlink(missing_ok=True)
+            return True
+        try:
+            os.link(aside, path)  # back where it was, never over a lock taken meanwhile
+        except FileExistsError:
+            log.warning("publish: a fresh lock was taken while %s was set aside", path.name)
+        except OSError:
+            try:
+                os.rename(aside, path)
+                return False
+            except OSError:
+                log.warning("publish: could not put the lock %s back", path.name)
+        aside.unlink(missing_ok=True)
+        return False
+    finally:
+        marker.unlink(missing_ok=True)
+
+
+def _take(path: Path, token: str) -> bool:
+    """Create the lock file holding this process's pid and host and `token`; False when it
+    exists. A lock that cannot be written is not left behind."""
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
@@ -520,7 +646,7 @@ def _take(path: Path) -> bool:
         raise
     try:
         with f:
-            f.write(f"{os.getpid()} {socket.gethostname()} {time.time():.0f}\n")
+            f.write(f"{os.getpid()} {socket.gethostname()} {time.time():.0f} {token}\n")
     except BaseException:
         path.unlink(missing_ok=True)
         raise
@@ -530,36 +656,124 @@ def _take(path: Path) -> bool:
 @contextmanager
 def _lock(run_dir: Path) -> Iterator[None]:
     """Hold run_dir/.publish.lock while publishing (see the module doc): wait while another
-    publish holds it, break it only when _breakable says so, and touch it every
-    LOCK_HEARTBEAT_S from a daemon thread while it is held."""
+    publish holds it, break it only when _breakable says so (see _break), and touch it every
+    LOCK_HEARTBEAT_S from a daemon thread while it is held. The lock carries a random token:
+    the heartbeat touches it and the release removes it only while it still holds ours."""
     path = run_dir / LOCK
-    while not _take(path):
-        if path.exists() and _breakable(path):
-            log.warning("publish: breaking a stale lock in %s", run_dir)
-            path.unlink(missing_ok=True)  # another waiter may have broken it first
+    token = secrets.token_hex(16)
+    refused = 0
+    while True:
+        try:
+            if _take(path, token):
+                break
+            refused = 0
+        except (FileNotFoundError, PermissionError):
+            # Windows, for a moment, cannot create a file whose name was just deleted
+            refused += 1
+            if refused >= LOCK_CREATE_TRIES or not run_dir.is_dir():
+                raise
+            time.sleep(LOCK_POLL_S)
+            continue
+        # judged in place first (cheap, moves nothing): a live, heartbeating lock is never
+        # set aside; _break judges again, authoritatively, on the file it moved
+        if path.exists() and _breakable(path) and _break(path):
+            log.warning("publish: broke a stale lock in %s", run_dir)
             continue
         time.sleep(LOCK_POLL_S)
     stop = threading.Event()
 
     def heartbeat() -> None:
         while not stop.wait(LOCK_HEARTBEAT_S):
+            if not _ours(path, token):
+                log.warning("publish: the lock in %s is no longer ours", run_dir)
+                return
             try:
                 os.utime(path, None)
             except OSError as e:
                 log.warning("publish: could not touch the lock: %s", e)
 
-    beat = threading.Thread(target=heartbeat, name="publish-lock", daemon=True)
-    beat.start()
+    beat, started = None, False
     try:
+        beat = threading.Thread(target=heartbeat, name="publish-lock", daemon=True)
+        beat.start()
+        started = True
         yield
     finally:
         stop.set()
-        beat.join(timeout=5)
-        path.unlink(missing_ok=True)
+        if started:
+            beat.join(timeout=5)
+        if _ours(path, token):
+            _release(path)
+
+
+def _release(path: Path) -> None:
+    """Remove our lock file. Windows cannot delete a file another thread is reading at that
+    moment (a waiter judging it), so a refusal is tried again a few times; a lock that still
+    cannot go is logged, and waiters break it once it is stale."""
+    for attempt in range(LOCK_CREATE_TRIES):
+        try:
+            path.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if attempt == LOCK_CREATE_TRIES - 1:
+                log.warning("publish: could not remove the lock %s", path)
+                return
+            time.sleep(OWNER_RECHECK_S)
+
+
+_rename = os.replace  # one name to stand in for a filesystem in the tests
+# what a filesystem without folder renames (a flat namespace such as Cloud Storage FUSE)
+# answers when asked to rename one
+_NO_FOLDER_RENAME = {
+    errno.EXDEV,
+    errno.EPERM,
+    errno.ENOTSUP,
+    getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+}
 
 
 def _move(src: Path, dst: Path) -> None:
-    os.replace(src, dst)
+    """`src` renamed to `dst`. When a folder cannot be renamed because the filesystem has no
+    folder renames (EXDEV, EPERM, ENOTSUP, EOPNOTSUPP) and `dst` does not exist yet, its
+    entries are moved one by one into a new `dst` and the emptied folder removed; when one of
+    them fails, those already moved go back, `dst` is removed and the error is raised, so the
+    commit can roll back from a whole folder. Any other failure raises as it is."""
+    try:
+        _rename(src, dst)
+    except OSError as e:
+        if (e.errno not in _NO_FOLDER_RENAME or not src.is_dir() or src.is_symlink()
+                or dst.exists()):  # fmt: skip
+            raise
+        log.info("publish: cannot rename the folder %s; moving its files one by one", src.name)
+        dst.mkdir()
+        moved: list[str] = []
+        try:
+            for item in sorted(src.iterdir()):
+                _move(item, dst / item.name)
+                moved.append(item.name)
+        except BaseException as first:
+            try:
+                for name in reversed(moved):
+                    _move(dst / name, src / name)
+                dst.rmdir()
+            except OSError as second:  # never hides why the move failed: both are logged
+                log.error("publish: moving %s back failed too (%s) after: %s", src.name,
+                          second, first)  # fmt: skip
+            raise
+        src.rmdir()
+
+
+def _merge_back(item: Path, dst: Path) -> None:
+    """Put a backed-up `item` back at `dst`: a folder whose place holds the part of it a
+    crash had not moved yet gets its missing entries back; anything else goes back only into
+    an empty place."""
+    if item.is_dir() and not item.is_symlink() and dst.is_dir():
+        for entry in sorted(item.iterdir()):
+            _merge_back(entry, dst / entry.name)
+        if not any(item.iterdir()):
+            item.rmdir()
+    elif not dst.exists():
+        _move(item, dst)
 
 
 def _replace_with(item: Path, dst: Path) -> None:
@@ -577,21 +791,54 @@ def _recover(run_dir: Path) -> None:
     - the manifest in place and one in the backup: the commit finished and only removing the
       backup failed, so the backup just goes;
     - otherwise (it stopped while moving the old outputs aside): each backed-up output whose
-      place is empty goes back.
+      place is empty goes back, and a folder it was moving file by file is merged back.
     The backup folder is removed afterwards."""
     for backup in sorted(p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith(BACKUP)):
         finished = (run_dir / MANIFEST).exists() and (backup / MANIFEST).exists()
         midway = not (run_dir / MANIFEST).exists()
+        if midway and not (backup / MANIFEST).exists():
+            # a first publish (nothing published before, and _guard let no foreign file stay
+            # under an output name): every output-named entry is its own, half moved in
+            for name in sorted(OUTPUTS):
+                dst = run_dir / name
+                if dst.is_dir():
+                    shutil.rmtree(dst)
+                elif dst.exists():
+                    dst.unlink()
         if not finished:
             for item in sorted(backup.iterdir()):
                 dst = run_dir / item.name
                 if midway:
                     _replace_with(item, dst)
-                elif not dst.exists():
-                    _move(item, dst)
+                else:  # a folder may be half moved: what is still in place stays
+                    _merge_back(item, dst)
         log.warning("publish: an interrupted publish left %s (%s)", backup.name,
                     "removed" if finished else "its outputs were put back")  # fmt: skip
         shutil.rmtree(backup, ignore_errors=True)
+
+
+def _guard(run_dir: Path, video: Path) -> None:
+    """Raise PublishError rather than replace what publish did not write: the input video
+    under an output name in the run folder, or output-named files in a folder no publish has
+    written (no manifest)."""
+    root = run_dir.resolve()
+    try:
+        top = video.resolve().relative_to(root).parts[0]
+    except ValueError:
+        top = None
+    if top in OUTPUTS | {MANIFEST}:
+        raise PublishError(
+            f"the input video is {top} in the run folder, a name publish writes; move it "
+            "out of the folder first"
+        )
+    if (run_dir / MANIFEST).exists():
+        return
+    foreign = sorted(name for name in OUTPUTS if (run_dir / name).exists())
+    if foreign:
+        raise PublishError(
+            "the run folder holds files publish did not write: " + ", ".join(foreign)
+            + "; move them or publish into another folder"
+        )  # fmt: skip
 
 
 def _clear_temp(run_dir: Path) -> None:
@@ -721,13 +968,26 @@ def publish(
     speech: list[Span],
     duplicates: dict[str, str] | None = None,
     priority: dict[str, int] | None = None,
+    since: float | None = None,
+    words: list[Word] | None = None,
+    reviewer: dict[str, list[str]] | None = None,
+    verify: bool = True,
+    watch_windows_split: int = 0,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
     protected sound or another cue; any other failure leaves the previous outputs untouched.
     `speech` is the listen stage's speech spans; `duplicates` the events the plan dropped as
     near-duplicates of another (dropped -> kept), counted as described with their twin;
-    `priority` the plan's priorities, which decide what is important (see `important`)."""
+    `priority` the plan's priorities, which decide what is important (see `important`);
+    `since` when this attempt started (epoch seconds): its calls are the ones reported as this
+    run's, next to the model spend of every attempt under the run id; `words` the transcript,
+    whose sentence ends decide where the extended version stops (mix.hold_point); `reviewer`
+    the event ids a person should look at: "plan_unanswered" (salient events the plan wrote
+    nothing for, even when asked again) and "undescribed" (salient events that got no
+    description anywhere), listed in the manifest and under "For the reviewer"; `verify`
+    False records an evaluation run without claim verification (manifest `verification:
+    "disabled"`, no WCAG row met)."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -745,15 +1005,18 @@ def publish(
     }
 
     info = media.probe(video)
+    media.assert_safe_container(info)  # never demux a playlist or a concat list
     run_dir.mkdir(parents=True, exist_ok=True)
     with _lock(run_dir):
         _recover(run_dir)
+        _guard(run_dir, video)
         _clear_temp(run_dir)
         staging = Path(tempfile.mkdtemp(dir=run_dir, prefix=STAGING))
         try:
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
-                run_id, opts, speech, duplicates, overlap, priority,
+                run_id, opts, speech, duplicates, overlap, priority, since, words or [],
+                reviewer or {}, verify, watch_windows_split,
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -764,16 +1027,60 @@ def publish(
     return PublishResult(files=files, manifest=run_dir / MANIFEST)
 
 
+def _cached_spend(run_dir: Path, run_id: str) -> dict | None:
+    """The spend, calls and models of the publish whose manifest is in `run_dir`, when it was
+    for `run_id` (None otherwise, or when it cannot be read)."""
+    try:
+        old = json.loads((run_dir / MANIFEST).read_bytes().decode("utf-8"))
+        summary = old["summary"]
+        if old.get("run_id") != run_id or not isinstance(summary.get("spend"), dict):
+            return None
+        return {
+            "spend": summary["spend"],
+            "calls": {"by_role_model": list(summary.get("calls_by_role_model") or [])},
+            "models": list((old.get("versions") or {}).get("models") or []),
+        }
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def _continuous_note(c: Cue, words: list[Word], speech: list[Span]) -> Cue:
+    """`c` with a note when its picture holds at a word boundary in continuous speech (no
+    sentence end or gap between words within reach: see mix.hold)."""
+    if mixer.hold(c.start, words=words, speech=speech)[1] != "word":
+        return c
+    note = mixer.CONTINUOUS_NOTE
+    return c.model_copy(update={"note": f"{c.note}; {note}" if c.note else note})
+
+
+def own_claims(c: Cue) -> Cue:
+    """`c` with only the claims judged on its current text: none when the text changed after
+    its last check (an edit), since every verdict belongs to the text it was given to. A cue
+    without a check history keeps its claims."""
+    if not c.claims or not c.checks:
+        return c
+    if " ".join(c.checks[-1].text.split()) == " ".join(c.text.split()):
+        return c
+    log.info("publish: %s changed after its last check; its %d claims are not published",
+             c.id, len(c.claims))  # fmt: skip
+    return c.model_copy(update={"claims": []})
+
+
 def _stage(
     run_dir: Path, final: Path, video: Path, info: media.Probe, cues: list[Cue],
     extended: list[Cue], events: list[VisualEvent], gaps: list[Gap],
     research: ResearchResult | None, ledger: Ledger, run_id: str, opts: RunOptions,
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
-    priority: dict[str, int] | None = None,
+    priority: dict[str, int] | None = None, since: float | None = None,
+    words: list[Word] | None = None, reviewer: dict[str, list[str]] | None = None,
+    verify: bool = True, watch_windows_split: int = 0,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
     manifest left out."""
+    cues, extended = [own_claims(c) for c in cues], [own_claims(c) for c in extended]
+    # an unverified cue means verification was off, whatever the caller passes (a republish)
+    verify = verify and not any(c.status == "unverified" for c in cues + extended)
     everything = cues + extended
     spoken, spoken_ext = mixer.voiced(cues), mixer.voiced_extended(extended)
     out: dict[str, Path] = {}
@@ -783,7 +1090,7 @@ def _stage(
     ext_error = None
     try:
         ext_video = mixer.extended_video(
-            video, extended, run_dir, standard=cues, speech=speech, info=info,
+            video, extended, run_dir, standard=cues, speech=speech, words=words or [], info=info,
             language=opts.language, levels=levels,
         )  # fmt: skip
     except MediaError as e:
@@ -794,9 +1101,15 @@ def _stage(
         out[mixer.EXTENDED_VIDEO] = ext_video
     out.update(_keyframes(video, everything, events, run_dir, info.duration))
 
-    fps, freezes = mixer.freeze_points(spoken_ext, info, standard=spoken, speech=speech)
+    fps, freezes = mixer.freeze_points(
+        spoken_ext, info, standard=spoken, speech=speech, words=words or []
+    )
     freeze_at = {c.id: float(f.frame / fps) for f in freezes for c in f.cues}
-    extended_vtt = [
+    extended = [_continuous_note(c, words or [], speech) if c.id in freeze_at else c
+                for c in extended]  # fmt: skip
+    # one timeline for every output: a voiced extended cue sits at its freeze point in the
+    # extended track, script.md and cues.json (freeze_at) alike
+    placed = [
         c.model_copy(update={"start": freeze_at[c.id]}) if c.id in freeze_at else c
         for c in extended
     ]
@@ -811,11 +1124,25 @@ def _stage(
     wcag = wcag_status(
         standard=len(spoken), extended_produced=ext_video is not None, held=len(held),
         overlap_s=overlap["total_s"], f113=len(flags), reviewed=signed_off,
-        extended_error=ext_error, coverage=cov,
+        extended_error=ext_error, coverage=cov, verified=verify,
     )  # fmt: skip
     disclosure = tts_disclosure(everything)
-    calls = ledger.summary(run_id)
-    cost = round(calls["total_cost_usd"], 6)
+    calls = ledger.summary(run_id, since=since)
+    spend = {
+        "model_usd_this_run": round(ledger.spent(run_id=run_id, since=since), 6),
+        "tavily_searches_this_run": ledger.searches(run_id=run_id, since=since),
+        "tavily_notional_usd_this_run": round(
+            ledger.spent(run_id=run_id, since=since, tavily=True)
+            - ledger.spent(run_id=run_id, since=since), 6
+        ),
+        "model_usd_all_runs": round(ledger.spent(run_id=run_id), 6),
+    }  # fmt: skip
+    models = sorted({c.model for c in ledger.calls(run_id)
+                     if since is None or c.ts >= since})  # fmt: skip
+    prior = _cached_spend(final, run_id) if since is not None and not models else None
+    if prior is not None:  # every stage came from the cache: keep what made these outputs
+        spend, calls, models = prior["spend"], prior["calls"], prior["models"]
+    cost = spend["model_usd_this_run"]
     minutes = info.duration / 60
     per_min = round(cost / minutes, 6) if minutes > 0 else None
     warnings = [
@@ -824,8 +1151,16 @@ def _stage(
         for f in c.findings
         if f.get("severity") == "warning"
     ]
+    by_id = {e.id: e for e in events}
+    for_reviewer = {
+        kind: [{"id": i, "text": by_id[i].text if i in by_id else ""}
+               for i in (reviewer or {}).get(kind, [])]
+        for kind in ("plan_unanswered", "undescribed")
+    }  # fmt: skip
     summary = {
         "cues": {s: counts.get(s, 0) for s in STATUSES},
+        "for_reviewer": for_reviewer,
+        "watch_windows_split": watch_windows_split,  # cut off by the token limit: in halves
         "coverage": cov,
         "repetitive": judged,  # watch-salient, rated 1-2 by the plan: not counted
         "overlap_seconds": overlap["total_s"],
@@ -833,8 +1168,11 @@ def _stage(
         "held": [{"id": c.id, "reason": c.note} for c in held],
         "f113": flags,
         "lint_warnings": [{k: w[k] for k in ("cue_id", "rule", "message")} for w in warnings],
-        "cost_usd": cost,
+        "cost_usd": cost,  # model spend of this run
         "cost_per_min": per_min,
+        "spend": spend,
+        "spend_from_cache": prior is not None,  # this attempt made no call: the spend that
+        # made these outputs, from the manifest of the publish before
         "calls_by_role_model": calls["by_role_model"],
         "wcag": wcag,
         "reviewed": signed_off,
@@ -845,15 +1183,13 @@ def _stage(
         "tts_disclosure": disclosure,
         "research": None if research is None else {
             "skipped": research.skipped, "terms": len(research.glossary),
-            "errors": research.errors,
+            "errors": research.errors, "notes": research.notes,
         },
     }  # fmt: skip
 
     language = opts.language
     out[STANDARD_VTT] = _write(run_dir / STANDARD_VTT, to_vtt(cues, language=language))
-    out[EXTENDED_VTT] = _write(
-        run_dir / EXTENDED_VTT, to_extended_vtt(extended_vtt, language=language)
-    )
+    out[EXTENDED_VTT] = _write(run_dir / EXTENDED_VTT, to_extended_vtt(placed, language=language))
     cue_data = {
         "run_id": run_id,
         "language": language,
@@ -865,7 +1201,10 @@ def _stage(
     out[CUES_JSON] = _write(
         run_dir / CUES_JSON, json.dumps(cue_data, indent=2, ensure_ascii=False) + "\n"
     )
-    out[SCRIPT] = _write(run_dir / SCRIPT, script_md(video.name, cues, extended, opts, disclosure))
+    visual = {c.id: c.start for c in extended if c.id in freeze_at}
+    out[SCRIPT] = _write(
+        run_dir / SCRIPT, script_md(video.name, cues, placed, opts, disclosure, visual)
+    )
     created = datetime.now(UTC).isoformat(timespec="seconds")
     context = {
         "video": video.name, "duration": _duration(info.duration), "run_id": run_id,
@@ -880,7 +1219,6 @@ def _stage(
     }  # fmt: skip
     out[REPORT] = _write(run_dir / REPORT, _render_report(context))
 
-    models = sorted({c.model for c in ledger.calls(run_id)})
     manifest = {
         "run_id": run_id,
         "created": created,
@@ -895,6 +1233,7 @@ def _stage(
             for name, path in sorted(out.items())
         },
         "summary": summary,
+        "verification": "enabled" if verify else "disabled",
         "versions": {"engine": lull.__version__, "models": models, "tts": TTS_NAME},
     }
     _write(run_dir / MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")

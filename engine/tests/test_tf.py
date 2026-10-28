@@ -240,7 +240,7 @@ def test_model_constants():
     assert ULTRA == "nvidia/Nemotron-3-Ultra-550b-a55b"
 
 
-# -- Task 5 minors -------------------------------------------------------------------------------
+# -- edge cases -------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("error", [httpx.ReadTimeout("slow"), httpx.RemoteProtocolError("cut")])
@@ -301,3 +301,16 @@ def test_client_closes_as_a_context_manager(ledger):
     with TokenFactory("k", ledger, transport=httpx.MockTransport(Server(ok()))) as client:
         assert call(client) == {"a": 1}
     assert client._http.is_closed
+
+
+def test_an_answer_without_usage_is_charged_at_its_estimate(ledger, caplog):
+    """A 200 answer that reports no token usage still costs something: it is recorded at the
+    call's estimate so the caps see it."""
+    resp = httpx.Response(
+        200, json={"choices": [{"message": {"content": '{"a": 1}'}, "finish_reason": "stop"}]}
+    )
+    client, _, _ = make(ledger, resp)
+    with caplog.at_level("WARNING", logger="lull.tf"):
+        assert call(client, estimate=0.0123) == {"a": 1}
+    [rec] = ledger.calls("r1")
+    assert rec.cost_usd == pytest.approx(0.0123) and "usage" in caplog.text

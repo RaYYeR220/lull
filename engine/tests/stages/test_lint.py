@@ -187,9 +187,40 @@ def test_autofix_idempotent(text):
 
 
 def test_a_quote_ending_a_sentence_keeps_the_next_look_ahead_at_its_start():
-    """Task 12 minor: masking the quote dropped its period, so the look-ahead after it looked
+    """Masking the quote dropped its period, so the look-ahead after it looked
     like the middle of a sentence."""
     assert "R2-ahead-format" not in rules('He holds a card: "Hi." In a moment, a door opens.')
     assert "R2-ahead-format" not in rules('A sign reads "Exit!" In a moment, it flickers.')
     assert "R2-ahead-format" not in rules("A caption reads: Day one. In a moment, rain falls.")
     assert "R2-ahead-format" in rules('A card says "Hi" and in a moment a door opens.')
+
+
+def test_on_screen_text_read_out_is_not_an_unintroduced_name():
+    """A line that reads the screen names nobody: an ALL-CAPS run ("STEP 2: BAKE") or the
+    text watch read off the screen. The same name used as a name still needs introducing."""
+    assert "R15-name" not in rules("A card reads STEP 2: BAKE.", named={"BAKE"})
+    banner = ["Welcome, Proog"]
+    t = "A banner reads Welcome, Proog. A man waves."
+    assert "R15-name" not in rules(t, named={"Proog"}, verbatim=banner)
+    t = "A banner reads Welcome, Proog. Proog waves."
+    found = [f for f in lint(t, named={"Proog"}, verbatim=banner) if f.rule == "R15-name"]
+    assert [f.span for f in found] == [(31, 36)]  # the second Proog, a name
+    assert "R15-name" in rules("HAL watches the crew.", named={"HAL"})  # a lone capital name
+
+
+def test_words_read_off_the_screen_are_not_the_describers_own():
+    """On-screen text read out in capitals, or the text watch read, is not first person or
+    past tense: "I" in "AND I JUST WANT TO BE AWESOME IN SPACE" is the screen's."""
+    t = "Pink text appears over the buildings: ...AND I JUST WANT TO BE AWESOME IN SPACE."
+    assert "R7-person" not in rules(t)
+    assert "R7-person" not in rules("A note reads I was here.", verbatim=["I was here"])
+    assert "R7-tense" not in rules("A note reads I was here.", verbatim=["I was here"])
+    assert "R7-person" in rules("I see a door.")  # the describer's own "I" still counts
+
+
+def test_a_run_of_capitals_stops_at_a_sentence_end():
+    """ "OK. I" is two sentences: the screen's "OK" does not make the describer's "I" the
+    screen's too."""
+    assert "R7-person" in rules("The screen shows OK. I wave.")
+    assert "R15-name" in rules("A card reads STOP. BAKE waves.", named={"BAKE"})
+    assert "R7-person" not in rules("A banner reads: AND I JUST WANT TO WIN.")

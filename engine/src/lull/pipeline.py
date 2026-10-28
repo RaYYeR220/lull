@@ -44,6 +44,7 @@ from pydantic import BaseModel, ValidationError
 
 import lull
 from lull import media
+from lull.config import get_settings
 from lull.ledger import CallRecord, Ledger
 from lull.speech import SpeechClient
 from lull.stages import mix as mixer
@@ -79,6 +80,7 @@ class Event:
 
 class _Events(BaseModel):
     events: list[VisualEvent]
+    windows_split: int = 0  # watch windows cut off by the token limit and watched in halves
 
 
 class _Schedule(BaseModel):
@@ -124,7 +126,7 @@ def source_digest(root: Path | Traversable | None = None) -> str:
 @functools.cache
 def engine_fingerprint() -> str:
     """What every stage key includes besides its inputs: the package version and a digest of
-    every source and prompt file (ruling, Task 16), so any change to the engine reruns every
+    every source and prompt file, so any change to the engine reruns every
     stage instead of reusing a result the old code made."""
     return f"{lull.__version__}+{source_digest()[:16]}"
 
@@ -137,31 +139,44 @@ def introduced_before(
 ) -> set[str]:
     """The names (whole words, case-sensitive) a listener has met by `cutoff`: said in a
     transcript word that ends before it, or read in one of the `heard` descriptions (those
-    voiced before it, see heard_before). On-screen text alone introduces nobody (strict I4):
+    voiced before it, see heard_before). On-screen text alone introduces nobody:
     only a description that reads it does."""
     names = {n for n in names if n}
-    texts = [" ".join(w.text for w in words if w.end < cutoff)]
+    texts = [" ".join(w.text for w in words if w.end <= cutoff + 1e-9)]  # heard by then
     texts += [c.text for c in heard]
     return set().union(*(names_in(t, names) for t in texts))
 
 
-def cutoff_for(cue: Cue, speech: list[Span]) -> float:
-    """When a listener reaches `cue`: a standard cue's start; for an extended cue the moment the
-    picture freezes for it, which waits for speech under its visual (mix.speech_free)."""
-    return cue.start if cue.gap_id is not None else mixer.speech_free(cue.start, speech)
+def cutoff_for(
+    cue: Cue, speech: list[Span], words: list[Word] = (), info: media.Probe | None = None,
+    standard: Iterable[Cue] = (),
+) -> float:  # fmt: skip
+    """When a listener reaches `cue`: a standard cue's start; for an extended cue the frame the
+    picture holds on for it (mix.freeze_time: the first sentence boundary after its visual),
+    or with no probed video the moment itself (mix.hold_point)."""
+    if cue.gap_id is not None:
+        return cue.start
+    if info is not None:  # the very frame the extended version holds on
+        return mixer.freeze_time(cue.start, info, standard=list(standard), speech=speech,
+                                 words=words)  # fmt: skip
+    return mixer.hold_point(cue.start, words=words, speech=speech)
 
 
-def heard_before(cue: Cue, finished: Iterable[Cue], speech: list[Span]) -> list[Cue]:
+def heard_before(
+    cue: Cue, finished: Iterable[Cue], speech: list[Span], words: list[Word] = (),
+    info: media.Probe | None = None,
+) -> list[Cue]:  # fmt: skip
     """The finished cues a listener has heard when `cue` is voiced: voiced standard cues that
     start before its cutoff, and for an extended cue also the voiced extended cues reached
     before it (the extended version has both). Extended cues that share a freeze point are
     voiced in start order, so the earlier one counts as heard."""
     finished = list(finished)
-    cutoff = cutoff_for(cue, speech)
+    std = mixer.voiced(finished)
+    cutoff = cutoff_for(cue, speech, words, info, std)
     heard = [c for c in mixer.voiced(finished) if c.start < cutoff]
     if cue.gap_id is None:
         for c in mixer.voiced_extended(finished):
-            at = cutoff_for(c, speech)
+            at = cutoff_for(c, speech, words, info, std)
             if at < cutoff or (at == cutoff and (c.start, c.id) < (cue.start, cue.id)):
                 heard.append(c)
     return heard
@@ -179,14 +194,17 @@ def cue_context(
     events: list[VisualEvent],
     speech: list[Span],
     finished: list[Cue],
+    info: media.Probe | None = None,
+    verify: bool = True,
+    priority: dict[str, int] | None = None,
 ) -> CueContext:
     """What finalising `cue` needs to know about the rest of the programme. `named` are the
     names lint checks for introduction (cast and glossary people); `proper_nouns` every
     spelling to keep (cast and the whole glossary)."""
     by_id = {e.id: e for e in events}
     own = sorted((by_id[i] for i in cue.event_ids if i in by_id), key=lambda e: (e.t_start, e.id))
-    cutoff = cutoff_for(cue, speech)
-    heard = heard_before(cue, finished, speech)
+    cutoff = cutoff_for(cue, speech, words, info, mixer.voiced(finished))
+    heard = heard_before(cue, finished, speech, words, info)
     return CueContext(
         wps=wps,
         cast=dict(cast),
@@ -195,6 +213,8 @@ def cue_context(
         verbatim=[e.verbatim_text for e in own if e.verbatim_text],
         proper_nouns=set(proper_nouns),
         video_duration=duration,
+        verify=verify,
+        priority={i: p for i, p in (priority or {}).items() if i in cue.event_ids},
     )
 
 
@@ -241,6 +261,10 @@ class _Run:
     ledger: Ledger
     emit: _Emitter
     stage: str | None = None
+    info: media.Probe | None = None  # the probed video: frame rate and length for freezes
+    undescribed: list[str] = field(default_factory=list)  # salient, and the plan wrote nothing
+    verify: bool = True  # False only with LULL_NO_VERIFY (the evaluation's ablation)
+    windows_split: int = 0  # watch windows whose answer was cut off and watched in halves
 
     @property
     def store(self) -> Store:
@@ -341,37 +365,48 @@ class _Run:
     def watch(self, words: list[Word]) -> list[VisualEvent]:
         with self.step("watch") as info:
             inputs = {"words": words, "profile": self.opts.profile}
-            out = self.cached(
-                info,
-                "watch",
-                inputs,
-                _Events,
-                lambda: _Events(
-                    events=watch(
-                        self.video,
-                        self.work,
-                        words,
-                        self.tf,
-                        run_id=self.run_id,
-                        profile=self.opts.profile,
-                    )
-                ),
-            )
+
+            def compute() -> _Events:
+                splits: list[str] = []
+                events = watch(
+                    self.video,
+                    self.work,
+                    words,
+                    self.tf,
+                    run_id=self.run_id,
+                    profile=self.opts.profile,
+                    memo=self.memo_in("watch"),
+                    splits=splits,
+                )
+                return _Events(events=events, windows_split=len(splits))
+
+            out = self.cached(info, "watch", inputs, _Events, compute)
             info["events"] = len(out.events)
+            info["windows_split"] = out.windows_split
+        self.windows_split = out.windows_split
         return out.events
 
+    def memo_in(self, stage: str) -> Callable[[str, dict, Callable[[], object]], object]:
+        """A Memo for one step of `stage`, kept under its own key
+        (`stages/<stage>/<step>-<key>.json`): research's term list, source page and each
+        successful lookup, and each watch window's answer, survive a run whose stage as a
+        whole did not finish or is not cached."""
+
+        def memo(name: str, inputs: dict, compute: Callable[[], object]) -> object:
+            key = self.key(f"{stage}-{name}", inputs)
+            path = f"{stage}/{name}-{key[:16]}"
+            data = self.store.cached(path, key)
+            if data is not None and "value" in data:
+                return data["value"]
+            value = compute()
+            self.store.save(path, key, {"value": value})
+            return value
+
+        return memo
+
     def memo(self, name: str, inputs: dict, compute: Callable[[], object]) -> object:
-        """One research step, kept under its own key (`stages/research/<step>-<key>.json`):
-        the term list, the source page and each successful lookup survive a run whose
-        research as a whole is not cached."""
-        key = self.key(f"research-{name}", inputs)
-        stage = f"research/{name}-{key[:16]}"
-        data = self.store.cached(stage, key)
-        if data is not None and "value" in data:
-            return data["value"]
-        value = compute()
-        self.store.save(stage, key, {"value": value})
-        return value
+        """One research step (see memo_in)."""
+        return self.memo_in("research")(name, inputs, compute)
 
     def research(self, events: list[VisualEvent], words: list[Word]) -> ResearchResult:
         """Not cached when a lookup failed: the next run tries again (only what failed: the
@@ -397,7 +432,8 @@ class _Run:
                     run_id=self.run_id,
                     memo=self.memo,
                 ),
-                keep=lambda result: not result.errors,
+                # failed or capped lookups are tried again by a later run
+                keep=lambda result: not result.errors and not result.notes,
             )
             info.update(terms=len(found.glossary), skipped=found.skipped, errors=len(found.errors))
         if found.skipped:
@@ -408,6 +444,8 @@ class _Run:
             )
         for err in found.errors:
             self.warn("research_error", f"research: {err}", "research")
+        for note in found.notes:
+            self.warn("research_capped", note, "research")
         return found
 
     def plan(self, events, words, gaps, found: ResearchResult) -> PlanResult:
@@ -485,6 +523,7 @@ class _Run:
             )
         later = {i for c in cues if c.gap_id is None for i in c.event_ids}
         missing = [eid for eid in out.extended if eid not in later]
+        self.undescribed = missing
         if missing:  # salient, placed nowhere, and no variant for the extended track either
             one = len(missing) == 1
             self.warn(
@@ -500,6 +539,7 @@ class _Run:
     def finalize(
         self, cues: list[Cue], gaps: list[Gap], events: list[VisualEvent], heard: ListenResult,
         cast: dict[str, str], named: set[str], proper: set[str],
+        priority: dict[str, int] | None = None,
     ) -> tuple[list[Cue], list[Cue]]:  # fmt: skip
         by_gap = {g.id: g for g in gaps}
         by_event = {e.id: e for e in events}
@@ -520,6 +560,9 @@ class _Run:
                     events=events,
                     speech=heard.speech,
                     finished=finished,
+                    info=self.info,
+                    verify=self.verify,
+                    priority=priority,
                 )
                 gap = by_gap.get(cue.gap_id) if cue.gap_id is not None else None
                 own = {i: by_event[i] for i in cue.event_ids if i in by_event}
@@ -545,7 +588,8 @@ class _Run:
                         cue_id=done.id,
                         reason=done.note,
                     )
-            counts = {s: sum(c.status == s for c in finished) for s in ("verified", "held")}
+            counts = {s: sum(c.status == s for c in finished)
+                      for s in ("verified", "held", "unverified")}  # fmt: skip
             info.update(
                 cached=bool(order) and hits == len(order),
                 cues=len(order),
@@ -646,10 +690,11 @@ def run(
     video, run_dir = Path(video), given.absolute()
     emit = _Emitter(on_event)
     t0 = time.monotonic()
+    started = time.time()  # this attempt's calls are the ledger rows from here on
     state: _Run | None = None
     try:
         info = media.probe(video)
-        media.assert_safe_container(info)  # before anything else reads it (E-sec)
+        media.assert_safe_container(info)  # before anything else reads it
         sha = sha256 or file_sha256(video)
         run_id = run_id or run_id_for(video, sha)
         if wps is None:
@@ -671,8 +716,25 @@ def run(
             if client is not None and getattr(client, "ledger", ledger) is not ledger:
                 log.warning("pipeline: %s records to another ledger", type(client).__name__)
         state = _Run(
-            video, run_dir, opts, run_id, sha, wps, info.duration, tf, speech, tavily, ledger, emit
+            video,
+            run_dir,
+            opts,
+            run_id,
+            sha,
+            wps,
+            info.duration,
+            tf,
+            speech,
+            tavily,
+            ledger,
+            emit,
+            info=info,
+            verify=not get_settings().lull_no_verify,
         )
+        if not state.verify:
+            emit("warning", None, kind="verification_off",
+                 message="LULL_NO_VERIFY is set: lines are voiced without claim verification "
+                 "(an evaluation run; nothing it publishes reads as met)")  # fmt: skip
 
         def on_call(rec: CallRecord) -> None:
             if rec.run_id == run_id:
@@ -691,7 +753,7 @@ def run(
 
         unsubscribe = ledger.subscribe(on_call)
         try:
-            result = _stages(state)
+            result = _stages(state, started)
         finally:
             unsubscribe()
     except Exception as e:
@@ -710,7 +772,7 @@ def run(
     return result
 
 
-def _stages(r: _Run) -> PublishResult:
+def _stages(r: _Run, started: float | None = None) -> PublishResult:
     heard, gaps = r.listen()
     events = r.watch(heard.words)
     found = r.research(events, heard.words)
@@ -720,7 +782,9 @@ def _stages(r: _Run) -> PublishResult:
     proper = set(planned.cast) | spelled  # spellings to keep
     named = set(planned.cast) | people  # names a listener must be introduced to (R15)
     cues = r.schedule(events, planned, gaps, proper)
-    standard, extended = r.finalize(cues, gaps, events, heard, planned.cast, named, proper)
+    standard, extended = r.finalize(
+        cues, gaps, events, heard, planned.cast, named, proper, planned.priority
+    )
     with r.step("publish") as info:
         assert_no_overlap(standard, heard.speech)
         result = publish(
@@ -735,8 +799,16 @@ def _stages(r: _Run) -> PublishResult:
             r.run_id,
             r.opts,
             speech=heard.speech,
+            words=heard.words,
             duplicates=planned.duplicates,
             priority=planned.priority,
+            since=started,
+            reviewer={
+                "plan_unanswered": list(planned.unanswered),
+                "undescribed": list(r.undescribed),
+            },  # fmt: skip
+            verify=r.verify,
+            watch_windows_split=r.windows_split,
         )
         info["files"] = len(result.files) + 1
     return result

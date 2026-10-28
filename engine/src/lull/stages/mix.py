@@ -12,9 +12,10 @@ described-audio.m4a  the programme dipped 10 dB around each voiced standard cue 
 described.mp4        the original video stream (copied when MP4 can carry it), the described
                      audio as default track 1 "Described" and the original audio as track 2
                      "Original": a described version (G173) with a selectable track (G78).
-extended.mp4         constant frame rate first. At each freeze point (a speech-free instant at
-                     or before the extended cue's visual, after any standard cue playing there,
-                     on a frame boundary) the frame is held for the cue audio rounded up to
+extended.mp4         constant frame rate first. At each freeze point (the first sentence
+                     boundary FREEZE_LEAD_S or more after the extended cue's visual, after any
+                     standard cue playing there, on a frame boundary: see hold_point and
+                     freeze_points) the frame is held for the cue audio rounded up to
                      whole frames, and the programme pauses in silence for exactly as long, so
                      picture and sound stay in step (G8).
 
@@ -38,9 +39,18 @@ from typing import NamedTuple
 
 from pydantic import BaseModel
 
-from lull.media import MediaError, Probe, _bin, _run, input_args, probe
+from lull.media import (
+    MediaError,
+    Probe,
+    _bin,
+    _run,
+    ffmpeg_timeout,
+    input_args,
+    probe,
+    wav_input_args,
+)
 from lull.timeline import merge_spans
-from lull.types import Cue, Span
+from lull.types import Cue, Span, Word
 
 log = logging.getLogger(__name__)
 
@@ -63,8 +73,13 @@ AUDIO_BITRATE = "192k"
 MIN_SEGMENT = 0.1  # extended pauses closer than this to each other or to an edge are merged
 FALLBACK_FPS = Fraction(30)
 FFMPEG_MIN_MAJOR = 7
-STANDARD_VOICED = ("verified", "edited", "approved")
-EXTENDED_VOICED = ("extended", "edited", "approved")
+FREEZE_LEAD_S = 0.3  # an extended freeze waits at least this long after its visual starts
+SENTENCE_PAUSE_S = 0.25  # a pause this long between words ends a sentence
+WORD_GAP_S = 0.15  # the shortest gap between words a freeze may fall in
+FREEZE_WAIT_S = 6.0  # how long a freeze waits for a sentence to end before taking a word gap
+_EPS_T = 1e-6
+STANDARD_VOICED = ("verified", "edited", "approved", "unverified")
+EXTENDED_VOICED = ("extended", "edited", "approved", "unverified")
 MP4_VIDEO = frozenset({"h264", "hevc", "av1", "mpeg4", "vp9"})
 MP4_AUDIO = frozenset({"aac", "mp3", "ac3", "eac3", "alac"})
 TTS_NAME = "NVIDIA Magpie TTS"
@@ -242,7 +257,7 @@ def measure_levels(video: Path, info: Probe, cues: Sequence[Cue]) -> Levels:
         labels += "[l0]"
     cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", *input_args(Path(video).resolve())]
     for i, p in enumerate(inputs, start=1):
-        cmd += input_args(p)
+        cmd += wav_input_args(p)
         chains.append(f"[{i}:a:0]{_CUE_IN},ebur128=framelog=verbose[l{i}]")
         labels += f"[l{i}]"
     graph = ";".join(chains) + f";{labels}concat=n={len(chains)}:v=0:a=1[all]"
@@ -250,7 +265,8 @@ def measure_levels(video: Path, info: Probe, cues: Sequence[Cue]) -> Levels:
         graph_file = Path(tmp) / "levels.graph"
         graph_file.write_text(graph, encoding="utf-8")
         cmd += ["-/filter_complex", str(graph_file), "-map", "[all]", "-f", "null", "-"]
-        proc = _run(cmd, cwd=cwd)
+        audio = sum(c.audio_dur or 0.0 for c in cues)
+        proc = _run(cmd, cwd=cwd, timeout=ffmpeg_timeout(info.duration + audio))
     found = [
         _parse(s, ["input_i"])["input_i"]
         for s in _summaries(proc.stderr.decode("utf-8", "replace"))
@@ -349,7 +365,7 @@ def _relative(paths: Sequence[Path]) -> tuple[Path | None, list[str]]:
 
 def _premix(
     video: Path, programme: str, duck_cues: Sequence[Cue],
-    placements: Sequence[tuple[float, Path, float]], wav: Path,
+    placements: Sequence[tuple[float, Path, float]], wav: Path, seconds: float,
 ) -> dict[str, float]:  # fmt: skip
     """Render the un-normalised mix to a float WAV and measure it in the same run."""
     graph_file = wav.with_suffix(".graph")
@@ -358,13 +374,13 @@ def _premix(
     cwd, inputs = _relative([p for _, p, _ in placements])
     cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", *input_args(video.resolve())]
     for p in inputs:
-        cmd += input_args(p)
+        cmd += wav_input_args(p)
     cmd += [
         "-/filter_complex", str(graph_file.resolve()),
         "-map", "[out]", "-c:a", "pcm_f32le", str(wav.resolve()),
         "-map", "[meas]", "-f", "null", "-",
     ]  # fmt: skip
-    proc = _run(cmd, cwd=cwd)
+    proc = _run(cmd, cwd=cwd, timeout=ffmpeg_timeout(seconds))
     summaries = _summaries(proc.stderr.decode("utf-8", "replace"))
     if not summaries:
         raise MediaError("ebur128 printed no measurement of the mix")
@@ -416,14 +432,14 @@ def mix(
     with tempfile.TemporaryDirectory(dir=out_dir, prefix=".mix-") as tmp:
         premix = Path(tmp) / "premix.wav"
         placements = [(c.start, Path(c.audio_path), _gain(levels, c)) for c in spoken]
-        stats = _premix(video, _programme(info), spoken, placements, premix)
+        stats = _premix(video, _programme(info), spoken, placements, premix, info.duration)
         graph = f"[1:a]{_normalise(stats)},aresample={RATE},asplit=2[a1][a2]"
         original = ["-map", "0:a:0"] if info.has_audio else []
         keep = ["-c:a:1", "copy"] if info.audio_codec in MP4_AUDIO else _aac("a:1")
         title = "Described" if spoken else NO_DESCRIPTION  # never claim what is not there
         cmd = [
             _bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-            *input_args(video.resolve()), *input_args(premix),
+            *input_args(video.resolve()), *wav_input_args(premix),
             "-filter_complex", graph,
             "-map", "[a1]", *_aac(), *_track(0, title, lang), *_disclose(bool(spoken)),
             "-movflags", "+faststart", str(ad_audio),
@@ -433,7 +449,7 @@ def mix(
             "-disposition:a:0", "default", *(["-disposition:a:1", "0"] if info.has_audio else []),
             *_disclose(bool(spoken)), "-movflags", "+faststart", str(ad_video),
         ]  # fmt: skip
-        _run(cmd)
+        _run(cmd, timeout=ffmpeg_timeout(info.duration))
     log.info("mix: %d cues mixed into %s and %s", len(spoken), AD_AUDIO, AD_VIDEO)
     return MixResult(ad_audio=ad_audio, ad_video=ad_video)
 
@@ -457,62 +473,124 @@ def frame_rate(info: Probe) -> Fraction:
     return Fraction(info.fps).limit_denominator(1001)
 
 
-def speech_free(t: float, speech: Sequence[Span]) -> float:
-    """Where an extended pause for a visual at `t` can start: `t`, or when `t` falls inside
-    speech the start of that speech (its end when the speech opens the programme)."""
-    return _speech_free(t, merge_spans(list(speech)))
+def _units(words: Sequence[Word], speech: Sequence[Span]) -> list[tuple[float, float, bool]]:
+    """(start, end, ends a sentence) of what is said, in time order: the recognised words (a
+    word ending in . ! ? or an ellipsis ends one) and the speech spans that hold no word (a
+    laugh, singing), each of those taken as a sentence; without words, every speech span."""
+    spans = merge_spans(list(speech))
+    if not words:
+        return [(s.start, s.end, True) for s in spans]
+    said = [
+        (w.start, w.end, w.text.rstrip("\"')\u201d\u2019]").endswith((".", "!", "?", "\u2026")))
+        for w in words
+    ]
+    wordless = [
+        (s.start, s.end, True)
+        for s in spans
+        if not any(w.start < s.end and w.end > s.start for w in words)
+    ]
+    return sorted(said + wordless)
 
 
-def _speech_free(t: float, talk: Sequence[Span]) -> float:
-    """`t`, or when it falls inside speech the start of that speech (the end when the speech
-    starts the programme): the latest instant at or before t where nobody is speaking."""
-    for s in talk:
-        if s.start < t < s.end:
-            return s.start if s.start > 0 else s.end
-    return t
+def hold(t: float, *, words: Sequence[Word] = (), speech: Sequence[Span] = ()) -> tuple[float, str]:
+    """The moment an extended description for a visual starting at `t` can stop the
+    programme, and how it was found; never before the visual. From t + FREEZE_LEAD_S on:
+    "silence" when nothing is said there, else the first sentence boundary ("sentence": a word
+    that ends a sentence, a pause of SENTENCE_PAUSE_S or more, the end of wordless speech)
+    within FREEZE_WAIT_S, else the first gap of WORD_GAP_S or more between words within it
+    ("gap"), else the end of the word running then ("word": continuous speech, never
+    mid-word, and never long after the visual)."""
+    target = t + FREEZE_LEAD_S
+    units = _units(words, speech)
+    after = [i for i, (a, b, _) in enumerate(units) if b > target + _EPS_T]
+    if not after:
+        return target, "silence"  # nothing is said from here on
+    k = after[0]
+    a, _, _ = units[k]
+    between = a >= target - _EPS_T  # target falls between units k-1 and k
+    if between:
+        prev = units[k - 1] if k > 0 else None
+        if prev is None or prev[2] or a - prev[1] >= SENTENCE_PAUSE_S - _EPS_T:
+            return target, "silence"
+    limit = target + FREEZE_WAIT_S + _EPS_T
+    for i in range(k, len(units)):
+        end_i, ends = units[i][1], units[i][2]
+        if end_i > limit:
+            break
+        nxt = units[i + 1][0] if i + 1 < len(units) else None
+        if ends or nxt is None or nxt - end_i >= SENTENCE_PAUSE_S - _EPS_T:
+            return max(target, end_i), "sentence"
+    for i in range(k, len(units) - 1):
+        if units[i][1] > limit:
+            break
+        if units[i][1] >= target - _EPS_T and units[i + 1][0] - units[i][1] >= WORD_GAP_S - _EPS_T:
+            return units[i][1], "gap"
+    return (target if between else units[k][1]), "word"
+
+
+def hold_point(t: float, *, words: Sequence[Word] = (), speech: Sequence[Span] = ()) -> float:
+    """Where the extended version stops for a visual starting at `t` (see hold)."""
+    return hold(t, words=words, speech=speech)[0]
+
+
+CONTINUOUS_NOTE = "freeze at a word boundary in continuous speech"
+
+
+def freeze_time(
+    t: float, info: Probe, *, standard: Sequence[Cue] = (), speech: Sequence[Span] = (),
+    words: Sequence[Word] = (),
+) -> float:  # fmt: skip
+    """The time of the frame the extended version holds for a visual at `t`, exactly as
+    freeze_points chooses it (grouping with a neighbouring cue aside): for the R15 cutoff."""
+    fps, last, min_frames, busy, std = _freeze_frame_setup(info, standard, speech, words)
+    return _freeze_frame(t, fps, last, min_frames, busy, std, words, speech) / fps
+
+
+def _freeze_frame_setup(info, standard, speech, words):
+    fps = frame_rate(info)
+    std = voiced(standard)
+    min_frames = max(1, math.ceil(MIN_SEGMENT * fps))
+    last = max(0, math.floor(info.duration * fps) - min_frames)
+    said = [(a, b) for a, b, _ in _units(words, speech)]
+    busy = said + [(c.start, c.start + c.audio_dur) for c in std]
+    return fps, last, min_frames, busy, std
+
+
+def _freeze_frame(t, fps, last, min_frames, busy, std, words, speech) -> int:
+    h = hold_point(t, words=words, speech=speech)
+    for s in std:  # after any standard description still speaking there
+        if s.start < h < s.start + s.audio_dur:
+            h = hold_point(s.start + s.audio_dur - FREEZE_LEAD_S, words=words, speech=speech)
+
+    def inside(m: int) -> bool:  # strictly inside a word or a standard cue (1 us slack)
+        x = float(m / fps)
+        return any(a + _EPS_T < x < b - _EPS_T for a, b in busy)
+
+    up, down = math.ceil(h * fps - 1e-6), math.floor(h * fps + 1e-6)
+    n = next((m for m in (up, down) if float(m / fps) >= t - 1e-9 and not inside(m)), up)
+    n = min(max(n, 0), last)
+    for a, b in busy:  # kept inside the video: back out of speech it was moved into
+        if a + _EPS_T < float(n / fps) < b - _EPS_T:
+            n = max(0, math.floor(a * fps + 1e-6))
+    return 0 if n < min_frames else n
 
 
 def freeze_points(
     cues_extended: Sequence[Cue], info: Probe, *, standard: Sequence[Cue] = (),
-    speech: Sequence[Span] = (),
+    speech: Sequence[Span] = (), words: Sequence[Word] = (),
 ) -> tuple[Fraction, list[Freeze]]:  # fmt: skip
     """Where the extended version holds the picture, at the constant frame rate it is made at.
 
-    Each voiced extended cue's start (its visual) moves to a speech-free instant (_speech_free),
-    then past any voiced standard cue still speaking there, then onto the neighbouring frame
-    boundary that is still free (down, or up when it was moved later). It is kept MIN_SEGMENT
-    inside the video; cues closer than that share one freeze. A freeze lasts the cues' audio
-    rounded up to whole frames.
+    Each voiced extended cue holds at hold_point of its visual (never before it: the first
+    sentence boundary FREEZE_LEAD_S or more after it), past any voiced standard cue still
+    speaking there, on the frame at or after that moment (the one before when that one falls
+    inside a word). It is kept MIN_SEGMENT inside the video; cues closer than that share one
+    freeze. A freeze lasts the cues' audio rounded up to whole frames.
     """
-    fps = frame_rate(info)
-    talk = merge_spans(list(speech))
-    std = voiced(standard)
-    min_frames = max(1, math.ceil(MIN_SEGMENT * fps))
-    last = max(0, math.floor(info.duration * fps) - min_frames)
-    busy = [(s.start, s.end) for s in talk] + [(c.start, c.start + c.audio_dur) for c in std]
-
-    def frame(t: float, later: bool) -> int:
-        """The frame boundary next to t (after it when t was moved later) that is not inside
-        speech or a standard cue; the other neighbour when that one is."""
-        down, up = math.floor(t * fps + 1e-6), math.ceil(t * fps - 1e-6)
-        order = (up, down) if later else (down, up)
-        for n in order:
-            if not any(a < n / fps < b for a, b in busy):
-                return n
-        return order[0]
-
+    fps, last, min_frames, busy, std = _freeze_frame_setup(info, standard, speech, words)
     groups: list[list] = []
     for c in voiced_extended(cues_extended):
-        t = _speech_free(c.start, talk)
-        later = t > c.start
-        for s in std:
-            if s.start < t < s.start + s.audio_dur:
-                t, later = s.start + s.audio_dur, True
-        n = min(max(frame(t, later), 0), last)
-        for a, b in busy:  # kept inside the video: back out of speech it was moved into
-            if a < n / fps < b:
-                n = max(0, math.floor(a * fps + 1e-6))
-        n = 0 if n < min_frames else n
+        n = _freeze_frame(c.start, fps, last, min_frames, busy, std, words, speech)
         if groups and n - groups[-1][0] < min_frames:
             groups[-1][1].append(c)
         else:
@@ -540,7 +618,7 @@ def _join(head: str, chains: list[str], kind: str) -> str:
 def extended_video(
     video: Path, cues_extended: list[Cue], out_dir: Path, *, standard: Sequence[Cue] = (),
     speech: Sequence[Span] = (), info: Probe | None = None, language: str = "en",
-    levels: Levels | None = None,
+    levels: Levels | None = None, words: Sequence[Word] = (),
 ) -> Path | None:  # fmt: skip
     """extended.mp4 (see module doc and freeze_points); None when no extended cue is voiced.
     Every time below is a whole number of frames, so picture and sound end together."""
@@ -552,7 +630,7 @@ def extended_video(
     info = info or probe(video)
     std = voiced(standard)
     levels = levels if levels is not None else measure_levels(video, info, std + ext)
-    fps, freezes = freeze_points(ext, info, standard=std, speech=speech)
+    fps, freezes = freeze_points(ext, info, standard=std, speech=speech, words=words)
 
     def sec(frames: int) -> float:
         return float(Fraction(frames) / fps)
@@ -597,19 +675,21 @@ def extended_video(
     dst = out_dir / EXTENDED_VIDEO
     with tempfile.TemporaryDirectory(dir=out_dir, prefix=".extended-") as tmp:
         premix = Path(tmp) / "premix.wav"
-        stats = _premix(video, programme, moved, placements, premix)
+        long = info.duration + sec(sum(f.frames for f in freezes))
+        stats = _premix(video, programme, moved, placements, premix, long)
         graph_file = Path(tmp) / "final.graph"
         graph_file.write_text(
             f"{picture};[1:a]{_normalise(stats)},aresample={RATE}[a]", encoding="utf-8"
         )
         _run(
             [_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-             *input_args(video.resolve()), *input_args(premix),
+             *input_args(video.resolve()), *wav_input_args(premix),
              "-/filter_complex", str(graph_file),
              "-map", "[v]", "-map", "[a]",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
              *_aac(), *_track(0, "Described (extended)", _lang3(language)), *_disclose(True),
-             "-movflags", "+faststart", str(dst)]
+             "-movflags", "+faststart", str(dst)],
+            timeout=ffmpeg_timeout(long),
         )  # fmt: skip
     added = sec(sum(f.frames for f in freezes))
     log.info("mix: %d extended pauses, %.2f s added, in %s", len(freezes), added, dst.name)

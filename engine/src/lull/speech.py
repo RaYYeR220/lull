@@ -18,6 +18,21 @@ class SpeechError(RuntimeError):
     """Speech server returned an error or an unusable response."""
 
 
+class SpeechTimeout(SpeechError, TimeoutError):
+    """The speech server did not answer within its time limit."""
+
+
+# every wait on the speech server is bounded: connecting, sending the audio, the answer
+TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=120.0, pool=10.0)
+HEALTH_TIMEOUT = httpx.Timeout(5.0)
+
+
+def _failed(path: str, e: httpx.HTTPError) -> SpeechError:
+    if isinstance(e, httpx.TimeoutException):
+        return SpeechTimeout(f"{path}: the speech server did not answer in time ({e})")
+    return SpeechError(f"{path}: {e}")
+
+
 class SpeechClient(Protocol):
     def transcribe(self, wav: Path) -> list[Word]: ...
 
@@ -37,7 +52,7 @@ class NemoSpeechHTTP:
         api_key: str | None = None,
         *,
         transport: httpx.BaseTransport | None = None,
-        timeout: float = 300.0,
+        timeout: httpx.Timeout = TIMEOUT,
     ) -> None:
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._http = httpx.Client(
@@ -51,7 +66,7 @@ class NemoSpeechHTTP:
 
     def health(self) -> bool:
         try:
-            r = self._http.get("/health")
+            r = self._http.get("/health", timeout=HEALTH_TIMEOUT)
             return r.status_code == 200 and r.json().get("status") == "ok"
         except (httpx.HTTPError, ValueError, AttributeError):
             return False
@@ -62,7 +77,7 @@ class NemoSpeechHTTP:
                 files = {"file": (Path(wav).name, f, "audio/wav")}
                 r = self._http.post(path, files=files, data=data)
         except httpx.HTTPError as e:
-            raise SpeechError(f"{path}: {e}") from e
+            raise _failed(path, e) from e
         if not r.is_success:
             raise _fail(path, r)
         try:
@@ -102,7 +117,7 @@ class NemoSpeechHTTP:
         try:
             r = self._http.post("/v1/audio/speech", json=payload)
         except httpx.HTTPError as e:
-            raise SpeechError(f"/v1/audio/speech: {e}") from e
+            raise _failed("/v1/audio/speech", e) from e
         if not r.is_success:
             raise _fail("/v1/audio/speech", r)
         ctype = r.headers.get("content-type", "")

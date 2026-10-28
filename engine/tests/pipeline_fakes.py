@@ -13,6 +13,7 @@ and e003 in g002 (cue c002).
 from __future__ import annotations
 
 import copy
+import re
 import time
 import wave
 from pathlib import Path
@@ -21,6 +22,7 @@ import numpy as np
 
 from lull.ledger import CallRecord, Ledger, cost_of
 from lull.stages.plan import count_words
+from lull.stages.verify import tokenize
 from lull.types import Turn, Word
 
 WORDS = [
@@ -137,8 +139,20 @@ def description(messages: list[dict]) -> str:
     return text.split("<description>\n", 1)[1].split("\n</description>", 1)[0]
 
 
+def split_all(call: dict) -> dict:
+    """One claim per line: the whole description."""
+    line = description(call["messages"])
+    last = len(tokenize(line)) - 1
+    return {"claims": [{"id": "k1", "text": line.rstrip("."), "tokens": [[0, max(0, last)]]}]}
+
+
 def verify_all(call: dict) -> dict:
-    return {"claims": [{"text": description(call["messages"]), "verdict": "supported", "at": 0.5}]}
+    """Every claim the judge is given is supported."""
+    content = next(m for m in call["messages"] if m["role"] == "user")["content"]
+    text = " ".join(p["text"] for p in content if p.get("type") == "text")
+    listed = re.findall(r"^([ks]\d+): ", text, re.M)  # the claims and the sentences
+    return {"verdicts": [{"id": i, "verdict": "supported", "evidence": "seen", "at": 0.5}
+                         for i in listed]}  # fmt: skip
 
 
 class FakeTF:
@@ -151,6 +165,7 @@ class FakeTF:
             "watch": WATCH,
             "research": TERMS,
             "plan": PLAN,
+            "split": split_all,
             "verify": verify_all,
             **answers,
         }

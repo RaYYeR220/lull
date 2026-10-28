@@ -10,16 +10,20 @@ This is where a description is refused. Each cue goes through at most MAX_ROUNDS
    was already cut, or when the cut changes nothing; on the last round it is held as well.
    A held cue still loses its contradicted claims (never kept); not-visible ones stay for the
    reviewer to judge.
-3. voice. The line is spoken and its duration measured. It fits when it ends by the gap's
-   usable end; up to 10 % over, it is sped up with atempo; beyond that Lightning compresses it
-   towards floor(words x usable / duration x 0.95) words and the next round starts at step 1.
-   A line that fits is also timed sentence by sentence from the measured audio: a sentence
-   that would start at or after its visual ends sends the line back for compression too.
+3. voice. The line is spoken and its duration measured. It fits when it fits the gap's
+   usable window; up to 10 % over, it is sped up with atempo; beyond that Lightning compresses
+   it towards floor(words x usable / duration x 0.95) words and the next round starts at
+   step 1. A line that fits starts LEAD_IN_S before its first visual, or at the window's start
+   if that is later. When it could not then finish before the window ends it starts as late as
+   the window allows; if that is before its visual it is voiced again with "In a moment, "
+   (and fitted again), so a listener never hears a description early without being told. It
+   is also timed sentence by sentence from the measured audio: a sentence that would start at
+   or after its visual ends sends the line back for compression too.
 
 A look-ahead ("In a moment, ") is never lost silently: a repair or compression that drops one
 gets one repair to restore it, else the cue is held; a claim cut may drop one only with the
 sentence it introduced. Before round 1, a cast name the programme has not introduced yet gets
-its descriptor at its first mention (ruling I4). Extended cues (no gap) are verified and voiced
+its descriptor at its first mention. Extended cues (no gap) are verified and voiced
 but never fitted or timed.
 """
 
@@ -36,26 +40,38 @@ from pydantic import BaseModel, Field
 
 from lull.media import audio_duration, cut_clip, probe
 from lull.speech import SpeechClient
-from lull.stages.lint import Finding, autofix, lint, quoted_spans
+from lull.stages.lint import Finding, autofix, lint, quoted_spans, screen_spans
 from lull.stages.plan import count_words
+from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
+    FUNCTION_WORDS,
+    PREPOSITIONS,
+    Token,
     clip_window,
-    remove_claims,
+    content_words,
+    fold,
+    mend,
+    mend_dropped,
+    mend_ok,
     rewrite,
     tagged,
+    time_framing,
+    tokenize,
     verify,
 )
 from lull.stages.voice import MAX_TEMPO, atempo, voice
-from lull.tf import TokenFactory
+from lull.tf import TFUnusable, TokenFactory
 from lull.timeline import merge_spans
 from lull.types import Check, Claim, Cue, Gap, RunOptions, Span, VisualEvent
 
 log = logging.getLogger(__name__)
 
 MAX_ROUNDS = 4
+MAX_REPAIRS = 2  # claim cuts per cue: a third failure holds it
+LEAD_IN_S = 0.3  # a line starts this long before its first visual when its pause allows
 COMPRESS_MARGIN = 0.95
-GATED = ("verified", "edited", "approved")  # statuses the overlap gate checks
+GATED = ("verified", "edited", "approved", "unverified")  # statuses the overlap gate checks
 OVERLAP_EPS = 1e-6
 _FIT_EPS = 1e-6
 _ARTICLES = frozenset({"a", "an", "the"})
@@ -82,6 +98,10 @@ class CueContext(BaseModel):
     verbatim: list[str] = Field(default_factory=list)  # on-screen text of the cue's events
     proper_nouns: set[str] = Field(default_factory=set)  # spelled exactly; never visual claims
     video_duration: float | None = None  # probed once by the caller; probed here when None
+    # False only for the evaluation's ablation (LULL_NO_VERIFY): no claim is checked and the
+    # fitted line is voiced with status "unverified"
+    verify: bool = True
+    priority: dict[str, int] = Field(default_factory=dict)  # the plan's, per event id
 
 
 class OverlapError(Exception):
@@ -123,26 +143,38 @@ def _descriptor_at(descriptor: str, sentence_start: bool) -> str:
     return descriptor
 
 
+def _first_name(name: str, text: str, verbatim: list[str]) -> re.Match[str] | None:
+    """The first mention of `name` in `text` that names someone: not where the line reads the
+    screen (lint.screen_spans)."""
+    screen = screen_spans(text, verbatim)
+    return next((m for m in _name_re(name).finditer(text)
+                 if not any(a <= m.start() < b for a, b in screen)), None)  # fmt: skip
+
+
 def introduce_names(
-    text: str, cast: dict[str, str], introduced: set[str]
+    text: str, cast: dict[str, str], introduced: set[str], verbatim: list[str] = ()
 ) -> tuple[str, set[str], list[str]]:
     """Give each cast name not yet introduced its descriptor at its first mention (R15).
 
     "Proog climbs." becomes "A bald person in a dark coat, Proog, climbs."; the descriptor is
     capitalised at a sentence start and its leading article lower-cased elsewhere. A name the
     text already introduces (inside quoted on-screen text, or right after its descriptor) is left
-    as it is; a possessive first mention ("Proog's") is left to lint and repair. Returns the
-    text, the names this cue introduces, and the names that got a descriptor, in text order.
+    as it is, and so is a mention where the line reads the screen (capitals, or the on-screen
+    text in `verbatim`); a possessive first mention ("Proog's") is left to lint and repair.
+    Returns the text, the names this cue introduces, and the names that got a descriptor, in
+    text order.
     """
+    verbatim = list(verbatim)
     already = introduced_in(text, cast)
     found = sorted(
         (m.start(), n)
         for n in cast
-        if n and n not in introduced and n not in already and (m := _name_re(n).search(text))
-    )
+        if n and n not in introduced and n not in already
+        and (m := _first_name(n, text, verbatim))
+    )  # fmt: skip
     inserted: list[str] = []
     for _, name in found:
-        m = _name_re(name).search(text)
+        m = _first_name(name, text, verbatim)
         before, after = text[: m.start()], text[m.end() :]
         descriptor = _descriptor(cast, name)
         if not descriptor or _POSSESSIVE.match(after):
@@ -227,7 +259,11 @@ def repair(
             tagged("names", [", ".join(known)] if known else []),
         ]
     )
-    return rewrite("repair", user, tf, run_id=run_id, role="repair")
+    try:
+        return rewrite("repair", user, tf, run_id=run_id, role="repair")
+    except TFUnusable as e:  # no repair: the line keeps its errors, and lint holds it
+        log.warning("finalize: the repair gave no usable answer (%s)", e)
+        return text
 
 
 def compress(
@@ -241,7 +277,11 @@ def compress(
     user = "\n\n".join(
         [tagged("description", [text]), f"{ask} {note}" if note else ask, tagged("keep", keep)]
     )
-    return rewrite("compress", user, tf, run_id=run_id, role="compress")
+    try:
+        return rewrite("compress", user, tf, run_id=run_id, role="compress")
+    except TFUnusable as e:  # no shorter line: it is fitted (or held) as it is
+        log.warning("finalize: the compression gave no usable answer (%s)", e)
+        return text
 
 
 # -- sentences and look-aheads ------------------------------------------------------------------
@@ -311,19 +351,6 @@ def _ahead_sentences(text: str) -> list[str]:
 
 def _content(s: str) -> set[str]:
     return {t for t in _TOKEN.findall(s.lower()) if t not in _STOP}
-
-
-def dropped_sentences(before: str, after: str, claims: Iterable[Claim]) -> list[str]:
-    """Sentences of `before` that `after` lost (fewer than half their content words survive)
-    although the `claims` cut were not about them (they cover less than half of its words)."""
-    kept = _content(after)
-    cut = set().union(*(_content(c.text) for c in claims))
-    out = []
-    for s, e in split_sentences(before):
-        words = _content(before[s:e])
-        if words and len(words & kept) * 2 < len(words) and len(words & cut) * 2 < len(words):
-            out.append(before[s:e])
-    return out
 
 
 def _lost_ahead(before: str, after: str) -> bool:
@@ -407,6 +434,105 @@ def _same(a: str, b: str) -> bool:
     return " ".join(a.split()) == " ".join(b.split())
 
 
+JUDGE_CUT_OFF = "verification answer cut off"
+NEGATIONS = frozenset("not no never without nobody nothing none neither nor cannot nowhere".split())
+
+
+class _JudgeCutOff(Exception):
+    """The judge's answer was cut off by its token limit: the line has no verdict."""
+
+
+def _is_negation(word: str) -> bool:
+    w = fold(word)
+    return w in NEGATIONS or w.endswith("n't")
+
+
+def _meaning_cut(tokens: list[Token], drop: set[int], bad: list[Claim]) -> str | None:
+    """Why cutting `drop` from the line would change what the words it keeps say, or None:
+    - a negation cut while a content word of its failed claim stays ("A room with no door"
+      would say "a room ... door");
+    - a word cut right before a content word that stays, the cut not starting with a
+      function word: a modifier cut from its head ("toy gun" -> "gun", "nearly falls" ->
+      "falls", "a red door" -> "a door");
+    - a cut ending in a preposition right before a word that stays ("stands behind the car"
+      -> "stands the car");
+    - a word cut from a space-free chunk whose other words stay: a number or a compound
+      ("004.77" -> "004", "10:45" -> "10", "half-full" -> "full")."""
+    for i in sorted(drop):
+        if not _is_negation(tokens[i].text):
+            continue
+        for c in bad:
+            mine = {k for a, b in (c.tokens or []) for k in range(a, b + 1)}
+            if i in mine and any(
+                k not in drop and tokens[k].word and fold(tokens[k].text) not in FUNCTION_WORDS
+                and not _is_negation(tokens[k].text)
+                for k in mine if k < len(tokens)
+            ):  # fmt: skip
+                return f'the cut would leave the words "{tokens[i].text}" denies'
+    for i in sorted(drop):  # a word glued to a kept one: "004.77", "10:45", "2-1", "half-full"
+        j = k = i
+        while j > 0 and tokens[j - 1].end == tokens[j].start:
+            j -= 1
+        while k + 1 < len(tokens) and tokens[k].end == tokens[k + 1].start:
+            k += 1
+        if any(tokens[x].word and x not in drop for x in range(j, k + 1)):
+            return f'the cut would split "{"".join(t.text for t in tokens[j : k + 1])}"'
+    for a, b in _runs(drop):
+        nxt = b + 1
+        if nxt >= len(tokens) or nxt in drop or not tokens[nxt].word:
+            continue
+        if (
+            fold(tokens[a].text) not in FUNCTION_WORDS
+            and fold(tokens[nxt].text) not in FUNCTION_WORDS
+        ):
+            return f'the cut would leave "{tokens[nxt].text}" without "{tokens[b].text}"'
+        if fold(tokens[b].text) in PREPOSITIONS:
+            return f'the cut would leave "{tokens[nxt].text}" without "{tokens[b].text}"'
+    return None
+
+
+def _runs(idx: set[int]) -> list[tuple[int, int]]:
+    out: list[list[int]] = []
+    for i in sorted(idx):
+        if out and out[-1][1] == i - 1:
+            out[-1][1] = i
+        else:
+            out.append([i, i])
+    return [(a, b) for a, b in out]
+
+
+def cut_tokens(text: str, drop: set[int]) -> str:
+    """`text` without the tokens in `drop` (and the space before each), tidied by autofix:
+    a space before punctuation removed, doubled spaces collapsed."""
+    tokens = tokenize(text)
+    out, pos = [], 0
+    for i, t in enumerate(tokens):
+        gap = text[pos : t.start]
+        if i not in drop:
+            out.append(gap + t.text)
+        pos = t.end
+    out.append(text[pos:])
+    joined = "".join(out).strip()
+    joined = re.sub(r"\s+([,.;:!?…])", r"\1", joined)
+    joined = re.sub(r"([,;:])(?=[,;:.!?…])", "", joined)
+    joined = re.sub(r"^[,;:]\s*", "", joined)
+    joined = re.sub(r"\s*[\"“]\s*[\"”]", "", joined)  # quotes left empty
+    out = autofix(" ".join(joined.split())) if any(c.isalnum() for c in joined) else ""
+    # a sentence the cut left with nothing that describes (only "In a moment,") goes too
+    kept = [_capital(p) for p in re.split(r"(?<=[.!?…])\s+", out) if content_words(p)]
+    return autofix(" ".join(kept)) if kept else ""
+
+
+def _capital(sentence: str) -> str:
+    """A sentence whose first word the cut left lowercase starts with a capital ("a cup."
+    -> "A cup."); a word with capitals of its own ("iPhone") is left as it is."""
+    m = re.match(r"(\W*)(\w+)", sentence)
+    if not m or not m.group(2)[0].islower() or m.group(2)[1:] != m.group(2)[1:].lower():
+        return sentence
+    i = m.start(2)
+    return sentence[:i] + sentence[i].upper() + sentence[i + 1 :]
+
+
 @dataclass
 class _Finalise:
     """The state of one cue while it goes round; `run` returns the finished cue."""
@@ -429,31 +555,69 @@ class _Finalise:
     findings: list[Finding] = field(default_factory=list)
     removed: list[Claim] = field(default_factory=list)
     words_before: int | None = None  # word count before the first compression
+    dropped: list[str] = field(default_factory=list)  # events whose sentence went to fit
+    repairs: int = 0  # claim cuts made
+    splits: dict = field(default_factory=dict)  # claim splits by text (verify.split_claims)
+    extras: list[Claim] = field(default_factory=list)  # supported claims the line never made
+    split_notes: list[str] = field(default_factory=list)  # e.g. a split that fell back
+    left_out: list[str] = field(default_factory=list)  # sentences a mend left out
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
+    at: float | None = None  # where in its window the voiced line starts
+    prefixed: bool = False  # "In a moment, " added because the line starts before its visual
 
     @property
     def start(self) -> float:
-        return self.gap.usable_start if self.gap is not None else self.cue.start
+        if self.gap is None:
+            return self.cue.start
+        return self.at if self.at is not None else self.gap.usable_start
+
+    def place(self, dur: float) -> tuple[float, bool]:
+        """Where a line of `dur` seconds starts in its window, and whether that is before its
+        first visual: LEAD_IN_S before the visual (not before the window opens) when it can
+        still finish in the window, else as late as the window allows."""
+        us, ue = self.gap.usable_start, self.gap.usable_end
+        first = min(e.t_start for e in self.events)
+        want = max(us, math.ceil(round((first - LEAD_IN_S) * 1000, 6)) / 1000)
+        if want + dur <= ue + _FIT_EPS:
+            return want, False
+        start = max(us, math.floor(round((ue - dur) * 1000, 6)) / 1000)
+        return start, start < first - LEAD_IN_S - _FIT_EPS
 
     def run(self) -> Cue:
         ctx = self.ctx
-        self.text, _, self.inserted = introduce_names(self.cue.text, ctx.cast, ctx.introduced)
+        self.text, _, self.inserted = introduce_names(
+            self.cue.text, ctx.cast, ctx.introduced, ctx.verbatim
+        )
         self.names = set(ctx.named) | set(ctx.cast) | set(ctx.introduced) | set(ctx.proper_nouns)
         self.keep = _verbatim_in(self.text, ctx.verbatim)
         for rnd in range(1, MAX_ROUNDS + 1):
-            last = rnd == MAX_ROUNDS
-            reason = self.style()
-            if reason:
-                return self.held(reason)
-            self.claims = self.check_frames()
-            if not self.claims:
-                return self.held("the verifier found no visual claim to check")
-            bad = [c for c in self.claims if c.verdict != "supported"]
-            out = self.cut(bad, last) if bad else self.speak(last)
+            try:
+                out = self.round(rnd == MAX_ROUNDS)
+            except _JudgeCutOff:  # no verdict: held as it is, nothing cut for it
+                return self.held(JUDGE_CUT_OFF)
             if out is not None:
                 return out
         raise AssertionError("unreachable")  # pragma: no cover - every last round returns
+
+    def round(self, last: bool) -> Cue | None:
+        """One round: style, then the frames; the cue, or None to go round again. A line is
+        voiced only when every atomic claim and every whole sentence is supported. A failed
+        sentence whose atomic claims all hold is held as it is: a cut cannot target it."""
+        reason = self.style()
+        if reason:
+            return self.held(reason)
+        if not self.ctx.verify:  # evaluation only: voice the fitted line unchecked
+            return self.speak(last)
+        self.claims = self.check_frames()
+        if not self.claims:
+            return self.held("the verifier found no visual claim to check")
+        bad = [c for c in self.claims if c.verdict != "supported"]
+        atomic = [c for c in bad if c.kind != "sentence"]
+        if bad and not atomic:
+            return self.held("each claim is supported but a sentence is not: "
+                             + _claims_note(bad))  # fmt: skip
+        return self.cut(atomic, last) if atomic else self.speak(last)
 
     # -- results -------------------------------------------------------------------------
 
@@ -467,6 +631,14 @@ class _Finalise:
             parts.append(f"{n} claim{'' if n == 1 else 's'} removed: {gone}")
         if self.words_before is not None:
             parts.append(f"compressed {self.words_before}→{count_words(self.text)} words")
+        for eid in self.dropped:
+            parts.append(f"dropped the sentence for {eid} to fit")
+        parts += [f'sentence dropped: "{s}"' for s in dict.fromkeys(self.left_out)]
+        parts += list(dict.fromkeys(self.split_notes))
+        if self.extras:
+            seen = list(dict.fromkeys(c.text for c in self.extras))
+            parts.append(f"left out {'a claim' if len(seen) == 1 else 'claims'} the line does "
+                         "not make: " + "; ".join(seen))  # fmt: skip
         return "; ".join(parts + extra) or None
 
     def _result(
@@ -499,10 +671,34 @@ class _Finalise:
         """Held for a person; it keeps its placement, look-ahead included."""
         return self._result("held", reason, None, None, 1.0, self.cue.ahead, [])
 
+    def recheck(self) -> list[Claim] | None:
+        """When the text changed after its last check (a look-ahead added, a contradicted
+        claim cut), its claims are judged again, on the text as it now is: a cue never
+        carries a verdict given to another text. None when nothing changed, or when
+        verification is off."""
+        if not self.ctx.verify:
+            return None
+        if not self.text or (self.checks and _same(self.checks[-1].text, self.text)):
+            return None
+        self.claims = self.check_frames()
+        return self.claims
+
     def done(self, audio: Path, dur: float, tempo: float) -> Cue:
-        ahead = self.cue.ahead and count_ahead(self.text) > 0
+        again = self.recheck()
+        if again is not None:
+            bad = [c for c in again if c.verdict != "supported"]
+            if not again or bad:
+                # held with every verdict on the text it keeps, contradictions included
+                why = _claims_note(bad) if bad else "no visual claim left to check"
+                return self.held("not verified as voiced: " + why)
+        ahead = (self.cue.ahead or self.prefixed) and count_ahead(self.text) > 0
         extra = ["look-ahead sentence removed"] if self.cue.ahead and not ahead else []
-        status = "verified" if self.gap is not None else self.cue.status
+        if self.prefixed and ahead:
+            extra.append("look-ahead added: the line starts before its visual")
+        if not self.ctx.verify:
+            status = "unverified"
+        else:
+            status = "verified" if self.gap is not None else self.cue.status
         return self._result(status, None, audio, dur, tempo, ahead, extra)
 
     # -- style ---------------------------------------------------------------------------
@@ -555,6 +751,8 @@ class _Finalise:
     # -- verify --------------------------------------------------------------------------
 
     def check_frames(self) -> list[Claim]:
+        """The claims of the line as it is now, split (once per text) and judged against the
+        clip of its events, kept in `checks`."""
         if self.clip is None:
             duration = self.ctx.video_duration
             if duration is None:
@@ -565,7 +763,13 @@ class _Finalise:
             self.clip = (cut_clip(self.video, dst, lo, hi, height=CLIP_HEIGHT), lo)
         clip, offset = self.clip
         names = names_in(self.text, self.names)
-        claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset)
+        try:
+            claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names,
+                            offset=offset, cache=self.splits, dropped=self.extras,
+                            notes=self.split_notes)  # fmt: skip
+        except TFUnusable as e:
+            log.warning("finalize: %s: %s (%s)", self.cue.id, JUDGE_CUT_OFF, e)
+            raise _JudgeCutOff from e
         self.checks.append(Check(text=self.text, claims=claims))
         return claims
 
@@ -574,9 +778,9 @@ class _Finalise:
         self.removed.extend(c for c in bad if _key(c) not in seen)
 
     def cut(self, bad: list[Claim], last: bool) -> Cue | None:
-        """Cut the claims the frames do not support; the held cue, or None to go round. A cut
-        that drops a sentence the claims were not about is asked for once more with a note;
-        doing it again holds the cue with the line as it was."""
+        """Cut the claims the frames do not support; the held cue, or None to go round. The
+        engine cuts their tokens itself (see cut_out); the shorter line is split and judged
+        afresh next round."""
         gone = {_key(c) for c in self.removed}
         again = [c for c in bad if _key(c) in gone]
         if again:
@@ -585,51 +789,80 @@ class _Finalise:
         if last:
             reason = f"not verified after {MAX_ROUNDS} rounds: " + _claims_note(bad)
             return self.hold_unverified(reason, bad)
+        if self.repairs >= MAX_REPAIRS:
+            reason = f"not verified after {MAX_REPAIRS} repairs: " + _claims_note(bad)
+            return self.hold_unverified(reason, bad)
         before = self.text
-        new = remove_claims(before, bad, self.tf, run_id=self.run_id)
-        lost = dropped_sentences(before, new, bad)
-        if lost and not _same(new, before):
-            note = (
-                f'Your previous answer "{new}" dropped "{lost[0]}", which none of the listed '
-                "claims is about. Remove only the listed claims and keep every other sentence."
-            )
-            new = remove_claims(before, bad, self.tf, run_id=self.run_id, note=note)
-            lost = dropped_sentences(before, new, bad)
-            if lost and not _same(new, before):
-                reason = f'the claim cut dropped "{lost[0]}" twice: ' + _claims_note(bad)
-                return self.hold_unverified(reason, bad, cut_tried=True)
-        if _same(new, before):
-            reason = "the rewrite removed nothing: " + _claims_note(bad)
-            return self.hold_unverified(reason, bad, cut_tried=True)
-        self._removed_add(bad)
+        new, why = self.cut_out(bad)
+        if why:
+            return self.hold_unverified(f"{why}: " + _claims_note(bad), bad, cut_tried=True)
+        self.repairs += 1
+        self._removed_add(bad)  # their tokens are out of the line
         self.claims = []  # they judged the old text; the next round verifies the new one
         self.text = new
         if not new:
             return self.held("nothing left once the unverified claims were removed")
         if count_ahead(new) < count_ahead(before) and _lost_ahead(before, new):
             return self.held('a claim cut dropped "In a moment, " from a sentence it kept')
-        said = " ".join(c.text.lower() for c in bad)
-        self.keep = [k for k in self.keep if not _occurs(said, k.lower())]  # cut quotes only
+        self.keep = [k for k in self.keep if _occurs(new, k)]  # on-screen text still read
         return None
 
+    def cut_out(self, bad: list[Claim]) -> tuple[str, str | None]:
+        """The line without the tokens of `bad` (tokens a claim that did not fail also holds
+        stay), and why it could not be cut (None when it was). Lightning then only mends the
+        grammar of what is left; its answer is taken only when it adds or moves no word
+        (see mend_keeps), else the raw cut is kept when it passes lint."""
+        text = self.text
+        tokens = tokenize(text)
+        bad = [c for c in bad if c.kind != "sentence"]  # a sentence is never cut as such
+        failed = {i for c in bad for a, b in (c.tokens or []) for i in range(a, b + 1)}
+        kept = {i for c in self.claims
+                if c not in bad and c.verdict == "supported" and c.kind != "sentence"
+                for a, b in (c.tokens or []) for i in range(a, b + 1)}  # fmt: skip
+        framing = time_framing(tokens)  # "In a moment" is never a claim's to lose
+        drop = {i for i in failed - kept - framing if i < len(tokens) and tokens[i].word}
+        if not drop:
+            return text, "the failed claims share every word with claims that passed"
+        why = _meaning_cut(tokens, drop, bad)
+        if why:
+            return text, why
+        raw = cut_tokens(text, drop)
+        if not content_words(raw):
+            return "", None
+        cut = sorted({tokens[i].text for i in drop}, key=str.lower)
+        mended = autofix(mend(raw, cut, self.tf, run_id=self.run_id))
+        if mended and mend_ok(text, raw, mended):
+            self.left_out += mend_dropped(raw, mended) or []
+            return mended, None
+        if mended:
+            log.info("finalize: %s: the mend changed words; the raw cut stands", self.cue.id)
+        if not any(f.severity == "error" for f in _lint(raw, self.keep, self.ctx)):
+            return raw, None
+        return text, "the cut line could not be mended"
+
     def hold_unverified(self, reason: str, bad: list[Claim], *, cut_tried: bool = False) -> Cue:
-        """Held for review. Contradicted claims are cut from the text even so (never kept), and
-        the text is withheld when they cannot be cut. The claims left keep their verdicts for
-        the reviewer, and the findings are those of the text kept."""
-        wrong = [c for c in bad if c.verdict == "contradicted"]
+        """Held for review. Contradicted claims are cut from the text even so, and the text is
+        withheld when they cannot be cut. The cut text is checked once more: its claims, each
+        with its verdict (a contradiction found then included, and named in the note), are
+        the ones it is held with; the findings are those of the text kept."""
+        wrong = [c for c in bad if c.verdict == "contradicted" and c.kind != "sentence"]
         if wrong:
-            cut = (
-                self.text
-                if cut_tried
-                else remove_claims(self.text, wrong, self.tf, run_id=self.run_id)
-            )
-            if _same(cut, self.text):
+            cut, why = (self.text, "tried") if cut_tried else self.cut_out(wrong)
+            if why:
                 self.text = ""
                 reason += "; text withheld: a contradicted claim could not be cut"
             else:
-                self.text = autofix(cut)
+                self.text = cut
                 self._removed_add(wrong)
             self.claims = [c for c in self.claims if c.verdict != "contradicted"]
+            if not self.text:
+                self.claims = []  # nothing is said: no claim is the text's
+            elif self.recheck() is not None:
+                # the claims of the text it is held with, each with its verdict: a new
+                # contradiction stays visible to the reviewer and is named in the note
+                still = [c for c in self.claims if c.verdict == "contradicted"]
+                if still:
+                    reason += "; the text it is held with is contradicted: " + _claims_note(still)
             keep = [k for k in self.keep if _occurs(self.text, k)]
             self.findings = _lint(self.text, keep, self.ctx)
         return self.held(reason)
@@ -675,6 +908,12 @@ class _Finalise:
         """Compress towards `target` words; the held cue, or None to go round. A compression
         that cuts too much (see `overcut`) is asked for once more with a note; cutting too much
         again holds the cue with the line as it was before compression."""
+        if self.prefixed and self.text.startswith(AHEAD_PREFIX):
+            # the look-ahead was added only to place the line: compress the line itself, and
+            # let placement decide again whether the shorter line still needs it
+            body = self.text[len(AHEAD_PREFIX) :]
+            self.text, self.prefixed = body[:1].upper() + body[1:], False
+            target -= AHEAD_WORDS
         if target < 1:
             return self.held(reason)
         before = self.text
@@ -692,14 +931,87 @@ class _Finalise:
             problem = self.overcut(before, new, target)
             if problem:
                 return self.held(f"compression {problem}, twice")
-        if self.words_before is None:
-            self.words_before = count_words(before)
-        self.claims = []
         if not new:
             self.text = ""
             return self.held("nothing left after compression")
-        self.text, lost = self.keep_ahead(before, autofix(new))
-        return self.held(lost) if lost else None
+        candidate, lost = self.keep_ahead(before, autofix(new))
+        if lost:
+            self.text = candidate
+            return self.held(lost)
+        taken = self.shorter(before, candidate, keep)
+        if taken is not None:
+            candidate = taken
+        else:
+            # never longer: keep the line, and give up the sentence that matters least
+            answered = candidate
+            candidate = self.drop_lowest(before)
+            if candidate is None:
+                if count_words(answered) >= count_words(before):
+                    why = (f"compression did not shorten the line ({count_words(before)} words, "
+                           f"answered with {count_words(answered)})")  # fmt: skip
+                else:
+                    rules = sorted({f.rule for f in _lint(answered, keep, self.ctx)
+                                    if f.severity == "error"})  # fmt: skip
+                    why = ("the shorter compression broke " + ", ".join(rules)
+                           + " even after a repair")  # fmt: skip
+                return self.held(f"{reason}; {why}")
+            broken = sorted({f.rule for f in _lint(candidate, keep, self.ctx)
+                             if f.severity == "error"})  # fmt: skip
+            if broken:  # the shorter line is linted like any rewrite
+                eid = self.dropped.pop()
+                return self.held(f"{reason}; dropping the sentence for {eid} breaks "
+                                 + ", ".join(broken))  # fmt: skip
+        if self.words_before is None:
+            self.words_before = count_words(before)
+        self.claims = []
+        self.text = candidate
+        return None
+
+    def shorter(self, before: str, candidate: str, keep: list[str]) -> str | None:
+        """A compression is taken only when it has fewer words than the line it replaces and
+        passes lint; a shorter one that breaks a style rule gets one repair. The text to take,
+        or None (as long or longer, or still breaking a rule)."""
+        if count_words(candidate) >= count_words(before):
+            return None
+        errors = [f for f in _lint(candidate, keep, self.ctx) if f.severity == "error"]
+        if not errors:
+            return candidate
+        fixed, lost = self.keep_ahead(before, self._repair(candidate, errors))
+        if lost or count_words(fixed) >= count_words(before):
+            return None  # a repair, like every rewrite, keeps the look-ahead or is not taken
+        if any(f.severity == "error" for f in _lint(fixed, keep, self.ctx)):
+            return None
+        return fixed
+
+    def drop_lowest(self, text: str) -> str | None:
+        """`text` without the sentence of the event the plan rates lowest (its salience when
+        the plan gave none; the later sentence on a tie), or None when one sentence is all
+        there is. A sentence belongs to the event whose composed words it shares most."""
+        spans = split_sentences(text)
+        if len(spans) < 2:
+            return None
+        by_id = {e.id: e for e in self.events}
+
+        def owner(sentence: str) -> str | None:
+            mine = _content(sentence)
+            scored = [(len(mine & _content(t)), eid) for eid, t in self.cue.parts.items()
+                      if eid in by_id]  # fmt: skip
+            best = max(scored, default=(0, None))
+            return best[1] if best[0] else None
+
+        def rank(i: int) -> tuple[int, int]:
+            eid = owner(text[spans[i][0] : spans[i][1]])
+            if eid is None:
+                return (10**6, -i)  # a sentence no event owns is never the one dropped
+            return (int(self.ctx.priority.get(eid, by_id[eid].salience)), -i)
+
+        k = min(range(len(spans)), key=rank)
+        eid = owner(text[spans[k][0] : spans[k][1]])
+        if eid is None:
+            return None
+        kept = " ".join(text[a:b].strip() for i, (a, b) in enumerate(spans) if i != k)
+        self.dropped.append(eid)
+        return kept
 
     def speak(self, last: bool) -> Cue | None:
         """Voice, fit and time the line; the finished cue, or None to go round."""
@@ -710,12 +1022,18 @@ class _Finalise:
         fast_path = audio_dir / f"{self.cue.id}.t.wav"
         if self.gap is None:
             return self.done(audio, dur, 1.0)
-        usable = self.gap.usable_end - self.start
+        self.at = None
+        usable = self.gap.usable_end - self.gap.usable_start
         tempo = 1.0
         if usable + _FIT_EPS < dur <= usable * MAX_TEMPO + _FIT_EPS:
             factor = min(MAX_TEMPO, math.ceil(dur / usable * 1000 - 1e-6) / 1000)
             fast = atempo(audio, fast_path, factor)
             fast_dur = audio_duration(fast)
+            if fast_dur > usable + _FIT_EPS and factor < MAX_TEMPO:
+                # atempo pads its output to whole frames: raise the factor once by the miss
+                factor = min(MAX_TEMPO, math.ceil(factor * fast_dur / usable * 1000) / 1000 + 0.001)
+                fast = atempo(audio, fast_path, factor)
+                fast_dur = audio_duration(fast)
             if fast_dur <= usable + _FIT_EPS:
                 audio, dur, tempo = fast, fast_dur, factor
         if dur > usable + _FIT_EPS:
@@ -726,6 +1044,15 @@ class _Finalise:
             return self.shorten(target, f"does not fit: {fit}")
         if tempo == 1.0:
             fast_path.unlink(missing_ok=True)
+        start, early = self.place(dur)
+        if early and not _AHEAD_START.match(self.text):  # the sentence that starts early
+            names = set(self.ctx.proper_nouns) | set(self.ctx.cast)
+            self.text = AHEAD_PREFIX + lower_first(self.text, names)
+            self.prefixed = True
+            log.info("finalize: %s starts before its visual; voiced again as a look-ahead",
+                     self.cue.id)  # fmt: skip
+            return self.speak(last)  # the longer line is fitted and placed again
+        self.at = start
         late = self.late(dur)
         if not late:
             return self.done(audio, dur, tempo)
@@ -755,9 +1082,11 @@ def finalize_cue(
 ) -> Cue:
     """The cue verified and voiced, or held with the reason in `note`.
 
-    A standard cue (with its gap) comes back "verified" with start = gap.usable_start and
-    end = start + measured audio duration; an extended cue (gap None) keeps "extended" and its
-    start. Model calls carry stage "finalize" and roles verify, repair, remove and compress.
+    A standard cue (with its gap) comes back "verified" with start where placement puts it in
+    its window (LEAD_IN_S before its first visual, or earlier with "In a moment, " when it
+    could not finish otherwise) and end = start + measured audio duration; an extended cue
+    (gap None) keeps "extended" and its start. Model calls carry stage "finalize" and roles
+    verify, repair, remove and compress.
     """
     if (gap is None) != (cue.gap_id is None) or (gap is not None and gap.id != cue.gap_id):
         got = gap.id if gap else None
