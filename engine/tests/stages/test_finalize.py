@@ -2112,7 +2112,7 @@ def test_a_judge_answer_cut_off_is_raised_for_the_caller_to_hold(tmp_path, video
         judge("A cat sits.", claims, clip, FakeTF(verify=_cut_off), run_id="r1")
 
 
-# -- fix round 4: the r3 probes, each ending held or with the false fact gone ---------------------
+# -- cuts that must end held or with the false fact gone ---------------------
 
 
 def _by_text(answers: dict):
@@ -2364,7 +2364,7 @@ def test_r3_f_a_judge_answer_cut_off_holds_the_line_as_it_was(tmp_path, video):
     assert tf.roles() == ["verify"]
 
 
-# -- fix round 4: the sentence gate, the judge at temperature 0, cuts that would change meaning --
+# -- the sentence gate, the judge at temperature 0, cuts that would change meaning --
 
 
 @pytest.mark.strict_split
@@ -2474,7 +2474,7 @@ def test_a_compress_answer_cut_off_is_no_shorter_line():
     )
 
 
-# -- fix round 5: never cut inside a glued token; sentences end only at a space ------------------
+# -- never cut inside a glued token; sentences end only at a space ------------------
 
 DISPLAY = "A display reads 004.77."
 CLOCK = "A clock shows 10:45."
