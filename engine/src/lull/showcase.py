@@ -17,7 +17,9 @@ showcase.json: {id, title, credit, duration, loudness (dBFS of the original audi
 floor -120, 1 decimal), speech [[start, end]...], gaps [{id, start, end, capacity}] (the
 usable windows the scheduler filled), cues [{id, start, end, text, status, ahead, extended}]
 (the published standard and extended cues; an extended cue starts at its freeze point; end =
-start + its audio), words [{t, s, e}], audio {original, described}, cueAudioBase,
+start + its audio; a held cue is listed too, with `note` (why it was held), the pause it would
+have filled as start/end (an extended one: its visual's start, twice), and no audio: it is in no
+description track), words [{t, s, e}], audio {original, described}, cueAudioBase,
 verifyExample {cueId, cue, claims [{text, verdict}]}, costUsd, summary}.
 
 summary is what the report says about the run: counts (cues by status), coverage
@@ -142,6 +144,27 @@ def run_summary(manifest: dict) -> dict:
     }
 
 
+def _held(published: dict) -> list[dict]:
+    """The held cues, for a page that shows what was held and why: the pause a standard one
+    would have filled (an extended one: its visual's start), its text and its note."""
+    gaps = {g["id"]: g for g in published.get("gaps") or []}
+    out = []
+    for entry in (published.get("cues") or []) + (published.get("extended") or []):
+        try:
+            c = Cue.model_validate(entry)
+        except ValidationError as e:
+            raise ShowcaseError(f"cues.json holds a cue that does not load: {e}") from e
+        if c.status != "held":
+            continue
+        g = gaps.get(c.gap_id) if c.gap_id is not None else None
+        start = float(g["usable_start"]) if g else c.start
+        end = float(g["usable_end"]) if g else c.start
+        out.append({"id": c.id, "start": _r(start), "end": _r(end), "text": c.text,
+                    "status": "held", "ahead": c.ahead, "extended": c.gap_id is None,
+                    "note": c.note or ""})  # fmt: skip
+    return out
+
+
 def _cues(entries: list[dict], voiced) -> list[tuple[Cue, dict]]:
     try:
         pairs = [(Cue.model_validate(e), e) for e in entries]
@@ -240,6 +263,7 @@ def export_showcase(
         start = c.start if c.gap_id is not None else float(entry.get("freeze_at", c.start))
         rows.append((start, c))
     rows.sort(key=lambda r: (r[0], r[1].id))
+    held = _held(published)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     for folder in (AUDIO_DIR, KEYFRAMES):  # nothing from an earlier export lingers
@@ -278,18 +302,22 @@ def export_showcase(
             }
             for g in published.get("gaps") or []
         ],  # fmt: skip
-        "cues": [
-            {
-                "id": c.id,
-                "start": _r(start),
-                "end": _r(start + c.audio_dur),
-                "text": c.text,
-                "status": c.status,
-                "ahead": c.ahead,
-                "extended": c.gap_id is None,  # the picture holds while it plays
-            }
-            for start, c in rows
-        ],  # fmt: skip
+        "cues": sorted(
+            [
+                {
+                    "id": c.id,
+                    "start": _r(start),
+                    "end": _r(start + c.audio_dur),
+                    "text": c.text,
+                    "status": c.status,
+                    "ahead": c.ahead,
+                    "extended": c.gap_id is None,  # the picture holds while it plays
+                }
+                for start, c in rows
+            ]
+            + held,
+            key=lambda c: (c["start"], c["id"]),
+        ),
         "words": [
             {"t": w["text"], "s": _r(w["start"]), "e": _r(w["end"])}
             for w in listen.get("words") or []

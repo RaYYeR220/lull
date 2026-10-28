@@ -401,7 +401,9 @@ def export_showcase_cmd(
     data = json.loads(path.read_text(encoding="utf-8"))
     files = sum(1 for p in Path(out_dir).rglob("*") if p.is_file())
     typer.echo(
-        f"{data['id']}: {len(data['cues'])} cues, {len(data['gaps'])} pauses, "
+        f"{data['id']}: {sum(c['status'] != 'held' for c in data['cues'])} cues "
+        f"({sum(c['status'] == 'held' for c in data['cues'])} held listed), "
+        f"{len(data['gaps'])} pauses, "
         f"{data['duration']:.1f} s, ${data['costUsd']:.4f}; {files} files in {out_dir} "
         f"({path.name})"
     )

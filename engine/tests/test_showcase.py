@@ -105,7 +105,8 @@ def run_dir(tmp_path_factory) -> Path:
         "cues": [
             _cue("c001", 0.5, 1.0, "A red door opens.", audio=audio["c001"],
                  claims=[_claim("A red door opens.")]),
-            _cue("c002", 2.2, None, "A dog barks.", gap="g002", status="held"),
+            _cue("c002", 2.2, None, "A dog barks.", gap="g002", status="held",
+                 note="not verified after 2 repairs: a dog barks (not visible)"),
             _cue("c004", 3.0, 0.8, "In a moment, a sign appears.", gap="g003",
                  audio=audio["c004"], claims=[_claim("A sign appears.", at=3.5)], ahead=True),
         ],
@@ -198,6 +199,16 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "extended": True,
         },
         {
+            "id": "c002",
+            "start": 2.2,
+            "end": 2.7,
+            "text": "A dog barks.",
+            "status": "held",
+            "ahead": False,
+            "extended": False,
+            "note": "not verified after 2 repairs: a dog barks (not visible)",
+        },
+        {
             "id": "c004",
             "start": 3.0,
             "end": 3.8,
@@ -206,7 +217,7 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "ahead": True,
             "extended": False,
         },
-    ]  # fmt: skip  (held c002 is not published; x003 sits at its freeze point)
+    ]  # fmt: skip  (x003 sits at its freeze point; held c002 has its reason, no audio)
 
 
 def test_the_run_summary_comes_with_the_showcase(exported):
@@ -390,3 +401,17 @@ def test_exporting_inside_the_run_folder_or_around_it_is_refused(run_dir):
             export_showcase(run_dir, out)
     assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*")) == before
     assert not (run_dir / "site").exists()
+
+
+def test_held_cues_come_with_their_reason_but_no_audio(exported, run_dir):
+    """A recorded-run page shows what was held and why: the held cue is listed with its note
+    and the pause it would have filled, has no audio file, is in no description track, and
+    the counts stay as published."""
+    out, data = exported
+    held = [c for c in data["cues"] if c["status"] == "held"]
+    assert [c["id"] for c in held] == ["c002"]
+    assert not (out / "audio" / "c002.m4a").exists()
+    for name in ("descriptions.vtt", "extended.vtt"):
+        assert "c002" not in (out / name).read_text(encoding="utf-8")
+    assert data["summary"]["counts"] == SUMMARY["cues"]
+    assert data["verifyExample"]["cueId"] != "c002"
