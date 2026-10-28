@@ -246,16 +246,20 @@ class Ledger:
         return [CallRecord(*r) for r in rows]
 
     def runs(self) -> list[dict]:
-        """Every run in the ledger, most recent activity first: calls, cost, first/last time."""
+        """Every run in the ledger, most recent activity first: calls, model spend (`cost_usd`;
+        web searches are counted in `searches`, never charged), first/last time."""
         with self._lock:
             rows = self._db.execute(
-                "SELECT run_id, COUNT(*), SUM(cost_usd), MIN(ts), MAX(ts) FROM calls"
-                " GROUP BY run_id ORDER BY MAX(ts) DESC, run_id"
+                "SELECT run_id, COUNT(*),"
+                " SUM(CASE WHEN provider = 'tavily' THEN 0 ELSE cost_usd END),"
+                " SUM(CASE WHEN provider = 'tavily' THEN 1 ELSE 0 END), MIN(ts), MAX(ts)"
+                " FROM calls GROUP BY run_id ORDER BY MAX(ts) DESC, run_id"
             ).fetchall()
         return [
-            {"run_id": r[0], "calls": r[1], "cost_usd": r[2], "first_ts": r[3], "last_ts": r[4]}
+            {"run_id": r[0], "calls": r[1], "cost_usd": r[2], "searches": r[3],
+             "first_ts": r[4], "last_ts": r[5]}
             for r in rows
-        ]
+        ]  # fmt: skip
 
     def summary(self, run_id: str, *, since: float | None = None) -> dict:
         """Calls of `run_id` by role and model (only those at or after `since` when given)."""
@@ -271,9 +275,12 @@ class Ledger:
              "tokens_cached": r[4], "tokens_out": r[5], "cost_usd": r[6], "latency_s": r[7]}
             for r in rows
         ]  # fmt: skip
+        searches = self.searches(run_id=run_id, since=since)
         return {
             "run_id": run_id,
             "calls": sum(g["calls"] for g in groups),
-            "total_cost_usd": sum(g["cost_usd"] for g in groups),
+            "total_cost_usd": sum(g["cost_usd"] for g in groups),  # list price of searches too
+            "model_cost_usd": self.spent(run_id=run_id, since=since) if groups else 0.0,
+            "searches": searches,
             "by_role_model": groups,
         }

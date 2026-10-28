@@ -183,6 +183,8 @@ def test_summary(tmp_path):
         "run_id": "none",
         "calls": 0,
         "total_cost_usd": 0.0,
+        "model_cost_usd": 0.0,
+        "searches": 0,
         "by_role_model": [],
     }
 

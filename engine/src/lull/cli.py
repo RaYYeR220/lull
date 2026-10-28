@@ -339,7 +339,10 @@ def ledger_cmd(
         )
         for r in led.runs():
             when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["last_ts"]))
-            typer.echo(f"  {r['run_id']:<32} {r['calls']:>4} calls  ${r['cost_usd']:.4f}  {when}")
+            searched = f", {r['searches']} searches" if r["searches"] else ""
+            typer.echo(
+                f"  {r['run_id']:<32} {r['calls']:>4} calls  ${r['cost_usd']:.4f}  {when}{searched}"
+            )
         return
     summary = led.summary(run_id)
     if not summary["calls"]:
@@ -362,8 +365,14 @@ def ledger_cmd(
     seconds = sum(g["latency_s"] for g in rows)
     typer.echo(
         f"  {'total':<9} {'':<13} {summary['calls']:>5} {tin:>10,} {cached:>8,} "
-        f"{tout:>8,}  ${summary['total_cost_usd']:.4f}  {seconds:>7.1f}"
+        f"{tout:>8,}  ${summary['model_cost_usd']:.4f}  {seconds:>7.1f}  (model spend)"
     )
+    if summary["searches"]:
+        listed = summary["total_cost_usd"] - summary["model_cost_usd"]
+        typer.echo(
+            f"  {'searches':<9} {summary['searches']} web searches, counted, not charged "
+            f"(${listed:.4f} at list price)"
+        )
 
 
 @app.command("export-showcase")

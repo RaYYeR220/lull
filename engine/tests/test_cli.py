@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import re
 import time
@@ -237,3 +238,20 @@ def test_describe_takes_the_content_profile_and_says_english_only(
     assert "education" in text and "entertainment" in text
     assert "English" in text  # descriptions are written in English only
     assert "full long versions" in text  # what extended mode changes
+
+
+def test_ledger_totals_are_model_spend_and_searches_are_counted_apart(home):
+    """A web search is recorded at its list price but never charged: the run list and a run's
+    total give model spend, and the searches get a line of their own."""
+    ledger = _free_ledger(home)
+    ledger.record(_call("r1", "plan", "nvidia/Nemotron-3-Ultra-550b-a55b", 0.0158))
+    search = _call("r1", "research", "tavily-search", 0.008)
+    ledger.record(
+        dataclasses.replace(search, provider="tavily", tokens_in=0, tokens_cached=0, tokens_out=0)
+    )
+    r = runner.invoke(cli.app, ["ledger"])
+    assert re.search(r"^\s*r1\s+2 calls\s+\$0\.0158", r.output, re.M), r.output
+    r = runner.invoke(cli.app, ["ledger", "--run", "r1"])
+    assert r.exit_code == 0, r.output
+    assert re.search(r"^\s*total\s+2\b.*\$0\.0158", r.output, re.M), r.output
+    assert re.search(r"^\s*searches\s+1\b.*not charged.*\$0\.0080", r.output, re.M), r.output
