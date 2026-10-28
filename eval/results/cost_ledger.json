@@ -1,76 +1,76 @@
 {
-  "as_of": "2026-10-28T14:53:41+00:00",
+  "as_of": "2026-10-28T20:42:36+00:00",
   "ledger": "~/.lull/ledger.db",
-  "calls": 2574,
+  "calls": 3109,
   "first_call": "2026-10-27T20:18:51+00:00",
-  "last_call": "2026-10-28T14:52:55+00:00",
+  "last_call": "2026-10-28T20:41:40+00:00",
   "models": [
     {
       "provider": "tavily",
       "model": "tavily-search",
-      "calls": 67,
+      "calls": 72,
       "tokens_in": 0,
       "tokens_cached": 0,
       "tokens_out": 0,
-      "cost_ledger": 0.536,
-      "credits": 67.0,
-      "cost_recomputed": 0.536
+      "cost_ledger": 0.576,
+      "credits": 72.0,
+      "cost_recomputed": 0.576
     },
     {
       "provider": "tokenfactory",
       "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
-      "calls": 94,
-      "tokens_in": 94010,
-      "tokens_cached": 18928,
-      "tokens_out": 48231,
-      "cost_ledger": 0.044901,
-      "cost_recomputed": 0.044901
+      "calls": 116,
+      "tokens_in": 145551,
+      "tokens_cached": 42608,
+      "tokens_out": 86611,
+      "cost_ledger": 0.074686,
+      "cost_recomputed": 0.074686
     },
     {
       "provider": "tokenfactory",
       "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
-      "calls": 300,
-      "tokens_in": 571376,
+      "calls": 328,
+      "tokens_in": 653973,
       "tokens_cached": 8704,
-      "tokens_out": 975063,
-      "cost_ledger": 3.488905,
-      "cost_recomputed": 3.488905
+      "tokens_out": 1302631,
+      "cost_ledger": 4.554206,
+      "cost_recomputed": 4.554206
     },
     {
       "provider": "tokenfactory",
       "model": "nvidia/Nemotron-3.5-Super-VL",
-      "calls": 904,
-      "tokens_in": 2621662,
-      "tokens_cached": 274176,
-      "tokens_out": 301785,
-      "cost_ledger": 0.992303,
-      "cost_recomputed": 0.992303
+      "calls": 1066,
+      "tokens_in": 3061487,
+      "tokens_cached": 280704,
+      "tokens_out": 355329,
+      "cost_ledger": 1.170873,
+      "cost_recomputed": 1.170873
     },
     {
       "provider": "tokenfactory",
       "model": "nvidia/Nemotron-3_5-Lightning",
-      "calls": 1209,
-      "tokens_in": 951587,
+      "calls": 1527,
+      "tokens_in": 1199397,
       "tokens_cached": 0,
-      "tokens_out": 349040,
-      "cost_ledger": 0.140865,
-      "cost_recomputed": 0.140865
+      "tokens_out": 431977,
+      "cost_ledger": 0.175638,
+      "cost_recomputed": 0.175638
     }
   ],
   "totals": {
     "tavily": {
-      "calls": 67,
+      "calls": 72,
       "tokens_in": 0,
       "tokens_cached": 0,
       "tokens_out": 0,
-      "cost_ledger": 0.536
+      "cost_ledger": 0.576
     },
     "tokenfactory": {
-      "calls": 2507,
-      "tokens_in": 4238635,
-      "tokens_cached": 301808,
-      "tokens_out": 1674119,
-      "cost_ledger": 4.666974
+      "calls": 3037,
+      "tokens_in": 5060408,
+      "tokens_cached": 332016,
+      "tokens_out": 2176548,
+      "cost_ledger": 5.975403
     }
   },
   "by_day": [
@@ -123,57 +123,57 @@
       "day": "2026-10-28",
       "provider": "tavily",
       "model": "tavily-search",
-      "calls": 51,
+      "calls": 56,
       "tokens_in": 0,
       "tokens_cached": 0,
       "tokens_out": 0,
-      "cost_ledger": 0.408,
-      "credits": 51.0,
-      "cost_recomputed": 0.408
+      "cost_ledger": 0.448,
+      "credits": 56.0,
+      "cost_recomputed": 0.448
     },
     {
       "day": "2026-10-28",
       "provider": "tokenfactory",
       "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
-      "calls": 94,
-      "tokens_in": 94010,
-      "tokens_cached": 18928,
-      "tokens_out": 48231,
-      "cost_ledger": 0.044901,
-      "cost_recomputed": 0.044901
+      "calls": 116,
+      "tokens_in": 145551,
+      "tokens_cached": 42608,
+      "tokens_out": 86611,
+      "cost_ledger": 0.074686,
+      "cost_recomputed": 0.074686
     },
     {
       "day": "2026-10-28",
       "provider": "tokenfactory",
       "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
-      "calls": 294,
-      "tokens_in": 546233,
+      "calls": 322,
+      "tokens_in": 628830,
       "tokens_cached": 8704,
-      "tokens_out": 957132,
-      "cost_ledger": 3.409969,
-      "cost_recomputed": 3.409969
+      "tokens_out": 1284700,
+      "cost_ledger": 4.47527,
+      "cost_recomputed": 4.47527
     },
     {
       "day": "2026-10-28",
       "provider": "tokenfactory",
       "model": "nvidia/Nemotron-3.5-Super-VL",
-      "calls": 804,
-      "tokens_in": 2395576,
-      "tokens_cached": 274176,
-      "tokens_out": 285841,
-      "cost_ledger": 0.910127,
-      "cost_recomputed": 0.910127
+      "calls": 966,
+      "tokens_in": 2835401,
+      "tokens_cached": 280704,
+      "tokens_out": 339385,
+      "cost_ledger": 1.088698,
+      "cost_recomputed": 1.088698
     },
     {
       "day": "2026-10-28",
       "provider": "tokenfactory",
       "model": "nvidia/Nemotron-3_5-Lightning",
-      "calls": 1190,
-      "tokens_in": 943151,
+      "calls": 1508,
+      "tokens_in": 1190961,
       "tokens_cached": 0,
-      "tokens_out": 347346,
-      "cost_ledger": 0.139952,
-      "cost_recomputed": 0.139952
+      "tokens_out": 430283,
+      "cost_ledger": 0.174726,
+      "cost_recomputed": 0.174726
     }
   ],
   "prices": [
