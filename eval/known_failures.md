@@ -37,3 +37,13 @@ Magpie TTS returns slightly different audio for the same sentence from one call 
 empty cache came out 48.56 s instead of 48.40 s. Suite A's lectures are rendered once and
 cached (the render tarball reproduces them bit for bit), and Lull's own cue durations vary
 slightly between runs.
+
+## Elephants Dream (full film) failed in publish
+
+The scored recorded run of the full film (final-ed) finished its descriptions (43 verified, 21
+held, 43 extended) and then failed while saving keyframes: a cue's keyframe time, 656.3 s, lies
+after the last video frame of this file (the video stream ends at 653.8 s, the audio at 658.1
+s), because the engine bounds keyframe times by the container's duration rather than the video
+stream's. ffmpeg returned no frame and the run stopped without publishing. A pipeline failure,
+not re-run: there is no full-film showcase, and Suite B, whose results need all four videos,
+has no results.
