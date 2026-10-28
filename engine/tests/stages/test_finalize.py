@@ -1319,3 +1319,21 @@ def test_a_placement_look_ahead_is_not_kept_through_compression(tmp_path, video,
     assert seen == [(CHART_LINE, 6)]
     assert out.status == "verified" and out.text == "In a moment, a bar chart shows sales rising."
     assert out.ahead is True and out.end <= 19.0 + 1e-6
+
+
+def test_a_tempo_that_misses_by_the_padding_is_raised_once(tmp_path, video, monkeypatch):
+    """atempo pads its output to whole frames, so the factor that should fit can miss by a few
+    milliseconds (ed90: 3.344 s for a 3.32 s pause came out at 3.3215 s at 1.008): the factor
+    is raised once rather than the line sent for compression."""
+    factors = []
+
+    def padded(src, dst, factor):
+        factors.append(factor)
+        return _wav(Path(dst), _wav_seconds(src) / factor + 0.004)
+
+    monkeypatch.setattr(fin, "atempo", padded)
+    tf = FakeTF(verify=[_supported("a person", "a red coat", "opens a door")])
+    out = _run(tmp_path, video, tf, FakeSpeech([3.3437]), gap=_pause(2.0, 5.32))
+    assert out.status == "verified" and out.audio_dur <= 3.32
+    assert len(factors) == 2 and factors[0] < factors[1] <= 1.10
+    assert out.tempo == factors[1] and "compress" not in tf.roles()

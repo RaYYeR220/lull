@@ -781,6 +781,11 @@ class _Finalise:
             factor = min(MAX_TEMPO, math.ceil(dur / usable * 1000 - 1e-6) / 1000)
             fast = atempo(audio, fast_path, factor)
             fast_dur = audio_duration(fast)
+            if fast_dur > usable + _FIT_EPS and factor < MAX_TEMPO:
+                # atempo pads its output to whole frames: raise the factor once by the miss
+                factor = min(MAX_TEMPO, math.ceil(factor * fast_dur / usable * 1000) / 1000 + 0.001)
+                fast = atempo(audio, fast_path, factor)
+                fast_dur = audio_duration(fast)
             if fast_dur <= usable + _FIT_EPS:
                 audio, dur, tempo = fast, fast_dur, factor
         if dur > usable + _FIT_EPS:
