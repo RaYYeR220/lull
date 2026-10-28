@@ -25,6 +25,8 @@ STAGE = "finalize"
 CLIP_PAD_S = 1.0  # context on each side of the cue's events
 CLIP_CAP_S = 12.0  # longest clip sent to the verifier (cost control)
 CLIP_MIN_S = 4.0  # shortest clip: a 1 s event needs context to be seen
+CLIP_SEE_S = 2.0  # a capped clip runs at least this far past the last visual's start
+CLIP_MAX_S = 20.0  # longest clip, when the visuals of one line start far apart
 CLIP_HEIGHT = 360
 VERIFY_MAX_TOKENS = 1500
 VERIFY_TEMPERATURE = 0.2
@@ -96,22 +98,28 @@ def clip_window(
     cap: float = CLIP_CAP_S, least: float = CLIP_MIN_S,
 ) -> tuple[float, float]:  # fmt: skip
     """[first start - pad, last end + pad] clamped to the video. When that is longer than `cap`
-    it is the `cap` seconds centred on the events, and when it is shorter than `least` the
-    `least` seconds centred on them, moved inside the video if they would leave it
-    (a video shorter than `least` gives all it has)."""
+    it starts at first start - pad (a line describes a visual from its start, not its
+    middle) and runs `cap` seconds, or as far as CLIP_SEE_S past the last visual's start
+    when that is later (at most CLIP_MAX_S); when it is shorter than `least` it is the
+    `least` seconds centred on the visuals. It is moved inside the video if it would leave it
+    (a video shorter than the window gives all it has)."""
     evs = list(events)
     if not evs:
         raise ValueError("verify: a cue needs at least one event to check against")
     first, last = min(e.t_start for e in evs), max(e.t_end for e in evs)
     lo, hi = max(0.0, first - pad), min(duration, last + pad)
-    size = cap if hi - lo > cap else least if hi - lo < least else None
-    if size is not None:
-        mid = (first + last) / 2
-        lo, hi = mid - size / 2, mid + size / 2
-        if lo < 0:
-            lo, hi = 0.0, min(duration, size)
+    if hi - lo > cap:
+        size = min(CLIP_MAX_S, max(cap, max(e.t_start for e in evs) + CLIP_SEE_S - lo))
+        lo, hi = lo, lo + size
         if hi > duration:
             lo, hi = max(0.0, duration - size), duration
+    elif hi - lo < least:
+        mid = (first + last) / 2
+        lo, hi = mid - least / 2, mid + least / 2
+        if lo < 0:
+            lo, hi = 0.0, min(duration, least)
+        if hi > duration:
+            lo, hi = max(0.0, duration - least), duration
     if hi <= lo:
         raise ValueError(f"verify: events {first}..{last} lie outside the video (0..{duration})")
     return round(lo, 3), round(hi, 3)

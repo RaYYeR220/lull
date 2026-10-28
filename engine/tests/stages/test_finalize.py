@@ -917,7 +917,7 @@ def test_clip_uses_the_duration_from_the_context(tmp_path, video, monkeypatch):
     ctx = CTX.model_copy(update={"video_duration": 14.0})
     tf = FakeTF(verify=[_supported("a person opens a door")])
     _run(tmp_path, video, tf, FakeSpeech([2.0]), events={"e001": long}, ctx=ctx)
-    assert cuts == [(2.0, 14.0, 360)]
+    assert cuts == [(0.0, 12.0, 360)]  # from the visual's start, within the 14 s video
 
 
 # -- extended cues ----------------------------------------------------------------------------
@@ -958,11 +958,24 @@ def test_clip_window_pads_and_clamps():
     assert clip_window([_e(2.0, 3.0, "a"), _e(5.0, 6.0, "b")], 30.0) == (1.0, 7.0)
 
 
-def test_clip_window_capped_at_12_s_around_the_events():
-    assert clip_window([_e(0.0, 20.0)], 30.0) == (4.0, 16.0)
-    assert clip_window([_e(10.0, 14.0, "a"), _e(30.0, 40.0, "b")], 60.0) == (19.0, 31.0)
-    assert clip_window([_e(0.0, 20.0)], 14.0) == (2.0, 14.0)  # shifted inside the video
+def test_clip_window_capped_at_12_s_from_the_first_visual():
+    assert clip_window([_e(0.0, 20.0)], 30.0) == (0.0, 12.0)
+    assert clip_window([_e(10.0, 25.0)], 60.0) == (9.0, 21.0)
+    assert clip_window([_e(0.0, 20.0)], 14.0) == (0.0, 12.0)
     assert clip_window([_e(0.0, 2.0)], 1.0) == (0.0, 1.0)
+
+
+def test_the_verify_clip_covers_the_moment_a_line_describes():
+    """However the line is placed (0.3 s before its visual, or an extended line whose picture
+    holds after it), the clip is cut from the visuals: it covers a visual from its start, a
+    long one from its start rather than its middle, and the start of every visual a line
+    describes (up to CLIP_MAX_S)."""
+    lo, hi = clip_window([_e(18.0, 25.0)], 60.0)
+    assert lo <= 18.0 and hi >= 25.0
+    lo, hi = clip_window([_e(30.0, 48.0)], 60.0)  # longer than the cap: its start is in
+    assert lo <= 30.0 < hi
+    lo, hi = clip_window([_e(10.0, 14.0, "a"), _e(22.0, 24.0, "b")], 60.0)
+    assert lo <= 10.0 and hi >= 23.0
 
 
 # -- model calls on their own -------------------------------------------------------------------
@@ -1216,7 +1229,7 @@ def test_the_verify_clip_is_at_least_4_s():
     assert clip_window([_e(0.2, 0.8)], 30.0) == (0.0, 4.0)  # moved inside the video
     assert clip_window([_e(29.5, 29.9)], 30.0) == (26.0, 30.0)
     assert clip_window([_e(0.0, 1.0)], 2.0) == (0.0, 2.0)  # a 2 s video gives what it has
-    assert clip_window([_e(0.0, 20.0)], 30.0) == (4.0, 16.0)  # the cap still holds
+    assert clip_window([_e(0.0, 20.0)], 30.0) == (0.0, 12.0)  # the cap still holds
 
 
 def test_repeated_claims_are_judged_once():
