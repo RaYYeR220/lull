@@ -526,7 +526,7 @@ def _pct(r: dict | None) -> str:
 def _kappa(x: dict | None) -> str:
     if not x or x.get("agreement") is None:
         return "n/a"
-    k = "undefined" if x["kappa"] is None else f"{x['kappa']:.2f}"
+    k = "undefined" if x["kappa"] is None else f"{x['kappa'] + 0.0:.2f}"
     return f"{x['agreement']:.1%}, kappa {k} (n={x['n']})"
 
 
@@ -534,6 +534,19 @@ def prompt_sha(rules: dict) -> str:
     import hashlib
 
     return hashlib.sha256(rules["judge"]["prompt"].encode("utf-8")).hexdigest()
+
+
+def spend_and_timing(rows: list[dict], referenced: set[str], prereg_ts: float) -> dict:
+    """Spend of the scoring run ids and of the probe's apart (the probe judges synthetic cues
+    and ran before the pin by design), and whether every scoring call came after the pin."""
+    probe = {r for r in referenced if r.startswith(("suite-b-probe-", "suite-b-probe2-"))}
+    scoring = referenced - probe
+    first = [r["first_ts"] for r in rows if r["run_id"] in scoring and r.get("first_ts")]
+    return {
+        "spend_usd": round(A.spend_of(scoring, rows), 6),
+        "probe_spend_usd": round(A.spend_of(probe, rows), 6),
+        "ledger_calls_after_preregistration": bool(first) and min(first) > prereg_ts,
+    }
 
 
 def counts_as_results(runs: list[dict], smoke: bool) -> bool:
@@ -611,8 +624,9 @@ def markdown(result: dict) -> str:
         f"`{result['git_commit'][:12]}`{' (dirty tree)' if result['git_dirty'] else ''}; "
         f"{result['date']}. Primary judge `{result['judge_model']}`; second judge "
         f"`{result['second_judge_model']}`. Window +/-{result['window_s']:g} s "
-        f"(+/-{result.get('long_block_window_s', 30):g} s for blocks over 30 s). Spend over the "
-        f"referenced run ids: ${result['spend_usd']:.4f}.",
+        f"(+/-{result.get('long_block_window_s', 30):g} s for blocks over 30 s). Scoring spend: "
+        f"${result['spend_usd']:.4f} (probe, judged before the pin: "
+        f"${result.get('probe_spend_usd') or 0:.4f}).",
         "",
     ]
     if result.get("note"):
@@ -761,8 +775,8 @@ def main(argv: list[str] | None = None) -> int:
         probe = run_probe(judges, rules, refs, stamp)
     rows = [r for r in c["ledger"].runs() if r["run_id"].startswith("suite-b-")]
     referenced = set().union(*(j.paid_by for j in judges.values()))
-    first_ts = [r["first_ts"] for r in rows if r["run_id"] in referenced and r.get("first_ts")]
     prereg_ts = datetime.fromisoformat(prereg["committed"]).timestamp()
+    timing = spend_and_timing(rows, referenced, prereg_ts)
     note = None
     if not complete:
         note = ("smoke on a clip: partial, not Suite B results" if args.smoke
@@ -778,7 +792,7 @@ def main(argv: list[str] | None = None) -> int:
         "git_dirty": bool(dirty()),
         "preregistration": prereg,
         "reference_set_sha256": digest,
-        "ledger_calls_after_preregistration": bool(first_ts) and min(first_ts) > prereg_ts,
+        "ledger_calls_after_preregistration": timing["ledger_calls_after_preregistration"],
         "judge_model": ULTRA,
         "second_judge_model": None if args.no_second_judge else SECOND_JUDGE,
         "window_s": float(rules["window_s"]),
@@ -790,7 +804,8 @@ def main(argv: list[str] | None = None) -> int:
         "summary": summarize(videos, rules),
         "judge_probe": probe,
         "videos": videos,
-        "spend_usd": round(A.spend_of(referenced, rows), 6),
+        "spend_usd": timing["spend_usd"],
+        "probe_spend_usd": timing["probe_spend_usd"],
         "referenced_run_ids": sorted(referenced),
         "judge_files": sorted({Path(p).name for j in judges.values() for p in j.files}),
     }

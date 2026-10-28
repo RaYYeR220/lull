@@ -219,3 +219,14 @@ def test_replaced_facts_keep_the_line_order():
     new = [{"id": "b.1", "ref_cue_id": "b", "text": "n"}]
     out = F.replace_facts(base, new, {"b"})
     assert [f["id"] for f in out] == ["a.1", "b.1", "c.1"] and out[1]["text"] == "n"
+
+
+def test_the_probe_is_not_counted_as_scoring():
+    rows = [{"run_id": "suite-b-probe-w-1", "first_ts": 10.0, "cost_usd": 0.01},
+            {"run_id": "suite-b-judge-w-2", "first_ts": 30.0, "cost_usd": 0.02}]  # fmt: skip
+    refd = {"suite-b-probe-w-1", "suite-b-judge-w-2"}
+    out = B.spend_and_timing(rows, refd, prereg_ts=20.0)
+    assert out["ledger_calls_after_preregistration"] is True
+    assert out["spend_usd"] == 0.02 and out["probe_spend_usd"] == 0.01
+    late = B.spend_and_timing(rows, refd, prereg_ts=40.0)
+    assert late["ledger_calls_after_preregistration"] is False
