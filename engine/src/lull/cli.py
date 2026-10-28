@@ -307,6 +307,16 @@ def describe(
         _print_summary(printer.summary, printer.seconds, out)
 
 
+@app.command("mcp")
+def mcp_cmd() -> None:
+    """Serve Lull to an MCP client (Claude Desktop, any agent) over stdio, on this machine with
+    your own keys and spend caps: describe a local video file, fetch its tracks and report,
+    list the runs with lines held for review. Runs go under LULL_HOME/runs."""
+    from lull.api.agents import local_server
+
+    local_server().run("stdio")
+
+
 @app.command("calibrate-voice")
 def calibrate_voice(
     voice: Annotated[str, typer.Option(help="Magpie TTS voice to measure.")] = "Sofia",

@@ -1,0 +1,40 @@
+{
+  "samples": [
+    {
+      "id": "bbb45",
+      "file": "bbb45.mp4",
+      "title": "Big Buck Bunny (excerpt)",
+      "credit": "Blender Foundation, peach.blender.org",
+      "licence": "CC BY 3.0",
+      "licence_url": "https://creativecommons.org/licenses/by/3.0/",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_4K.webm",
+      "excerpt": "6:35.0-7:19.9: the flying squirrel glides over the meadow while the rabbit sets his trap",
+      "changes": "cut to 44.9 s and re-encoded at 854x480 (H.264 CRF 26, AAC 96 kb/s)",
+      "duration": 44.9
+    },
+    {
+      "id": "ed45",
+      "file": "ed45.mp4",
+      "title": "Elephants Dream (excerpt)",
+      "credit": "Orange Open Movie Team / Blender Foundation, elephantsdream.org",
+      "licence": "CC BY 2.5",
+      "licence_url": "https://creativecommons.org/licenses/by/2.5/",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm",
+      "excerpt": "1:00-1:44.9",
+      "changes": "cut to 44.9 s and re-encoded at 854x480 (H.264 CRF 26, AAC 96 kb/s)",
+      "duration": 44.917
+    },
+    {
+      "id": "tos45",
+      "file": "tos45.mp4",
+      "title": "Tears of Steel (excerpt)",
+      "credit": "Blender Foundation, mango.blender.org",
+      "licence": "CC BY 3.0",
+      "licence_url": "https://creativecommons.org/licenses/by/3.0/",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Tears_of_Steel_in_4k_-_Official_Blender_Foundation_release.webm",
+      "excerpt": "4:50.0-5:34.9: the memory override and Thom and Celia's quarrel, dialogue over cuts between the lab and the robots",
+      "changes": "cut to 44.9 s and re-encoded at 854x382 (H.264 CRF 26, AAC 96 kb/s)",
+      "duration": 44.917
+    }
+  ]
+}
