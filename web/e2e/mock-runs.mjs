@@ -86,7 +86,13 @@ function ed90() {
       audio_dur: Number((c.end - c.start).toFixed(3)),
       tempo: 1.0,
       findings: [],
-      note: c.id === "c002" ? "removed “move across a narrow metal walkway” (not visible in the frames)" : null,
+      note:
+        show.verifyExample?.cueId === c.id
+          ? show.verifyExample.claims
+              .filter((k) => k.verdict === "not_visible")
+              .map((k) => `removed “${k.text}” (not visible in the frames)`)
+              .join("; ") || null
+          : null,
     };
   };
   return {
@@ -249,6 +255,39 @@ function summary(run) {
   };
 }
 
+/**
+ * The recorded run's summary as its export carries it (showcase.json `summary`), in the
+ * manifest's own shape: the API serves the run's real summary, so the stand-in doesn't invent
+ * one for it. What the export doesn't carry (calls, lint warnings) stays the stand-in's.
+ */
+function exportedSummary(run) {
+  const x = show.summary;
+  if (!x || run.source?.kind !== "showcase") return null;
+  const c = x.counts;
+  const reviewed = c.verified === 0 && c.edited + c.approved > 0;
+  return {
+    cues: c,
+    coverage: {
+      important_events: x.coverage.importantEvents,
+      described: x.coverage.described,
+      ratio: x.coverage.ratio,
+      described_with_extended: x.coverage.describedWithExtended,
+      ratio_with_extended: x.coverage.ratioWithExtended,
+      undescribed: x.coverage.undescribed,
+    },
+    repetitive: x.repetitive,
+    overlap_seconds: x.overlapSeconds,
+    overlap: null,
+    held: null,
+    f113: x.f113.map((f) => ({ gap_id: f.gapId, start: f.start, end: f.end, seconds: Number((f.end - f.start).toFixed(3)), event_ids: f.eventIds })),
+    cost_usd: x.spend.modelUsdThisRun,
+    wcag: x.wcag.map((w) => ({ criterion: w.criterion, level: w.level, name: w.name, status: w.status, via: "", reasons: w.blockers })),
+    reviewed,
+    tts_disclosure: `Descriptions are voiced with synthetic speech (${TTS}); ${reviewed ? "every line was reviewed before publishing." : "lines are awaiting review."}`,
+    spend: { models_usd: x.spend.modelUsdThisRun, tavily_credits: x.spend.webSearchesThisRun },
+  };
+}
+
 const OUTPUTS = (run) => ({
   "cues.json": { sha256: "0".repeat(64), bytes: 9214 },
   "descriptions.vtt": { sha256: "1".repeat(64), bytes: 1182 },
@@ -277,7 +316,7 @@ function detail(run) {
       video: { name: run.video.name, duration: run.video.duration, sha256: "a".repeat(64) },
       options: { mode: run.extended.length ? "extended" : "standard", profile: "entertainment", voice: run.voice, language: "en" },
       outputs: OUTPUTS(run),
-      summary: { ...summary(run), spend: { models_usd: run.cost, tavily_credits: 1 } },
+      summary: { ...summary(run), spend: { models_usd: run.cost, tavily_credits: 1 }, ...exportedSummary(run) },
       versions: { engine: "0.4.0", models: [ULTRA, VL, LIGHT], tts: TTS },
     },
     cues: { run_id: run.id, language: "en", cues: run.cues.map((c) => view(run, c)), extended: run.extended.map((c) => view(run, c)) },

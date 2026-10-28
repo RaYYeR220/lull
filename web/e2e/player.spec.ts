@@ -398,7 +398,7 @@ test.describe("player, in the site", () => {
     // the engine's real lines, from descriptions.vtt
     await player(page).getByRole("button", { name: "Transcript" }).click();
     await expect(player(page).getByRole("region", { name: "Descriptions transcript" })).toContainText(
-      "A second person in a light outfit joins the bald person in a doorway.",
+      "A second person with dark hair and light shirt enters behind the first.",
     );
     expect(errors).toEqual([]);
   });

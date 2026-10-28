@@ -94,8 +94,8 @@ test.describe("a recorded run's page", () => {
       await expect(line).toContainText(c.text);
       await expect(line.locator("[data-status]")).toHaveAttribute("data-status", c.status);
     }
-    await expect(row(page, "x001")).toContainText("video holds 4.46 s");
-    await expect(row(page, "c001")).toContainText("14 of 19 words");
+    await expect(row(page, "x001")).toContainText("video holds 6.78 s");
+    await expect(row(page, "c001")).toContainText("18 of 20 words");
   });
 
   test("choosing a line moves the player there and marks the line", async ({ page }) => {
@@ -113,7 +113,7 @@ test.describe("a recorded run's page", () => {
     await expect(row(page, "c005").getByRole("button")).not.toHaveAttribute("aria-current", "true");
     // an extended line: its freeze point
     await row(page, "x002").getByRole("button").click();
-    await expect.poll(() => clock(page)).toBeCloseTo(8.833, 1);
+    await expect.poll(() => clock(page)).toBeCloseTo(4.917, 1);
   });
 
   test("on a phone, choosing a line brings the picture back into view", async ({ page }) => {
@@ -123,7 +123,7 @@ test.describe("a recorded run's page", () => {
     await row(page, "c013").scrollIntoViewIfNeeded();
     await expect(player(page)).not.toBeInViewport();
     await row(page, "c013").getByRole("button").click();
-    await expect.poll(() => clock(page)).toBeCloseTo(83.31, 1);
+    await expect.poll(() => clock(page)).toBeCloseTo(83.21, 1);
     await expect(player(page)).toBeInViewport();
   });
 
@@ -146,7 +146,7 @@ test.describe("a recorded run's page", () => {
     await expect(checks).toContainText("8 of 13 pauses carry a line");
     await expect(checks).toContainText("10 of 10");
     await expect(checks).toContainText("Not yet");
-    await expect(checks).toContainText("$0.04");
+    await expect(checks).toContainText("$0.05");
     await expect(checks).toContainText("For the full run");
   });
 

@@ -29,7 +29,7 @@ describe("the shipped showcase is the engine's real export", () => {
     expect(show.words?.[0]).toEqual({ text: "Safe", start: 0.24, end: 0.8 });
     expect(show.audio).toEqual({ original: "/showcase/ed90/video.mp4", described: "/showcase/ed90/described-audio.m4a" });
     expect(show.cueAudioBase).toBe("/showcase/ed90/audio/");
-    expect(show.verifyExample?.cueId).toBe("c002");
+    expect(show.verifyExample?.cueId).toBe("c013");
   });
 
   it("lists in the index exactly as its showcase.json reads", () => {
@@ -47,7 +47,7 @@ describe("the shipped showcase is the engine's real export", () => {
 describe("what the pages derive from the run", () => {
   it("voices standard lines only, none over speech, each inside its pause", () => {
     const voiced = voicedCues(show);
-    expect(voiced.map((c) => c.id)).toEqual(["c001", "c002", "c005", "c007", "c008", "c011", "c012", "c013"]);
+    expect(voiced.map((c) => c.id)).toEqual(["c001", "c002", "c005", "c006", "c007", "c008", "c011", "c013"]);
     expect(voiced.every((c) => c.status !== "held" && c.status !== "extended")).toBe(true);
     expect(speechOverlap(show)).toEqual({ cues: 0, seconds: 0 });
     expect(linesInsidePauses(show)).toEqual({ inside: 8, of: 8 });
@@ -61,44 +61,44 @@ describe("what the pages derive from the run", () => {
       "c001=Cue 1",
       "c002=Cue 2",
       "c005=Cue 3",
-      "c007=Cue 4",
-      "c008=Cue 5",
-      "c011=Cue 6",
-      "c012=Cue 7",
+      "c006=Cue 4",
+      "c007=Cue 5",
+      "c008=Cue 6",
+      "c011=Cue 7",
       "c013=Cue 8",
     ]);
   });
 
   it("finds the verify example's cue by its id, and the spoken line is that cue's text", () => {
     const cue = verifiedCue(show);
-    expect(cue?.id).toBe("c002");
-    expect(cue?.label).toBe("Cue 2");
-    expect(cue?.text).toBe("The two people are surrounded by wires.");
+    expect(cue?.id).toBe("c013");
+    expect(cue?.label).toBe("Cue 8");
+    expect(cue?.text).toBe("Both figures fall through the wires into darkness.");
     // cutting the claim the frames didn't show leaves the draft's own words
-    expect(show.verifyExample && spokenFromDraft(show.verifyExample)).toBe("The two people surrounded by wires.");
+    expect(show.verifyExample && spokenFromDraft(show.verifyExample)).toBe("And both figures fall through the wires into darkness.");
   });
 
   it("falls back to the claims when the export names no cue", () => {
     const r = clone();
     delete r.verifyExample.cueId;
-    expect(verifiedCue(parseShowcase(r, "ed90"))?.id).toBe("c002");
+    expect(verifiedCue(parseShowcase(r, "ed90"))?.id).toBe("c013");
   });
 
   it("closes up on a pause one guard from words on both sides", () => {
     const cu = closeUp(show);
     expect(cu?.gap.id).toBe("g001");
     expect(cu?.cue.id).toBe("c001");
-    expect([cu?.a, cu?.b]).toEqual([7.5, 17]);
+    expect([cu?.a, cu?.b]).toEqual([7.5, 17.1]);
     expect(cu?.guardBefore).toBe(true);
     expect(cu?.guardAfter).toBe(true);
     expect(cu?.before.map((w) => w.text).join(" ")).toBe("You'll see");
     expect(cu?.after.map((w) => w.text).join(" ")).toBe("Emo");
     expect(cu?.prevSpeechEnd).toBe(8.8);
-    expect(cu?.nextSpeechStart).toBe(15.741);
+    expect(cu?.nextSpeechStart).toBe(15.84);
     // speech as heard, clipped to the close-up
     expect(cu?.spans).toEqual([
       { start: 7.5, end: 8.8 },
-      { start: 15.741, end: 17 },
+      { start: 15.84, end: 16.32 },
     ]);
   });
 
@@ -126,7 +126,7 @@ describe("what the pages derive from the run", () => {
   });
 
   it("says the run's spend as a figure and in words", () => {
-    expect(spend(show.costUsd ?? 0)).toEqual({ figure: "$0.04", words: "About four cents" });
+    expect(spend(show.costUsd ?? 0)).toEqual({ figure: "$0.05", words: "About five cents" });
     expect(spend(0.004)).toEqual({ figure: "<$0.01", words: "Under a cent" });
   });
 });

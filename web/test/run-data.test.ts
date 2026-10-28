@@ -52,15 +52,15 @@ describe("a recorded run", () => {
   it("numbers lines in time order, standard and extended apart, each in its pause", () => {
     expect(run.cues.map((c) => c.label)).toEqual(["Extended 1", "Extended 2", "Cue 1", "Cue 2", "Cue 3", "Cue 4", "Cue 5", "Cue 6", "Cue 7", "Cue 8"]);
     const first = run.cues.find((c) => c.id === "c001")!;
-    expect(first.gap).toEqual({ id: "g001", start: 9, end: 15.54, capacity: 19 });
+    expect(first.gap).toEqual({ id: "g001", start: 9, end: 15.64, capacity: 20 });
     expect(first.frame).toBe("/showcase/ed90/keyframes/c001.jpg");
     expect(voicedLines(run)).toHaveLength(8);
   });
 
   it("keeps the verify example's verdicts on its own line, marked as the draft's", () => {
-    const c002 = run.cues.find((c) => c.id === "c002")!;
-    expect(c002.claimsOf).toBe("draft");
-    expect(c002.claims?.map((k) => k.verdict)).toEqual(["supported", "not_visible", "supported"]);
+    const c013 = run.cues.find((c) => c.id === "c013")!;
+    expect(c013.claimsOf).toBe("draft");
+    expect(c013.claims?.map((k) => k.verdict)).toEqual(["not_visible", "supported"]);
     expect(run.cues.find((c) => c.id === "c001")!.claims).toBeNull();
   });
 
@@ -166,8 +166,8 @@ describe("a run from the API", () => {
   it("a line's fit names a borrowed pause as the recorded run's", () => {
     const d = detail({ name: "ed90.mp4", duration: 90, source: { kind: "sample", id: "ed90" }, cues: [{ id: "c001", gap_id: "g001", start: 9, text: "Two people walk on.", event_ids: [], status: "verified", claims: [], audio_dur: 2 }], extended: [] });
     const lent = fromApi("r1", d, { clip: show, timeline: { speech: null, gaps: null } });
-    expect(fitWords(lent.cues[0]!, countWords)).toBe("4 of 19 words");
-    expect(fitWords(lent.cues[0]!, countWords, { borrowed: true })).toBe("4 of 19 words, in the recorded run’s pause");
+    expect(fitWords(lent.cues[0]!, countWords)).toBe("4 of 20 words");
+    expect(fitWords(lent.cues[0]!, countWords, { borrowed: true })).toBe("4 of 20 words, in the recorded run’s pause");
   });
 
   it("the recorded run opened through the API keeps the site's media and files", () => {

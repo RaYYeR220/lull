@@ -44,7 +44,7 @@ async function axe(page: Page, where: string) {
 test.describe("the studio, editing a copy", () => {
   test("opens the copy with its timeline, the chosen line in the drawer and the run's summary", async ({ page }) => {
     const errors = pageErrors(page);
-    await openCopy(page, "c002");
+    await openCopy(page, "c013");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Elephants Dream");
     await expect(page.getByText("Studio, your run")).toBeVisible();
     await expect(page.getByText(/This copy is kept until/)).toHaveCount(0); // no record of when it was made in this test
@@ -56,19 +56,19 @@ test.describe("the studio, editing a copy", () => {
 
     // the timeline: soundtrack (lent by the recorded run of the clip), speech, pauses and lines
     await expect(page.getByRole("listbox", { name: "Lines, in time order" }).getByRole("option")).toHaveCount(10);
-    await expect(option(page, "c002")).toHaveAttribute("aria-selected", "true");
-    await expect(option(page, "c002")).toHaveAccessibleName(/^Cue 2, Verified, at 0:18\.35: The two people are surrounded by wires\.$/);
+    await expect(option(page, "c013")).toHaveAttribute("aria-selected", "true");
+    await expect(option(page, "c013")).toHaveAccessibleName(/^Cue 8, Verified, at 1:23\.21: Both figures fall through the wires into darkness\.$/);
     await expect(page.getByText("The soundtrack levels are from the recorded run of this clip, Elephants Dream.")).toBeVisible();
 
     // the drawer: where it sits, its frame, words against the pause, claims, note, provenance
-    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 2");
-    await expect(drawer(page)).toContainText("In the pause from 0:18.35 to 0:23.41, 5.06 s.");
+    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 8");
+    await expect(drawer(page)).toContainText("In the pause from 1:23.21 to 1:28.00, 4.79 s.");
     await expect(drawer(page).getByRole("img")).toHaveCount(0); // decorative frame: alt=""
-    await expect(drawer(page).locator("img")).toHaveAttribute("src", `${API}/v1/runs/${FORK_ID}/files/keyframes/c002.jpg`);
-    await expect(line(page)).toHaveValue("The two people are surrounded by wires.");
-    await expect(line(page)).toHaveAccessibleDescription(/7 of 15 words/);
-    await expect(drawer(page).getByText("removed “move across a narrow metal walkway” (not visible in the frames)")).toBeVisible();
-    await expect(drawer(page).getByRole("listitem").filter({ hasText: "two people" })).toContainText("Seen at 0:18.95");
+    await expect(drawer(page).locator("img")).toHaveAttribute("src", `${API}/v1/runs/${FORK_ID}/files/keyframes/c013.jpg`);
+    await expect(line(page)).toHaveValue("Both figures fall through the wires into darkness.");
+    await expect(line(page)).toHaveAccessibleDescription(/8 of 14 words/);
+    await expect(drawer(page).getByText("removed “The platform breaks apart” (not visible in the frames)")).toBeVisible();
+    await expect(drawer(page).getByRole("listitem").filter({ hasText: "both figures fall" })).toContainText("Seen at 1:23.81");
     await expect(drawer(page).getByRole("list", { name: "Who made this line" })).toContainText("Checked by Nemotron 3.5 Super VL");
     await expect(drawer(page).getByRole("list", { name: "Who made this line" })).toContainText("Voiced by Magpie TTS Multilingual");
 
@@ -87,7 +87,7 @@ test.describe("the studio, editing a copy", () => {
     await line(page).fill("Two people stand among wires.");
     await expect(line(page)).toHaveAccessibleDescription(/5 of 15 words/);
     await drawer(page).getByRole("button", { name: "Undo my changes" }).click();
-    await expect(line(page)).toHaveValue("The two people are surrounded by wires.");
+    await expect(line(page)).toHaveValue("A second person with dark hair and light shirt enters behind the first.");
   });
 
   test("an edit is checked again and comes back edited, with its checks; the run then needs publishing", async ({ page }) => {
@@ -202,10 +202,10 @@ test.describe("the studio, editing a copy", () => {
   test("choosing a line in the list opens it and moves the player there", async ({ page }) => {
     await openCopy(page, "c001");
     await waitReady(page);
-    await page.getByRole("region", { name: "Every line" }).getByRole("button", { name: /Cue 6/ }).click();
-    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 6");
+    await page.getByRole("region", { name: "Every line" }).getByRole("button", { name: /Cue 7/ }).click();
+    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 7");
     await expect(option(page, "c011")).toHaveAttribute("aria-selected", "true");
-    await expect.poll(() => page.locator("lull-player").evaluate((el) => (el as unknown as { currentTime: number }).currentTime)).toBeCloseTo(72.459, 1);
+    await expect.poll(() => page.locator("lull-player").evaluate((el) => (el as unknown as { currentTime: number }).currentTime)).toBeCloseTo(72.2, 1);
     await expect(page).toHaveURL(/\?cue=c011$/);
   });
 
@@ -239,7 +239,7 @@ test.describe("the studio, editing a copy", () => {
     await expect(page.getByRole("button", { name: "Whole clip" })).toBeDisabled();
     // Enter opens the line: focus on the drawer's heading, then on to the text
     await page.keyboard.press("ArrowLeft");
-    await expect(option(page, "c012")).toBeFocused();
+    await expect(option(page, "c011")).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(drawer(page).getByRole("heading", { level: 2, name: "Cue 7" })).toBeFocused();
     for (let i = 0; i < 6 && !(await line(page).evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
@@ -249,7 +249,7 @@ test.describe("the studio, editing a copy", () => {
     await page.keyboard.press("Tab");
     await expect(save(page)).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(outcome(page)).toHaveText("Cue 7 is edited: it passed the frame check and was voiced again.", { timeout: 15_000 });
+    await expect(outcome(page)).toHaveText("Cue 7 is edited: it passed the frame check and was voiced again. Sped up to 1.08x to fit its pause.", { timeout: 15_000 });
     // the button kept the focus through the check
     await expect(save(page)).toBeFocused();
   });
@@ -422,7 +422,7 @@ test.describe("the studio, borrowing only what the API vouches for", () => {
     await expect(page.locator("lull-player")).toHaveAttribute("sound", "described");
     await expect(page.locator("[class*='h_wave'], [class*='h_gaps'], [class*='h_speech']")).toHaveCount(0);
     await expect(page.getByText(/from the recorded run of this clip/)).toHaveCount(0);
-    await expect(drawer(page).getByText("7 words", { exact: true })).toBeVisible();
+    await expect(drawer(page).getByText("13 words", { exact: true })).toBeVisible();
     await page.goto(`/run/${UPLOAD_ED90_ID}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("ed90.mp4");
     await expect(page.locator("lull-player")).toHaveAttribute("sound", "described");
@@ -450,17 +450,20 @@ test.describe("the studio, read-only", () => {
 
   test("the recorded run is read-only, with the API's checks on each line", async ({ page }) => {
     await routeApi(page, own());
-    await page.goto("/studio/ed90?cue=c002");
+    await page.goto("/studio/ed90?cue=c013");
     await expect(page.getByText("Studio, recorded run")).toBeVisible();
     await expect(page.getByText("Recorded run, read-only")).toBeVisible();
-    await expect(drawer(page).getByRole("listitem").filter({ hasText: "surrounded by wires" })).toContainText("Seen at 0:19.95");
+    // the summary is the run's own, as its export carries it
+    await expect(page.getByText("8 of 15", { exact: true })).toBeVisible();
+    await expect(page.getByRole("list", { name: "WCAG statuses" }).getByRole("listitem").filter({ hasText: "1.2.5" })).toContainText("Needs review");
+    await expect(drawer(page).getByRole("listitem").filter({ hasText: "both figures fall" })).toContainText("Seen at 1:23.81");
     await expect(drawer(page).getByText(/A recorded run stays as it was made/)).toBeVisible();
     await expect(line(page)).toHaveCount(0);
   });
 
   test("the recorded run still opens with the live service down, from its own files", async ({ page }) => {
     await apiDown(page);
-    await page.goto("/studio/ed90?cue=c002");
+    await page.goto("/studio/ed90?cue=c013");
     await expect(page.getByText(/The live service didn’t answer for this run, so each line’s claims, writing checks and notes aren’t shown/)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("listbox", { name: "Lines, in time order" }).getByRole("option")).toHaveCount(10);
     // the recorded export keeps the verifier's ruling on one draft

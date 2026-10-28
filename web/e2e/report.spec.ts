@@ -9,21 +9,25 @@ import { API, RUN_ID, RUNNING_ID, own, routeApi } from "./try-api";
 const PHONE = { width: 390, height: 844 };
 
 test.describe("conformance reports", () => {
-  test("a recorded run's report says what its export lacks, and reports its published lines", async ({ page }) => {
+  test("a recorded run's report: WCAG with its blockers, coverage, timing and spend, from its export's summary", async ({ page }) => {
     await page.goto("/watch/ed90/report");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Elephants Dream");
     await expect(page.getByText("Conformance report, recorded run")).toBeVisible();
-    // the shipped export predates the summary: no WCAG, coverage or timing rows are invented
-    await expect(page.locator("[data-no-summary]")).toContainText("doesn’t carry its run summary");
-    await expect(page.getByRole("region", { name: "WCAG audio description" })).toHaveCount(0);
-    await expect(page.getByRole("region", { name: "Coverage" })).toHaveCount(0);
-    await expect(page.getByRole("region", { name: "Timing" })).toHaveCount(0);
-    const lines = page.getByRole("list", { name: "Published lines by status" });
+    await expect(page.locator("[data-no-summary]")).toHaveCount(0);
+    const wcag = page.getByRole("region", { name: "WCAG audio description" });
+    for (const c of ["1.2.3", "1.2.5", "1.2.7"]) await expect(wcag.locator(`[data-criterion="${c}"]`)).toContainText("Needs review");
+    await expect(wcag.locator('[data-criterion="1.2.5"]')).toContainText("4 descriptions held for review");
+    await expect(wcag.locator('[data-criterion="1.2.5"]')).toContainText("7 important events undescribed (8 of 15 described)");
+    // the export's summary doesn't say whether a person reviewed the lines: nothing is claimed
+    await expect(wcag.locator("[data-reviewed]")).toHaveCount(0);
+    await expect(page.locator('[data-fact="coverage"]')).toContainText("8 of 15 (53 %) in the standard track; 10 of 15 (67 %) with the extended track");
+    await expect(page.getByRole("region", { name: "Timing" }).locator('[data-fact="overlap"]')).toContainText("0.000 s");
+    await expect(page.locator('[data-fact="f113"]').getByRole("listitem")).toHaveCount(3);
+    const lines = page.getByRole("list", { name: "Lines by status" });
     await expect(lines).toContainText("8");
-    await expect(lines).toContainText("verified");
-    await expect(lines).toContainText("extended");
-    await expect(page.getByText("Counted from the published lines.")).toBeVisible();
-    await expect(page.locator('[data-fact="spend"]')).toContainText("$0.0364");
+    await expect(lines).toContainText("held");
+    await expect(page.getByText("Counted from the published lines.")).toHaveCount(0);
+    await expect(page.locator('[data-fact="spend"]').first()).toContainText("$0.0480");
     await expect(page.getByRole("link", { name: "Watch it described" })).toHaveAttribute("href", "/watch/ed90");
   });
 
