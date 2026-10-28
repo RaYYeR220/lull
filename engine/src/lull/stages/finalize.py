@@ -802,7 +802,7 @@ class _Finalise:
         if tempo == 1.0:
             fast_path.unlink(missing_ok=True)
         start, early = self.place(dur)
-        if early and count_ahead(self.text) == 0:
+        if early and not _AHEAD_START.match(self.text):  # the sentence that starts early
             names = set(self.ctx.proper_nouns) | set(self.ctx.cast)
             self.text = AHEAD_PREFIX + lower_first(self.text, names)
             self.prefixed = True

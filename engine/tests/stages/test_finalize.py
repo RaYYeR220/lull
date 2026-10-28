@@ -1404,3 +1404,20 @@ def test_a_line_that_fails_its_check_as_voiced_keeps_the_contradiction(tmp_path,
                events={"e009": CHART}, ctx=ctx)  # fmt: skip
     assert out.status == "held"
     assert ("sales rising each year", "contradicted") in [(c.text, c.verdict) for c in out.claims]
+
+
+def test_the_first_sentence_gets_the_look_ahead_when_it_starts_early(tmp_path, video):
+    """A two-event line whose second sentence already looks ahead: when placement starts it
+    before its first visual (window 10-19 s, door from 17.5 s, line 3.6 s: it starts at
+    15.4 s), the first sentence gets "In a moment, " too; the second one's says nothing about
+    the first."""
+    door = VisualEvent(id="e001", t_start=17.5, t_end=22.0, kind="action", text="A door opens.",
+                       verbatim_text=None, salience=4, said_in_dialogue=False)  # fmt: skip
+    line = "A door opens. In a moment, a bar chart shows sales."
+    cue = _cue(line, start=10.0, event_ids=["e001", "e009"], ahead=True)
+    tf = FakeTF(verify=lambda call: _supported("a door opens", "a bar chart shows sales"))
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, FakeSpeech([3.6, 4.8]), cue=cue, gap=_pause(10.0, 19.0),
+               events={"e001": door, "e009": CHART}, ctx=ctx)  # fmt: skip
+    assert out.text == "In a moment, a door opens. In a moment, a bar chart shows sales."
+    assert out.status == "verified" and out.ahead is True
