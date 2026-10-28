@@ -1,4 +1,5 @@
 import hashlib
+import json
 import tarfile
 
 import pytest
@@ -51,6 +52,7 @@ from suite_a.score import (
     voiced_request,
     write_bundle,
 )
+from tests import prereg_requests
 
 # sha256 of the scorer's prompts as first committed (5551575), before any judge call
 PREREGISTERED_CLAIMS = "eca1dc4eb1fcda4233dc2eb58ecdcfc251ff86d3612dcfe1104f86f68ae3e2f5"
@@ -354,12 +356,24 @@ def test_value_match_needs_value_and_label_in_one_cue():
     assert not value_match(23.0, "H3", ["H3 shows 2.3"])
 
 
-def test_a_tied_highest_value_accepts_any_tied_category():
+def test_a_tied_highest_value_counts_only_in_the_supplementary_numbers():
     assert chart_ties(ENTRY) == {"t01-v02": ["H3"]}
-    out = exact_matches(ENTRY["visual_facts"], ["The line peaks at 23 for H3."], chart_ties(ENTRY))
-    assert out["chart_value"] == {"matched": 1, "of": 1}
+    texts = ["The line peaks at 23 for H3."]
+    assert exact_matches(ENTRY["visual_facts"], texts)["chart_value"] == {"matched": 0, "of": 1}
+    tie_aware = exact_matches(ENTRY["visual_facts"], texts, chart_ties(ENTRY))
+    assert tie_aware["chart_value"] == {"matched": 1, "of": 1}
     prompt, _ = coverage_request(ENTRY, tagged(*published(cues_json())))
-    assert 'also shown for "H3"' in prompt
+    assert "also shown" not in prompt  # the primary request is the pre-registered one
+
+
+def test_tie_aware_recall_credits_a_cue_naming_a_tied_category():
+    v = verdicts()
+    v["coverage"]["visual_facts"][1]["cue_ids"] = []  # the judge did not credit c002 for v02
+    m = video_metrics(ENTRY, run_record(), cues_json(), v)
+    assert m["recall"]["standard"] == [1, 3]
+    assert m["supplementary"]["recall_tie_aware"] == {"standard": [2, 3], "with_extended": [2, 3]}
+    agg = aggregate([m])
+    assert agg["recall_tie_aware_standard"]["value"] == pytest.approx(2 / 3)
 
 
 def test_exact_matches_count_by_kind():
@@ -427,7 +441,8 @@ def test_video_metrics_from_fake_verdicts():
     assert m["redundancy"]["cues"] == [1, 3]
     assert m["redundancy"]["spoken_facts_restated"] == [0, 1]
     assert m["judge_problems"] == []
-    assert m["exact_match"]["standard"]["chart_value"]["matched"] == 1  # the tie
+    assert m["exact_match"]["standard"]["chart_value"]["matched"] == 0  # H3 is a tied label
+    assert m["supplementary"]["exact_tie_aware"]["standard"]["chart_value"]["matched"] == 1
     sup = m["supplementary"]
     assert sup["hallucination_voiced_text"] is None  # no voiced-text call was made
     assert sup["decoys_absent_part"] == ["t01-d02"]
@@ -776,3 +791,31 @@ def test_voiced_probe_scores():
     s = voiced_probe_scores(cues, answers)
     assert s["sensitivity"] == [1, 2] and s["specificity"] == [2, 3]
     assert s["by_type"]["swapped_label"] == [0, 1] and s["by_type"]["invented_bullet"] == [1, 1]
+
+
+# -- the request lock ------------------------------------------------------------------------------
+
+
+def test_primary_requests_are_byte_identical_to_the_preregistered_scorer():
+    """For every video, the coverage and claims requests (the judge cache key: sorted-key JSON
+    of model, prompt, schema, temperature, reasoning, max_tokens) equal those of 5551575."""
+    fixture = json.loads(prereg_requests.FIXTURE.read_text(encoding="utf-8"))
+    key, key_sha = score.load_key()
+    assert fixture["key_sha256"] == key_sha
+    assert prereg_requests.hashes(score, key) == fixture["requests"]
+    assert len(fixture["requests"]) == len(key["videos"]) == 12
+
+
+def test_the_lock_fixture_is_what_the_preregistered_code_produces():
+    module = prereg_requests.preregistered_module()
+    if module is None:
+        pytest.skip("no git history here: the committed fixture stands alone")
+    key, _ = score.load_key()
+    fixture = json.loads(prereg_requests.FIXTURE.read_text(encoding="utf-8"))
+    assert prereg_requests.hashes(module, key) == fixture["requests"]
+
+
+def test_request_digest_is_the_judge_cache_key():
+    prompt, schema = coverage_request(ENTRY, tagged(*published(cues_json())))
+    expected = prereg_requests.digest(prompt, schema, score.JUDGE_MAX_TOKENS)
+    assert score.request_digest(score.ULTRA, True, prompt, schema) == expected

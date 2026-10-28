@@ -302,7 +302,12 @@ def chart_ties(entry: dict) -> dict[str, list[str]]:
     return out
 
 
-def exact_matches(facts: list[dict], texts: list[str], ties: dict[str, list[str]]) -> dict:
+def exact_matches(
+    facts: list[dict], texts: list[str], ties: dict[str, list[str]] | None = None
+) -> dict:
+    """Title and chart-value matches. Pre-registered: the key's own label. With `ties`
+    (supplementary): any category that shows the same highest value counts too."""
+    ties = ties or {}
     out = {"title": [0, 0], "chart_value": [0, 0]}
     for f in facts:
         ex = f.get("exact")
@@ -560,18 +565,14 @@ def _items_schema(ids: list[str], cue_ids: list[str]) -> dict:
 
 
 def coverage_request(entry: dict, cues: list[dict]) -> tuple[str, dict]:
+    """Exactly the pre-registered request (5551575); tests/prereg_requests.py locks it."""
     ctx = key_context(entry)
-    ties = chart_ties(entry)
 
     def fact_lines(facts: list[dict]) -> str:
-        rows = []
-        for f in facts:
-            row = f"{f['id']} (slide {f['slide']}, {f['kind']}): {f['text']}"
-            if f["id"] in ties:  # added after review: the key names one of tied categories
-                others = ", ".join(f'"{x}"' for x in ties[f["id"]])
-                row += f" (the same highest value is also shown for {others}; any of them is fine)"
-            rows.append(row)
-        return "\n".join(rows) or "(none)"
+        return (
+            "\n".join(f"{f['id']} (slide {f['slide']}, {f['kind']}): {f['text']}" for f in facts)
+            or "(none)"
+        )
 
     prompt = COVERAGE_PROMPT.format(
         **ctx,
@@ -732,6 +733,14 @@ class Budget:
             )
 
 
+def request_digest(model: str, thinking: bool, prompt: str, schema: dict) -> str:
+    """A judge request's cache key: sha256 of the sorted-key JSON of model, prompt, schema,
+    temperature, reasoning and max_tokens (as in the pre-registered scorer)."""
+    request = {"model": model, "prompt": prompt, "schema": schema, "temperature": 0.0,
+               "thinking": thinking, "max_tokens": JUDGE_MAX_TOKENS}  # fmt: skip
+    return hashlib.sha256(json.dumps(request, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 @dataclass
 class Judge:
     """A model as a judge, every answer cached by the exact request (model, reasoning,
@@ -747,9 +756,7 @@ class Judge:
     def ask(
         self, prompt: str, schema: dict, run_id: str, stage: str, estimate: float = JUDGE_ESTIMATE
     ) -> dict:
-        request = {"model": self.model, "prompt": prompt, "schema": schema, "temperature": 0.0,
-                   "thinking": self.thinking, "max_tokens": JUDGE_MAX_TOKENS}  # fmt: skip
-        digest = hashlib.sha256(json.dumps(request, sort_keys=True).encode("utf-8")).hexdigest()
+        digest = request_digest(self.model, self.thinking, prompt, schema)
         path = JUDGE_CACHE / f"{digest}.json"
         if path.exists():
             saved = json.loads(path.read_text(encoding="utf-8"))
@@ -867,8 +874,8 @@ def video_metrics(
         "extended_freeze_in_speech": freeze_points_in_speech(extended, speech),
         "capacity_violations": capacity_violations(standard, (cues_json or {}).get("gaps", [])),
         "exact_match": {
-            "standard": exact_matches(entry["visual_facts"], std_texts, ties),
-            "with_extended": exact_matches(entry["visual_facts"], all_texts, ties),
+            "standard": exact_matches(entry["visual_facts"], std_texts),
+            "with_extended": exact_matches(entry["visual_facts"], all_texts),
         },
         "decoy_number_hits": decoy_number_hits(entry["absent_decoys"], all_texts),
     }
@@ -890,6 +897,7 @@ def video_metrics(
     std_hit = ext_hit = timely = 0
     kinds: dict[str, list[int]] = {}
     per_fact = []
+    tie_std = tie_ext = 0
     for f in entry["visual_facts"]:
         row = facts.get(f["id"])
         if row is None:
@@ -897,6 +905,11 @@ def video_metrics(
         ids = credited(row)
         s_ok = any(track[i] == "standard" for i in ids)
         a_ok = bool(ids)
+        labels = [f["anchor"], *ties.get(f["id"], [])]
+        tied = [c for c in cues if f["id"] in ties
+                and any(value_match(f["value"], lb, [c["text"]]) for lb in labels)]  # fmt: skip
+        tie_std += s_ok or any(c["track"] == "standard" for c in tied)
+        tie_ext += a_ok or bool(tied)
         t_ok = any(f["slide_start"] - EPS <= start[i] < f["slide_end"] for i in ids)
         std_hit, ext_hit, timely = std_hit + s_ok, ext_hit + a_ok, timely + t_ok
         k = kinds.setdefault(f["kind"], [0, 0, 0])
@@ -979,6 +992,11 @@ def video_metrics(
         if any(states_absent_part(text_of[i], words, numbers) for i in ids):
             absent.append(d["id"])
     m["supplementary"] = {
+        "recall_tie_aware": {"standard": [tie_std, n], "with_extended": [tie_ext, n]},
+        "exact_tie_aware": {
+            "standard": exact_matches(entry["visual_facts"], std_texts, ties),
+            "with_extended": exact_matches(entry["visual_facts"], all_texts, ties),
+        },
         "claims_not_in_cue_text": [len(judged_claims) - len(in_text), len(judged_claims)],
         "unsupported_claims_in_cue_text": [
             sum(x["verdict"] != "supported" for x in in_text), len(in_text)],
@@ -1057,6 +1075,11 @@ def aggregate(videos: list[dict]) -> dict:
         "extended_freeze_in_speech": sum(len(v["extended_freeze_in_speech"]) for v in videos),
         "capacity_violations": sum(len(v["capacity_violations"]) for v in videos),
         "recall_standard": ratio("recall", "standard"),
+        # supplementary (added after the pre-registration): a tied highest value
+        "recall_tie_aware_standard": ratio("supplementary", "recall_tie_aware", "standard"),
+        "recall_tie_aware_with_extended": ratio(
+            "supplementary", "recall_tie_aware", "with_extended"
+        ),
         "recall_with_extended": ratio("recall", "with_extended"),
         "timely_recall_with_extended": ratio("recall", "timely_with_extended"),
         "hallucination_claims": ratio("hallucination", "claims"),
@@ -1091,6 +1114,11 @@ def aggregate(videos: list[dict]) -> dict:
             pairs = [(v["exact_match"][tr][kind]["matched"], v["exact_match"][tr][kind]["of"])
                      for v in videos]  # fmt: skip
             out[f"exact_{kind}_{tr}"] = bootstrap_ratio(pairs)
+    for tr in ("standard", "with_extended"):
+        pairs = [(x["matched"], x["of"]) for v in videos
+                 if (x := v.get("supplementary", {}).get("exact_tie_aware", {})
+                     .get(tr, {}).get("chart_value"))]  # fmt: skip
+        out[f"exact_tie_aware_chart_value_{tr}"] = bootstrap_ratio(pairs)
     cost_model = sum(v.get("cost_model_usd", 0.0) for v in videos)
     cost_tavily = sum(v.get("cost_tavily_usd", 0.0) for v in videos)
     seconds = sum(v.get("processing_s", 0.0) for v in videos)
@@ -1687,10 +1715,16 @@ def markdown(result: dict) -> str:
         f"| visual-fact recall, standard | {_pct(a['recall_standard'])} |",
         f"| visual-fact recall, with extended | {_pct(a['recall_with_extended'])} |",
         f"| timely recall, with extended | {_pct(a['timely_recall_with_extended'])} |",
+        f"| (supplementary, added after the pre-registration) tie-aware recall, standard / "
+        f"with extended | {_pct(a['recall_tie_aware_standard'])} / "
+        f"{_pct(a['recall_tie_aware_with_extended'])} |",
         f"| exact title match, standard / with extended | {_pct(a['exact_title_standard'])} / "
         f"{_pct(a['exact_title_with_extended'])} |",
         f"| exact chart-value match, standard / with extended | "
         f"{_pct(a['exact_chart_value_standard'])} / {_pct(a['exact_chart_value_with_extended'])} |",
+        f"| (supplementary, added after the pre-registration) tie-aware exact chart-value "
+        f"match, standard / with extended | {_pct(a['exact_tie_aware_chart_value_standard'])} / "
+        f"{_pct(a['exact_tie_aware_chart_value_with_extended'])} |",
         f"| hallucination, claims (content only) | {_pct(a['hallucination_claims'])} |",
         f"| hallucination, cues with an unsupported claim | {_pct(a['hallucination_cues'])} |",
         f"| absent decoys stated (judge) | {a['decoys_stated']}/{a['decoys_total']} |",
