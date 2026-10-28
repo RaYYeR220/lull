@@ -22,6 +22,7 @@ import numpy as np
 
 from lull.ledger import CallRecord, Ledger, cost_of
 from lull.stages.plan import count_words
+from lull.stages.verify import tokenize
 from lull.types import Turn, Word
 
 WORDS = [
@@ -141,7 +142,8 @@ def description(messages: list[dict]) -> str:
 def split_all(call: dict) -> dict:
     """One claim per line: the whole description."""
     line = description(call["messages"])
-    return {"claims": [{"id": "k1", "text": line.rstrip("."), "span": line}]}
+    last = len(tokenize(line)) - 1
+    return {"claims": [{"id": "k1", "text": line.rstrip("."), "tokens": [[0, max(0, last)]]}]}
 
 
 def verify_all(call: dict) -> dict:

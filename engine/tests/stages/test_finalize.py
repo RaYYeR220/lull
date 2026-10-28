@@ -1,4 +1,3 @@
-import re
 import wave
 from pathlib import Path
 
@@ -25,7 +24,6 @@ from lull.stages.verify import (
     TEXT_SCHEMA,
     VERIFY_SCHEMA,
     clip_window,
-    remove_claims,
     verify,
 )
 from lull.stages.voice import atempo, voice
@@ -58,10 +56,31 @@ class FakeSpeech:
         return _wav(Path(dst), d)
 
 
-def _span_of(claim: str, line: str) -> str:
-    """The words of `line` a claim's text names (case aside), or the whole line."""
-    at = line.lower().find(claim.lower()) if claim else -1
-    return line[at : at + len(claim)] if at >= 0 else line
+def _range_of(claim: str, line: str) -> list[list[int]]:
+    """The token ranges of `line` whose words a claim's text spells (case aside): the words
+    together if they stand together, else each where it first comes in order; the whole line
+    when they are not all in it."""
+    from lull.stages.verify import fold, tokenize
+
+    toks = [fold(t.text) for t in tokenize(line)]
+    want = [fold(t.text) for t in tokenize(claim)]
+    for i in range(len(toks) - len(want) + 1):
+        if want and toks[i : i + len(want)] == want:
+            return [[i, i + len(want) - 1]]
+    found, at = [], 0
+    for w in want:
+        k = next((j for j in range(at, len(toks)) if toks[j] == w), None)
+        if k is None:
+            return [[0, max(0, len(toks) - 1)]]
+        found.append(k)
+        at = k + 1
+    ranges: list[list[int]] = []
+    for k in found:
+        if ranges and ranges[-1][1] == k - 1:
+            ranges[-1][1] = k
+        else:
+            ranges.append([k, k])
+    return ranges or [[0, max(0, len(toks) - 1)]]
 
 
 class FakeTF:
@@ -69,9 +88,10 @@ class FakeTF:
 
     A "verify" answer may be written as the claims a check finds, {"claims": [{text, verdict,
     at}]}: unless the test gives "split" answers of its own, the split call is answered with
-    those claims (each spanning the words of the line it names, else the whole line) and the
-    judge call with their verdicts, by
-    position. `roles()` leaves such split calls out; `roles(splits=True)` keeps them."""
+    those claims (each on the tokens of the line it spells, else the whole line) and the
+    judge call with their verdicts, by position. A mend call with no answer given is answered
+    with the cut line as it is. `roles()` leaves such split calls out; `roles(splits=True)`
+    keeps them."""
 
     def __init__(self, **answers):
         self.answers = answers
@@ -90,9 +110,11 @@ class FakeTF:
             self._found = self._answer("verify", call)
             line = _description(call)
             return {"claims": [{"id": f"k{i}", "text": c.get("text") or "a claim",
-                                "span": _span_of(c.get("text") or "", line)}
+                                "tokens": _range_of(c.get("text") or "", line)}
                                for i, c in enumerate(self._found.get("claims", []), start=1)]
-                    or [{"id": "k1", "text": line, "span": line}]}  # fmt: skip
+                    or [{"id": "k1", "text": line, "tokens": _range_of("", line)}]}  # fmt: skip
+        if role == "mend" and "mend" not in self.answers:
+            return {"text": _description(call)}  # the cut line as it is
         if role == "verify" and "split" not in self.answers:
             found, self._found = self._found, None
             if found is None:  # the same line judged again: its split was kept
@@ -104,7 +126,14 @@ class FakeTF:
                     for i, c in enumerate(found["claims"], start=1)
                 ]}  # fmt: skip
             return found
-        return self._answer(role, call)
+        out = self._answer(role, call)
+        if role == "split" and isinstance(out, dict):  # words given for tokens: their range
+            line = _description(call)
+            out = {"claims": [
+                {**c, "tokens": _range_of(c["tokens"], line)} if isinstance(c.get("tokens"), str)
+                else c for c in out.get("claims", [])
+            ]}  # fmt: skip
+        return out
 
     def roles(self, *, splits: bool = False) -> list[str]:
         return [c["role"] for c in self.calls if splits or c["role"] != "split"]
@@ -123,8 +152,9 @@ def _lenient_split(request, monkeypatch):
     from lull.stages import verify as ver
 
     def lenient(text, claims, names=()):
-        problems = [f"the span {c.span!r} of claim {c.id} is not in the description"
-                    for c in claims if c.span not in text]  # fmt: skip
+        n = len(ver.tokenize(text))
+        problems = [f"claim {c.id} has tokens outside 0..{n - 1}" for c in claims
+                    if any(not (0 <= a <= b < n) for a, b in c.tokens)]  # fmt: skip
         return problems + (["two claims share an id"]
                            if len({c.id for c in claims}) < len(claims) else [])  # fmt: skip
 
@@ -250,6 +280,8 @@ def test_claim_times_are_absolute(tmp_path, video):
 
 
 def test_not_visible_claim_is_removed_and_reverified(tmp_path, video):
+    """The engine cuts the failed claim's tokens itself; Lightning only mends the grammar of
+    what is left, and the shorter line is split and judged again."""
     tf = FakeTF(
         verify=[
             _claims(
@@ -259,17 +291,17 @@ def test_not_visible_claim_is_removed_and_reverified(tmp_path, video):
             ),  # fmt: skip
             _supported("a person", "opens a door"),
         ],
-        remove=[{"text": "A person opens a door."}],
     )
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert tf.roles() == ["verify", "remove", "verify"]
+    assert tf.roles() == ["verify", "mend", "verify"]
     assert out.status == "verified"
     assert out.text == "A person opens a door."
     assert "1 claim removed: in a red coat" in out.note
-    rm = tf.of("remove")[0]
-    assert (rm["model"], rm["stage"], rm["thinking"]) == (LIGHTNING, "finalize", False)
-    assert rm["schema"] == TEXT_SCHEMA
-    assert "in a red coat" in _user_text(rm) and _description(rm) == TEXT
+    md = tf.of("mend")[0]
+    assert (md["model"], md["stage"], md["thinking"]) == (LIGHTNING, "finalize", False)
+    assert md["schema"] == TEXT_SCHEMA
+    assert _description(md) == "A person opens a door."  # the engine's cut
+    assert "<cut>\na, coat, in, red\n</cut>" in _user_text(md)
     assert _description(tf.of("verify")[1]) == "A person opens a door."
     # every verification round is kept: the draft as first checked, then the cut line
     assert [(c.text, [k.verdict for k in c.claims]) for c in out.checks] == [
@@ -284,7 +316,7 @@ def test_contradicted_claim_is_removed(tmp_path, video):
             _claims(("a person", "supported"), ("a red coat", "contradicted")),
             _supported("a person", "opens a door"),
         ],
-        remove=[{"text": "A person opens a door."}],
+        mend=[{"text": "A person opens a door."}],
     )
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
     assert out.status == "verified" and "red" not in out.text
@@ -301,46 +333,24 @@ def _new_failure_each_round(*last_round, then=()):
     return lambda call: next(answers)
 
 
-def _changed_each_time():
-    """A remover that takes the words of the first listed claim out of the line."""
-
-    def remove(call):
-        listed = _user_text(call).split("<remove>\n", 1)[1].split("\n</remove>", 1)[0]
-        words = re.search(r'the words: "([^"]+)"', listed)
-        gone = words.group(1) if words else listed.split("\n")[0][2:].split(" (")[0]
-        line = re.sub(rf"\b{re.escape(gone)}\b\s*", "", _description(call), count=1)
-        return {"text": " ".join(line.split())}
-
-    return remove
-
-
 def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
     """After its two repairs the cue is held for a person, but a contradicted claim is still
     cut from its text; a claim that is only not visible stays for the reviewer to judge."""
-    removes = iter(
-        ["A person in a coat opens a door.", "A person in a opens a door.", "A person stands."]
-    )  # fmt: skip  (red, then coat, then the contradiction)
     tf = FakeTF(
         verify=_new_failure_each_round(
             ("opens a door", "contradicted"),
             ("a person", "not_visible"),
-            then=[_claims(("a person", "supported"), ("stands", "not_visible"))],
+            then=[_claims(("a person", "not_visible"))],
         ),  # fmt: skip
-        remove=lambda call: {"text": next(removes)},
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
-    assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 3
-    last = _user_text(tf.of("remove")[-1]).split("<remove>", 1)[1]
-    assert "opens a door" in last and "a person" not in last  # only the contradiction
-    assert out.text == "A person stands."
+    assert len(tf.of("verify")) == 4 and len(tf.of("mend")) == 3
+    assert "opens" not in out.text and "door" not in out.text  # the contradiction is cut
     # the claims it is held with are those of the cut text, judged on it (one more check)
     assert _description(tf.of("verify")[-1]) == out.text == out.checks[-1].text
-    # "a person" failed in the third check: the words keep that verdict (carried forward)
-    assert [(c.text, c.verdict) for c in out.claims] == [
-        ("a person", "not_visible"), ("stands", "not_visible")
-    ]  # fmt: skip
+    assert [(c.text, c.verdict) for c in out.claims] == [("a person", "not_visible")]
     assert "not verified after 2 repairs" in out.note and "opens a door" in out.note
     assert speech.calls == []
     assert (out.audio_path, out.audio_dur) == (None, None)
@@ -349,32 +359,37 @@ def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
 def test_claim_rejected_again_after_removal_is_held(tmp_path, video):
     tf = FakeTF(
         verify=lambda call: _claims(("a person", "supported"), ("a red coat", "not_visible")),
-        remove=[{"text": "A person in a coat opens a door."}],
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert tf.roles() == ["verify", "remove", "verify"]
-    assert out.status == "held" and out.text == "A person in a coat opens a door."
+    assert tf.roles() == ["verify", "mend", "verify"]
+    assert out.status == "held" and "red" not in out.text
     assert "rejected a removed claim again: a red coat" in out.note
 
 
-def test_removal_that_changes_nothing_is_held(tmp_path, video):
+def test_a_mend_that_puts_the_failed_words_back_is_not_taken(tmp_path, video):
+    """The mend answers with the line as it was: a cut word would come back, so the engine's
+    own cut stands; the failed fact is gone."""
     tf = FakeTF(
-        verify=[_claims(("a person", "supported"), ("a red coat", "not_visible"))],
-        remove=lambda call: {"text": _description(call)},
+        verify=[
+            _claims(("a person", "supported"), ("a red coat", "not_visible")),
+            _supported("a person", "opens a door"),
+        ],  # fmt: skip
+        mend=lambda call: {"text": TEXT},
     )
-    out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert tf.roles() == ["verify", "remove", "remove"]  # one re-ask
-    assert out.status == "held" and out.text == TEXT
-    assert "removed nothing" in out.note
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "mend", "verify"]
+    assert "red" not in out.text and "coat" not in out.text
+    assert out.text == _description(tf.of("verify")[1])
 
 
 def test_contradiction_that_cannot_be_cut_withholds_the_text(tmp_path, video):
+    """The contradicted claim's words all belong to a claim that passed: there is nothing to
+    cut without cutting what passed, so the held cue withholds its text."""
     tf = FakeTF(
-        verify=[_claims(("a person", "supported"), ("a red coat", "contradicted"))],
-        remove=lambda call: {"text": _description(call)},
+        verify=[_claims(("a person in a red coat", "supported"), ("red coat", "contradicted"))],
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert tf.roles() == ["verify", "remove", "remove"]  # one re-ask
+    assert tf.roles() == ["verify"]
     assert out.status == "held" and out.text == ""
     assert "withheld" in out.note
     assert out.claims == []  # nothing is said, so no claim is published; the check is kept
@@ -386,7 +401,7 @@ def test_everything_removed_is_held(tmp_path, video):
         verify=[
             _claims(("a person in a red coat", "not_visible"), ("opens a door", "not_visible"))
         ],
-        remove=[{"text": "  "}],
+        mend=[{"text": "  "}],
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
@@ -403,11 +418,11 @@ def test_removed_on_screen_text_is_not_demanded_back(tmp_path, video):
             _claims(('a sign reads "EXIT"', "not_visible"), ("a person opens a door", "supported")),
             _supported("a person opens a door"),
         ],
-        remove=[{"text": "A person opens a door."}],
+        mend=[{"text": "A person opens a door."}],
     )
     cue = _cue('A sign reads: "EXIT". A person opens a door.')
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=cue, ctx=ctx)
-    assert tf.roles() == ["verify", "remove", "verify"]
+    assert tf.roles() == ["verify", "mend", "verify"]
     assert out.status == "verified" and out.text == "A person opens a door."
 
 
@@ -593,7 +608,7 @@ TABBY = EV.model_copy(update={"id": "e002", "t_start": 2.5, "t_end": 6.0, "text"
 COAT_CAT = "A person in a red coat opens a door. A cat runs past."
 COAT_CLAIMS = _claims(
     ("a person opens a door", "supported"),
-    ("the person wears a red coat", "not_visible"),
+    ("in a red coat", "not_visible"),
     ("a cat runs past", "supported"),
 )
 
@@ -603,30 +618,13 @@ def _coat_cat(tmp_path, video, tf, speech):
     return _run(tmp_path, video, tf, speech, cue=cue, events={"e001": EV, "e002": TABBY})
 
 
-def test_a_claim_cut_that_drops_another_visual_is_retried_with_a_note(tmp_path, video):
-    tf = FakeTF(
-        verify=[COAT_CLAIMS, _supported("a person opens a door", "a cat runs past")],
-        remove=[
-            {"text": "A person opens a door."},
-            {"text": "A person opens a door. A cat runs past."},
-        ],
-    )
+def test_a_claim_cut_never_drops_another_visual(tmp_path, video):
+    """The cut takes only the failed claim's tokens: the other visual's sentence stays."""
+    tf = FakeTF(verify=[COAT_CLAIMS, _supported("a person opens a door", "a cat runs past")])
     out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert tf.roles() == ["verify", "remove", "remove", "verify"]
-    first, retry = (_user_text(c) for c in tf.of("remove"))
-    assert "previous answer" not in first
-    assert 'Your previous answer "A person opens a door." dropped "A cat runs past."' in retry
-    assert out.status == "verified" and out.text == "A person opens a door. A cat runs past."
-    assert "1 claim removed: the person wears a red coat" in out.note
-
-
-def test_a_claim_cut_that_drops_another_visual_twice_is_held_with_the_line(tmp_path, video):
-    tf = FakeTF(verify=[COAT_CLAIMS], remove=[{"text": "A person opens a door."}] * 2)
-    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert tf.roles() == ["verify", "remove", "remove"]
-    assert out.status == "held" and out.text == COAT_CAT  # nothing contradicted: kept for review
-    assert 'the claim cut dropped "A cat runs past." twice' in out.note
-    assert [c.verdict for c in out.claims] == ["supported", "not_visible", "supported"]
+    assert tf.roles() == ["verify", "mend", "verify"]
+    assert out.status == "verified" and "A cat runs past." in out.text and "red" not in out.text
+    assert "1 claim removed: in a red coat" in out.note
 
 
 def test_a_claim_cut_may_drop_the_sentence_its_claims_were_about(tmp_path, video):
@@ -635,20 +633,20 @@ def test_a_claim_cut_may_drop_the_sentence_its_claims_were_about(tmp_path, video
             _claims(("a person opens a door", "supported"), ("a cat runs past", "not_visible")),
             _supported("a person opens a door"),
         ],
-        remove=[{"text": "A person in a red coat opens a door."}],
     )
-    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert tf.roles() == ["verify", "remove", "verify"]
-    assert out.status == "verified" and out.text == "A person in a red coat opens a door."
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "mend", "verify"]
+    assert out.status == "verified" and "cat" not in out.text
 
 
-def test_remove_claims_sends_the_note_only_when_given():
-    bad = [Claim(text="red", verdict="not_visible", at=None)]
-    tf = FakeTF(remove=[{"text": "A door opens."}] * 2)
-    remove_claims("A red door opens.", bad, tf, run_id="r1")
-    remove_claims("A red door opens.", bad, tf, run_id="r1", note="it dropped a visual")
-    plain, noted = (_user_text(c) for c in tf.calls)
-    assert "it dropped a visual" not in plain and "it dropped a visual" in noted
+def test_mend_is_given_the_cut_line_and_the_cut_words():
+    from lull.stages.verify import mend
+
+    tf = FakeTF(mend=[{"text": "A door opens."}])
+    assert mend("A door opens.", ["red"], tf, run_id="r1") == "A door opens."
+    (call,) = tf.calls
+    assert call["role"] == "mend" and call["model"] == LIGHTNING
+    assert "<cut>\nred\n</cut>" in _user_text(call) and _description(call) == "A door opens."
 
 
 # -- (e) verification never passes ----------------------------------------------------------
@@ -659,12 +657,11 @@ def test_verify_always_fails_is_held_after_two_repairs(tmp_path, video):
     repairs never loop."""
     tf = FakeTF(
         verify=_new_failure_each_round(("a person", "supported"), ("door", "not_visible")),
-        remove=_changed_each_time(),
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
-    assert len(tf.of("verify")) == 3 and len(tf.of("remove")) == 2
+    assert len(tf.of("verify")) == 3 and len(tf.of("mend")) == 2
     assert "not verified after 2 repairs: door (not visible)" in out.note
     assert "2 claims removed: red; coat" in out.note
     assert speech.calls == []
@@ -674,16 +671,19 @@ def test_verify_always_fails_is_held_after_two_repairs(tmp_path, video):
 
 def test_a_judge_that_gives_no_verdict_leaves_the_line_unverified(tmp_path, video):
     """The vision model answered with no verdict at all: every claim of the line counts as
-    not visible, and the line is never voiced as verified."""
+    not visible, its words are cut, and nothing is left to voice."""
     tf = FakeTF(
-        split=[_split(("a person opens a door", "A person in a red coat opens a door"))],
-        verify=[{"verdicts": []}] * 2,
-        remove=lambda call: {"text": _description(call)},
+        split=[
+            _split(("a person in a red coat opens a door", "A person in a red coat opens a door"))
+        ],
+        verify=[{"verdicts": []}],
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
-    assert out.status == "held" and speech.calls == []
-    assert [(c.text, c.verdict) for c in out.claims] == [("a person opens a door", "not_visible")]
+    assert out.status == "held" and out.text == "" and speech.calls == []
+    assert [(k.text, k.verdict) for k in out.checks[-1].claims] == [
+        ("a person in a red coat opens a door", "not_visible")
+    ]  # fmt: skip
 
 
 # -- lint ---------------------------------------------------------------------------------
@@ -864,20 +864,20 @@ def test_removing_a_whole_look_ahead_sentence_is_fine(tmp_path, video):
             _claims(("a person waves", "supported"), ("a red car drives past", "not_visible")),
             _supported("a person waves"),
         ],
-        remove=[{"text": "A person waves."}],
+        mend=[{"text": "A person waves."}],
     )
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_ahead_cue(), events=AHEAD_EVENTS)
     assert out.status == "verified" and out.text == "A person waves."
     assert out.ahead is False and "look-ahead sentence removed" in out.note
 
 
-def test_removal_that_strips_the_prefix_but_keeps_the_sentence_is_held(tmp_path, video):
+def test_a_mend_that_strips_the_look_ahead_but_keeps_its_sentence_is_held(tmp_path, video):
     tf = FakeTF(
-        verify=[_claims(("a person waves", "supported"), ("the car is red", "not_visible"))],
-        remove=[{"text": "A person waves. A car drives past."}],
+        verify=[_claims(("a person waves", "not_visible"), ("a red car drives past", "supported"))],
+        mend=[{"text": "A red car drives past."}],  # the look-ahead dropped, its sentence kept
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]), cue=_ahead_cue(), events=AHEAD_EVENTS)
-    assert tf.roles() == ["verify", "remove"]
+    assert tf.roles() == ["verify", "mend"]
     assert out.status == "held" and "In a moment" in out.note and out.ahead is True
 
 
@@ -940,23 +940,23 @@ def test_fit_is_measured_from_the_placed_start(tmp_path, video):
     assert tf.roles() == ["verify"]
 
 
-def test_quote_lost_with_an_unrelated_claim_is_demanded_back(tmp_path, video):
+def test_on_screen_text_the_failed_claim_does_not_hold_stays(tmp_path, video):
+    """The cut takes only the failed claim's tokens: the sign's quoted text, which a claim
+    that passed holds, is never lost with it (R19 has nothing to demand back)."""
     ctx = CTX.model_copy(update={"verbatim": ["EXIT"]})
     tf = FakeTF(
         verify=[
-            _claims(('a sign reads "EXIT"', "supported"), ("in a red coat", "not_visible")),
+            _claims(
+                ('a sign above the door reads: "EXIT"', "supported"),
+                ("in a red coat", "not_visible"),
+            ),
             _supported('a sign reads "EXIT"', "a person opens a door"),
-        ],
-        # the sign sentence survives but loses its quote (a whole lost sentence is asked back
-        # from the cut itself: see the (d3) tests)
-        remove=[{"text": "A sign above the door. A person opens a door."}],
-        repair=[{"text": 'A sign above the door reads: "EXIT". A person opens a door.'}],
+        ],  # fmt: skip
     )
     cue = _cue('A sign above the door reads: "EXIT". A person in a red coat opens a door.')
     out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=cue, ctx=ctx)
-    assert tf.roles() == ["verify", "remove", "repair", "verify"]
-    assert "R19-verbatim" in _user_text(tf.of("repair")[0])
-    assert out.status == "verified" and '"EXIT"' in out.text
+    assert tf.roles() == ["verify", "mend", "verify"]
+    assert out.status == "verified" and '"EXIT"' in out.text and "red" not in out.text
 
 
 def test_clip_uses_the_duration_from_the_context(tmp_path, video, monkeypatch):
@@ -1036,14 +1036,15 @@ def test_the_verify_clip_covers_the_moment_a_line_describes():
 # -- model calls on their own -------------------------------------------------------------------
 
 
-def test_remove_claims_lists_the_bad_claims():
-    tf = FakeTF(remove=[{"text": "A door opens."}])
-    bad = [Claim(text="a red door", verdict="contradicted", at=1.0)]
-    assert remove_claims("A red door opens.", bad, tf, run_id="r1") == "A door opens."
-    assert "a red door" in _user_text(tf.calls[0])
-    assert tf.calls[0]["role"] == "remove"
-    assert remove_claims("A door opens.", [], tf, run_id="r1") == "A door opens."
-    assert len(tf.calls) == 1
+def test_a_cut_line_loses_the_failed_tokens_and_keeps_what_passed():
+    from lull.stages.finalize import cut_tokens
+    from lull.stages.verify import tokenize
+
+    line = "A person in a red coat opens a door."
+    assert [t.text for t in tokenize(line)][:6] == ["A", "person", "in", "a", "red", "coat"]
+    assert cut_tokens(line, {2, 3, 4, 5}) == "A person opens a door."
+    assert cut_tokens('A sign reads "\u6771\u4eac".', {2, 4}) == "A sign."  # no empty quotes
+    assert cut_tokens("In a moment, a red door opens.", {4, 5, 6, 7}) == ""
 
 
 def test_compress_passes_target_and_keep():
@@ -1155,26 +1156,6 @@ def test_overlap_gate_needs_audio():
 # -- edge cases ------------------------------------------------------------------------------
 
 
-def test_a_quote_inside_a_longer_word_of_a_cut_claim_is_still_demanded(tmp_path, video):
-    """Cutting "a person exits the building" does not cut the sign "EXIT": only a quote the
-    cut claims say as a whole word stops being demanded (R19)."""
-    ctx = CTX.model_copy(update={"verbatim": ["EXIT"]})
-    tf = FakeTF(
-        verify=[
-            _claims(
-                ('a sign reads "EXIT"', "supported"), ("a person exits the building", "not_visible")
-            ),
-            _supported('a sign reads "EXIT"'),
-        ],  # fmt: skip
-        remove=[{"text": "A sign above the door."}],
-        repair=[{"text": 'A sign above the door reads: "EXIT".'}],
-    )
-    cue = _cue('A sign above the door reads: "EXIT". A person exits the building.')
-    out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=cue, ctx=ctx)
-    assert tf.roles() == ["verify", "remove", "repair", "verify"]
-    assert out.status == "verified" and '"EXIT"' in out.text
-
-
 def test_lost_ahead_follows_the_look_ahead_sentence_words_that_are_its_own():
     """A look-ahead merged into a longer unprefixed sentence is caught (most of its own words
     survive there), and words it shares with other sentences prove nothing."""
@@ -1208,7 +1189,7 @@ def test_a_line_that_lost_an_events_sentence_no_longer_describes_it(tmp_path, vi
             ),
             _supported("a person opens a door"),
         ],  # fmt: skip
-        remove=[{"text": "A person opens a door."}],
+        mend=[{"text": "A person opens a door."}],
     )
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=cue,
                events={"e001": EV, "e002": EV2})  # fmt: skip
@@ -1426,33 +1407,27 @@ def test_claims_of_drops_only_supported_claims_the_line_does_not_make():
 def test_a_paraphrased_contradicted_claim_is_never_voiced_as_verified(tmp_path, video):
     tf = FakeTF(
         verify=[_claims(("a person waves", "supported"), ("1 person", "contradicted"))],
-        remove=lambda call: {"text": _description(call)},  # the cut finds nothing to cut
     )
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue("One person waves at the camera."))
     assert out.status == "held" and out.audio_path is None
-    assert tf.roles() == ["verify", "remove", "remove"]  # one re-ask
+    # "1 person" holds no word the claim that passed does not: nothing can be cut
+    assert tf.roles() == ["verify"]
 
 
 def test_a_held_cue_keeps_a_contradiction_found_when_its_cut_text_is_checked_again(tmp_path, video):
     """The check of the cut text finds a new contradiction: the held cue keeps that claim
     with its verdict and says so, so a reviewer never sees the line as merely unconfirmed."""
-    removes = iter(
-        ["A person in a coat opens a door.", "A person in a opens a door.", "A person stands."]
-    )  # fmt: skip  (red, then coat, then the contradiction)
     tf = FakeTF(
         verify=_new_failure_each_round(
             ("opens a door", "contradicted"),
             ("a person", "not_visible"),
-            then=[_claims(("a person", "supported"), ("stands", "contradicted"))],
+            then=[_claims(("a person", "contradicted"))],
         ),  # fmt: skip
-        remove=lambda call: {"text": next(removes)},
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert out.status == "held" and out.text == "A person stands."
-    assert [(c.text, c.verdict) for c in out.claims] == [
-        ("a person", "not_visible"), ("stands", "contradicted")
-    ]  # fmt: skip
-    assert "stands (contradicted)" in out.note
+    assert out.status == "held" and "door" not in out.text
+    assert [(c.text, c.verdict) for c in out.claims] == [("a person", "contradicted")]
+    assert "a person (contradicted)" in out.note
 
 
 def test_a_line_that_fails_its_check_as_voiced_keeps_the_contradiction(tmp_path, video):
@@ -1509,10 +1484,8 @@ def test_with_verification_off_a_line_is_voiced_unverified(tmp_path, video):
 # -- atomic claims and a targeted repair ------------------------------------------------------
 
 
-def test_a_repair_rewrites_only_the_clause_that_carries_a_failed_claim(tmp_path, video):
+def test_a_cut_takes_only_the_clause_that_carries_a_failed_claim(tmp_path, video):
     """A two-clause line with one false clause keeps the true one."""
-    from lull.stages.verify import load_prompt
-
     line = "A person walks along the bridge while lasers scan the crowd."
     tf = FakeTF(
         split=[_split(("a person walks along the bridge", "A person walks along the bridge"),
@@ -1520,13 +1493,10 @@ def test_a_repair_rewrites_only_the_clause_that_carries_a_failed_claim(tmp_path,
                _split(("a person walks along the bridge", "A person walks along the bridge"))],
         verify=[_verdicts(("k1", "supported"), ("k2", "not_visible")),
                 _verdicts(("k1", "supported"))],
-        remove=[{"text": "A person walks along the bridge."}],
     )  # fmt: skip
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
     assert out.status == "verified" and out.text == "A person walks along the bridge."
-    listed = _user_text(tf.of("remove")[0]).split("<remove>", 1)[1]
-    assert '"while lasers scan the crowd"' in listed and "walks along the bridge" not in listed
-    assert "only the clause" in " ".join(load_prompt("remove").split())
+    assert "<cut>\ncrowd, lasers, scan, the, while\n</cut>" in _user_text(tf.of("mend")[0])
 
 
 def test_a_compression_that_breaks_a_style_rule_gets_one_repair(tmp_path, video):
@@ -1550,22 +1520,28 @@ def test_a_cut_that_leaves_only_the_look_ahead_leaves_nothing(tmp_path, video):
     A line with nothing but its look-ahead prefix says nothing: held as nothing left."""
     tf = FakeTF(
         verify=[_claims(("a screen reads MEMORY OVERRIDE", "not_visible"))],
-        remove=[{"text": "In a moment, ."}],
+        mend=[{"text": "In a moment, ."}],
     )
     cue = _cue("In a moment, a screen reads MEMORY OVERRIDE.", ahead=True)
     out = _run(tmp_path, video, tf, FakeSpeech([]), cue=cue)
     assert out.status == "held" and out.text == ""
     assert "nothing left once the unverified claims were removed" in out.note
-    assert tf.roles() == ["verify", "remove"]
+    assert tf.roles() == ["verify"]  # nothing to mend
 
 
 # -- claims split by the engine, judged by the vision model -----------------------------------
 
 
 def _split(*claims):
-    """A split answer: (text, span) pairs, ids k1, k2, ..."""
-    return {"claims": [{"id": f"k{i}", "text": t, "span": sp}
+    """A split answer: (text, words) pairs, ids k1, k2, ...; `words` are the line's words the
+    claim comes from (a list of ranges when given as [[a, b], ...]), resolved to token ranges
+    when the line is known (see _ranges)."""
+    return {"claims": [{"id": f"k{i}", "text": t, "tokens": sp}
                        for i, (t, sp) in enumerate(claims, start=1)]}  # fmt: skip
+
+
+_FINE = [("a person", "A person"), ("a person in a red coat", "A person in a red coat"),
+         ("a person opens a door", [[0, 1], [6, 8]])]  # fmt: skip
 
 
 def _verdicts(*items):
@@ -1607,32 +1583,37 @@ def test_a_sound_split_is_judged_claim_by_claim(tmp_path):
 
 
 @pytest.mark.strict_split
-def test_a_split_whose_span_is_not_in_the_line_or_misses_a_word_is_asked_again():
+def test_a_split_whose_tokens_leave_words_out_is_asked_again_naming_them():
     from lull.stages.verify import check_split, split_claims
 
     line = "A person in a red coat opens a door."
-    bad = [
-        {"id": "k1", "text": "a person", "span": "a person"},  # wrong case: not in the line
-        {"id": "k2", "text": "opens a door", "span": "opens a door"},
-    ]
+    bad = [{"id": "k1", "text": "a person", "tokens": [[0, 40]]},  # past the last token
+           {"id": "k2", "text": "opens a door", "tokens": "opens a door"}]  # fmt: skip
     good = _split(("a person in a red coat", "A person in a red coat"),
-                  ("the person opens a door", "opens a door"))  # fmt: skip
+                  ("a person opens a door", [[0, 1], [6, 8]]))  # fmt: skip
     tf = FakeTF(split=[{"claims": bad}, good])
     claims = split_claims(line, tf, run_id="r1")
-    assert [c.span for c in claims] == ["A person in a red coat", "opens a door"]
+    assert [c.span(line) for c in claims] == [
+        "A person in a red coat", "A person … opens a door"
+    ]  # fmt: skip
+    asked = _user_text(tf.calls[0])
+    assert "<tokens>\n0: A\n1: person\n2: in" in asked
     retry = _user_text(tf.calls[1])
-    assert "'a person' of claim k1 is not in the description" in retry
-    assert "no claim covers: coat, in, person, red" in retry
+    assert "claim k1 has tokens outside 0..9" in retry
+    assert "tokens no claim says: 1 'person', 2 'in', 4 'red', 5 'coat'" in retry
     assert check_split(line, claims) == []
     # names are context and framing words need no claim
     assert check_split("In a moment, Proog waves.", [
-        _sc("k1", "Proog waves", "waves")], names={"Proog"}) == []  # fmt: skip
+        _sc("k1", "Proog waves", "waves", "In a moment, Proog waves.")],
+        names={"Proog"}) == []  # fmt: skip
 
 
-def _sc(cid, text, span):
+def _sc(cid, text, words, line=""):
+    """A split claim: its tokens given as ranges, or as the words of `line` it comes from."""
     from lull.stages.verify import SplitClaim
 
-    return SplitClaim(id=cid, text=text, span=span)
+    tokens = words if isinstance(words, list) else _range_of(words, line)
+    return SplitClaim(id=cid, text=text, tokens=[tuple(r) for r in tokens])
 
 
 @pytest.mark.strict_split
@@ -1642,7 +1623,8 @@ def test_a_split_that_fails_twice_falls_back_to_one_claim_per_sentence(caplog):
     tf = FakeTF(split=[{"claims": []}, _split(("a door", "a door"))])
     with caplog.at_level("WARNING", logger="lull.stages.verify"):
         claims = split_claims("In a moment, a door opens. A cat runs past.", tf, run_id="r1")
-    assert [(c.text, c.span) for c in claims] == [
+    line = "In a moment, a door opens. A cat runs past."
+    assert [(c.text, c.span(line)) for c in claims] == [
         ("a door opens", "a door opens."), ("A cat runs past", "A cat runs past."),
     ]  # fmt: skip
     assert "one claim per sentence" in caplog.text
@@ -1663,7 +1645,7 @@ def test_the_judge_needs_a_verdicts_list_and_keeps_the_worse_of_two(tmp_path):
 
     clip = tmp_path / "c.mp4"
     clip.write_bytes(b"\0" * 16)
-    claims = [_sc("k1", "a cat sits", "A cat sits")]
+    claims = [_sc("k1", "a cat sits", "A cat sits", "A cat sits.")]
     with pytest.raises(ValueError):
         judge("A cat sits.", claims, clip, FakeTF(split=[], verify=[{"claims": []}]),
               run_id="r1")  # fmt: skip
@@ -1672,28 +1654,32 @@ def test_the_judge_needs_a_verdicts_list_and_keeps_the_worse_of_two(tmp_path):
     assert c.verdict == "contradicted"
 
 
-def test_one_contradicted_claim_of_two_cuts_only_its_words_and_the_new_line_is_split_again(
+@pytest.mark.strict_split
+def test_one_contradicted_claim_of_three_is_cut_and_the_new_line_split_and_judged_again(
     tmp_path, video
 ):
-    """The repair is given the exact words of the failed claim; the shorter line is split
-    afresh and judged, and its claims are the ones published."""
-    line = "A person in a red coat opens a door."
+    """Strict check, a realistic split: the contradicted claim's own tokens are cut (those a
+    passed claim also holds stay), the mend may only tidy, and the shorter line is split
+    afresh (here after one re-ask) and judged; only its claims are published."""
+    line, cut = TEXT, "A person opens a door"
     tf = FakeTF(
-        split=[_split(("the person wears a red coat", "in a red coat"),
-                      ("a person opens a door", "A person"),
-                      ("the person opens a door", "opens a door")),
-               _split(("a person opens a door", "A person opens a door"))],
-        verify=[_verdicts(("k1", "contradicted"), ("k2", "supported"), ("k3", "supported")),
-                _verdicts(("k1", "supported"))],
-        remove=[{"text": "A person opens a door."}],
+        split=[_split(*_FINE),
+               {"claims": [{"id": "k1", "text": "a person", "tokens": [[0, 1]]}]},  # no door
+               _split(("a person", "A person"), ("a person opens a door", cut))],
+        verify=[_verdicts(("k1", "supported"), ("k2", "contradicted"), ("k3", "supported")),
+                _verdicts(("k1", "supported"), ("k2", "supported"))],
+        mend=[{"text": "A person opens a door."}],
     )  # fmt: skip
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
-    assert tf.roles(splits=True) == ["split", "verify", "remove", "split", "verify"]
-    listed = _user_text(tf.of("remove")[0]).split("<remove>", 1)[1]
-    assert 'the person wears a red coat (contradicted) -- the words: "in a red coat"' in listed
-    assert "opens a door" not in listed
+    assert tf.roles(splits=True) == ["split", "verify", "mend", "split", "split", "verify"]
+    assert _description(tf.of("mend")[0]) == "A person opens a door."
+    assert "<cut>\na, coat, in, red\n</cut>" in _user_text(tf.of("mend")[0])  # "A person" kept
+    retry = _user_text(tf.of("split")[2])
+    assert "tokens no claim says: 2 'opens', 4 'door'" in retry
     assert out.status == "verified" and out.text == "A person opens a door."
-    assert [(c.text, c.verdict) for c in out.claims] == [("a person opens a door", "supported")]
+    assert [(c.text, c.verdict) for c in out.claims] == [
+        ("a person", "supported"), ("a person opens a door", "supported")
+    ]  # fmt: skip
 
 
 def test_the_split_prompt_asks_for_one_checkable_fact_and_exact_spans():
@@ -1701,49 +1687,13 @@ def test_the_split_prompt_asks_for_one_checkable_fact_and_exact_spans():
 
     text = " ".join(load_prompt("split").split())
     assert "One checkable fact per claim" in text
-    for case in ('"and"', "lists", '"X does Y while Z"', "character for character"):
+    for case in ('"and"', "lists", '"X does Y while Z"', "[first, last] inclusive"):
         assert case in text, case
     judge_prompt = " ".join(load_prompt("verify").split())
     assert "add no claim" in judge_prompt
 
 
 # -- a second look never rescues a failed claim -------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "second",
-    [
-        _supported("a person in a red coat", "the person opens a door"),  # reworded
-        _claims(("a person", "supported"), ("a red coat", "supported")),  # flipped
-        _supported("a person"),  # the failed claim left out
-    ],
-    ids=["reworded", "flipped", "omitted"],
-)
-def test_a_failed_claim_the_line_says_is_never_rescued_by_a_second_look(tmp_path, video, second):
-    """The line says "a red coat" and it failed; the repair could not cut it. Whatever a
-    second check would answer (the fact reworded, its verdict flipped, or the claim left out),
-    there is none: the cue is held."""
-    tf = FakeTF(
-        verify=[_claims(("a person", "supported"), ("a red coat", "contradicted")), second],
-        remove=lambda call: {"text": TEXT},
-    )
-    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert out.status == "held" and out.audio_path is None
-    assert tf.roles() == ["verify", "remove", "remove"]  # one re-ask
-
-
-def test_a_contradicted_whole_sentence_claim_holds_the_line(tmp_path, video):
-    """The split gave one claim for the whole sentence and it was contradicted: nothing
-    re-asks for a finer split, and no later all-supported answer can pass the line."""
-    line = "A person in a blue jacket walks onto the bridge and looks around."
-    tf = FakeTF(
-        split=[_split((line.rstrip("."), line))],
-        verify=[_verdicts(("k1", "contradicted")), _verdicts(("k1", "supported"))],
-        remove=lambda call: {"text": line},
-    )
-    out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=_cue(line))
-    assert out.status == "held" and out.audio_path is None
-    assert tf.roles(splits=True) == ["split", "verify", "remove", "remove"]
 
 
 def test_supported_claims_the_line_does_not_make_are_left_out_and_noted(tmp_path, video,
@@ -1828,57 +1778,6 @@ def test_the_verify_estimate_covers_the_longest_clip():
     assert ver.VERIFY_ESTIMATE >= 0.003 * ver.CLIP_MAX_S / ver.CLIP_CAP_S
 
 
-# -- a cut must take the failed words out ---------------------------------------------------------
-
-_RED = [("a person", "A person"), ("a person in a red coat", "A person in a red coat"),
-        ("a person opens a door", "opens a door")]  # fmt: skip
-
-
-@pytest.mark.parametrize(
-    "rewrite",
-    [
-        "A person in a red coat opens the door.",  # only "a" -> "the"
-        "A person in a red coat opens a door",  # only the full stop
-        "A person in a red coat pushes a door.",
-    ],  # another clause rewritten
-    ids=["a-to-the", "full-stop", "opens-to-pushes"],
-)
-def test_a_cut_that_leaves_the_failed_words_in_place_holds_the_line(tmp_path, video, rewrite):
-    """The failed claim's words ("in a red coat") are still in the rewrite: that is a cut that
-    removed nothing. It is asked once more, naming the words, and then the line is held;
-    no later answer can pass it, and the note never claims a removal that did not happen."""
-    line = "A person in a red coat opens a door."
-    tf = FakeTF(
-        split=[_split(*_RED), _split(("a person in a red coat", "A person in a red coat"),
-                                     ("a person opens the door", "opens the door"))],
-        verify=[_verdicts(("k1", "supported"), ("k2", "contradicted"), ("k3", "supported")),
-                _verdicts(("k1", "supported"), ("k2", "supported"))],
-        remove=[{"text": rewrite}, {"text": rewrite}],
-    )  # fmt: skip
-    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
-    assert out.status == "held" and out.audio_path is None
-    assert tf.roles(splits=True) == ["split", "verify", "remove", "remove"]
-    retry = _user_text(tf.of("remove")[1])
-    assert '"A person in a red coat"' in retry and "still" in retry
-    assert "removed:" not in (out.note or "") and "claim removed" not in (out.note or "")
-
-
-def test_a_claim_that_contains_words_that_failed_before_keeps_their_verdict(tmp_path, video):
-    """A later split can wrap words that already failed in a bigger claim; it keeps the worse
-    verdict however the second check answers."""
-    from lull.stages import finalize as f
-
-    st = f._Finalise(_cue(TEXT), GAP, [EV], video, tmp_path / "w", FakeTF(), FakeSpeech([]),
-                     OPTS, CTX, "r1")  # fmt: skip
-    st.failed = {"in a red coat": "contradicted"}
-    later = [Claim(text="a person in a red coat", verdict="supported", at=1.0,
-                   span="A person in a red coat"),
-             Claim(text="a person opens a door", verdict="supported", at=1.0,
-                   span="opens a door")]  # fmt: skip
-    got = st.carry_forward(later)
-    assert [c.verdict for c in got] == ["contradicted", "supported"]
-
-
 # -- the split check reads the claims, not just their spans ---------------------------------------
 
 
@@ -1890,31 +1789,54 @@ def test_a_claim_that_contains_words_that_failed_before_keeps_their_verdict(tmp_
             "A person in a red coat opens a door.",
             [("a person opens a door", "A person in a red coat opens a door.")],
             (),
-            "no claim covers: coat, in, red",
+            "tokens no claim says: 2 'in', 4 'red', 5 'coat'",
         ),
         (
             'A sign reads: "EXIT 12".',
             [('a sign reads "EXIT"', 'A sign reads: "EXIT 12"')],
             (),
-            "no claim covers: 12",
+            "tokens no claim says: 6 '12'",
         ),
         (
             "A cat sits under the table without a collar.",
             [("a cat sits", "A cat sits"), ("the table", "the table"), ("a collar", "a collar")],
             (),
-            "no claim covers: under, without",
+            "tokens no claim says: 3 'under', 6 'without'",
         ),
         (
             "Red Leader waves from a red car.",
             [("Red Leader waves from a", "Red Leader waves from a"), ("a car", "car")],
             ("Red Leader",),
-            "no claim covers: red",
+            "tokens no claim says: 5 'red'",
         ),
         (
             "A person opens a door.",
             [("a person in a red coat opens a door", "A person opens a door")],
             (),
-            "says coat, in, red, which the description does not",
+            "says coat, red, which its tokens do not",
+        ),
+        (
+            "The lights go off. Both doors stay up.",
+            [("the lights go", "The lights go"), ("doors stay", "doors stay")],
+            (),
+            "tokens no claim says: 3 'off', 5 'Both', 8 'up'",
+        ),
+        ("Nobody is in the room.", [("the room", "the room")], (), "0 'Nobody'"),
+        (
+            "The door does not open.",
+            [("the door opens", "The door does not open")],
+            (),
+            "tokens no claim says: 2 'does', 3 'not'",
+        ),
+        (  # attributes swapped between claims: each claim says words its own tokens lack
+            "A man in a red hat stands by a blue car.",
+            [
+                ("a man in a blue hat", "A man in a red hat"),
+                ("a red car", "red hat stands by a blue car"),
+                ("a man stands by a car", "stands by a blue car"),
+            ],  # fmt: skip
+            (),
+            "claim k1 says blue, which its tokens do not",
         ),
     ],
     ids=[
@@ -1923,14 +1845,64 @@ def test_a_claim_that_contains_words_that_failed_before_keeps_their_verdict(tmp_
         "position-and-negation",
         "name-and-colour",
         "added-fact",
+        "particles",
+        "nobody",
+        "negation",
+        "binding-swap",
     ],
 )
 def test_the_split_check_reads_each_claims_own_words(line, claims, names, problem):
     from lull.stages.verify import check_split
 
-    got = check_split(line, [_sc(f"k{i}", t, sp) for i, (t, sp) in enumerate(claims, start=1)],
+    got = check_split(line, [_sc(f"k{i}", t, sp, line) for i, (t, sp) in enumerate(claims, 1)],
                       names)  # fmt: skip
     assert any(problem in p for p in got), got
+
+
+@pytest.mark.strict_split
+def test_a_binding_swap_is_named_for_every_claim_that_moves_a_word():
+    from lull.stages.verify import check_split
+
+    line = "A man in a red hat stands by a blue car."
+    claims = [("a man in a blue hat", "A man in a red hat"),
+              ("a red car", "red hat stands by a blue car"),
+              ("a man stands by a car", "stands by a blue car")]  # fmt: skip
+    got = check_split(line, [_sc(f"k{i}", t, sp, line) for i, (t, sp) in enumerate(claims, 1)])
+    assert "claim k1 says blue, which its tokens do not" in got
+    assert "claim k3 says man, which its tokens do not" in got
+
+
+REAL = "In a moment, a woman in a red coat walks past two parked cars."
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "claims, ok",
+    [
+        ([("a woman", "a woman"), ("a woman in a red coat", "a woman in a red coat"),
+          ("a woman walks past two parked cars", "walks past two parked cars")], False),
+        ([("a woman", "a woman"), ("a woman in a red coat", "a woman in a red coat"),
+          ("walks past two parked cars", "walks past two parked cars")], True),
+        ([("a woman in a red coat", "a woman in a red coat"),
+          ("a woman walks past cars", [[4, 5], [10, 11], [14, 14]]),
+          ("two cars are parked", "two parked cars")], True),
+        ([("the woman wears a red coat", "a woman in a red coat"),
+          ("the woman walks past two parked cars", [[4, 5], [10, 14]])], False),  # "wears"
+        ([("a woman", "a woman"), ("the woman's coat is red", "a woman in a red coat"),
+          ("the woman walks past two parked cars", [[4, 5], [10, 14]])], False),  # "in"
+        ([("a woman in a red coat walks past two parked cars",
+           "a woman in a red coat walks past two parked cars")], True),
+        ([("a woman", "a woman"), ("a woman in a red coat", "a woman in a red coat"),
+          ("a woman walked past two parked cars", [[4, 5], [10, 14]])], True),  # tense
+    ],
+    ids=["woman-not-in-its-tokens", "fine", "non-contiguous", "wears", "possessive",
+         "one-claim", "tense"],
+)  # fmt: skip
+def test_a_realistic_split_is_checked_word_by_word(claims, ok):
+    from lull.stages.verify import check_split
+
+    got = check_split(REAL, [_sc(f"k{i}", t, sp, REAL) for i, (t, sp) in enumerate(claims, 1)])
+    assert (got == []) is ok, got
 
 
 def test_the_same_words_from_two_places_are_two_claims(tmp_path):
@@ -1941,8 +1913,8 @@ def test_the_same_words_from_two_places_are_two_claims(tmp_path):
     clip = tmp_path / "c.mp4"
     clip.write_bytes(b"\0" * 16)
     line = "A door opens. A door opens."
-    claims = [_sc("k1", "a door opens", "A door opens."), _sc("k2", "a door opens", "A door opens"),
-              _sc("k3", "a door opens", "A door opens")]  # fmt: skip
+    claims = [_sc("k1", "a door opens", [[0, 3]]), _sc("k2", "a door opens", [[4, 6]]),
+              _sc("k3", "a door opens", [[4, 6]])]  # fmt: skip
     tf = FakeTF(split=[], verify=[_verdicts(("k1", "supported"), ("k2", "contradicted"),
                                             ("k3", "supported"))])  # fmt: skip
     got = judge(line, claims, clip, tf, run_id="r1")
@@ -1963,3 +1935,105 @@ def test_the_judge_supports_a_claim_only_when_every_detail_is_visible():
     from lull.stages.verify import load_prompt
 
     assert "only when every detail in it is visible" in " ".join(load_prompt("verify").split())
+
+
+# -- the engine cuts; nothing a second look or a mend says can bring a failed fact back ----------
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "mended",
+    [
+        "A person in a red coat opens the door.",
+        "A person in a red coat opens a door",
+        "A person in a red coat pushes a door.",
+        "A person in a bright red coat opens a door.",
+        "A person wearing a red coat opens a door.",
+    ],
+    ids=["a-to-the", "full-stop", "opens-to-pushes", "word-inserted", "reworded"],
+)
+def test_a_mend_never_brings_a_cut_fact_back(tmp_path, video, mended):
+    """Whatever the mend answers, the failed claim's words ("red coat") are out of the line:
+    a mend that would add or put back a word is not taken, and the engine's own cut stands."""
+    tf = FakeTF(
+        split=[_split(*_FINE), _split(("a person opens a door", "A person opens a door"))],
+        verify=[_verdicts(("k1", "supported"), ("k2", "contradicted"), ("k3", "supported")),
+                _verdicts(("k1", "supported"))],
+        mend=[{"text": mended}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(TEXT))
+    assert out.status in ("verified", "held")
+    assert "red" not in out.text and "coat" not in out.text
+    if out.status == "verified":
+        assert out.text == "A person opens a door."
+
+
+@pytest.mark.parametrize("verdict", ["not_visible", "contradicted"])
+def test_a_whole_sentence_claim_that_fails_leaves_nothing(tmp_path, video, verdict):
+    tf = FakeTF(
+        split=[_split(("a person in a red coat opens a door", TEXT.rstrip(".")))],
+        verify=[_verdicts(("k1", verdict)), _verdicts(("k1", "supported"))],
+        mend=[{"text": "A person in a red coat opens the door."}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(TEXT))
+    assert out.status == "held" and out.text == "" and out.audio_path is None
+
+
+@pytest.mark.strict_split
+def test_a_fallen_back_split_that_fails_leaves_nothing(tmp_path, video):
+    tf = FakeTF(
+        split=[{"claims": []}, {"claims": []}],
+        verify=[_verdicts(("s1", "not_visible"))],
+        mend=[{"text": "A person in a red coat opens the door."}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(TEXT))
+    assert out.status == "held" and out.text == ""
+    assert "claims: one per sentence (split failed)" in out.note
+
+
+@pytest.mark.parametrize(
+    "line, held, failed, mended, gone",
+    [
+        ("A man’s coat is red.", ("a man’s coat", [[0, 2]]),
+         ("a man’s coat is red", [[0, 4]]), "A man's coat is red.", "red"),
+        ('A sign reads "東京".', ("a sign", [[0, 1]]),
+         ('a sign reads "東京"', [[0, 5]]), 'The sign reads "東京".',
+         "東京"),
+    ],
+    ids=["apostrophe", "non-latin"],
+)  # fmt: skip
+def test_a_cut_works_on_tokens_whatever_the_script_or_apostrophe(
+    tmp_path, video, line, held, failed, mended, gone
+):
+    """The failed claim's tokens are cut whatever the apostrophe or the script: a mend that
+    only straightens the apostrophe or swaps the article cannot put them back."""
+    tf = FakeTF(
+        split=[{"claims": [{"id": "k1", "text": held[0], "tokens": held[1]},
+                           {"id": "k2", "text": failed[0], "tokens": failed[1]}]},
+               {"claims": [{"id": "k1", "text": held[0], "tokens": held[1]}]}],
+        verify=[_verdicts(("k1", "supported"), ("k2", "contradicted")),
+                _verdicts(("k1", "supported"))],
+        mend=[{"text": mended}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    assert gone not in out.text
+    assert out.status == "held" or out.text.rstrip(".") == line[: len(held[0])]
+
+
+@pytest.mark.parametrize(
+    "raw, mended, ok",
+    [
+        ("A person opens a red door.", "The person opens the door.", True),  # articles, a drop
+        ("A person opens a red door.", "A person opens a red door", True),
+        ("A person, opens a door.", "A person opens a door.", True),
+        ("A person opens a red door.", "A person in red opens a door.", False),  # "red" moved
+        ("A person opens a red door.", "A person opens a red red door.", False),  # doubled
+        ("A person opens a door.", "A person in a bright coat opens a door.", False),  # added
+        ("A man with a hat walks.", "A man without a hat walks.", False),  # negated
+        ("A man’s hat.", "A man's hat.", True),  # an apostrophe straightened
+    ],
+)
+def test_a_mend_may_tidy_but_never_add_or_move_a_word(raw, mended, ok):
+    from lull.stages.verify import mend_keeps
+
+    assert mend_keeps(raw, mended) is ok

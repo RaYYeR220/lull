@@ -1,12 +1,14 @@
 """Verify: every claim of a description is judged against its own frames.
 
-A blind listener takes a description as fact, so it may say only what the frames show.
-Lightning first splits the description into atomic visual claims, each with the exact words
-of the description it comes from (split_claims, checked by the engine: every span is in the
-text and every content word is covered). The vision model then sees a short clip around the
-cue's events (never the whole video) and judges only those claims, by id: supported, not
-visible or contradicted (judge). It cannot add a claim, and a claim it gives no verdict is not
-visible. Lightning then rewrites the words of the claims that failed (remove_claims).
+A blind listener takes a description as fact, so it may say only what the frames show. The
+engine numbers the description's tokens and Lightning splits it into atomic visual claims,
+each naming the tokens it comes from (split_claims, checked by the engine: every content
+token is said by a claim that holds it, and no claim says a word its tokens do not). The
+vision model then sees a short clip around the cue's events (never the whole video) and
+judges only those claims, by id: supported, not visible or contradicted (judge). It cannot
+add a claim, and a claim it gives no verdict is not visible. The engine itself cuts the tokens
+of the claims that failed, and Lightning only mends the grammar of what is left (mend), never
+adding a word.
 """
 
 from __future__ import annotations
@@ -15,10 +17,12 @@ import hashlib
 import logging
 import math
 import re
+from collections import Counter
 from collections.abc import Iterable
 from functools import cache
 from importlib.resources import files
 from pathlib import Path
+from typing import NamedTuple
 
 from pydantic import BaseModel
 
@@ -90,7 +94,9 @@ def _list_of(key: str, props: dict) -> dict:
 SPLIT_SCHEMA: dict = _list_of("claims", {
     "id": {"type": "string", "minLength": 1},
     "text": {"type": "string", "minLength": 1},
-    "span": {"type": "string", "minLength": 1},
+    "tokens": {"type": "array", "minItems": 1, "items": {
+        "type": "array", "minItems": 2, "maxItems": 2,
+        "items": {"type": "integer", "minimum": 0}}},
 })  # fmt: skip
 VERIFY_SCHEMA: dict = _list_of("verdicts", {
     "id": {"type": "string", "minLength": 1},
@@ -105,7 +111,8 @@ _EXEMPT = frozenset(
     her hers this that these those there here who whom whose which what and or but nor so yet
     as while when then now meanwhile later soon""".split()
 )
-_TIME_FRAMING = re.compile(r"\bin a moment\b", re.IGNORECASE)
+_TIME_WORDS = frozenset("now then meanwhile later soon".split())
+_WORD_RE = re.compile(r"\w+(?:['\u2019]\w+)*")
 _COUNT_WORDS = {**_NUMBER_WORDS, "one": "1"}  # a count in words is the same as in digits
 TEXT_SCHEMA: dict = {
     "type": "object",
@@ -169,7 +176,8 @@ def _distinct(claims: list[Claim]) -> list[Claim]:
     kept: dict[object, Claim] = {}
     for n, c in enumerate(claims):
         # a claim the verifier gave no text is its own claim: never folded into another
-        key = n if c.text == UNSPECIFIED else (" ".join(c.text.lower().split()), c.span)
+        where = tuple(map(tuple, c.tokens)) if c.tokens else c.span
+        key = n if c.text == UNSPECIFIED else (" ".join(c.text.lower().split()), where)
         first = kept.get(key)
         if first is None:
             kept[key] = c
@@ -216,6 +224,8 @@ def said_in(claim: str, text: str) -> bool:
 def is_extra(claim: Claim, text: str) -> bool:
     """Whether `claim` is not something `text` says: it has no span in the text and its
     wording is not in it either (said_in). Deterministic: no model decides it."""
+    if claim.tokens:  # split from the line itself
+        return False
     return (claim.span is None or claim.span not in text) and not said_in(claim.text, text)
 
 
@@ -237,69 +247,182 @@ def claims_of(
     return kept
 
 
+class Token(NamedTuple):
+    """One token of a line: a word (letters, digits, an inner apostrophe) or one punctuation
+    mark, with its place in the line."""
+
+    text: str
+    start: int
+    end: int
+
+    @property
+    def word(self) -> bool:
+        return self.text[:1].isalnum() or self.text[:1] == "_"
+
+
+_TOKEN_RE = re.compile(r"\w+(?:['’]\w+)*|[^\w\s]")
+
+
+def tokenize(text: str) -> list[Token]:
+    """The tokens of `text`, in order: deterministic, punctuation as tokens of its own."""
+    return [Token(m.group(), m.start(), m.end()) for m in _TOKEN_RE.finditer(text)]
+
+
+def fold(word: str) -> str:
+    """A word for comparison only: case and the curly apostrophe folded."""
+    return word.replace("’", "'").lower()
+
+
+_IRREGULAR = {
+    "ran": "run", "sat": "sit", "stood": "stand", "went": "go", "came": "come", "saw": "see",
+    "took": "take", "held": "hold", "fell": "fall", "threw": "throw", "wore": "wear",
+    "ate": "eat", "flew": "fly", "drove": "drive", "rode": "ride", "spoke": "speak",
+    "broke": "break", "began": "begin", "swam": "swim", "knelt": "kneel", "led": "lead",
+    "met": "meet", "found": "find", "gave": "give", "got": "get", "made": "make",
+    "said": "say", "told": "tell", "thought": "think", "brought": "bring", "caught": "catch",
+    "left": "leave", "lit": "light", "hung": "hang", "shot": "shoot", "grew": "grow",
+    "drew": "draw", "ridden": "ride", "taken": "take", "fallen": "fall", "worn": "wear",
+    "men": "man", "women": "woman", "children": "child", "people": "person", "feet": "foot",
+    "teeth": "tooth", "mice": "mouse",
+}  # fmt: skip
+
+
+def norm(word: str) -> str:
+    """A word as the split check compares it: folded, a possessive dropped, a count as
+    digits ("twelve" is "12"), an irregular form as its base ("ran" is "run"), then stemmed."""
+    w = fold(word)
+    if w.endswith("'s"):
+        w = w[:-2]
+    if w.isdigit():
+        return w
+    if w in _COUNT_WORDS:
+        return _COUNT_WORDS[w]
+    return _stem(_IRREGULAR.get(w, w))
+
+
+# words a claim's text may hold without its tokens holding them
+_LIGHT = frozenset(
+    """a an the is are was were be been being am has have had there it its they them their
+    theirs he him his she her hers this that these those who whom whose which what of to in on
+    at by for from with into onto over under up down off out about around through across
+    along between behind beside near past against toward towards inside outside""".split()
+)
+
+
+def time_framing(tokens: list[Token]) -> set[int]:
+    """Indices of tokens that only frame time: each "In a moment" (and its comma), and the
+    words now, then, meanwhile, later and soon."""
+    out: set[int] = set()
+    words = [fold(t.text) for t in tokens]
+    for i in range(len(tokens) - 2):
+        if words[i : i + 3] == ["in", "a", "moment"]:
+            out |= {i, i + 1, i + 2}
+            if i + 3 < len(tokens) and tokens[i + 3].text == ",":
+                out.add(i + 3)
+    out |= {i for i, w in enumerate(words) if w in _TIME_WORDS}
+    return out
+
+
+def _named(tokens: list[Token], names: Iterable[str]) -> set[int]:
+    """Indices of tokens that spell one of `names` (case and apostrophes aside): context."""
+    out: set[int] = set()
+    words = [fold(t.text) for t in tokens]
+    for name in {n for n in names if n}:
+        parts = [fold(t.text) for t in tokenize(name)]
+        k = len(parts)
+        for i in range(len(tokens) - k + 1):
+            if k and words[i : i + k] == parts:
+                out |= set(range(i, i + k))
+    return out
+
+
+def must_cover(tokens: list[Token], names: Iterable[str] = ()) -> list[int]:
+    """The tokens some claim must cover: every word except articles, copulas, pronouns,
+    conjunctions, the time framing and the programme's names (where they occur). Negation,
+    position and quantity words are facts and must be covered."""
+    skip = time_framing(tokens) | _named(tokens, names)
+    return [i for i, t in enumerate(tokens)
+            if t.word and i not in skip and fold(t.text) not in _EXEMPT]  # fmt: skip
+
+
+def content_words(text: str) -> Counter:
+    """The words of `text` that say something, normalised (see norm), with their counts:
+    light words (articles, copulas, pronouns, prepositions, conjunctions) and the time
+    framing aside. A mend of a cut line may drop such words but never add one."""
+    return Counter(_content_seq(text))
+
+
+def _content_seq(text: str) -> list[str]:
+    tokens = tokenize(text)
+    framing = time_framing(tokens)
+    return [norm(t.text) for i, t in enumerate(tokens)
+            if t.word and i not in framing
+            and fold(t.text) not in _LIGHT and fold(t.text) not in _EXEMPT]  # fmt: skip
+
+
+def mend_keeps(raw: str, mended: str) -> bool:
+    """Whether a mend of the cut line `raw` only tidies it: its content words (see
+    content_words) are those of `raw`, in their order, some perhaps dropped; none added,
+    doubled or moved onto another word ("a red door" never becomes "a person in red")."""
+    left = iter(_content_seq(raw))
+    return all(w in left for w in _content_seq(mended))
+
+
 class SplitClaim(BaseModel):
-    """One atomic visual claim of a description and the exact words it comes from."""
+    """One atomic visual claim of a line and the tokens of the line it comes from (ranges,
+    inclusive)."""
 
     id: str
     text: str
-    span: str
+    tokens: list[tuple[int, int]]
 
+    def indices(self) -> set[int]:
+        return {i for a, b in self.tokens for i in range(a, b + 1)}
 
-def _tokens(s: str) -> list[str]:
-    return _WORD.findall(_POSSESSIVE.sub("", s.lower()))
-
-
-def _key(token: str) -> str:
-    """A word as the split check compares it: a number as digits ("twelve" is "12"), any
-    other word by its stem ("waves", "waving" and "waved" alike)."""
-    if token.isdigit():
-        return token
-    return _COUNT_WORDS.get(token) or _stem(token)
-
-
-def _masked(s: str, names: Iterable[str]) -> str:
-    """`s` with the time framing ("In a moment") and every occurrence of a name blanked out:
-    those words are context, not claims. A name's words elsewhere (the colour "red" beside
-    the name "Red Leader") still count."""
-    s = _TIME_FRAMING.sub(" ", s)
-    for name in sorted({n for n in names if n}, key=len, reverse=True):
-        s = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", " ", s)
-    return s
-
-
-def _content(s: str, names: Iterable[str] = ()) -> set[str]:
-    return {_key(t) for t in _tokens(_masked(s, names)) if t not in _EXEMPT}
+    def span(self, text: str) -> str:
+        """The line's words the claim comes from: each range as it stands in the line, ranges
+        apart joined by an ellipsis."""
+        toks = tokenize(text)
+        parts = [text[toks[a].start : toks[b].end] for a, b in sorted(self.tokens)
+                 if 0 <= a <= b < len(toks)]  # fmt: skip
+        return " … ".join(parts)
 
 
 def check_split(text: str, claims: list[SplitClaim], names: Iterable[str] = ()) -> list[str]:
     """What is wrong with a split of `text`, empty when it is sound:
-    - an id used twice, or a span that is not an exact substring of the text;
-    - a word of the text no claim covers: a word is covered by a claim only when it is in the
-      claim's span and in the claim's own text (stems and numbers alike), so a claim cannot
-      drop a fact its span holds. Only articles, copulas, pronouns, conjunctions, the time
-      framing "In a moment" and the programme's names (where they occur) need no claim;
-      negation, position and quantity words do;
-    - a claim text that says a word the description does not (it would be judged for a fact
-      the line never states)."""
-    names = [n for n in names if n]
+    - an id used twice, or a token range outside the line;
+    - a token no claim covers: a token is covered by a claim only when it is in the claim's
+      ranges and its word (normalised: see norm) is in the claim's own text, so a claim can
+      neither leave a fact of its tokens unjudged nor be judged for it under another word;
+    - a claim text that holds a word its own tokens do not (light words such as articles,
+      copulas, pronouns and prepositions aside), so a claim cannot add or swap a fact (a
+      "blue hat" built from the tokens of "red hat ... blue car")."""
+    tokens = tokenize(text)
+    n = len(tokens)
+    # a claim may name who it is about: the programme's names are context, not facts
+    name_words = {norm(t.text) for nm in names if nm for t in tokenize(nm)}
     problems = []
     ids = [c.id for c in claims]
     if len(set(ids)) < len(ids):
         problems.append("two claims share an id")
-    line = {_key(t) for t in _tokens(text)}
-    covered: set[str] = set()
+    covered: set[int] = set()
     for c in claims:
-        if c.span not in text:
-            problems.append(f"the span {c.span!r} of claim {c.id} is not in the description")
+        if not c.tokens or any(not (0 <= a <= b < n) for a, b in c.tokens):
+            problems.append(f"claim {c.id} has tokens outside 0..{n - 1}")
             continue
-        said = {_key(t) for t in _tokens(c.text)}
-        covered |= _content(c.span, names) & said
-        added = sorted({t for t in _tokens(c.text) if t not in _EXEMPT and _key(t) not in line})
+        own = c.indices()
+        said = [fold(w) for w in _WORD_RE.findall(c.text)]
+        said_norm = {norm(w) for w in said}
+        covered |= {i for i in own if tokens[i].word and norm(tokens[i].text) in said_norm}
+        theirs = {norm(tokens[i].text) for i in own if tokens[i].word} | name_words
+        added = sorted({w for w in said if w not in _LIGHT and w not in _EXEMPT
+                        and norm(w) not in theirs})  # fmt: skip
         if added:
-            problems.append(f"claim {c.id} says {', '.join(added)}, which the description does not")
-    missing = sorted(_content(text, names) - covered)
+            problems.append(f"claim {c.id} says {', '.join(added)}, which its tokens do not")
+    missing = [i for i in must_cover(tokens, names) if i not in covered]
     if missing:
-        problems.append("no claim covers: " + ", ".join(missing))
+        problems.append("tokens no claim says: "
+                        + ", ".join(f"{i} {tokens[i].text!r}" for i in missing))  # fmt: skip
     return problems
 
 
@@ -310,23 +433,38 @@ def _parse_split(out: object) -> list[SplitClaim]:
     claims = []
     for item in raw:
         item = item if isinstance(item, dict) else {}
-        cid, text, span = (str(item.get(k) or "").strip() for k in ("id", "text", "span"))
-        if cid and text and span:
-            claims.append(SplitClaim(id=cid, text=" ".join(text.split()), span=span))
+        cid, text = (str(item.get(k) or "").strip() for k in ("id", "text"))
+        ranges = []
+        for r in item.get("tokens") or []:
+            ints = (
+                isinstance(r, list | tuple)
+                and len(r) == 2
+                and all(isinstance(x, int) and not isinstance(x, bool) for x in r)
+            )
+            if ints:
+                ranges.append((int(r[0]), int(r[1])))
+        if cid and text and ranges:
+            claims.append(SplitClaim(id=cid, text=" ".join(text.split()), tokens=ranges))
     return claims
 
 
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?…])\s+")
-_AHEAD_LEAD = re.compile(r"^in a moment,\s*", re.IGNORECASE)
-
-
 def sentence_claims(text: str) -> list[SplitClaim]:
-    """The fallback split: one claim per sentence, its look-ahead prefix aside."""
-    out = []
-    for n, piece in enumerate((p.strip() for p in _SENTENCE_BREAK.split(text)), start=1):
-        body = _AHEAD_LEAD.sub("", piece)
-        if any(ch.isalnum() for ch in body):
-            out.append(SplitClaim(id=f"s{n}", text=body.rstrip("."), span=body))
+    """The fallback split: one claim per sentence, its tokens the sentence's (the time framing
+    aside), its text the sentence's words."""
+    tokens = tokenize(text)
+    framing = time_framing(tokens)
+    out, start = [], 0
+    for i, t in enumerate(tokens + [Token(".", len(text), len(text))]):
+        if i < len(tokens) and t.text not in ".!?…":
+            continue
+        idx = [k for k in range(start, min(i + 1, len(tokens))) if k not in framing]
+        words = [k for k in idx if tokens[k].word]
+        if words:
+            a, b = words[0], idx[-1]
+            body = text[tokens[a].start : tokens[b].end]
+            out.append(SplitClaim(id=f"s{len(out) + 1}", text=body.rstrip(".!?… "),
+                                  tokens=[(a, b)]))  # fmt: skip
+        start = i + 1
     return out
 
 
@@ -337,15 +475,18 @@ def split_claims(
     text: str, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
     cache: dict[str, list[SplitClaim]] | None = None, notes: list[str] | None = None,
 ) -> list[SplitClaim]:  # fmt: skip
-    """The atomic visual claims of `text` (Lightning, temperature 0, role "split"), checked by
-    check_split; a split that fails the check is asked for once more with what was wrong,
-    then one claim per sentence stands in (logged). `cache` keeps a split per text (and
-    names), so a text checked again is not split again."""
+    """The atomic visual claims of `text` (Lightning, temperature 0, role "split"): the engine
+    numbers the line's tokens and each claim names its tokens by range. The split is checked
+    (check_split); one that fails is asked for once more, naming the exact problems (the
+    tokens left out), then one claim per sentence stands in (logged, and noted in `notes`).
+    `cache` keeps a split per text and names."""
     known = sorted({n for n in names if n})
     key = hashlib.sha256("\n".join([text, *known]).encode("utf-8")).hexdigest()
     if cache is not None and key in cache:
         return cache[key]
-    base = [tagged("description", [text]), tagged("names", [", ".join(known)] if known else [])]
+    numbered = [f"{i}: {t.text}" for i, t in enumerate(tokenize(text))]
+    base = [tagged("description", [text]), tagged("tokens", numbered),
+            tagged("names", [", ".join(known)] if known else [])]  # fmt: skip
     note = None
     claims: list[SplitClaim] = []
     problems: list[str] = []
@@ -425,7 +566,8 @@ def judge(
         result.append(Claim(
             text=c.text, verdict=verdict,
             at=round(max(0.0, float(at)) + offset, 3) if ok and verdict != "not_visible" else None,
-            span=c.span, evidence=" ".join(evidence.split()) or None,
+            span=c.span(text), evidence=" ".join(evidence.split()) or None,
+            tokens=[list(r) for r in c.tokens],
         ))  # fmt: skip
     return _distinct(result)
 
@@ -463,18 +605,9 @@ def rewrite(prompt: str, user: str, tf: TokenFactory, *, run_id: str, role: str)
     return text if any(c.isalnum() for c in text) else ""
 
 
-def remove_claims(
-    text: str, bad: list[Claim], tf: TokenFactory, *, run_id: str, note: str | None = None
-) -> str:
-    """`text` rewritten without the `bad` claims, or "" when nothing else is left. `note` says
-    what was wrong with a previous answer."""
-    if not bad:
-        return text
-    listed = [
-        f"- {c.text} ({c.verdict.replace('_', ' ')})"
-        + (f' -- the words: "{c.span}"' if c.span else "")
-        for c in bad
-    ]
-    parts = [tagged("description", [text]), tagged("remove", listed)]
-    user = "\n\n".join([*parts, note] if note else parts)
-    return rewrite("remove", user, tf, run_id=run_id, role="remove")
+def mend(text: str, cut: list[str], tf: TokenFactory, *, run_id: str) -> str:
+    """The grammar of `text` (a line the engine cut words out of) mended by Lightning (role
+    "mend"); `cut` lists the words that were cut, which must not come back. The caller checks
+    the answer (it may only keep or drop words, never add one)."""
+    parts = [tagged("description", [text]), tagged("cut", [", ".join(cut)] if cut else [])]
+    return rewrite("mend", "\n\n".join(parts), tf, run_id=run_id, role="mend")
