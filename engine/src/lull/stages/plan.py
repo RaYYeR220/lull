@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from lull.stages.research import LOOKUP_FAILED, ResearchResult
 from lull.stages.watch import NO_SPEECH, transcript_slice
-from lull.tf import ULTRA, TokenFactory
+from lull.tf import ULTRA, TFError, TokenFactory
 from lull.types import Gap, RunOptions, Span, Variant, VisualEvent, Word
 
 log = logging.getLogger(__name__)
@@ -416,7 +416,7 @@ def plan(
         log.info("plan: asking again for %s", ", ".join(e.id for e in missing))
         try:
             again = _ask(missing, words, gaps, research, opts, tf, run_id, note=ASK_AGAIN)
-        except ValueError as e:
+        except (ValueError, TFError) as e:  # the first answer is paid for: keep it
             log.warning("plan: the second answer was unusable, keeping the first: %s", e)
             again = PlanResult()
         result = _merge(result, again, send)

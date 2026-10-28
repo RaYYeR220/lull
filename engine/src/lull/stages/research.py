@@ -7,13 +7,13 @@ every successful lookup, so a run that stopped on a failed lookup tries only tha
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from importlib.resources import files
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from lull.ledger import BudgetExceeded, SearchCapReached
+from lull.store import Memo, fresh
 from lull.tavily import Tavily, TavilyError
 from lull.tf import LIGHTNING, TokenFactory
 from lull.types import RunOptions, VisualEvent, Word
@@ -27,14 +27,6 @@ ON_SCREEN_KINDS = {"technical"}  # looked up only when the screen shows them
 LOOKUP_FAILED = "lookup failed"
 LOOKUP_CAPPED = "lookup skipped: search cap"
 Kind = Literal["person", "place", "organization", "work", "technical", "other"]
-# (step name, inputs, compute) -> the step's JSON-able result, from a cache or computed; a
-# step that raises is never kept
-Memo = Callable[[str, dict, Callable[[], Any]], Any]
-
-
-def fresh(name: str, inputs: dict, compute: Callable[[], Any]) -> Any:
-    """The default Memo: keeps nothing."""
-    return compute()
 
 
 TERMS_SCHEMA = {

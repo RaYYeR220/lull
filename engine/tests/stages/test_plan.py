@@ -505,3 +505,25 @@ def test_numbered_or_differently_quoted_lines_are_never_near_duplicates():
     ]}  # fmt: skip
     result, _ = _run(answer, events=slides)
     assert result.duplicates == {"e049": "e042"}  # the same step shown again: still a repeat
+
+
+def test_a_failed_second_call_keeps_the_first_answer(caplog):
+    """The first answer is paid for: a model error on the second call (asked for the events
+    it left out) keeps it, and the rest are flagged, instead of failing the stage."""
+    from lull.tf import TFError
+
+    first = {"cast": [], "items": [_item("e001")]}
+
+    class Flaky(FakeTF):
+        def json(self, model, messages, schema, **kw):
+            if self.calls:
+                self.calls.append(kw)
+                raise TFError("HTTP 503 after retries")
+            return super().json(model, messages, schema, **kw)
+
+    fake = Flaky([first])
+    with caplog.at_level(logging.WARNING, logger="lull.stages.plan"):
+        out = plan(EVENTS, WORDS, GAPS, RESEARCH, OPTS, fake, run_id="r1")
+    assert len(fake.calls) == 2
+    assert out.priority == {"e001": 3} and out.unanswered == ["e003"]
+    assert "second answer" in caplog.text

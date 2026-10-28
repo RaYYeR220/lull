@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import get_args
 
 from lull.media import cut_clip, make_proxy, probe, scene_cuts
+from lull.store import Memo, fresh
 from lull.tf import MAX_VIDEO_BYTES, VL, TokenFactory, video_part
 from lull.types import EventKind, Span, VisualEvent, Word
 
@@ -384,9 +385,12 @@ def confirm_said(events: list[VisualEvent], words: list[Word]) -> list[VisualEve
 
 
 def watch(
-    video: Path, work: Path, words: list[Word], tf: TokenFactory, *, run_id: str, profile: str
-) -> list[VisualEvent]:
-    """Inventory the visual events of `video` in absolute seconds, windows sent one by one."""
+    video: Path, work: Path, words: list[Word], tf: TokenFactory, *, run_id: str, profile: str,
+    memo: Memo = fresh,
+) -> list[VisualEvent]:  # fmt: skip
+    """Inventory the visual events of `video` in absolute seconds, windows sent one by one.
+    `memo` keeps each window's answer once it parses ("window"), so a failure on a later
+    window does not make the next attempt pay for the earlier ones again."""
     if profile not in PROFILES:
         raise ValueError(f"unknown profile {profile!r} (expected one of {PROFILES})")
     info = probe(video)
@@ -396,25 +400,27 @@ def watch(
     clips.mkdir(parents=True, exist_ok=True)
     per_window: list[tuple[Span, list[VisualEvent]]] = []
     for i, span in enumerate(windows):
-        clip = cut_clip(video, clips / f"w{i:03d}.mp4", span.start, span.end, height=CLIP_HEIGHT)
-        if clip.stat().st_size > CLIP_MAX_BYTES:
-            clip = make_proxy(
-                clip, clips / f"w{i:03d}_proxy.mp4", max_bytes=CLIP_MAX_BYTES, height=CLIP_HEIGHT
-            )
-        messages = [
-            {"role": "system", "content": load_prompt()},
-            {
-                "role": "user",
-                "content": [
-                    video_part(clip),
-                    {"type": "text", "text": _user_text(span, words, profile)},
-                ],
-            },
-        ]
-        out = tf.json(
-            VL, messages, EVENT_SCHEMA,
-            run_id=run_id, stage="watch", role="watch", thinking=False,
-            max_tokens=MAX_TOKENS, temperature=TEMPERATURE, estimate=ESTIMATE,
-        )  # fmt: skip
+        text = _user_text(span, words, profile)
+
+        def ask(i: int = i, span: Span = span, text: str = text) -> dict:
+            clip = cut_clip(video, clips / f"w{i:03d}.mp4", span.start, span.end,
+                            height=CLIP_HEIGHT)  # fmt: skip
+            if clip.stat().st_size > CLIP_MAX_BYTES:
+                clip = make_proxy(clip, clips / f"w{i:03d}_proxy.mp4", max_bytes=CLIP_MAX_BYTES,
+                                  height=CLIP_HEIGHT)  # fmt: skip
+            messages = [
+                {"role": "system", "content": load_prompt()},
+                {"role": "user", "content": [video_part(clip), {"type": "text", "text": text}]},
+            ]
+            out = tf.json(
+                VL, messages, EVENT_SCHEMA,
+                run_id=run_id, stage="watch", role="watch", thinking=False,
+                max_tokens=MAX_TOKENS, temperature=TEMPERATURE, estimate=ESTIMATE,
+            )  # fmt: skip
+            parse_events(out, span.dur, window=i)  # an answer that does not parse is not kept
+            return out
+
+        inputs = {"start": span.start, "end": span.end, "text": text, "prompt": load_prompt()}
+        out = memo("window", inputs, ask)
         per_window.append((span, parse_events(out, span.dur, window=i)))
     return confirm_said(merge_events(per_window, cuts), words)

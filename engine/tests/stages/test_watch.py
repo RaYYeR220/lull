@@ -539,3 +539,35 @@ def test_said_in_dialogue_ignores_reflexives_and_modals():
     words = [_w("He", 1.0), _w("could", 1.3), _w("do", 1.6), _w("it", 1.9), _w("himself.", 2.2)]
     event = _ve(2.0, 4.0, "action", "He could see himself in the mirror.", said=True)
     assert confirm_said([event], words)[0].said_in_dialogue is False
+
+
+def test_each_window_that_worked_is_kept_when_a_later_one_fails(two_window_video, tmp_path):
+    """A model error on window 2 stops watch, but window 1's answer was kept (memo): the next
+    attempt asks for window 2 only."""
+    from lull.tf import TFError
+
+    kept: dict = {}
+
+    def memo(name, inputs, compute):
+        key = (name, repr(sorted(inputs.items())))
+        if key not in kept:
+            kept[key] = compute()
+        return kept[key]
+
+    good = [{"events": [_ev(2.0, 5.0, "setting", "a plain red screen", sal=2)]},
+            {"events": [_ev(20.0, 25.0, "object", "a blue field fills the frame")]}]  # fmt: skip
+
+    class Fails(FakeTF):
+        def json(self, model, messages, schema, **kw):
+            if len(self.calls) == 1:
+                self.calls.append(kw)
+                raise TFError("HTTP 503 after retries")
+            return super().json(model, messages, schema, **kw)
+
+    first = Fails([good[0]])
+    with pytest.raises(TFError):
+        watch(two_window_video, tmp_path, [], first, run_id="r", profile="education", memo=memo)
+    again = FakeTF([good[1]])
+    out = watch(two_window_video, tmp_path, [], again, run_id="r", profile="education", memo=memo)
+    assert len(again.calls) == 1 and "31.0" in _user_text(again.calls[0])  # window 2 only
+    assert [e.text for e in out] == ["a plain red screen", "a blue field fills the frame"]

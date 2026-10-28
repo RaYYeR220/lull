@@ -134,7 +134,8 @@ def test_full_run_publishes_every_output(runs):
     assert speech.calls == ["transcribe", "diarize"] + ["synthesize"] * 3
     stages = run_dir / "stages"
     names = sorted(p.relative_to(stages).as_posix() for p in stages.rglob("*.json"))
-    assert [n for n in names if not n.startswith("research/")] == [
+    steps = ("research/", "watch/")
+    assert [n for n in names if not n.startswith(steps)] == [
         "finalize/c001.json",
         "finalize/c002.json",
         "finalize/x002.json",
@@ -144,8 +145,9 @@ def test_full_run_publishes_every_output(runs):
         "schedule.json",
         "watch.json",
     ]
-    assert [re.sub(r"-[0-9a-f]{16}", "-<key>", n) for n in names if n.startswith("research/")] == [
-        "research/terms-<key>.json"  # research's own steps (no Tavily: no lookups)
+    assert [re.sub(r"-[0-9a-f]{16}", "-<key>", n) for n in names if n.startswith(steps)] == [
+        "research/terms-<key>.json",  # research's own steps (no Tavily: no lookups)
+        "watch/window-<key>.json",  # each watch window's answer
     ]
 
 
@@ -333,6 +335,7 @@ def test_provider_402_at_plan_keeps_earlier_stages_and_a_rerun_resumes(
         "listen.json",
         "research",  # its steps
         "research.json",
+        "watch",  # each window's answer
         "watch.json",
     ]
     assert (events[-1].type, events[-1].stage) == ("error", "plan")

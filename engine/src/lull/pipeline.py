@@ -369,24 +369,34 @@ class _Run:
                         self.tf,
                         run_id=self.run_id,
                         profile=self.opts.profile,
+                        memo=self.memo_in("watch"),
                     )
                 ),
             )
             info["events"] = len(out.events)
         return out.events
 
+    def memo_in(self, stage: str) -> Callable[[str, dict, Callable[[], object]], object]:
+        """A Memo for one step of `stage`, kept under its own key
+        (`stages/<stage>/<step>-<key>.json`): research's term list, source page and each
+        successful lookup, and each watch window's answer, survive a run whose stage as a
+        whole did not finish or is not cached."""
+
+        def memo(name: str, inputs: dict, compute: Callable[[], object]) -> object:
+            key = self.key(f"{stage}-{name}", inputs)
+            path = f"{stage}/{name}-{key[:16]}"
+            data = self.store.cached(path, key)
+            if data is not None and "value" in data:
+                return data["value"]
+            value = compute()
+            self.store.save(path, key, {"value": value})
+            return value
+
+        return memo
+
     def memo(self, name: str, inputs: dict, compute: Callable[[], object]) -> object:
-        """One research step, kept under its own key (`stages/research/<step>-<key>.json`):
-        the term list, the source page and each successful lookup survive a run whose
-        research as a whole is not cached."""
-        key = self.key(f"research-{name}", inputs)
-        stage = f"research/{name}-{key[:16]}"
-        data = self.store.cached(stage, key)
-        if data is not None and "value" in data:
-            return data["value"]
-        value = compute()
-        self.store.save(stage, key, {"value": value})
-        return value
+        """One research step (see memo_in)."""
+        return self.memo_in("research")(name, inputs, compute)
 
     def research(self, events: list[VisualEvent], words: list[Word]) -> ResearchResult:
         """Not cached when a lookup failed: the next run tries again (only what failed: the
