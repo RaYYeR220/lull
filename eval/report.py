@@ -627,19 +627,22 @@ def write_web(results: Path, out: Path, *, git=git_run, readme: str | None = Non
     return doc
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, git=git_run, **kw) -> int:
+    """The CLI. The web file is written first: a fresh RESULTS.md makes eval/ dirty, and the
+    web file is written only from a clean tree. `git` and `kw` (main_text / write_web
+    arguments) are for tests."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--results", type=Path, default=RESULTS)
     ap.add_argument("--out-md", type=Path, default=OUT_MD)
     ap.add_argument("--out-web", type=Path, help="also write the site's benchmarks.json here")
     args = ap.parse_args(argv)
-    text = main_text(args.results)
-    args.out_md.write_text(text, encoding="utf-8", newline="\n")
-    print(f"wrote {args.out_md}")
     if args.out_web:
-        doc = write_web(args.results, args.out_web)
+        doc = write_web(args.results, args.out_web, git=git, **kw)
         print(f"wrote {args.out_web} ({', '.join(doc['suites'])}; "
               f"{len(doc['known_failures'])} known failures)")  # fmt: skip
+    text = main_text(args.results, git=git, **kw)
+    args.out_md.write_text(text, encoding="utf-8", newline="\n")
+    print(f"wrote {args.out_md}")
     return 0
 
 

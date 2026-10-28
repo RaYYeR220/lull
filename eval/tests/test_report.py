@@ -375,3 +375,22 @@ def test_the_run_log_is_appended_to_results_md(tmp_path):
     plain = R.main_text(d, git=FakeGit(), readme=README, manual=MANUAL, suite_a_runs=tmp_path,
                         now="2026-10-28T07:00:00+00:00", run_log="")  # fmt: skip
     assert "## Run log" not in plain
+
+
+def test_main_writes_the_web_file_before_results_md(tmp_path, monkeypatch):
+    """A fresh RESULTS.md would make the tree dirty, so the clean-tree check for the web
+    file runs first."""
+    d = results_dir(tmp_path)
+    md, web = tmp_path / "RESULTS.md", tmp_path / "out" / "benchmarks.json"
+    seen = {}
+    real = R.write_web
+
+    def spy(results, out, **kw):
+        seen["md_existed"] = md.exists()
+        return real(results, out, **kw)
+
+    monkeypatch.setattr(R, "write_web", spy)
+    kw = {"readme": README, "manual": MANUAL, "suite_a_runs": tmp_path}
+    assert R.main(["--results", str(d), "--out-md", str(md), "--out-web", str(web)],
+                  git=FakeGit(), **kw) == 0  # fmt: skip
+    assert seen == {"md_existed": False} and md.exists() and web.exists()
