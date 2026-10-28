@@ -1,6 +1,6 @@
 # Lull: evaluation results
 
-Generated 2026-10-28T14:54:20+00:00 from commit `c34b41340c7b` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
+Generated 2026-10-28T17:40:23+00:00 from commit `6cdd3e2691af` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
 
 Not included: Suite B (missing).
 
@@ -284,3 +284,22 @@ Site exports (`lull export-showcase`) in lull-runs/showcase-final/: `ed90` ("Ele
 excerpt 1:00-2:30), `bbb120` ("Big Buck Bunny", 0:00-2:00), `tos180` ("Tears of Steel
 (development clip, used to tune the engine)", 3:30-6:30), each with its CC BY credit. The USGS
 runs are not exported (music licences).
+
+### The full-film re-run on main 0b83117 (controller ruling, a disclosed deviation)
+
+- main 0b83117 ("engine: keyframes stay inside the video stream"; keyframe and freeze times
+  clamped to the video stream's last frame, nothing else) merged as 1a85db9; engine tests 788
+  passed, 6 skipped; eval tests 210 passed.
+- **15:14:25** the full film was run once more under a fresh run id, `final-ed2` (same command
+  and options; LULL_CAP_RUN=1.50; out lull-runs/final/ed2). Ledger before: $4.6670.
+
+### Second interruption: speech server stopped at the user's request (deliberate pause)
+
+- **15:48:40** the user needed the GPU and the local speech server was stopped on request.
+  `final-ed2` stopped in finalize at its next speech call (SpeechError, connection closed;
+  exit 1; 2055 s). Not retried; nothing else started; no model spend during the pause.
+- Cached in lull-runs/final/ed2/stages: listen, watch (164 events), research (5 terms), plan,
+  schedule, and 70 finalize cues (the last logged: x076 at 5:02 of 10:58).
+- Spend so far: $0.2666 (403 Token Factory calls) and 5 searches; ledger $4.9335.
+- To resume when the server is back: the same command with the same `--out` and `--run-id`,
+  from the stage cache. That counts as the same single re-run.
