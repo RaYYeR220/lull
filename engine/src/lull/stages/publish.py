@@ -914,6 +914,7 @@ def publish(
     priority: dict[str, int] | None = None,
     since: float | None = None,
     words: list[Word] | None = None,
+    reviewer: dict[str, list[str]] | None = None,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
@@ -923,7 +924,10 @@ def publish(
     `priority` the plan's priorities, which decide what is important (see `important`);
     `since` when this attempt started (epoch seconds): its calls are the ones reported as this
     run's, next to the model spend of every attempt under the run id; `words` the transcript,
-    whose sentence ends decide where the extended version stops (mix.hold_point)."""
+    whose sentence ends decide where the extended version stops (mix.hold_point); `reviewer`
+    the event ids a person should look at: "plan_unanswered" (salient events the plan wrote
+    nothing for, even when asked again) and "undescribed" (salient events that got no
+    description anywhere), listed in the manifest and under "For the reviewer"."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -952,6 +956,7 @@ def publish(
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
                 run_id, opts, speech, duplicates, overlap, priority, since, words or [],
+                reviewer or {},
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -981,7 +986,7 @@ def _stage(
     research: ResearchResult | None, ledger: Ledger, run_id: str, opts: RunOptions,
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
     priority: dict[str, int] | None = None, since: float | None = None,
-    words: list[Word] | None = None,
+    words: list[Word] | None = None, reviewer: dict[str, list[str]] | None = None,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
@@ -1050,8 +1055,15 @@ def _stage(
         for f in c.findings
         if f.get("severity") == "warning"
     ]
+    by_id = {e.id: e for e in events}
+    for_reviewer = {
+        kind: [{"id": i, "text": by_id[i].text if i in by_id else ""}
+               for i in (reviewer or {}).get(kind, [])]
+        for kind in ("plan_unanswered", "undescribed")
+    }  # fmt: skip
     summary = {
         "cues": {s: counts.get(s, 0) for s in STATUSES},
+        "for_reviewer": for_reviewer,
         "coverage": cov,
         "repetitive": judged,  # watch-salient, rated 1-2 by the plan: not counted
         "overlap_seconds": overlap["total_s"],

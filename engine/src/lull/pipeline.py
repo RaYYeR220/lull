@@ -255,6 +255,7 @@ class _Run:
     emit: _Emitter
     stage: str | None = None
     info: media.Probe | None = None  # the probed video: frame rate and length for freezes
+    undescribed: list[str] = field(default_factory=list)  # salient, and the plan wrote nothing
 
     @property
     def store(self) -> Store:
@@ -501,6 +502,7 @@ class _Run:
             )
         later = {i for c in cues if c.gap_id is None for i in c.event_ids}
         missing = [eid for eid in out.extended if eid not in later]
+        self.undescribed = missing
         if missing:  # salient, placed nowhere, and no variant for the extended track either
             one = len(missing) == 1
             self.warn(
@@ -769,6 +771,10 @@ def _stages(r: _Run, started: float | None = None) -> PublishResult:
             duplicates=planned.duplicates,
             priority=planned.priority,
             since=started,
+            reviewer={
+                "plan_unanswered": list(planned.unanswered),
+                "undescribed": list(r.undescribed),
+            },  # fmt: skip
         )
         info["files"] = len(result.files) + 1
     return result

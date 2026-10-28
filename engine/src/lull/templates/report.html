@@ -161,6 +161,19 @@
 
 <section>
   <h2>For the reviewer</h2>
+  {% set fr = summary.for_reviewer | default({}) %}
+  {% if fr.plan_unanswered | default([]) %}
+  <p>The plan wrote nothing for {{ fr.plan_unanswered | length }} salient event{{ '' if fr.plan_unanswered | length == 1 else 's' }}, even when asked again:</p>
+  <ul class="plain">
+  {% for e in fr.plan_unanswered %}<li><code>{{ e.id }}</code> {{ e.text }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if fr.undescribed | default([]) %}
+  <p>{{ fr.undescribed | length }} salient event{{ ' has' if fr.undescribed | length == 1 else 's have' }} no description in either track:</p>
+  <ul class="plain">
+  {% for e in fr.undescribed %}<li><code>{{ e.id }}</code> {{ e.text }}</li>{% endfor %}
+  </ul>
+  {% endif %}
   {% if warnings %}
   <ul class="plain">
   {% for w in warnings %}

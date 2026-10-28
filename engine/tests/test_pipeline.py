@@ -662,7 +662,7 @@ def test_salient_events_the_plan_left_out_are_flagged(tone_slides, tmp_path, fas
     plan = copy.deepcopy(PLAN)
     plan["items"] = plan["items"][:2]  # nothing for e003 (salience 4, 7-12 s)
     ledger = _ledger(tmp_path)
-    _, _, _, events = _run(tone_slides, tmp_path / "run", ledger, tf=FakeTF(ledger, plan=plan))
+    res, _, _, events = _run(tone_slides, tmp_path / "run", ledger, tf=FakeTF(ledger, plan=plan))
     incomplete = [e.data for e in events if e.data.get("kind") == "plan_incomplete"]
     assert [w["event_ids"] for w in incomplete] == [["e003"]]  # asked twice, still nothing
     flagged = [(e.stage, e.data) for e in events if e.data.get("kind") == "undescribed"]
@@ -678,6 +678,13 @@ def test_salient_events_the_plan_left_out_are_flagged(tone_slides, tmp_path, fas
         )
     ]
     assert _ends(events)["schedule"]["extended"] == ["e002", "e003"]
+    # the manifest and the report carry both for the reviewer, not only the run events
+    summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert [e["id"] for e in summary["for_reviewer"]["plan_unanswered"]] == ["e003"]
+    assert [e["id"] for e in summary["for_reviewer"]["undescribed"]] == ["e003"]
+    report = (res.manifest.parent / "report.html").read_text(encoding="utf-8")
+    reviewer = report.split("For the reviewer", 1)[1].split("</section>", 1)[0]
+    assert "e003" in reviewer and "The plan wrote nothing" in reviewer
 
 
 # -- the cache: moves, stops, option changes, new engine -------------------------------------------
