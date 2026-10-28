@@ -25,7 +25,7 @@ export function RunReport({ r }: { r: ReportData }) {
   const watch = r.kind === "recorded" ? watchHref(r.id) : runHref(r.id);
   const lines = ORDER.filter((s) => (r.counts[s] ?? 0) > 0);
   return (
-    <article className={styles.report} aria-labelledby="report-title">
+    <article className={styles.report} aria-labelledby="report-title" data-report="">
       <header className={styles.head}>
         <Eyebrow className={styles.eyebrow}>{r.kind === "recorded" ? "Conformance report, recorded run" : "Conformance report, live run"}</Eyebrow>
         <h1 id="report-title" className={cx("t-display-2", styles.title)}>

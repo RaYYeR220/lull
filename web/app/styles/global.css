@@ -90,4 +90,20 @@ cite{font-style:italic}
 }
 @media print{
   .reveal{animation:none}
+  /* ink on paper: the night becomes white, cream becomes ink, the lamp and the statuses darken
+     enough to read on white (browsers drop backgrounds when printing) */
+  :root{
+    --night-0:#fff; --night-1:#fff; --night-2:#f6f6f6; --night-3:#eee; --night-4:#ddd; --night-5:#bbb;
+    --cream-0:#111; --cream-1:#222; --cream-2:#444; --cream-3:#555;
+    --lamp-0:#5c4210; --lamp-1:#5c4210; --lamp-2:#5c4210;
+    --verified:#1d5a27; --held:#8a2518; --edited:#253c86;
+    --cream-rgb:17 17 17; --lamp-rgb:92 66 16; --night-rgb:255 255 255;
+  }
+  html{color-scheme:light}
+  html,body{background:#fff;color:#111}
+  /* the page's own content only: no site header, footer, skip link or texture */
+  [data-site-chrome],.skip,[data-grain]{display:none !important}
+  /* a printed report says where each link goes */
+  [data-report] a[href]::after{content:" (" attr(href) ")";font-size:.85em;word-break:break-all}
+  [data-report] section,[data-report] tr{break-inside:avoid}
 }

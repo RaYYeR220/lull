@@ -7,7 +7,7 @@ import styles from "./Footer.module.css";
 /** The page ends on a flat line under one lamp pool. */
 export function Footer() {
   return (
-    <footer className={styles.foot}>
+    <footer className={styles.foot} data-site-chrome="">
       <div className={styles.line} aria-hidden="true" />
       <div className={cx("wrap", styles.grid)}>
         <div className={styles.brand}>

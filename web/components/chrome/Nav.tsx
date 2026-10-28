@@ -10,7 +10,7 @@ import styles from "./Nav.module.css";
  */
 export function Nav() {
   return (
-    <header className={styles.head}>
+    <header className={styles.head} data-site-chrome="">
       <div className={cx("wrap", styles.bar)}>
         <Wordmark className="reveal" />
         <nav aria-label="Primary" className={cx(styles.nav, "reveal")}>

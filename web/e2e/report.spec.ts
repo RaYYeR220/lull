@@ -31,6 +31,41 @@ test.describe("conformance reports", () => {
     await expect(page.getByRole("link", { name: "Watch it described" })).toHaveAttribute("href", "/watch/ed90");
   });
 
+  test("prints as ink on paper: no site chrome, readable text, links spelled out", async ({ page }) => {
+    await routeApi(page, own());
+    await page.emulateMedia({ media: "print" });
+    for (const url of ["/watch/ed90/report", `/run/${RUN_ID}/report`]) {
+      await page.goto(url, { waitUntil: "networkidle" });
+      await expect(page.locator("[data-report]")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole("banner")).toBeHidden();
+      await expect(page.getByRole("contentinfo")).toBeHidden();
+      const worst = await page.evaluate(() => {
+        const lum = (c: string) => {
+          const [r, g, b] = (c.match(/[\d.]+/g) ?? ["0", "0", "0"]).slice(0, 3).map((v) => {
+            const x = Number(v) / 255;
+            return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+        };
+        const paper = lum("rgb(255, 255, 255)");
+        let min = { ratio: 21, what: "" };
+        for (const el of document.querySelectorAll<HTMLElement>("[data-report] h1, [data-report] h2, [data-report] p, [data-report] td, [data-report] th, [data-report] dt, [data-report] dd, [data-report] li, [data-report] a")) {
+          if (!el.textContent?.trim() || !el.getClientRects().length) continue;
+          const st = getComputedStyle(el);
+          if (st.visibility === "hidden") continue;
+          const ratio = (paper + 0.05) / (lum(st.color) + 0.05);
+          if (ratio < min.ratio) min = { ratio, what: `${el.tagName} ${st.color} ${el.textContent.trim().slice(0, 30)}` };
+        }
+        return min;
+      });
+      expect(worst.ratio, `${url}: ${worst.what}`).toBeGreaterThanOrEqual(4.5);
+      expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(255, 255, 255)");
+      const link = page.locator("[data-report] a[href]").first();
+      const href = (await link.getAttribute("href")) ?? "";
+      expect(await link.evaluate((a) => getComputedStyle(a, "::after").content)).toContain(href);
+    }
+  });
+
   test("the recorded run's page links to its report", async ({ page }) => {
     await routeApi(page, own());
     await page.goto("/watch/ed90");

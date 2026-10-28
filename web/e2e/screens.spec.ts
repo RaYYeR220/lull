@@ -406,6 +406,12 @@ test.describe("report screens @screens", () => {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(300);
       await fullPage(page, `report-live-${size.name}-full.png`);
+      // as printed: ink on paper
+      await page.emulateMedia({ media: "print" });
+      await page.goto("/watch/ed90/report");
+      await page.evaluate(() => document.fonts.ready);
+      await fullPage(page, `report-ed90-print-${size.name}-full.png`);
+      await page.emulateMedia({ media: "screen" });
     });
   }
 });
