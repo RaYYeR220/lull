@@ -106,25 +106,35 @@ def git_run(*args: str) -> tuple[int, str]:
     return out.returncode, out.stdout
 
 
-def verify_prereg(key_digest: str, git: Git = git_run) -> dict:
+def verify_prereg(
+    key_digest: str,
+    git: Git = git_run,
+    *,
+    tag: str = PREREG_TAG,
+    sha_file: str = "eval/suite_a/key.sha256",
+    pinned: tuple[str, ...] = PINNED,
+    what: str = "key.json",
+) -> dict:
     """The tag, its commit and commit time, or Refused: the tag must exist, be an ancestor of
-    HEAD, carry a key.sha256 equal to `key_digest`, and every PINNED path must be as tagged."""
-    rc, out = git("rev-parse", "--verify", "--quiet", f"{PREREG_TAG}^{{commit}}")
+    HEAD, carry a `sha_file` whose first word is `key_digest`, and every `pinned` path must be
+    as tagged. Suite A's pin by default; Suite B passes its own."""
+    rc, out = git("rev-parse", "--verify", "--quiet", f"{tag}^{{commit}}")
     if rc != 0 or not out.strip():
-        raise Refused(f"tag {PREREG_TAG} not found: the pre-registration is not pinned")
+        raise Refused(f"tag {tag} not found: the pre-registration is not pinned")
     commit = out.strip()
-    rc, _ = git("merge-base", "--is-ancestor", PREREG_TAG, "HEAD")
+    rc, _ = git("merge-base", "--is-ancestor", tag, "HEAD")
     if rc != 0:
-        raise Refused(f"tag {PREREG_TAG} is not an ancestor of HEAD")
-    rc, out = git("show", f"{PREREG_TAG}:eval/suite_a/key.sha256")
+        raise Refused(f"tag {tag} is not an ancestor of HEAD")
+    rc, out = git("show", f"{tag}:{sha_file}")
     tagged = out.split()[0] if rc == 0 and out.split() else None
     if tagged != key_digest:
-        raise Refused(f"key.json hashes to {key_digest}; the tagged key.sha256 says {tagged}")
-    rc, out = git("diff", "--name-only", PREREG_TAG, "--", *PINNED)
+        name = sha_file.rsplit("/", 1)[-1]
+        raise Refused(f"{what} hashes to {key_digest}; the tagged {name} says {tagged}")
+    rc, out = git("diff", "--name-only", tag, "--", *pinned)
     if rc != 0 or out.strip():
-        raise Refused(f"changed since {PREREG_TAG}: {' '.join(out.split()) or 'git diff failed'}")
+        raise Refused(f"changed since {tag}: {' '.join(out.split()) or 'git diff failed'}")
     _, when = git("show", "-s", "--format=%cI", commit)
-    return {"tag": PREREG_TAG, "commit": commit, "committed": when.strip()}
+    return {"tag": tag, "commit": commit, "committed": when.strip()}
 
 
 def dirty(git: Git = git_run) -> list[str]:
@@ -752,12 +762,13 @@ class Judge:
     thinking: bool = True
     paid_by: set = field(default_factory=set)
     files: list = field(default_factory=list)
+    cache: Path | None = None  # None: JUDGE_CACHE (Suite A's)
 
     def ask(
         self, prompt: str, schema: dict, run_id: str, stage: str, estimate: float = JUDGE_ESTIMATE
     ) -> dict:
         digest = request_digest(self.model, self.thinking, prompt, schema)
-        path = JUDGE_CACHE / f"{digest}.json"
+        path = (JUDGE_CACHE if self.cache is None else self.cache) / f"{digest}.json"
         if path.exists():
             saved = json.loads(path.read_text(encoding="utf-8"))
             self.paid_by.add(saved["run_id"])
