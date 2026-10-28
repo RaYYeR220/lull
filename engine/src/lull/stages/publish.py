@@ -37,6 +37,7 @@ removes it (see _break). Every status in the report is computed here;
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import logging
@@ -721,23 +722,54 @@ def _release(path: Path) -> None:
 
 
 _rename = os.replace  # one name to stand in for a filesystem in the tests
+# what a filesystem without folder renames (a flat namespace such as Cloud Storage FUSE)
+# answers when asked to rename one
+_NO_FOLDER_RENAME = {
+    errno.EXDEV,
+    errno.EPERM,
+    errno.ENOTSUP,
+    getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+}
 
 
 def _move(src: Path, dst: Path) -> None:
-    """`src` renamed to `dst`. A filesystem that cannot rename a folder (a flat namespace
-    such as Cloud Storage FUSE: EXDEV, EPERM, ENOTSUP) gets the folder's entries moved one by
-    one into `dst`, and the emptied folder removed; a file that cannot be renamed raises as
-    before, so the commit rolls back."""
+    """`src` renamed to `dst`. When a folder cannot be renamed because the filesystem has no
+    folder renames (EXDEV, EPERM, ENOTSUP, EOPNOTSUPP) and `dst` does not exist yet, its
+    entries are moved one by one into a new `dst` and the emptied folder removed; when one of
+    them fails, those already moved go back, `dst` is removed and the error is raised, so the
+    commit can roll back from a whole folder. Any other failure raises as it is."""
     try:
         _rename(src, dst)
-    except OSError:
-        if not src.is_dir() or src.is_symlink():
+    except OSError as e:
+        if (e.errno not in _NO_FOLDER_RENAME or not src.is_dir() or src.is_symlink()
+                or dst.exists()):  # fmt: skip
             raise
         log.info("publish: cannot rename the folder %s; moving its files one by one", src.name)
-        dst.mkdir(exist_ok=True)
-        for item in sorted(src.iterdir()):
-            _move(item, dst / item.name)
+        dst.mkdir()
+        moved: list[str] = []
+        try:
+            for item in sorted(src.iterdir()):
+                _move(item, dst / item.name)
+                moved.append(item.name)
+        except BaseException:
+            for name in reversed(moved):
+                _move(dst / name, src / name)
+            dst.rmdir()
+            raise
         src.rmdir()
+
+
+def _merge_back(item: Path, dst: Path) -> None:
+    """Put a backed-up `item` back at `dst`: a folder whose place holds the part of it a
+    crash had not moved yet gets its missing entries back; anything else goes back only into
+    an empty place."""
+    if item.is_dir() and not item.is_symlink() and dst.is_dir():
+        for entry in sorted(item.iterdir()):
+            _merge_back(entry, dst / entry.name)
+        if not any(item.iterdir()):
+            item.rmdir()
+    elif not dst.exists():
+        _move(item, dst)
 
 
 def _replace_with(item: Path, dst: Path) -> None:
@@ -755,7 +787,7 @@ def _recover(run_dir: Path) -> None:
     - the manifest in place and one in the backup: the commit finished and only removing the
       backup failed, so the backup just goes;
     - otherwise (it stopped while moving the old outputs aside): each backed-up output whose
-      place is empty goes back.
+      place is empty goes back, and a folder it was moving file by file is merged back.
     The backup folder is removed afterwards."""
     for backup in sorted(p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith(BACKUP)):
         finished = (run_dir / MANIFEST).exists() and (backup / MANIFEST).exists()
@@ -774,8 +806,8 @@ def _recover(run_dir: Path) -> None:
                 dst = run_dir / item.name
                 if midway:
                     _replace_with(item, dst)
-                elif not dst.exists():
-                    _move(item, dst)
+                else:  # a folder may be half moved: what is still in place stays
+                    _merge_back(item, dst)
         log.warning("publish: an interrupted publish left %s (%s)", backup.name,
                     "removed" if finished else "its outputs were put back")  # fmt: skip
         shutil.rmtree(backup, ignore_errors=True)

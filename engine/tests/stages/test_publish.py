@@ -2024,3 +2024,72 @@ def test_a_failed_publish_rolls_back_where_folders_cannot_be_renamed(
         publish(run, video, [_cue("c002", 2.0, 1.2, ev=["e1"], audio="d.wav")], [], *args,
                 speech=[])  # fmt: skip
     assert _tree(run) == before
+
+
+def _flat_fs_failing_on(monkeypatch, fail):
+    """Folders cannot be renamed (EXDEV); file renames work except the first one `fail`
+    picks, which fails with EIO."""
+    import errno
+
+    from lull.stages import publish as pub
+
+    real = pub._rename
+    hit = []
+
+    def rename(src, dst):
+        if Path(src).is_dir():
+            raise OSError(errno.EXDEV, "Invalid cross-device link", str(src))
+        if not hit and fail(Path(src), Path(dst)):
+            hit.append((src, dst))
+            raise OSError(errno.EIO, "the bucket said no", str(src))
+        return real(src, dst)
+
+    monkeypatch.setattr(pub, "_rename", rename)
+    return hit
+
+
+@pytest.mark.parametrize("phase", ["old-to-backup", "staging-to-run"])
+def test_a_folder_moved_file_by_file_that_fails_halfway_rolls_back(
+    tmp_path, fake_media, monkeypatch, phase
+):
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+
+    def two(ids):
+        cues = [_cue(ids[0], 2.0, 0.5, ev=["e1"], audio="c.wav"),
+                _cue(ids[1], 3.0, 0.5, ev=["e1"], audio="d.wav")]  # fmt: skip
+        return publish(run, video, cues, [], *args, speech=[])
+
+    two(["c001", "c002"])
+    before = _tree(run)
+    if phase == "old-to-backup":  # the 2nd old keyframe cannot move into the backup
+
+        def fail(src, dst):
+            return ".publish-old-" in str(dst) and src.name == "c002.jpg"
+    else:  # the 2nd new keyframe cannot move into the run folder
+
+        def fail(src, dst):
+            return dst.parent == run / "keyframes" and src.name == "c004.jpg"
+
+    hit = _flat_fs_failing_on(monkeypatch, fail)
+    with pytest.raises(OSError):
+        two(["c003", "c004"])
+    assert hit, "the failure was never triggered"
+    assert _tree(run) == before
+
+
+def test_recovery_puts_back_a_folder_a_crash_left_half_moved(tmp_path):
+    """A crash while keyframes/ was moving file by file into the backup (the manifest not yet
+    moved) leaves half the frames in each place: recovery merges them back."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    backup = run / ".publish-old-x9"
+    (backup / "keyframes").mkdir(parents=True)
+    (backup / "keyframes" / "c001.jpg").write_text("one", encoding="utf-8")
+    (run / "keyframes").mkdir()
+    (run / "keyframes" / "c002.jpg").write_text("two", encoding="utf-8")
+    (run / "manifest.json").write_text("old manifest", encoding="utf-8")
+    pub._recover(run)
+    assert _files(run) == {"manifest.json": "old manifest", "keyframes/c001.jpg": "one",
+                           "keyframes/c002.jpg": "two"}  # fmt: skip
