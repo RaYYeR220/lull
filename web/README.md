@@ -47,7 +47,9 @@ A production build stops, and says why, when:
 
 - **Recorded runs:** `node scripts/sync-showcase.mjs <export dir> <id>` copies an engine export
   (`lull export-showcase RUN_DIR OUT_DIR --title … --credit …`) into `public/showcase/<id>/`. It
-  checks the export first and rewrites the index.
+  checks the export first and rewrites the index. A `video.mp4` over 15 MiB is re-encoded on the
+  way in with ffmpeg (at most 480 lines, H.264 CRF 30, audio copied unchanged so the timing holds);
+  ffmpeg must be on the PATH for that. Keep `public/showcase/` under about 40 MB in all.
 - **Benchmarks:** the evaluation's scorer writes `benchmarks.json`. Put it at
   `public/benchmarks.json` and rebuild. With no file, the page shows its empty state.
 - **API refusal codes:** after the API changes its refusals, run `node scripts/api-codes.mjs` to
