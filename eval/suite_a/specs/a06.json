@@ -1,0 +1,336 @@
+{
+  "id": "a06",
+  "subject": "chemistry",
+  "title": "Reaction Kinetics Overview",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Rate of Reaction",
+      "bullets": [
+        "Measures how fast reactants disappear",
+        "Depends on concentration and temperature",
+        "Rate law expresses this mathematical relationship",
+        "Units are typically concentration per time"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Reaction Rates",
+        "x_label": "Reaction Type",
+        "y_label": "Rate (mol/L/s)",
+        "points": [
+          {
+            "label": "First Order",
+            "value": 1.5
+          },
+          {
+            "label": "Second Order",
+            "value": 0.8
+          },
+          {
+            "label": "Zero Order",
+            "value": 0.2
+          }
+        ]
+      },
+      "narration": [
+        "Measures how fast reactants disappear.",
+        "The speed of chemical change depends on what vanishes."
+      ],
+      "pauses": [
+        2.6,
+        2.3
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Temperature Effect",
+      "bullets": [
+        "Rate constant increases with temperature",
+        "Arrhenius equation describes the trend",
+        "Activation energy barrier is overcome",
+        "Typical Q10 value is around 2 to 3"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Rate vs Temperature",
+        "x_label": "Temp (K)",
+        "y_label": "Rate Constant",
+        "points": [
+          {
+            "label": "300 K",
+            "value": 2.1
+          },
+          {
+            "label": "320 K",
+            "value": 4.5
+          },
+          {
+            "label": "340 K",
+            "value": 9.6
+          },
+          {
+            "label": "360 K",
+            "value": 20.3
+          }
+        ]
+      },
+      "narration": [
+        "Arrhenius equation describes the trend.",
+        "The mathematical rule shows how temperature changes speed."
+      ],
+      "pauses": [
+        4.0,
+        3.9
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Factors Affecting Rate",
+      "bullets": [
+        "Catalysts lower activation energy",
+        "Surface area increases collision frequency",
+        "Pressure affects gas-phase reactions",
+        "Light can initiate photochemical reactions"
+      ],
+      "chart": null,
+      "narration": [
+        "Pressure affects gas-phase reactions.",
+        "Changing volume shifts the collision count."
+      ],
+      "pauses": [
+        2.0,
+        3.7
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a06-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Rate of Reaction\".",
+      "anchor": "Rate of Reaction",
+      "value": null
+    },
+    {
+      "id": "a06-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Depends on concentration and temperature\".",
+      "anchor": "Depends on concentration and temperature",
+      "value": null
+    },
+    {
+      "id": "a06-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Rate law expresses this mathematical relationship\".",
+      "anchor": "Rate law expresses this mathematical relationship",
+      "value": null
+    },
+    {
+      "id": "a06-v04",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Units are typically concentration per time\".",
+      "anchor": "Units are typically concentration per time",
+      "value": null
+    },
+    {
+      "id": "a06-v05",
+      "slide": 1,
+      "kind": "label",
+      "text": "A bar chart is titled \"Reaction Rates\".",
+      "anchor": "Reaction Rates",
+      "value": null
+    },
+    {
+      "id": "a06-v06",
+      "slide": 1,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Reaction Type\".",
+      "anchor": "Reaction Type",
+      "value": null
+    },
+    {
+      "id": "a06-v07",
+      "slide": 1,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Rate (mol/L/s)\".",
+      "anchor": "Rate (mol/L/s)",
+      "value": null
+    },
+    {
+      "id": "a06-v08",
+      "slide": 1,
+      "kind": "chart_value",
+      "anchor": "First Order",
+      "value": 1.5,
+      "text": "The highest value in the bar chart \"Reaction Rates\" is 1.5, for \"First Order\"."
+    },
+    {
+      "id": "a06-v09",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Rate constant increases with temperature\".",
+      "anchor": "Rate constant increases with temperature",
+      "value": null
+    },
+    {
+      "id": "a06-v10",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Activation energy barrier is overcome\".",
+      "anchor": "Activation energy barrier is overcome",
+      "value": null
+    },
+    {
+      "id": "a06-v11",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Typical Q10 value is around 2 to 3\".",
+      "anchor": "Typical Q10 value is around 2 to 3",
+      "value": null
+    },
+    {
+      "id": "a06-v12",
+      "slide": 2,
+      "kind": "label",
+      "text": "A line chart is titled \"Rate vs Temperature\".",
+      "anchor": "Rate vs Temperature",
+      "value": null
+    },
+    {
+      "id": "a06-v13",
+      "slide": 2,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Temp (K)\".",
+      "anchor": "Temp (K)",
+      "value": null
+    },
+    {
+      "id": "a06-v14",
+      "slide": 2,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Rate Constant\".",
+      "anchor": "Rate Constant",
+      "value": null
+    },
+    {
+      "id": "a06-v15",
+      "slide": 2,
+      "kind": "chart_value",
+      "anchor": "360 K",
+      "value": 20.3,
+      "text": "The highest value in the line chart \"Rate vs Temperature\" is 20.3, for \"360 K\"."
+    },
+    {
+      "id": "a06-v16",
+      "slide": 2,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Rate vs Temperature\" the values rise at every step, from \"300 K\" to \"360 K\"."
+    },
+    {
+      "id": "a06-v17",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Factors Affecting Rate\".",
+      "anchor": "Factors Affecting Rate",
+      "value": null
+    },
+    {
+      "id": "a06-v18",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Catalysts lower activation energy\".",
+      "anchor": "Catalysts lower activation energy",
+      "value": null
+    },
+    {
+      "id": "a06-v19",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Surface area increases collision frequency\".",
+      "anchor": "Surface area increases collision frequency",
+      "value": null
+    },
+    {
+      "id": "a06-v20",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Light can initiate photochemical reactions\".",
+      "anchor": "Light can initiate photochemical reactions",
+      "value": null
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a06-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Measures how fast reactants disappear\".",
+      "anchor": "Measures how fast reactants disappear"
+    },
+    {
+      "id": "a06-s02",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Arrhenius equation describes the trend\".",
+      "anchor": "Arrhenius equation describes the trend"
+    },
+    {
+      "id": "a06-s03",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Pressure affects gas-phase reactions\".",
+      "anchor": "Pressure affects gas-phase reactions"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Temperature Effect\".",
+      "anchor": "Temperature Effect"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a06-d01",
+      "kind": "slide_title",
+      "text": "The slide shows activation energy diagram."
+    },
+    {
+      "id": "a06-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Zero Order at 0.25."
+    },
+    {
+      "id": "a06-d03",
+      "kind": "image",
+      "text": "A diagram of a chemical equilibrium system is shown."
+    },
+    {
+      "id": "a06-d04",
+      "kind": "bullet",
+      "text": "The rate depends on the presence of a catalyst."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 2106,
+      "attempt": 2,
+      "prompt_sha256": "9eb9ec7cba3c704fb305f18ba483372ce518eaadad30d72b38a3099416e3ca2b"
+    },
+    "narration": {
+      "seed": 2206,
+      "attempt": 1,
+      "prompt_sha256": "b65d599f23834f6b49a1179d5abb9798d38bbc3d118471a67ae1c318ac6e2e8d"
+    }
+  }
+}

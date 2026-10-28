@@ -1,0 +1,54 @@
+{
+  "commit": "55515753f17eb8b764d77cd2389123e43fe5ba16",
+  "key_sha256": "354967ad20310ab6013c5fd884520f57120dbaa56d81b927f2d0c3ec35b7ce96",
+  "requests": {
+    "a01": {
+      "coverage": "3318507003810f4805ba0ce5bb16fcb9c84e72b480fd2b678c93fd534f9f84e7",
+      "claims": "872aa1c1c7fff46f720b4eeb2c13b9ee609b46b160c8f6c3fe8d41c4337e4fde"
+    },
+    "a02": {
+      "coverage": "8db7f65471880e768685ef5667af47d9488545597135e885e8a50d15df8b35c0",
+      "claims": "d82e8204431823c53d668f781d492167e4a7e78138250f984f3af2bce7a796d0"
+    },
+    "a03": {
+      "coverage": "3b0562836a8a11cb9bb78020e900215d972b86d53603594f88c1620dcacd3176",
+      "claims": "e3e1a8b175eeb5d1bb86e8ae5da05c52360bd112cc7111fc2434bad4c2bdaf8e"
+    },
+    "a04": {
+      "coverage": "2f55f2be6407eb30e64ac7e3ea5c4a87dc8a48788e1228e4c0c00635128ffc18",
+      "claims": "a775a8539fb4cb21732296ae8b3d7309622a52c5f98568180a197a86c162efeb"
+    },
+    "a05": {
+      "coverage": "0c8a32cc7afa0f7b9cddd77cdae0dc00a3626a0f72c98c0c69f1982ec77fe30e",
+      "claims": "aa7ece2278513a4eb8773f949ee2be3f477dce8e6ddcd0840d63cd67afa3cab2"
+    },
+    "a06": {
+      "coverage": "a98f60bc2d0cb4cc92b3697265f8d1cfaab0b2b141ec65aa5f922bb641d5b551",
+      "claims": "9cc3a29ae621f607058e8547e866c4a657a463e13d1598c4c7021e277231b394"
+    },
+    "a07": {
+      "coverage": "86b117277879b09536651672a9753d5acc596e67dd488ba2ef53987bc61d7cfb",
+      "claims": "6a5637134dcab13f38b207bd7be88cc83e71d0a8a6c4ce9bb4c33781614bee14"
+    },
+    "a08": {
+      "coverage": "610b4476b6cfe4f9818db47daa34ee23d6626e988227c97142a90051e84924a5",
+      "claims": "5ecc57c0d520363ff524c0172d1a883b346b4903271205ff327760ba22ce1c4d"
+    },
+    "a09": {
+      "coverage": "17ad69cff2616c732788288ba10eecc2803b05f092c022afaae2db34525f4e09",
+      "claims": "a4270e3ad06c6cc13b2c269b705f9296e43ef42821cd1eb6fe17a3af8938bb4f"
+    },
+    "a10": {
+      "coverage": "c5a7ed2f963f4c233c4992dccfc1ac3b8834c913bb59994a390ed5799eb27b86",
+      "claims": "683bb77f0a846e0dd485738da4038bebb81514ce144eae039f180051c040ea18"
+    },
+    "a11": {
+      "coverage": "3678d6be08eecb0bfa0f8326c5e54c2570a028a26968826b2ab20c6f282d1600",
+      "claims": "9bb9fddbf7109328ed7b7cb44fc810768b483dde9c2d0373c61026c620b679b2"
+    },
+    "a12": {
+      "coverage": "f73bddaf6c1d073f4d7d68df9a0c0dc83f32a0168a664a2ee169370b52c19b46",
+      "claims": "445d1d8b78c9346adc480868922ce867e983990659c25991ee80dcd44e3d79f9"
+    }
+  }
+}

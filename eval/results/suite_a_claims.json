@@ -1,0 +1,326 @@
+{
+  "added": "after the scored run; no new model calls",
+  "source": {
+    "file": "suite_a.json",
+    "sha256": "e3e27ed37bf358fcf9aacf207a0a1e651990cb6a0f734248feeb8a876a85762a",
+    "invocation": {
+      "stamp": "20261028T115030Z",
+      "mode": "all",
+      "reuse": false,
+      "videos": [
+        "a01",
+        "a02",
+        "a03",
+        "a04",
+        "a05",
+        "a06",
+        "a07",
+        "a08",
+        "a09",
+        "a10",
+        "a11",
+        "a12"
+      ],
+      "engine_fingerprint": "0.2.0+980454e1b9cd77d0",
+      "started_utc": "2026-10-28T11:50:30+00:00",
+      "complete": true,
+      "runs": {
+        "a01": "suite-a-a01-20261028T115030Z",
+        "a02": "suite-a-a02-20261028T115030Z",
+        "a03": "suite-a-a03-20261028T115030Z",
+        "a04": "suite-a-a04-20261028T115030Z",
+        "a05": "suite-a-a05-20261028T115030Z",
+        "a06": "suite-a-a06-20261028T115030Z",
+        "a07": "suite-a-a07-20261028T115030Z",
+        "a08": "suite-a-a08-20261028T115030Z",
+        "a09": "suite-a-a09-20261028T115030Z",
+        "a10": "suite-a-a10-20261028T115030Z",
+        "a11": "suite-a-a11-20261028T115030Z",
+        "a12": "suite-a-a12-20261028T115030Z"
+      },
+      "finished_utc": "2026-10-28T12:17:02+00:00"
+    },
+    "date": "2026-10-28T12:17:02+00:00"
+  },
+  "review": {
+    "reviewed": "2026-10-28",
+    "method": "each claim read against the slide on screen at its cue (key.json slide inventory and style text) and the slide image in suite_a/out/<lecture>/slide_<n>.png; done after the scored run, no model calls",
+    "summary": "No unsupported claim is about styling, colours, layout or slide numbers: the key covers those (style text, slide inventory), and the one slide-number claim, a03 x001#6 'marked 1 of 4', was judged supported. One claim is a real error (a03 x002#1, chart values read as times); the rest are paraphrases or split-off fragments of on-screen text, which the pre-registered rule counts as unsupported because quoted on-screen text must match exactly, and whole-sentence claims that repeat them."
+  },
+  "preregistered": {
+    "value": 0.18095238095238095,
+    "num": 19.0,
+    "den": 105.0,
+    "ci95": [
+      0.04,
+      0.3717948717948718
+    ]
+  },
+  "atomic_only": {
+    "value": 0.16853932584269662,
+    "num": 15.0,
+    "den": 89.0,
+    "ci95": [
+      0.034782608695652174,
+      0.36363636363636365
+    ]
+  },
+  "by_kind": {
+    "atomic": [
+      15,
+      89
+    ],
+    "sentence": [
+      4,
+      16
+    ]
+  },
+  "classes": {
+    "a": {
+      "label": "true of the rendered slide but absent from the key (styling, colours, layout, slide numbers)",
+      "count": 0
+    },
+    "b": {
+      "label": "a whole-sentence claim (kind sentence) that repeats atomic claims of the same cue",
+      "count": 4
+    },
+    "c": {
+      "label": "a real error: contradicts the key or the slide",
+      "count": 1
+    },
+    "d": {
+      "label": "other",
+      "count": 14
+    }
+  },
+  "claims": [
+    {
+      "video": "a03",
+      "key": "x001#5",
+      "cue": "x001",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "action-reaction pairs",
+      "reason": "The exact phrase 'action-reaction pairs' is not on the slide; the slide says 'Action and reaction are always paired'.",
+      "note": "Slide 1 bullet 3 reads 'Action and reaction are always paired': the same content in other words; the pre-registered rule wants on-screen text quoted exactly."
+    },
+    {
+      "video": "a03",
+      "key": "x001#7",
+      "cue": "x001",
+      "track": "extended",
+      "kind": "sentence",
+      "class": "b",
+      "group": "",
+      "claim": "A slide titled Newton's Three Laws lists three laws: inertia, force causes acceleration, action-reaction pairs; marked 1 of 4",
+      "reason": "The claim includes the exact phrase 'action-reaction pairs' which does not match the slide text, and the summary does not exactly match the bullet wording.",
+      "note": "Repeats claims #1 to #6 of the same cue; unsupported only through #5 (the paraphrase)."
+    },
+    {
+      "video": "a03",
+      "key": "x002#1",
+      "cue": "x002",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "c",
+      "group": "",
+      "claim": "A slide titled Velocity Over Time shows a line graph of velocity versus time with data points at 0.5 to 8.5 seconds",
+      "reason": "Slide 2 shows a line chart titled 'Speed vs Time' with points at specific times and velocities, not 'data points at 0.5 to 8.5 seconds'.",
+      "note": "The chart 'Speed vs Time' has its points at t=0s to t=8s; 0.5 to 8.5 are their velocities in m/s, not times (slide_2.png). The title, the line chart and its axes are right."
+    },
+    {
+      "video": "a07",
+      "key": "c004#1",
+      "cue": "c004",
+      "track": "standard",
+      "kind": "atomic",
+      "class": "d",
+      "group": "title fragment",
+      "claim": "Temperature",
+      "reason": "Slide 2 does not display 'Temperature' as a standalone text element.",
+      "note": "One word of the slide 2 title 'Temperature and Precipitation', split off by the claim split; the whole title (#3) was judged supported."
+    },
+    {
+      "video": "a07",
+      "key": "c004#2",
+      "cue": "c004",
+      "track": "standard",
+      "kind": "atomic",
+      "class": "d",
+      "group": "title fragment",
+      "claim": "Precipitation",
+      "reason": "Slide 2 does not display 'Precipitation' as a standalone text element.",
+      "note": "As #1: one word of the slide 2 title; the whole title (#3) was judged supported."
+    },
+    {
+      "video": "a07",
+      "key": "c006#1",
+      "cue": "c006",
+      "track": "standard",
+      "kind": "atomic",
+      "class": "d",
+      "group": "framing word",
+      "claim": "Slide",
+      "reason": "The word 'Slide' does not appear on any slide.",
+      "note": "The framing word of 'Slide: Annual Rainfall by Region', split off as a claim; the rule does not doubt framing words, but the split made it a claim of its own."
+    },
+    {
+      "video": "a07",
+      "key": "c006#2",
+      "cue": "c006",
+      "track": "standard",
+      "kind": "atomic",
+      "class": "d",
+      "group": "title fragment",
+      "claim": "Annual Rainfall",
+      "reason": "'Annual Rainfall' is only a substring of the title, not a separate text element.",
+      "note": "Part of the slide 3 title 'Annual Rainfall by Region' (slide_3.png)."
+    },
+    {
+      "video": "a07",
+      "key": "c006#3",
+      "cue": "c006",
+      "track": "standard",
+      "kind": "atomic",
+      "class": "d",
+      "group": "title fragment",
+      "claim": "by Region",
+      "reason": "'by Region' is only a substring of the title, not a separate text element.",
+      "note": "Part of the slide 3 title 'Annual Rainfall by Region'."
+    },
+    {
+      "video": "a07",
+      "key": "c006#4",
+      "cue": "c006",
+      "track": "standard",
+      "kind": "atomic",
+      "class": "d",
+      "group": "title fragment",
+      "claim": "Region",
+      "reason": "'Region' appears only as part of the title or as 'Regions' on axis label, not as a standalone element.",
+      "note": "The last word of the slide 3 title 'Annual Rainfall by Region'."
+    },
+    {
+      "video": "a07",
+      "key": "c006#5",
+      "cue": "c006",
+      "track": "standard",
+      "kind": "sentence",
+      "class": "b",
+      "group": "",
+      "claim": "Slide: Annual Rainfall by Region",
+      "reason": "The phrase includes 'Slide:' which is not on screen, and the full string does not match any slide text.",
+      "note": "Repeats claims #1 to #4 of the same cue: the slide 3 title after the framing word 'Slide:'."
+    },
+    {
+      "video": "a10",
+      "key": "x002#1",
+      "cue": "x002",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "slide lists heart pumps five liters per minute",
+      "reason": "Slide 2 shows 'Heart pumps ~5 liters per minute at rest', not 'five liters per minute' exactly (missing tilde and 'at rest').",
+      "note": "Slide 2 bullet 1 reads 'Heart pumps ~5 liters per minute at rest': the same figure, quoted without '~' and 'at rest' (the qualifier is lost)."
+    },
+    {
+      "video": "a10",
+      "key": "x002#3",
+      "cue": "x002",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "heart rate regulation",
+      "reason": "Slide 2 says 'Heart rate regulated by autonomic nervous system', not 'heart rate regulation' (different word form).",
+      "note": "Slide 2 bullet 4 reads 'Heart rate regulated by autonomic nervous system', shortened."
+    },
+    {
+      "video": "a10",
+      "key": "x002#4",
+      "cue": "x002",
+      "track": "extended",
+      "kind": "sentence",
+      "class": "b",
+      "group": "",
+      "claim": "Slide lists heart pumps five liters per minute, stroke volume, heart rate regulation",
+      "reason": "The compound claim includes unsupported phrases ('five liters per minute' missing tilde and 'at rest', 'heart rate regulation' not exact).",
+      "note": "Repeats claims #1 to #3 of the same cue."
+    },
+    {
+      "video": "a10",
+      "key": "x003#1",
+      "cue": "x003",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "Slide lists resting heart rate, exercise increase, age effect, and a line chart",
+      "reason": "Slide 3 has 'Resting heart rate' exactly, but 'exercise increase' (vs 'Exercise increases') and 'age effect' (vs 'Age affects') are not exact matches.",
+      "note": "Slide 3 bullets 1, 2 and 4 ('Resting heart rate varies by fitness level', 'Exercise increases heart rate significantly', 'Age affects maximum heart rate capacity') shortened; the line chart is right."
+    },
+    {
+      "video": "a11",
+      "key": "x001#1",
+      "cue": "x001",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "Slide titled Global Temperature Rise lists: human activity drives warming, greenhouse gases trap heat, carbon dioxide levels increased, average temperatures rising worldwide",
+      "reason": "Bullet wording differs from slide (e.g., 'warming trends' vs 'warming').",
+      "note": "The title is exact; the four bullets of slide 1 are shortened ('Human activity drives warming trends', 'Greenhouse gases trap heat in the atmosphere', 'Carbon dioxide levels have increased significantly', 'Average temperatures are rising worldwide')."
+    },
+    {
+      "video": "a11",
+      "key": "x003#3",
+      "cue": "x003",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "sea levels rising steadily",
+      "reason": "Slide says 'Sea levels are rising steadily'; claim omits 'are'.",
+      "note": "Slide 3 reads 'Sea levels are rising steadily'; 'are' dropped."
+    },
+    {
+      "video": "a11",
+      "key": "x003#4",
+      "cue": "x003",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "storm intensity increasing",
+      "reason": "Slide says 'Storm intensity is increasing'; claim omits 'is'.",
+      "note": "Slide 3 reads 'Storm intensity is increasing'; 'is' dropped."
+    },
+    {
+      "video": "a11",
+      "key": "x003#5",
+      "cue": "x003",
+      "track": "extended",
+      "kind": "atomic",
+      "class": "d",
+      "group": "paraphrase",
+      "claim": "precipitation patterns shifting",
+      "reason": "Slide says 'Precipitation patterns are shifting'; claim omits 'are'.",
+      "note": "Slide 3 reads 'Precipitation patterns are shifting'; 'are' dropped."
+    },
+    {
+      "video": "a11",
+      "key": "x003#6",
+      "cue": "x003",
+      "track": "extended",
+      "kind": "sentence",
+      "class": "b",
+      "group": "",
+      "claim": "Slide titled Extreme Weather Events lists four points: heatwaves becoming more frequent, sea levels rising steadily, storm intensity increasing, precipitation patterns shifting",
+      "reason": "Listed points do not match slide text exactly (missing 'are' in three items).",
+      "note": "Repeats claims #1 to #5 of the same cue; unsupported only through #3 to #5."
+    }
+  ]
+}

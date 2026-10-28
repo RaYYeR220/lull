@@ -1,0 +1,168 @@
+{
+  "video": "csc_intro",
+  "kind": "usgs",
+  "title": "USGS Climate Science Champions: introduction",
+  "about": "a 45-second USGS introduction showing scientists at work in many settings",
+  "media": {
+    "file": "usgs/csc_intro.mp4",
+    "licence": "Public domain (USGS); music used with permission",
+    "credit": "U.S. Geological Survey",
+    "url": "https://www.usgs.gov/media/videos/climate-science-champions-introduction",
+    "sha256": "358832f7e61044dfdaac7525db48836ddcf979d9b3e1c50945b889d52b6e5959",
+    "duration_s": 44.878
+  },
+  "ad_media": {
+    "file": "usgs/csc_intro_AD.mp4",
+    "url": "https://www.usgs.gov/media/videos/climate-science-champions-introduction-ad",
+    "sha256": "c9d3ec2b29cf19bfc240b286ae501dc2869ccae3f019a1a875d5953fef499ab3",
+    "duration_s": 63.855
+  },
+  "timeline": "anchor_time is a time in the original video; start/end are times in the AD version (whose video pauses for the description)",
+  "asr": {
+    "original": "refs/asr/csc_intro.json",
+    "ad_version": "refs/asr/csc_intro_AD.json",
+    "models": [
+      "parakeet-tdt-0.6b-v3.oss-align.q8_0"
+    ]
+  },
+  "references": {
+    "usgs_ad": {
+      "author": "USGS (professionally voiced extended audio description)",
+      "licence": "Public domain (USGS)",
+      "url": "https://www.usgs.gov/media/videos/climate-science-champions-introduction-ad",
+      "kind": "extended_ad",
+      "cues": [
+        {
+          "id": "usgs-001",
+          "source": "usgs_ad",
+          "start": 0.0,
+          "end": 3.84,
+          "text": "The video opens with narration over footage of erupting volcanoes and geologists using tools to sample rocks.",
+          "ad_words": [
+            0,
+            16
+          ],
+          "anchor_time": 0.0,
+          "anchor_range": [
+            0.0,
+            0.0
+          ],
+          "pause_s": 19.2,
+          "paused": true,
+          "placement": "before_program",
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
+        },
+        {
+          "id": "usgs-002",
+          "source": "usgs_ad",
+          "start": 3.84,
+          "end": 7.04,
+          "text": "A split screen view shows mountains and forests, coasts and deserts and the seafloor.",
+          "ad_words": [
+            17,
+            30
+          ],
+          "anchor_time": 0.0,
+          "anchor_range": [
+            0.0,
+            0.0
+          ],
+          "pause_s": 19.2,
+          "paused": true,
+          "placement": "before_program",
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
+        },
+        {
+          "id": "usgs-003",
+          "source": "usgs_ad",
+          "start": 7.04,
+          "end": 14.8,
+          "text": "The video then shows USGS scientists working in a variety of different settings, on the Arctic tundra, in salt marshes, on offshore research vessels, on volcanic craters, and in tropical coral reefs.",
+          "ad_words": [
+            31,
+            62
+          ],
+          "anchor_time": 0.0,
+          "anchor_range": [
+            0.0,
+            0.0
+          ],
+          "pause_s": 19.2,
+          "paused": true,
+          "placement": "before_program",
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
+        },
+        {
+          "id": "usgs-004",
+          "source": "usgs_ad",
+          "start": 14.8,
+          "end": 19.2,
+          "text": "The video closes with text that reads, Hashtag Climate Champions, USGS Science for a Changing World.",
+          "ad_words": [
+            63,
+            78
+          ],
+          "anchor_time": 0.0,
+          "anchor_range": [
+            0.0,
+            0.0
+          ],
+          "pause_s": 19.2,
+          "paused": true,
+          "placement": "before_program",
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
+        }
+      ]
+    }
+  },
+  "asr_corrections": {
+    "applied": 0,
+    "lines": [],
+    "unresolved": []
+  },
+  "alignment": {
+    "method": "difflib.SequenceMatcher on suite_a.text.tokens of both transcripts, repairs: short chance matches <= 2 tokens dropped, near-identical tokens/runs (ratio >= 0.75) matched, describer runs slid along repeats (<= 8 tokens) to sentence edges; describer runs under 2 tokens dropped; paused = AD gap >= original gap + 1.0 s",
+    "dropped_runs": [],
+    "narration_in_ad_version": [
+      [
+        19.2,
+        58.4
+      ]
+    ],
+    "description_in_ad_version": [
+      [
+        0.0,
+        19.2
+      ]
+    ],
+    "narration_missing_from_ad_version": [],
+    "stats": {
+      "original_words": 93,
+      "ad_version_words": 172,
+      "original_tokens": 97,
+      "original_tokens_matched": 97,
+      "original_tokens_matched_share": 1.0,
+      "matched_word_pairs": 93,
+      "describer_words": 79,
+      "lines": 4,
+      "dropped_runs": 0,
+      "paused_lines": 4,
+      "before_program_lines": 4,
+      "duration_original_s": 44.878,
+      "duration_ad_version_s": 63.855,
+      "offset_drift_within_matched_runs_s": {
+        "runs": 1,
+        "median_s": 0.32,
+        "max_s": 0.32
+      }
+    }
+  }
+}

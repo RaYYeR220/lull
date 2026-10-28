@@ -1,0 +1,51 @@
+{
+  "about": "Judge probe for Suite B: synthetic cues written for known reference facts. Positives (a paraphrase that keeps every idea, using descriptions instead of names; the fact plus an extra detail) must be credited to their fact; near misses (wrong count, colour or value, swapped character, gist only, invented detail in place of the fact's own) must not. Facts are taken from the committed facts outside the smoke clip (Elephants Dream 60-150 s). The cues of a group are shown in a fixed shuffled order (seed below), under the pinned judge prompt, like any run's cues.",
+  "seed": 20261028,
+  "groups": [
+    {
+      "video": "elephants_dream",
+      "facts": ["pfeiffer-04.1", "pfeiffer-05.3", "hunt-36.2", "hunt-23.1", "pfeiffer-50.2", "hunt-54.3", "pfeiffer-39.1", "hunt-57.2", "pfeiffer-51.4"],
+      "cues": [
+        {"id": "e01", "for": "pfeiffer-04.1", "type": "positive_paraphrase", "expect": "credit", "text": "Two figures are standing on a narrow little bridge."},
+        {"id": "e02", "for": "pfeiffer-04.1", "type": "wrong_count", "expect": "no_credit", "text": "Three people stand on a small bridge."},
+        {"id": "e03", "for": "pfeiffer-05.3", "type": "positive_paraphrase", "expect": "credit", "text": "The old man pushes the young man down onto the ground."},
+        {"id": "e04", "for": "pfeiffer-05.3", "type": "swapped_character", "expect": "no_credit", "text": "The young man shoves the old man to the ground."},
+        {"id": "e05", "for": "hunt-36.2", "type": "positive_extra", "expect": "credit", "text": "The old man presses a red button, and the walls begin to shake."},
+        {"id": "e06", "for": "hunt-36.2", "type": "wrong_colour", "expect": "no_credit", "text": "The old man presses a green button."},
+        {"id": "e07", "for": "hunt-36.2", "type": "swapped_character", "expect": "no_credit", "text": "The young man presses a red button."},
+        {"id": "e08", "for": "hunt-23.1", "type": "positive_paraphrase", "expect": "credit", "text": "A lone spotlight falls on an antique telephone."},
+        {"id": "e09", "for": "hunt-23.1", "type": "invented_detail", "expect": "no_credit", "text": "A single light shines down on an old-fashioned typewriter."},
+        {"id": "e10", "for": "pfeiffer-50.2", "type": "positive_paraphrase", "expect": "credit", "text": "Two enormous hands push up out of the floor."},
+        {"id": "e11", "for": "pfeiffer-50.2", "type": "wrong_count", "expect": "no_credit", "text": "A single massive hand heaves out of the ground."},
+        {"id": "e12", "for": "pfeiffer-50.2", "type": "gist_only", "expect": "no_credit", "text": "Something rises in the room."},
+        {"id": "e13", "for": "hunt-54.3", "type": "positive_paraphrase", "expect": "credit", "text": "The old man hits the young man over the head with his stick."},
+        {"id": "e14", "for": "hunt-54.3", "type": "swapped_character", "expect": "no_credit", "text": "The young man hits the old man over the head."},
+        {"id": "e15", "for": "pfeiffer-39.1", "type": "positive_paraphrase", "expect": "credit", "text": "A camera goes off with a flash."},
+        {"id": "e16", "for": "pfeiffer-39.1", "type": "gist_only", "expect": "no_credit", "text": "The room lights up."},
+        {"id": "e17", "for": "hunt-57.2", "type": "positive_paraphrase", "expect": "credit", "text": "The credits read: Director, Bassam Kurdali."},
+        {"id": "e18", "for": "hunt-57.2", "type": "wrong_value", "expect": "no_credit", "text": "The credits read: Director, Ton Roosendaal."},
+        {"id": "e19", "for": "hunt-57.2", "type": "gist_only", "expect": "no_credit", "text": "The credits roll."},
+        {"id": "e20", "for": "pfeiffer-51.4", "type": "positive_paraphrase", "expect": "credit", "text": "The young man circles a finger by his temple, the sign for crazy."},
+        {"id": "e21", "for": "pfeiffer-51.4", "type": "invented_detail", "expect": "no_credit", "text": "The young man taps his chest with his fist."}
+      ]
+    },
+    {
+      "video": "woodshole",
+      "facts": ["usgs-012.1", "usgs-045.1", "usgs-046.1", "usgs-076.1", "usgs-073.1"],
+      "cues": [
+        {"id": "w01", "for": "usgs-012.1", "type": "positive_paraphrase", "expect": "credit", "text": "Two men ride in a boat."},
+        {"id": "w02", "for": "usgs-012.1", "type": "wrong_count", "expect": "no_credit", "text": "Four men are on a boat."},
+        {"id": "w03", "for": "usgs-045.1", "type": "positive_paraphrase", "expect": "credit", "text": "A world map highlights the 200-nautical-mile U.S. exclusive economic zone."},
+        {"id": "w04", "for": "usgs-045.1", "type": "wrong_value", "expect": "no_credit", "text": "A world map highlights the 300-nautical-mile U.S. exclusive economic zone."},
+        {"id": "w05", "for": "usgs-045.1", "type": "gist_only", "expect": "no_credit", "text": "A map of the world appears."},
+        {"id": "w06", "for": "usgs-046.1", "type": "positive_paraphrase", "expect": "credit", "text": "Yellow lines mark the extended continental shelf in the Arctic and Atlantic Oceans and the Bering Sea, where sediment thickness data were collected."},
+        {"id": "w07", "for": "usgs-046.1", "type": "wrong_colour", "expect": "no_credit", "text": "Red lines mark the extended continental shelf in the Arctic and Atlantic Oceans and the Bering Sea, where sediment thickness data were collected."},
+        {"id": "w08", "for": "usgs-076.1", "type": "positive_extra", "expect": "credit", "text": "A man wearing a USGS cap stands beside three men looking through binoculars on a windy beach."},
+        {"id": "w09", "for": "usgs-076.1", "type": "wrong_count", "expect": "no_credit", "text": "A man in a USGS hat stands next to two men with binoculars."},
+        {"id": "w10", "for": "usgs-076.1", "type": "invented_detail", "expect": "no_credit", "text": "A man in a USGS hat stands next to three men with fishing rods."},
+        {"id": "w11", "for": "usgs-073.1", "type": "positive_paraphrase", "expect": "credit", "text": "Two cars drive along a road."},
+        {"id": "w12", "for": "usgs-073.1", "type": "gist_only", "expect": "no_credit", "text": "There is traffic near the coast."}
+      ]
+    }
+  ]
+}

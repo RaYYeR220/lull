@@ -1,0 +1,397 @@
+{
+  "id": "a07",
+  "subject": "geography",
+  "title": "World Climate Regions",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Global Climate Patterns",
+      "bullets": [
+        "Solar energy drives atmospheric circulation",
+        "Three major wind belts per hemisphere",
+        "Pressure systems shape regional weather",
+        "Oceans moderate temperature extremes"
+      ],
+      "chart": null,
+      "narration": [
+        "Solar energy drives atmospheric circulation patterns on this slide.",
+        "The sun's power moves air through the atmosphere."
+      ],
+      "pauses": [
+        3.2,
+        3.5
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Temperature and Precipitation",
+      "bullets": [
+        "Latitude controls average temperature",
+        "Continentality affects seasonal range",
+        "Altitude lowers temperature with height",
+        "Distance from water influences moisture"
+      ],
+      "chart": null,
+      "narration": [
+        "Continentality affects seasonal range across land areas.",
+        "Large land masses change temperature through the year."
+      ],
+      "pauses": [
+        2.6,
+        3.3
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Annual Rainfall by Region",
+      "bullets": [
+        "Equatorial zones receive heavy rain",
+        "Deserts have low annual totals",
+        "Mid-latitudes show seasonal patterns",
+        "Coastal areas have higher precipitation"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Rainfall Comparison",
+        "x_label": "Regions",
+        "y_label": "Millimeters",
+        "points": [
+          {
+            "label": "Equator",
+            "value": 2200.5
+          },
+          {
+            "label": "Tropics",
+            "value": 1050.3
+          },
+          {
+            "label": "Desert",
+            "value": 25.0
+          },
+          {
+            "label": "Mid-latitudes",
+            "value": 750.8
+          }
+        ]
+      },
+      "narration": [
+        "Mid-latitudes show seasonal patterns throughout the year.",
+        "These regions experience distinct changes between seasons."
+      ],
+      "pauses": [
+        3.2,
+        3.8
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Temperature Trends Over Time",
+      "bullets": [
+        "Industrial era warming began ~1850",
+        "Global average temperature rise",
+        "Recent decades show acceleration",
+        "Polar regions warming faster than others"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Temperature Anomaly",
+        "x_label": "Years",
+        "y_label": "Degrees C",
+        "points": [
+          {
+            "label": "1880",
+            "value": 0.1
+          },
+          {
+            "label": "1950",
+            "value": 0.3
+          },
+          {
+            "label": "1990",
+            "value": 0.6
+          },
+          {
+            "label": "2020",
+            "value": 1.1
+          }
+        ]
+      },
+      "narration": [
+        "Polar regions warming faster than other areas of the planet.",
+        "The coldest parts of Earth are changing most quickly."
+      ],
+      "pauses": [
+        1.7,
+        3.6
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a07-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Global Climate Patterns\".",
+      "anchor": "Global Climate Patterns",
+      "value": null
+    },
+    {
+      "id": "a07-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Three major wind belts per hemisphere\".",
+      "anchor": "Three major wind belts per hemisphere",
+      "value": null
+    },
+    {
+      "id": "a07-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Pressure systems shape regional weather\".",
+      "anchor": "Pressure systems shape regional weather",
+      "value": null
+    },
+    {
+      "id": "a07-v04",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Oceans moderate temperature extremes\".",
+      "anchor": "Oceans moderate temperature extremes",
+      "value": null
+    },
+    {
+      "id": "a07-v05",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Latitude controls average temperature\".",
+      "anchor": "Latitude controls average temperature",
+      "value": null
+    },
+    {
+      "id": "a07-v06",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Altitude lowers temperature with height\".",
+      "anchor": "Altitude lowers temperature with height",
+      "value": null
+    },
+    {
+      "id": "a07-v07",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Distance from water influences moisture\".",
+      "anchor": "Distance from water influences moisture",
+      "value": null
+    },
+    {
+      "id": "a07-v08",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Annual Rainfall by Region\".",
+      "anchor": "Annual Rainfall by Region",
+      "value": null
+    },
+    {
+      "id": "a07-v09",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Equatorial zones receive heavy rain\".",
+      "anchor": "Equatorial zones receive heavy rain",
+      "value": null
+    },
+    {
+      "id": "a07-v10",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Deserts have low annual totals\".",
+      "anchor": "Deserts have low annual totals",
+      "value": null
+    },
+    {
+      "id": "a07-v11",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Coastal areas have higher precipitation\".",
+      "anchor": "Coastal areas have higher precipitation",
+      "value": null
+    },
+    {
+      "id": "a07-v12",
+      "slide": 3,
+      "kind": "label",
+      "text": "A bar chart is titled \"Rainfall Comparison\".",
+      "anchor": "Rainfall Comparison",
+      "value": null
+    },
+    {
+      "id": "a07-v13",
+      "slide": 3,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Millimeters\".",
+      "anchor": "Millimeters",
+      "value": null
+    },
+    {
+      "id": "a07-v14",
+      "slide": 3,
+      "kind": "chart_value",
+      "anchor": "Equator",
+      "value": 2200.5,
+      "text": "The highest value in the bar chart \"Rainfall Comparison\" is 2200.5, for \"Equator\"."
+    },
+    {
+      "id": "a07-v15",
+      "slide": 4,
+      "kind": "title",
+      "text": "The slide title reads \"Temperature Trends Over Time\".",
+      "anchor": "Temperature Trends Over Time",
+      "value": null
+    },
+    {
+      "id": "a07-v16",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Industrial era warming began ~1850\".",
+      "anchor": "Industrial era warming began ~1850",
+      "value": null
+    },
+    {
+      "id": "a07-v17",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Global average temperature rise\".",
+      "anchor": "Global average temperature rise",
+      "value": null
+    },
+    {
+      "id": "a07-v18",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Recent decades show acceleration\".",
+      "anchor": "Recent decades show acceleration",
+      "value": null
+    },
+    {
+      "id": "a07-v19",
+      "slide": 4,
+      "kind": "label",
+      "text": "A line chart is titled \"Temperature Anomaly\".",
+      "anchor": "Temperature Anomaly",
+      "value": null
+    },
+    {
+      "id": "a07-v20",
+      "slide": 4,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Years\".",
+      "anchor": "Years",
+      "value": null
+    },
+    {
+      "id": "a07-v21",
+      "slide": 4,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Degrees C\".",
+      "anchor": "Degrees C",
+      "value": null
+    },
+    {
+      "id": "a07-v22",
+      "slide": 4,
+      "kind": "chart_value",
+      "anchor": "2020",
+      "value": 1.1,
+      "text": "The highest value in the line chart \"Temperature Anomaly\" is 1.1, for \"2020\"."
+    },
+    {
+      "id": "a07-v23",
+      "slide": 4,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Temperature Anomaly\" the values rise at every step, from \"1880\" to \"2020\"."
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a07-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Solar energy drives atmospheric circulation\".",
+      "anchor": "Solar energy drives atmospheric circulation"
+    },
+    {
+      "id": "a07-s02",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Continentality affects seasonal range\".",
+      "anchor": "Continentality affects seasonal range"
+    },
+    {
+      "id": "a07-s03",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Mid-latitudes show seasonal patterns\".",
+      "anchor": "Mid-latitudes show seasonal patterns"
+    },
+    {
+      "id": "a07-s04",
+      "slide": 3,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Regions\".",
+      "anchor": "Regions"
+    },
+    {
+      "id": "a07-s05",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Polar regions warming faster than others\".",
+      "anchor": "Polar regions warming faster than others"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Temperature and Precipitation\".",
+      "anchor": "Temperature and Precipitation"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a07-d01",
+      "kind": "slide_title",
+      "text": "The slide shows a map of vegetation zones."
+    },
+    {
+      "id": "a07-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Mountain regions at 3.7."
+    },
+    {
+      "id": "a07-d03",
+      "kind": "image",
+      "text": "A diagram of a tectonic plate boundary is shown."
+    },
+    {
+      "id": "a07-d04",
+      "kind": "bullet",
+      "text": "The slide lists the names of all world capitals."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 1107,
+      "attempt": 1,
+      "prompt_sha256": "9e2013fe5b30ea620e394150cab7972b576b624ad665aa79d9a9ac89a95b6859"
+    },
+    "narration": {
+      "seed": 1207,
+      "attempt": 1,
+      "prompt_sha256": "d5cfb3ee0e2f38acd6d1d32c026c8b675b390c09a1c732f5beeab3c20e4e0903"
+    }
+  }
+}

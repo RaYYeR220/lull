@@ -1,0 +1,5033 @@
+{
+  "_fixture": "FIXTURE: a smoke run's output (a clip / a subset), copied for the report's tests; complete is false, as the scorer wrote it. Never results.",
+  "suite": "B",
+  "complete": false,
+  "smoke": true,
+  "note": "smoke on a clip: partial, not Suite B results",
+  "date": "2026-10-28T03:59:20+00:00",
+  "git_commit": "90bf4ade509d54205b4bc5735f94b775fc987050",
+  "git_dirty": false,
+  "preregistration": {
+    "tag": "suite-b-prereg-2",
+    "commit": "f308f9034fd87b7c8ac7dcb52c4f601ac06cddd6",
+    "committed": "2026-10-28T04:54:30+01:00"
+  },
+  "reference_set_sha256": "7d8b9fdfec4936aca0350efb712ed39e006aee77e4df9a2f239eb53e0a372209",
+  "ledger_calls_after_preregistration": true,
+  "judge_model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+  "second_judge_model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+  "window_s": 15.0,
+  "long_block_window_s": 30.0,
+  "judge_prompt_sha256": "78e6e4f632209283febe150df2f41ad9007b6e022a67cca558bf6b595d5257da",
+  "first_preregistration_tag": "suite-b-prereg",
+  "runs": [
+    {
+      "video": "elephants_dream",
+      "path": "<projects>/lull-runs\\ed90",
+      "run_id": "ed90-final-b",
+      "offset_s": 60.0,
+      "clip": [
+        60.0,
+        150.0
+      ],
+      "full": false,
+      "duration_s": 90.0,
+      "video_sha256": "0daa75ac9328b0c0e40704fad005eb44b57068efe5224e441f1a4c3e01820365",
+      "engine": {
+        "engine": "0.2.0",
+        "models": [
+          "nvidia/Nemotron-3-Ultra-550b-a55b",
+          "nvidia/Nemotron-3.5-Super-VL",
+          "nvidia/Nemotron-3_5-Lightning",
+          "tavily-search"
+        ],
+        "tts": "NVIDIA Magpie TTS"
+      },
+      "options": {
+        "mode": "extended",
+        "profile": "entertainment",
+        "voice": "Sofia",
+        "source_url": null,
+        "language": "en"
+      },
+      "cue_counts": {
+        "verified": 8,
+        "edited": 0,
+        "approved": 0,
+        "held": 4,
+        "extended": 2
+      },
+      "extended_produced": true,
+      "cues": [
+        {
+          "id": "x001",
+          "track": "extended",
+          "text": "A bald person with a long nose, green coat over red shirt, stands in a room with wires on the left.",
+          "start": 61.791667,
+          "end": 61.791667
+        },
+        {
+          "id": "x002",
+          "track": "extended",
+          "text": "The bald person in the green coat walks onto a narrow metal walkway in a tall shaft filled with wires.",
+          "start": 64.916667,
+          "end": 64.916667
+        },
+        {
+          "id": "c001",
+          "track": "standard",
+          "text": "The tall shaft is dark and filled with a dense web of wires and metal structures, extending upward.",
+          "start": 69.0,
+          "end": 74.944308
+        },
+        {
+          "id": "c002",
+          "track": "standard",
+          "text": "A second person with dark hair and light shirt enters behind the first.",
+          "start": 78.25,
+          "end": 82.336712
+        },
+        {
+          "id": "c005",
+          "track": "standard",
+          "text": "Figures hang from wires and fall.",
+          "start": 102.689,
+          "end": 104.546596
+        },
+        {
+          "id": "c006",
+          "track": "standard",
+          "text": "In a moment, second person walks as figures hang nearby.",
+          "start": 108.33,
+          "end": 112.13807299999999
+        },
+        {
+          "id": "c007",
+          "track": "standard",
+          "text": "In a moment, walkway tilts, figures slide off.",
+          "start": 113.577,
+          "end": 117.013553
+        },
+        {
+          "id": "c008",
+          "track": "standard",
+          "text": "In a moment, first person catches up to second.",
+          "start": 118.917,
+          "end": 121.889154
+        },
+        {
+          "id": "c011",
+          "track": "standard",
+          "text": "The walkway tilts and breaks, causing the second person to fall.",
+          "start": 132.2,
+          "end": 135.822313
+        },
+        {
+          "id": "c013",
+          "track": "standard",
+          "text": "Both figures fall through the wires into darkness.",
+          "start": 143.20999999999998,
+          "end": 146.089274
+        }
+      ],
+      "speech": [
+        [
+          60.24,
+          61.76
+        ],
+        [
+          62.08,
+          64.88
+        ],
+        [
+          65.44,
+          65.68
+        ],
+        [
+          66.0,
+          68.8
+        ],
+        [
+          75.84,
+          76.32
+        ],
+        [
+          77.12,
+          78.05
+        ],
+        [
+          94.47999999999999,
+          95.75999999999999
+        ],
+        [
+          97.21099916315079,
+          102.48899905206264
+        ],
+        [
+          122.09099860703945,
+          124.13899856814741
+        ],
+        [
+          125.9709985203147,
+          127.39899849528074
+        ],
+        [
+          131.12,
+          132.0
+        ],
+        [
+          136.18099829210342,
+          136.94899828182162
+        ],
+        [
+          137.2,
+          137.92000000000002
+        ]
+      ],
+      "speech_source": "cues.json speech"
+    }
+  ],
+  "not_scored": [
+    "woodshole",
+    "aquatic_connectivity",
+    "csc_intro"
+  ],
+  "summary": {
+    "references": {
+      "hunt": {
+        "recall": {
+          "facts": 20,
+          "lines": 12,
+          "standard_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "standard_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "by_kind": {
+          "visual": {
+            "facts": 20,
+            "lines": 12,
+            "standard_window": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            },
+            "both_window": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            },
+            "standard_anywhere": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            },
+            "both_anywhere": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "interpretation": {
+          "facts": 0,
+          "lines": 0,
+          "standard_window": {
+            "value": null,
+            "num": 0,
+            "den": 0,
+            "ci95": [
+              null,
+              null
+            ]
+          },
+          "both_window": {
+            "value": null,
+            "num": 0,
+            "den": 0,
+            "ci95": [
+              null,
+              null
+            ]
+          },
+          "standard_anywhere": {
+            "value": null,
+            "num": 0,
+            "den": 0,
+            "ci95": [
+              null,
+              null
+            ]
+          },
+          "both_anywhere": {
+            "value": null,
+            "num": 0,
+            "den": 0,
+            "ci95": [
+              null,
+              null
+            ]
+          }
+        },
+        "recall_without_unresolved": {
+          "facts": 20,
+          "lines": 12,
+          "standard_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "standard_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 20.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "flagged_facts": 0,
+        "second_judge": {
+          "recall": {
+            "facts": 20,
+            "lines": 12,
+            "standard_window": {
+              "value": 0.1,
+              "num": 2.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.2631578947368421
+              ]
+            },
+            "both_window": {
+              "value": 0.15,
+              "num": 3.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.3157894736842105
+              ]
+            },
+            "standard_anywhere": {
+              "value": 0.1,
+              "num": 2.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.2631578947368421
+              ]
+            },
+            "both_anywhere": {
+              "value": 0.15,
+              "num": 3.0,
+              "den": 20.0,
+              "ci95": [
+                0.0,
+                0.3157894736842105
+              ]
+            }
+          },
+          "agreement_window": {
+            "n": 20,
+            "agree": 17,
+            "agreement": 0.85,
+            "kappa": 0.0
+          },
+          "agreement_anywhere": {
+            "n": 20,
+            "agree": 17,
+            "agreement": 0.85,
+            "kappa": 0.0
+          }
+        }
+      },
+      "pfeiffer": {
+        "recall": {
+          "facts": 26,
+          "lines": 10,
+          "standard_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "standard_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "by_kind": {
+          "visual": {
+            "facts": 26,
+            "lines": 10,
+            "standard_window": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            },
+            "both_window": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            },
+            "standard_anywhere": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            },
+            "both_anywhere": {
+              "value": 0.0,
+              "num": 0.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "interpretation": {
+          "facts": 1,
+          "lines": 1,
+          "standard_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 1.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 1.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "standard_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 1.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 1.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "recall_without_unresolved": {
+          "facts": 26,
+          "lines": 10,
+          "standard_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_window": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "standard_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          },
+          "both_anywhere": {
+            "value": 0.0,
+            "num": 0.0,
+            "den": 26.0,
+            "ci95": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "flagged_facts": 0,
+        "second_judge": {
+          "recall": {
+            "facts": 26,
+            "lines": 10,
+            "standard_window": {
+              "value": 0.23076923076923078,
+              "num": 6.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.4642857142857143
+              ]
+            },
+            "both_window": {
+              "value": 0.23076923076923078,
+              "num": 6.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.4642857142857143
+              ]
+            },
+            "standard_anywhere": {
+              "value": 0.2692307692307692,
+              "num": 7.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.5333333333333333
+              ]
+            },
+            "both_anywhere": {
+              "value": 0.2692307692307692,
+              "num": 7.0,
+              "den": 26.0,
+              "ci95": [
+                0.0,
+                0.5333333333333333
+              ]
+            }
+          },
+          "agreement_window": {
+            "n": 26,
+            "agree": 20,
+            "agreement": 0.7692307692307693,
+            "kappa": 4.810966440042344e-16
+          },
+          "agreement_anywhere": {
+            "n": 26,
+            "agree": 19,
+            "agreement": 0.7307692307692307,
+            "kappa": -4.123685520036297e-16
+          }
+        }
+      }
+    },
+    "baseline": {
+      "hunt_lines_vs_pfeiffer_facts": {
+        "facts": 26,
+        "lines": 10,
+        "standard_window": {
+          "value": 0.3076923076923077,
+          "num": 8.0,
+          "den": 26.0,
+          "ci95": [
+            0.17857142857142858,
+            0.45
+          ]
+        },
+        "both_window": {
+          "value": 0.3076923076923077,
+          "num": 8.0,
+          "den": 26.0,
+          "ci95": [
+            0.17857142857142858,
+            0.45
+          ]
+        },
+        "standard_anywhere": {
+          "value": 0.3076923076923077,
+          "num": 8.0,
+          "den": 26.0,
+          "ci95": [
+            0.17857142857142858,
+            0.45
+          ]
+        },
+        "both_anywhere": {
+          "value": 0.3076923076923077,
+          "num": 8.0,
+          "den": 26.0,
+          "ci95": [
+            0.17857142857142858,
+            0.45
+          ]
+        }
+      },
+      "pfeiffer_lines_vs_hunt_facts": {
+        "facts": 20,
+        "lines": 12,
+        "standard_window": {
+          "value": 0.2,
+          "num": 4.0,
+          "den": 20.0,
+          "ci95": [
+            0.05,
+            0.3684210526315789
+          ]
+        },
+        "both_window": {
+          "value": 0.2,
+          "num": 4.0,
+          "den": 20.0,
+          "ci95": [
+            0.05,
+            0.3684210526315789
+          ]
+        },
+        "standard_anywhere": {
+          "value": 0.2,
+          "num": 4.0,
+          "den": 20.0,
+          "ci95": [
+            0.05,
+            0.3684210526315789
+          ]
+        },
+        "both_anywhere": {
+          "value": 0.2,
+          "num": 4.0,
+          "den": 20.0,
+          "ci95": [
+            0.05,
+            0.3684210526315789
+          ]
+        }
+      }
+    }
+  },
+  "judge_probe": {
+    "primary": {
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "groups": [
+        {
+          "video": "elephants_dream",
+          "sensitivity": [
+            9,
+            9
+          ],
+          "specificity": [
+            12,
+            12
+          ],
+          "by_type": {
+            "positive_paraphrase": [
+              8,
+              8
+            ],
+            "wrong_count": [
+              2,
+              2
+            ],
+            "swapped_character": [
+              3,
+              3
+            ],
+            "positive_extra": [
+              1,
+              1
+            ],
+            "wrong_colour": [
+              1,
+              1
+            ],
+            "invented_detail": [
+              2,
+              2
+            ],
+            "gist_only": [
+              3,
+              3
+            ],
+            "wrong_value": [
+              1,
+              1
+            ]
+          },
+          "missed": [],
+          "false_credits": [],
+          "cross_credits": [],
+          "verdicts": {
+            "pfeiffer-04.1": {
+              "cue_ids": [
+                "e01"
+              ],
+              "reason": "Cue k016 describes two figures on a narrow little bridge, matching two people on a small bridge; k015 says three people."
+            },
+            "pfeiffer-05.3": {
+              "cue_ids": [
+                "e03"
+              ],
+              "reason": "Cue k020 states the old man (Proog) pushes the young man (Emo) down onto the ground, matching Proog shoves Emo; k005 reverses the roles."
+            },
+            "hunt-23.1": {
+              "cue_ids": [
+                "e08"
+              ],
+              "reason": "Cue k006 describes a lone spotlight on an antique telephone, matching a single light on an old-fashioned telephone; k018 mentions a typewriter."
+            },
+            "hunt-36.2": {
+              "cue_ids": [
+                "e05"
+              ],
+              "reason": "Cue k001 states the old man (Proog) presses a red button, matching the fact; k003 and k021 involve the young man or a green button."
+            },
+            "pfeiffer-39.1": {
+              "cue_ids": [
+                "e15"
+              ],
+              "reason": "Cue k011 says a camera goes off with a flash, directly conveying a camera flashes."
+            },
+            "pfeiffer-50.2": {
+              "cue_ids": [
+                "e10"
+              ],
+              "reason": "Cue k008 describes two enormous hands pushing up out of the floor, matching a pair of massive hands heaving out of the ground; k002 mentions a single hand."
+            },
+            "pfeiffer-51.4": {
+              "cue_ids": [
+                "e20"
+              ],
+              "reason": "Cue k009 states the young man (Emo) circles a finger by his temple, the sign for crazy, matching the fact."
+            },
+            "hunt-54.3": {
+              "cue_ids": [
+                "e13"
+              ],
+              "reason": "Cue k017 says the old man (Proog) hits the young man (Emo) over the head with his stick, matching Proog clubs Emo over the head."
+            },
+            "hunt-57.2": {
+              "cue_ids": [
+                "e17"
+              ],
+              "reason": "Cue k007 gives the credits text 'Director, Bassam Kurdali', matching the on-screen text 'Director - Bassam Kurdali' (punctuation may differ)."
+            }
+          },
+          "problems": []
+        },
+        {
+          "video": "woodshole",
+          "sensitivity": [
+            5,
+            5
+          ],
+          "specificity": [
+            7,
+            7
+          ],
+          "by_type": {
+            "positive_paraphrase": [
+              4,
+              4
+            ],
+            "wrong_count": [
+              2,
+              2
+            ],
+            "wrong_value": [
+              1,
+              1
+            ],
+            "gist_only": [
+              2,
+              2
+            ],
+            "wrong_colour": [
+              1,
+              1
+            ],
+            "positive_extra": [
+              1,
+              1
+            ],
+            "invented_detail": [
+              1,
+              1
+            ]
+          },
+          "missed": [],
+          "false_credits": [],
+          "cross_credits": [],
+          "verdicts": {
+            "usgs-012.1": {
+              "cue_ids": [
+                "w01"
+              ],
+              "reason": "Cue k002 states 'Two men ride in a boat', matching the fact exactly; k005 says four men, which contradicts the count."
+            },
+            "usgs-045.1": {
+              "cue_ids": [
+                "w03"
+              ],
+              "reason": "Cue k011 explicitly mentions the 200-nautical-mile U.S. exclusive economic zone on a world map; k009 gives 300-nautical-mile, and k003 is too vague."
+            },
+            "usgs-046.1": {
+              "cue_ids": [
+                "w06"
+              ],
+              "reason": "Cue k004 describes yellow lines marking the extended continental shelf in the Arctic and Atlantic Oceans and the Bering Sea where sediment thickness data were collected, matching the fact; k006 incorrectly says red lines."
+            },
+            "usgs-073.1": {
+              "cue_ids": [
+                "w11"
+              ],
+              "reason": "Cue k010 states 'Two cars drive along a road', conveying the fact; k008 only mentions traffic near the coast without specifying two cars on a road."
+            },
+            "usgs-076.1": {
+              "cue_ids": [
+                "w08"
+              ],
+              "reason": "Cue k012 describes a man in a USGS cap (hat) beside three men looking through binoculars, matching the fact; k001 has two men, k007 has fishing rods."
+            }
+          },
+          "problems": []
+        }
+      ],
+      "total": {
+        "sensitivity": [
+          14,
+          14
+        ],
+        "specificity": [
+          19,
+          19
+        ],
+        "by_type": {
+          "positive_paraphrase": [
+            12,
+            12
+          ],
+          "wrong_count": [
+            4,
+            4
+          ],
+          "swapped_character": [
+            3,
+            3
+          ],
+          "positive_extra": [
+            2,
+            2
+          ],
+          "wrong_colour": [
+            2,
+            2
+          ],
+          "invented_detail": [
+            3,
+            3
+          ],
+          "gist_only": [
+            5,
+            5
+          ],
+          "wrong_value": [
+            2,
+            2
+          ]
+        },
+        "cross_credits": 0
+      }
+    },
+    "second": {
+      "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "groups": [
+        {
+          "video": "elephants_dream",
+          "sensitivity": [
+            9,
+            9
+          ],
+          "specificity": [
+            12,
+            12
+          ],
+          "by_type": {
+            "positive_paraphrase": [
+              8,
+              8
+            ],
+            "wrong_count": [
+              2,
+              2
+            ],
+            "swapped_character": [
+              3,
+              3
+            ],
+            "positive_extra": [
+              1,
+              1
+            ],
+            "wrong_colour": [
+              1,
+              1
+            ],
+            "invented_detail": [
+              2,
+              2
+            ],
+            "gist_only": [
+              3,
+              3
+            ],
+            "wrong_value": [
+              1,
+              1
+            ]
+          },
+          "missed": [],
+          "false_credits": [],
+          "cross_credits": [],
+          "verdicts": {
+            "pfeiffer-04.1": {
+              "cue_ids": [
+                "e01"
+              ],
+              "reason": "Cue k015 states 'Three people stand on a small bridge,' which does not match the fact of two people; k016 states 'Two figures are standing on a narrow little bridge,' which matches the fact."
+            },
+            "pfeiffer-05.3": {
+              "cue_ids": [
+                "e03"
+              ],
+              "reason": "Cue k005 states 'The young man shoves the old man to the ground,' which reverses the roles; k020 states 'The old man pushes the young man down onto the ground,' which matches Proog shoving Emo."
+            },
+            "hunt-23.1": {
+              "cue_ids": [
+                "e08"
+              ],
+              "reason": "Cue k006 mentions a spotlight on an antique telephone, which matches the fact about a light shining on a telephone."
+            },
+            "hunt-36.2": {
+              "cue_ids": [
+                "e05"
+              ],
+              "reason": "Cue k001 states 'The old man presses a red button,' and Proog is the old man, so this conveys the fact."
+            },
+            "pfeiffer-39.1": {
+              "cue_ids": [
+                "e15"
+              ],
+              "reason": "Cue k011 states 'A camera goes off with a flash,' which conveys the camera flash event."
+            },
+            "pfeiffer-50.2": {
+              "cue_ids": [
+                "e10"
+              ],
+              "reason": "Cue k008 states 'Two enormous hands push up out of the floor,' which matches the pair of massive hands heaving out of the ground."
+            },
+            "pfeiffer-51.4": {
+              "cue_ids": [
+                "e20"
+              ],
+              "reason": "Cue k009 states 'The young man circles a finger by his temple, the sign for crazy,' and Emo is the young man, so this conveys the fact."
+            },
+            "hunt-54.3": {
+              "cue_ids": [
+                "e13"
+              ],
+              "reason": "Cue k017 states 'The old man hits the young man over the head with his stick,' and Proog is the old man and Emo the young man, so this conveys Proog clubbing Emo."
+            },
+            "hunt-57.2": {
+              "cue_ids": [
+                "e17"
+              ],
+              "reason": "Cue k007 states 'The credits read: Director, Bassam Kurdali,' which matches the on-screen text exactly."
+            }
+          },
+          "problems": []
+        },
+        {
+          "video": "woodshole",
+          "sensitivity": [
+            5,
+            5
+          ],
+          "specificity": [
+            7,
+            7
+          ],
+          "by_type": {
+            "positive_paraphrase": [
+              4,
+              4
+            ],
+            "wrong_count": [
+              2,
+              2
+            ],
+            "wrong_value": [
+              1,
+              1
+            ],
+            "gist_only": [
+              2,
+              2
+            ],
+            "wrong_colour": [
+              1,
+              1
+            ],
+            "positive_extra": [
+              1,
+              1
+            ],
+            "invented_detail": [
+              1,
+              1
+            ]
+          },
+          "missed": [],
+          "false_credits": [],
+          "cross_credits": [],
+          "verdicts": {
+            "usgs-012.1": {
+              "cue_ids": [
+                "w01"
+              ],
+              "reason": "k002 mentions two men in a boat, which matches the fact."
+            },
+            "usgs-045.1": {
+              "cue_ids": [
+                "w03"
+              ],
+              "reason": "k011 shows a world map highlighting the 200-nautical-mile U.S. exclusive economic zone, which matches the fact."
+            },
+            "usgs-046.1": {
+              "cue_ids": [
+                "w06"
+              ],
+              "reason": "k004 describes yellow lines marking the extended continental shelf in the specified regions with sediment thickness data, matching the fact exactly."
+            },
+            "usgs-073.1": {
+              "cue_ids": [
+                "w11"
+              ],
+              "reason": "k010 describes two cars driving along a road, which conveys the fact."
+            },
+            "usgs-076.1": {
+              "cue_ids": [
+                "w08"
+              ],
+              "reason": "k012 describes a man in a USGS cap standing beside three men looking through binoculars on a beach, which matches the fact; k001 and k007 are incorrect due to mismatched numbers or activities."
+            }
+          },
+          "problems": []
+        }
+      ],
+      "total": {
+        "sensitivity": [
+          14,
+          14
+        ],
+        "specificity": [
+          19,
+          19
+        ],
+        "by_type": {
+          "positive_paraphrase": [
+            12,
+            12
+          ],
+          "wrong_count": [
+            4,
+            4
+          ],
+          "swapped_character": [
+            3,
+            3
+          ],
+          "positive_extra": [
+            2,
+            2
+          ],
+          "wrong_colour": [
+            2,
+            2
+          ],
+          "invented_detail": [
+            3,
+            3
+          ],
+          "gist_only": [
+            5,
+            5
+          ],
+          "wrong_value": [
+            2,
+            2
+          ]
+        },
+        "cross_credits": 0
+      }
+    }
+  },
+  "videos": [
+    {
+      "video": "elephants_dream",
+      "run_id": "ed90-final-b",
+      "clip": [
+        60.0,
+        150.0
+      ],
+      "full": false,
+      "references": {
+        "hunt": {
+          "primary": {
+            "rows": [
+              {
+                "id": "hunt-10.1",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog as stooped with sideburns; k001 only mentions a bald person with a long nose.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-10.2",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog leading them off a bridge.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-11.1",
+                "ref_cue_id": "hunt-11",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 78.0,
+                "window": [
+                  63.0,
+                  95.75
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog pulling Emo through a slit in the wall.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.1",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [],
+                "reason": "No single cue conveys that both enter a dark, cavernous space; k002 and k004 describe entries but not the space as cavernous, k003 describes the space but not entry.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.2",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions cables transmitting bolts of light; k003 mentions wires and metal structures.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-13.1",
+                "ref_cue_id": "hunt-13",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 89.0,
+                "window": [
+                  74.0,
+                  108.5
+                ],
+                "credited": [],
+                "reason": "No cue describes a suspended path of rectangular panels; k002 mentions a narrow metal walkway.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-14.1",
+                "ref_cue_id": "hunt-14",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  113.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions running or a winding path; cues describe walking.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.1",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions robotic birds on overhead wires; k005 mentions figures hanging from wires.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.2",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds flying about.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.1",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions a panel flipping when Proog steps; k007 mentions walkway tilting.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.2",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog running on the underside of the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.1",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Emo continuing along the top.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.2",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog defying gravity beneath Emo.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.1",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions more panels flipping.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.2",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions the pair running whether right-side up or upside down.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.1",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [],
+                "reason": "No cue states the path abruptly ends; k009 describes walkway tilting and breaking.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.2",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [],
+                "reason": "No cue states the two men slide to a stop; k007 mentions figures sliding off.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.1",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds lifting off wires.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.2",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds swooping down on them.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-21.1",
+                "ref_cue_id": "hunt-21",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 150.0,
+                "window": [
+                  135.0,
+                  167.0
+                ],
+                "credited": [],
+                "reason": "No cue states everything turns black; k010 mentions falling into darkness.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          },
+          "second": {
+            "rows": [
+              {
+                "id": "hunt-10.1",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [
+                  "x001"
+                ],
+                "reason": "k001 describes Proog as bald with a long nose, matching the visual details provided.",
+                "standard_window": false,
+                "both_window": true,
+                "standard_anywhere": false,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-10.2",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog leading or any bridge; the walkway in cues is not described as a bridge nor is leading indicated.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-11.1",
+                "ref_cue_id": "hunt-11",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 78.0,
+                "window": [
+                  63.0,
+                  95.75
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog pulling Emo or any action through a slit in the wall.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.1",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [
+                  "c001"
+                ],
+                "reason": "k003 describes a dark, tall shaft filled with wires and metal structures, which matches the dark, cavernous space.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.2",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions cables transmitting bolts of light; wires are present but no energy or light transmission is described.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-13.1",
+                "ref_cue_id": "hunt-13",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 89.0,
+                "window": [
+                  74.0,
+                  108.5
+                ],
+                "credited": [
+                  "x002",
+                  "c006"
+                ],
+                "reason": "k002 and k006 describe a walkway in a tall shaft, which matches the suspended path of rectangular panels crossing the room.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-14.1",
+                "ref_cue_id": "hunt-14",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  113.5
+                ],
+                "credited": [],
+                "reason": "No cue explicitly describes running; walking and falling are mentioned, but not running along a winding path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.1",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [],
+                "reason": "k005 mentions figures hanging from wires, which could include the robotic birds, but does not specify small robotic birds or their noticing behavior.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.2",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [],
+                "reason": "k005 and k006 mention figures hanging and moving, but do not describe birds flying about or any avian motion.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.1",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue describes a panel flipping under Proog's step or any such mechanism.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.2",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog running on the underside of the path or any gravity-defying movement beneath.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.1",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue describes Emo continuing on top while Proog is underneath or any relative positioning on the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.2",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog defying gravity beneath Emo or any such spatial relationship.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.1",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue describes multiple panels flipping or a sequence of structural changes in the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.2",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the pair running in alternating orientations (right-side up or upside down).",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.1",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the path ending abruptly or any sudden termination of the walkway.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.2",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the two men sliding to a stop or halting motion at the end of the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.1",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [],
+                "reason": "k005 mentions figures hanging from wires and falling, but does not specify birds lifting off; 'figures' may not refer to birds.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.2",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [],
+                "reason": "No cue describes birds swooping down on the men or any attack or descent by avian entities.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-21.1",
+                "ref_cue_id": "hunt-21",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 150.0,
+                "window": [
+                  135.0,
+                  167.0
+                ],
+                "credited": [],
+                "reason": "k010 describes both figures falling into darkness, which implies a black screen, but does not state that everything turns black as a visual transition.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          }
+        },
+        "pfeiffer": {
+          "primary": {
+            "rows": [
+              {
+                "id": "pfeiffer-08.1",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue mentions squealing plugs or their movement.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.2",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog checking that Emo is unharmed.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.3",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog urging Emo through a crack in a plug-wall.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.1",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "Cues show only one person walking on a walkway, not both walking through a narrow hall together.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.2",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue states they enter a massive room; cues describe a tall shaft with wires.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.3",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions the room fading into blackness on all sides.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.1",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "No cue indicates only one path is visible.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.2",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "No cue explicitly states the path is suspended in mid-air.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.3",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "Cues mention wires in a shaft, not thousands of dangling electric cables.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.4",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "No cue mentions robotic birds on cables.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.1",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [],
+                "reason": "Cues show Proog already in the room and Emo entering behind, not both entering together.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.2",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds waking up.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.3",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds noticing the characters.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.1",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "interpretation",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "No cue conveys Proog's realization of danger.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.2",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog grabbing Emo by the arm.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.1",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "Cues show walking and catching up, not both running along the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.2",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the path as increasingly bizarre.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.3",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds swarming.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.1",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [],
+                "reason": "Cues describe the walkway tilting and breaking, not dead-ending.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.2",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [],
+                "reason": "No cue states the path stops in the middle of nowhere.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.3",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the path as above an infinite drop.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.1",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog turning around.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.2",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds reaching the characters.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.3",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds dive-bombing.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.1",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions a candlestick phone.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.2",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds diving into a speaker piece.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-18.1",
+                "ref_cue_id": "pfeiffer-18",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 148.6,
+                "window": [
+                  133.6,
+                  166.0
+                ],
+                "credited": [],
+                "reason": "Cues describe figures falling into darkness, not the screen cutting to black.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          },
+          "second": {
+            "rows": [
+              {
+                "id": "pfeiffer-08.1",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue mentions the squealing plugs or their movement.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.2",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue indicates Proog checking on Emo's well-being.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.3",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue refers to a crack in a plug-wall or Proog urging Emo through it.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.1",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue describes walking through a narrow hall.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.2",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue explicitly describes entering a massive room.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.3",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue conveys that the room fades into blackness on all sides.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.1",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "x002",
+                  "c011"
+                ],
+                "reason": "k002 and k009 describe a narrow metal walkway, implying only one path is visible.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.2",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "x002",
+                  "c001"
+                ],
+                "reason": "k002 and k003 describe a walkway in a tall shaft filled with wires, implying it is suspended in mid-air.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.3",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "c001"
+                ],
+                "reason": "k003 describes the shaft as filled with a dense web of wires, matching the dangling electric cables around the path.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.4",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "No cue mentions robotic birds or any creatures sitting on the cables.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.1",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [
+                  "x001",
+                  "c002"
+                ],
+                "reason": "k001 and k004 introduce both characters entering the environment, implying they enter the room together.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.2",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [],
+                "reason": "No cue indicates the birds beginning to wake up.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.3",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [],
+                "reason": "No cue states that the birds notice Proog and Emo.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.1",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "interpretation",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "No cue conveys Proog realizing danger; actions imply urgency but not realization.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.2",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog grabbing Emo by the arm.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.1",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "k008 and k009 describe movement and pursuit, but do not explicitly convey running; k010 describes falling, not running.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.2",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the path becoming increasingly bizarre.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.3",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions the birds swarming.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.1",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [
+                  "c011"
+                ],
+                "reason": "k009 describes the walkway breaking and the second person falling, implying a dead-end before collapse.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.2",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [
+                  "c011"
+                ],
+                "reason": "k009 describes the walkway breaking in a tall shaft, implying it stops in the middle of nowhere.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.3",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [
+                  "c001",
+                  "c011"
+                ],
+                "reason": "k003 and k009 describe the shaft extending into darkness and the fall into darkness, implying an infinite drop below the path.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.1",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog turning around.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.2",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue indicates the birds reaching Proog and Emo.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.3",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds dive-bombing the two men.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.1",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog taking out an old candlestick phone.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.2",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue describes birds diving into a speaker piece.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-18.1",
+                "ref_cue_id": "pfeiffer-18",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 148.6,
+                "window": [
+                  133.6,
+                  166.0
+                ],
+                "credited": [],
+                "reason": "k010 describes both figures falling into darkness, which may imply a cut to black, but does not convey the screen cutting to black as a visual transition.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          }
+        }
+      },
+      "baseline": {
+        "hunt_lines_vs_pfeiffer_facts": {
+          "primary": {
+            "rows": [
+              {
+                "id": "pfeiffer-08.1",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue mentions squealing plugs or their movement.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.2",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog checking that Emo is unharmed.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.3",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "Cue k002 says Proog pulls Emo through a slit in the wall, but the fact specifies a crack in a plug-wall and urging onwards, which are not matched.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.1",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue describes a narrow hall; cues mention a slit in the wall and a cavernous space.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.2",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [
+                  "hunt-12"
+                ],
+                "reason": "Cue k003 states they enter a dark, cavernous space, which conveys entering a massive room.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.3",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the room fading into blackness on all sides; k012 says everything turns black later.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.1",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "Cue k004 mentions a suspended path but does not state it is the only one visible.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.2",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "hunt-13"
+                ],
+                "reason": "Cue k004 explicitly describes a suspended path crossing the room, conveying it is suspended in mid-air.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.3",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "No single cue combines the path running between thousands of dangling electric cables; k003 mentions cables, k004 mentions the path, but not together with those specifics.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.4",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [],
+                "reason": "Cue k006 mentions small robotic birds on overhead wires beginning to fly about, but not crowds, robin-like appearance, or sitting on cables.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.1",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [
+                  "hunt-12"
+                ],
+                "reason": "Cue k003 states they enter a dark, cavernous space, and 'they' refers to Proog and Emo from earlier cues.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.2",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [],
+                "reason": "Cue k006 says birds take notice and begin to fly about, not that they wake up.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.3",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [],
+                "reason": "Cue k006 says birds take notice but does not specify they notice Proog and Emo.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.1",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "interpretation",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "No cue conveys Proog's internal realization of danger; this is an interpretation.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.2",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "Cue k002 says Proog pulls Emo through a slit, not that he grabs Emo by the arm.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.1",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [
+                  "hunt-14",
+                  "hunt-17",
+                  "hunt-18"
+                ],
+                "reason": "Cues k005, k008, and k009 all describe Proog and Emo running along the path.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.2",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "Cues describe specific bizarre events (panels flipping, running upside down) but none state the path is increasingly bizarre.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.3",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [],
+                "reason": "Cue k006 says birds begin to fly about; cue k011 says several birds swoop down. Neither conveys the birds begin to swarm.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.1",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [
+                  "hunt-19"
+                ],
+                "reason": "Cue k010 states the path abruptly ends, which conveys it dead-ends.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.2",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [],
+                "reason": "Cue k010 says the path abruptly ends but does not describe the location as the middle of nowhere.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.3",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions an infinite drop below the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.1",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog turning around.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.2",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [
+                  "hunt-20"
+                ],
+                "reason": "Cue k011 says several birds swoop down on them, conveying the birds reach Proog and Emo.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.3",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [
+                  "hunt-20"
+                ],
+                "reason": "Cue k011 says several birds swoop down on them, conveying the birds begin to dive-bomb at Proog and Emo.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.1",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions a candlestick phone.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.2",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds diving into a speaker piece.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-18.1",
+                "ref_cue_id": "pfeiffer-18",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 148.6,
+                "window": [
+                  133.6,
+                  166.0
+                ],
+                "credited": [
+                  "hunt-21"
+                ],
+                "reason": "Cue k012 states everything turns black, conveying the screen cuts to black.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          },
+          "second": {
+            "rows": [
+              {
+                "id": "pfeiffer-08.1",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue mentions the squealing plugs or their movement.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.2",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [],
+                "reason": "No cue indicates Proog checking Emo's condition or ensuring he is unharmed.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-08.3",
+                "ref_cue_id": "pfeiffer-08",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 69.15,
+                "window": [
+                  54.150000000000006,
+                  91.03
+                ],
+                "credited": [
+                  "hunt-11"
+                ],
+                "reason": "Cue k002 describes Proog pulling Emo through a slit in the wall, which matches urging onwards through a crack.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.1",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "No cue explicitly describes walking through a narrow hall; k002 and k003 imply passage but not the hall's narrowness or walking pace.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.2",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [
+                  "hunt-12"
+                ],
+                "reason": "Cue k003 states they enter a dark, cavernous space, which matches entering a massive room.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-09.3",
+                "ref_cue_id": "pfeiffer-09",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 78.05,
+                "window": [
+                  63.05,
+                  99.0
+                ],
+                "credited": [],
+                "reason": "Cue k003 describes the space as 'cavernous' and 'filled with cables transmitting bolts of light', but does not state that the room fades into blackness on all sides.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.1",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "hunt-13"
+                ],
+                "reason": "Cue k004 describes a suspended path of rectangular panels crossing the room, implying it is the only visible path.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.2",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "hunt-13"
+                ],
+                "reason": "Cue k004 states the path is suspended, and k003 establishes the space as vast, implying mid-air suspension.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.3",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "hunt-12",
+                  "hunt-13"
+                ],
+                "reason": "Cue k003 mentions cables transmitting bolts of light, and k004 places the path between them, matching the path running among dangling electric cables.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-10.4",
+                "ref_cue_id": "pfeiffer-10",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 84.05,
+                "window": [
+                  69.05,
+                  109.2
+                ],
+                "credited": [
+                  "hunt-15"
+                ],
+                "reason": "Cue k006 states small robotic birds are on the wires, matching robin-like robotic birds sitting on cables.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.1",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [
+                  "hunt-12"
+                ],
+                "reason": "Cue k003 says they enter the space, which matches entering the room.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.2",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [
+                  "hunt-15"
+                ],
+                "reason": "Cue k006 says the birds begin to fly about, indicating they are waking up.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-11.3",
+                "ref_cue_id": "pfeiffer-11",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  115.0
+                ],
+                "credited": [
+                  "hunt-15"
+                ],
+                "reason": "Cue k006 states the birds take notice and begin to fly about, implying they notice the two men.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.1",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "interpretation",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "No cue conveys Proog realizing danger; k011 shows birds attacking, but not Proog's realization.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-12.2",
+                "ref_cue_id": "pfeiffer-12",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 102.0,
+                "window": [
+                  87.0,
+                  125.0
+                ],
+                "credited": [],
+                "reason": "Cue k002 says Proog pulls Emo, which implies grabbing by the arm, but does not specify the action of grabbing.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.1",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [
+                  "hunt-14"
+                ],
+                "reason": "Cue k005 explicitly states they run along the winding path.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.2",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [
+                  "hunt-16",
+                  "hunt-17",
+                  "hunt-18"
+                ],
+                "reason": "Cues k007, k008, and k009 describe panels flipping and the pair running upside down, conveying the path's bizarre nature.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-13.3",
+                "ref_cue_id": "pfeiffer-13",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 110.05,
+                "window": [
+                  95.05,
+                  135.0
+                ],
+                "credited": [
+                  "hunt-20"
+                ],
+                "reason": "Cue k011 states several birds lift off and swoop down, indicating a swarm beginning.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.1",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [
+                  "hunt-19"
+                ],
+                "reason": "Cue k010 states the path abruptly ends, matching a dead-end.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.2",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [
+                  "hunt-19"
+                ],
+                "reason": "Cue k010 says the path ends and they slide to a stop in an immense room, implying it stops in the middle of nowhere.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-15.3",
+                "ref_cue_id": "pfeiffer-15",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 132.6,
+                "window": [
+                  117.6,
+                  152.0
+                ],
+                "credited": [],
+                "reason": "Cue k003 describes the space as cavernous with cables transmitting light, and k004 places the path suspended, implying an infinite drop below, but no cue explicitly confirms this.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.1",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog turning around.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.2",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [
+                  "hunt-20"
+                ],
+                "reason": "Cue k011 states birds swoop down on them, meaning they reach Proog and Emo.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-16.3",
+                "ref_cue_id": "pfeiffer-16",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 137.6,
+                "window": [
+                  122.6,
+                  157.0
+                ],
+                "credited": [
+                  "hunt-20"
+                ],
+                "reason": "Cue k011 says birds swoop down on them, matching dive-bombing behavior.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.1",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog taking out a candlestick phone.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-17.2",
+                "ref_cue_id": "pfeiffer-17",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 142.6,
+                "window": [
+                  127.6,
+                  163.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions birds diving into a speaker piece.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "pfeiffer-18.1",
+                "ref_cue_id": "pfeiffer-18",
+                "source": "pfeiffer",
+                "kind": "visual",
+                "anchor_time": 148.6,
+                "window": [
+                  133.6,
+                  166.0
+                ],
+                "credited": [
+                  "hunt-21"
+                ],
+                "reason": "Cue k012 states everything turns black, matching the screen cutting to black.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          }
+        },
+        "pfeiffer_lines_vs_hunt_facts": {
+          "primary": {
+            "rows": [
+              {
+                "id": "hunt-10.1",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog's physical appearance (balding, stooped, sideburns, beak-like nose).",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-10.2",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [],
+                "reason": "No cue states Proog leads them off a bridge; k001 mentions urging through a crack in a plug-wall, not a bridge.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-11.1",
+                "ref_cue_id": "hunt-11",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 78.0,
+                "window": [
+                  63.0,
+                  95.75
+                ],
+                "credited": [],
+                "reason": "No cue says Proog pulls Emo through a slit; k001 says he urges Emo through a crack, which is a different action and opening.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.1",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [
+                  "pfeiffer-09"
+                ],
+                "reason": "k002 describes them walking into a massive room fading into blackness on all sides, conveying entry into a dark, cavernous space.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.2",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions cables transmitting bolts of light; k003 mentions dangling electric cables but not light transmission.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-13.1",
+                "ref_cue_id": "hunt-13",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 89.0,
+                "window": [
+                  74.0,
+                  108.5
+                ],
+                "credited": [],
+                "reason": "No cue describes the path as rectangular panels crossing the room; k003 mentions a suspended path but not panels or crossing.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-14.1",
+                "ref_cue_id": "hunt-14",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  113.5
+                ],
+                "credited": [],
+                "reason": "No cue describes the path as winding; k006 says they run along an increasingly bizarre path, which is not the same descriptor.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.1",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [],
+                "reason": "No single cue places the birds on overhead wires and states they take notice; k003 gives location, k004 gives noticing, but neither alone conveys the full fact.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.2",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [],
+                "reason": "No cue states the small robotic birds begin to fly about; k006 says they begin to swarm but does not describe them as small robotic birds.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.1",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions a panel flipping when Proog steps on it.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.2",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog running on the underside of the path due to panel flipping.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.1",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Emo continuing along the top of the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.2",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions Proog defying gravity beneath Emo.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.1",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions more panels flipping.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.2",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions the pair running whether right-side up or upside down.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.1",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [
+                  "pfeiffer-15"
+                ],
+                "reason": "k008 states the path dead-ends and stops in the middle of nowhere, conveying that the path abruptly ends.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.2",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the two men sliding to a stop; k008 describes the path stopping, not the men's motion.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.1",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [],
+                "reason": "No cue describes several birds lifting off their wires; k009 says birds reach them and dive-bomb, but not lifting off wires.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.2",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [
+                  "pfeiffer-16"
+                ],
+                "reason": "k009 states the birds begin to dive-bomb at them, which conveys that the birds swoop down on them.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-21.1",
+                "ref_cue_id": "hunt-21",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 150.0,
+                "window": [
+                  135.0,
+                  167.0
+                ],
+                "credited": [
+                  "pfeiffer-18"
+                ],
+                "reason": "k011 states the screen cuts to black, conveying that everything turns black in the film context.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          },
+          "second": {
+            "rows": [
+              {
+                "id": "hunt-10.1",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog's physical appearance such as balding, stooped posture, sideburns, or beak-like nose.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-10.2",
+                "ref_cue_id": "hunt-10",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 69.0,
+                "window": [
+                  54.0,
+                  90.5
+                ],
+                "credited": [
+                  "pfeiffer-08"
+                ],
+                "reason": "k001 states that Proog urges Emo onwards through a crack, implying leadership and movement off a previous area, which aligns with leading them off the bridge.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-11.1",
+                "ref_cue_id": "hunt-11",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 78.0,
+                "window": [
+                  63.0,
+                  95.75
+                ],
+                "credited": [
+                  "pfeiffer-08"
+                ],
+                "reason": "k001 mentions Proog urging Emo through a crack in the plug-wall, which matches pulling through a slit.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.1",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [
+                  "pfeiffer-09"
+                ],
+                "reason": "k002 describes entering a massive room that fades into blackness on all sides, matching a dark, cavernous space.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-12.2",
+                "ref_cue_id": "hunt-12",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 81.25,
+                "window": [
+                  66.25,
+                  102.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions cables transmitting bolts of light; k003 mentions dangling electric cables but not light transmission.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-13.1",
+                "ref_cue_id": "hunt-13",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 89.0,
+                "window": [
+                  74.0,
+                  108.5
+                ],
+                "credited": [
+                  "pfeiffer-10"
+                ],
+                "reason": "k003 describes a visible path suspended in mid-air running between dangling electric cables, matching a suspended path of rectangular panels crossing the room.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-14.1",
+                "ref_cue_id": "hunt-14",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 96.0,
+                "window": [
+                  81.0,
+                  113.5
+                ],
+                "credited": [
+                  "pfeiffer-13"
+                ],
+                "reason": "k006 states they run along the increasingly bizarre path, which matches running along the winding path.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.1",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [
+                  "pfeiffer-11"
+                ],
+                "reason": "k004 says the birds begin to wake up and notice them as they enter, matching that robotic birds take notice.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-15.2",
+                "ref_cue_id": "hunt-15",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 101.0,
+                "window": [
+                  86.0,
+                  121.0
+                ],
+                "credited": [
+                  "pfeiffer-13"
+                ],
+                "reason": "k006 mentions the birds begin to swarm as they run, which implies flying about.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.1",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue mentions any panel flipping under Proog's step.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-16.2",
+                "ref_cue_id": "hunt-16",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 108.0,
+                "window": [
+                  93.0,
+                  128.5
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog running on the underside of the path due to a flipped panel.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.1",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue specifies that Emo continues along the top of the path while Proog is underneath.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-17.2",
+                "ref_cue_id": "hunt-17",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 114.0,
+                "window": [
+                  99.0,
+                  133.0
+                ],
+                "credited": [],
+                "reason": "No cue describes Proog running beneath Emo on the underside of the path, defying gravity.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.1",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue mentions multiple panels flipping.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-18.2",
+                "ref_cue_id": "hunt-18",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 121.0,
+                "window": [
+                  106.0,
+                  141.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the pair running both right-side up and upside down on the path.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.1",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [
+                  "pfeiffer-15"
+                ],
+                "reason": "k008 states the path dead-ends, stopping in the middle of nowhere above an infinite drop, matching the abrupt end of the path.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-19.2",
+                "ref_cue_id": "hunt-19",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 132.0,
+                "window": [
+                  117.0,
+                  151.0
+                ],
+                "credited": [],
+                "reason": "No cue describes the two men sliding to a stop; k008 and k009 imply stopping but not sliding.",
+                "standard_window": false,
+                "both_window": false,
+                "standard_anywhere": false,
+                "both_anywhere": false,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.1",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [
+                  "pfeiffer-16"
+                ],
+                "reason": "k009 states the birds reach them and begin to dive-bomb, which implies lifting off and swooping down.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-20.2",
+                "ref_cue_id": "hunt-20",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 143.0,
+                "window": [
+                  128.0,
+                  162.0
+                ],
+                "credited": [
+                  "pfeiffer-16"
+                ],
+                "reason": "k009 explicitly states the birds begin to dive-bomb at them, matching swooping down.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              },
+              {
+                "id": "hunt-21.1",
+                "ref_cue_id": "hunt-21",
+                "source": "hunt",
+                "kind": "visual",
+                "anchor_time": 150.0,
+                "window": [
+                  135.0,
+                  167.0
+                ],
+                "credited": [
+                  "pfeiffer-18"
+                ],
+                "reason": "k011 states the screen cuts to black, matching everything turning black.",
+                "standard_window": true,
+                "both_window": true,
+                "standard_anywhere": true,
+                "both_anywhere": true,
+                "video": "elephants_dream",
+                "flagged": false
+              }
+            ],
+            "problems": []
+          }
+        }
+      },
+      "judge_problems": [],
+      "overlap": {
+        "speech_source": "cues.json speech",
+        "speech_s": 21.172,
+        "lull_standard": {
+          "description_s": 28.607,
+          "overlap_s": 0.0,
+          "share": 0.0,
+          "intervals": 8
+        },
+        "lull_extended_freeze_points_in_speech": [],
+        "pfeiffer_vtt": {
+          "description_s": 71.48,
+          "overlap_s": 8.032,
+          "share": 0.1124,
+          "intervals": 11
+        },
+        "hunt_vtt": {
+          "description_s": 49.5,
+          "overlap_s": 4.905,
+          "share": 0.0991,
+          "intervals": 11
+        },
+        "hunt_wav": {
+          "description_s": 44.24,
+          "overlap_s": 4.274,
+          "share": 0.0966,
+          "intervals": 15
+        },
+        "supplementary_against_reference_asr": {
+          "speech_s": 10.66,
+          "lull_standard": {
+            "description_s": 28.607,
+            "overlap_s": 0.01,
+            "share": 0.0003,
+            "intervals": 8
+          },
+          "lull_extended_freeze_points_in_speech": [],
+          "pfeiffer_vtt": {
+            "description_s": 71.48,
+            "overlap_s": 0.19,
+            "share": 0.0027,
+            "intervals": 11
+          },
+          "hunt_vtt": {
+            "description_s": 49.5,
+            "overlap_s": 0.06,
+            "share": 0.0012,
+            "intervals": 11
+          },
+          "hunt_wav": {
+            "description_s": 44.24,
+            "overlap_s": 0.0,
+            "share": 0.0,
+            "intervals": 15
+          }
+        }
+      },
+      "density": {
+        "minutes": 1.5,
+        "lull_standard": {
+          "words": 83,
+          "per_min": 55.33
+        },
+        "lull_with_extended": {
+          "words": 124,
+          "per_min": 82.67
+        },
+        "pfeiffer": {
+          "words": 180,
+          "per_min": 120.0
+        },
+        "hunt": {
+          "words": 142,
+          "per_min": 94.67
+        }
+      }
+    }
+  ],
+  "spend_usd": 0.078472,
+  "probe_spend_usd": 0.015434,
+  "referenced_run_ids": [
+    "suite-b-base-elephants_dream-20261028T035436Z",
+    "suite-b-base2-elephants_dream-20261028T035436Z",
+    "suite-b-judge-elephants_dream-20261028T035436Z",
+    "suite-b-judge2-elephants_dream-20261028T035436Z",
+    "suite-b-probe-elephants_dream-20261028T035243Z",
+    "suite-b-probe-woodshole-20261028T035243Z",
+    "suite-b-probe2-elephants_dream-20261028T035243Z",
+    "suite-b-probe2-woodshole-20261028T035243Z"
+  ],
+  "judge_files": [
+    "02b2718e5cf7e4eab7de8da042c6e818132c89df0762b95eb0a1efc5a336c2dd.json",
+    "07c43dd90beab7b86d3341be7bdf048326329aaf902f14af718d4781dc99566b.json",
+    "269f9f34c0a1305b112d9743b5f25717624d030a10673f8f9da3c56cafdb28ef.json",
+    "49dd9f9437b43eb2ab485dc0b1bdc20f5fbf925f8b1b1adbc3f2ee3e66c467e3.json",
+    "69ebe000f7fddec3f5c7d68aaa8ec1ad8891245767fbf8eafd768965608d8ca5.json",
+    "8623251387748825b8fb646affb33db6cba68504527a27a1e94dc12173c15238.json",
+    "8c0a4450718ea4475e0e868f961a19a6747b540ad7df4712a0626c5a089a432b.json",
+    "93786171d08db24f18a52720bac82d19a006275e154f42a0fbaf0386b2b0849a.json",
+    "ad5e908563e28825878e18284762b9dd518f01a5730cecfe0e27edd4407dff5d.json",
+    "b0c91f86adfc5510cf78bf37ebf5fcafc2a7d762dc63f409e3be7eb16a553ce0.json",
+    "da9facb016daf6c5e88ee4d2c4e07a7da306e28f4e133d6e38827fe0a03fed8b.json",
+    "f43f85c2ebd5efa5831e3f79a6871fdf362111d8a6b484d23a6c927c803e9da6.json"
+  ]
+}

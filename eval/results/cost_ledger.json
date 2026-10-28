@@ -1,0 +1,237 @@
+{
+  "as_of": "2026-10-28T20:42:36+00:00",
+  "ledger": "~/.lull/ledger.db",
+  "calls": 3109,
+  "first_call": "2026-10-27T20:18:51+00:00",
+  "last_call": "2026-10-28T20:41:40+00:00",
+  "models": [
+    {
+      "provider": "tavily",
+      "model": "tavily-search",
+      "calls": 72,
+      "tokens_in": 0,
+      "tokens_cached": 0,
+      "tokens_out": 0,
+      "cost_ledger": 0.576,
+      "credits": 72.0,
+      "cost_recomputed": 0.576
+    },
+    {
+      "provider": "tokenfactory",
+      "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "calls": 116,
+      "tokens_in": 145551,
+      "tokens_cached": 42608,
+      "tokens_out": 86611,
+      "cost_ledger": 0.074686,
+      "cost_recomputed": 0.074686
+    },
+    {
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "calls": 328,
+      "tokens_in": 653973,
+      "tokens_cached": 8704,
+      "tokens_out": 1302631,
+      "cost_ledger": 4.554206,
+      "cost_recomputed": 4.554206
+    },
+    {
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3.5-Super-VL",
+      "calls": 1066,
+      "tokens_in": 3061487,
+      "tokens_cached": 280704,
+      "tokens_out": 355329,
+      "cost_ledger": 1.170873,
+      "cost_recomputed": 1.170873
+    },
+    {
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3_5-Lightning",
+      "calls": 1527,
+      "tokens_in": 1199397,
+      "tokens_cached": 0,
+      "tokens_out": 431977,
+      "cost_ledger": 0.175638,
+      "cost_recomputed": 0.175638
+    }
+  ],
+  "totals": {
+    "tavily": {
+      "calls": 72,
+      "tokens_in": 0,
+      "tokens_cached": 0,
+      "tokens_out": 0,
+      "cost_ledger": 0.576
+    },
+    "tokenfactory": {
+      "calls": 3037,
+      "tokens_in": 5060408,
+      "tokens_cached": 332016,
+      "tokens_out": 2176548,
+      "cost_ledger": 5.975403
+    }
+  },
+  "by_day": [
+    {
+      "day": "2026-10-27",
+      "provider": "tavily",
+      "model": "tavily-search",
+      "calls": 16,
+      "tokens_in": 0,
+      "tokens_cached": 0,
+      "tokens_out": 0,
+      "cost_ledger": 0.128,
+      "credits": 16.0,
+      "cost_recomputed": 0.128
+    },
+    {
+      "day": "2026-10-27",
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "calls": 6,
+      "tokens_in": 25143,
+      "tokens_cached": 0,
+      "tokens_out": 17931,
+      "cost_ledger": 0.078936,
+      "cost_recomputed": 0.078936
+    },
+    {
+      "day": "2026-10-27",
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3.5-Super-VL",
+      "calls": 100,
+      "tokens_in": 226086,
+      "tokens_cached": 0,
+      "tokens_out": 15944,
+      "cost_ledger": 0.082175,
+      "cost_recomputed": 0.082175
+    },
+    {
+      "day": "2026-10-27",
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3_5-Lightning",
+      "calls": 19,
+      "tokens_in": 8436,
+      "tokens_cached": 0,
+      "tokens_out": 1694,
+      "cost_ledger": 0.000913,
+      "cost_recomputed": 0.000913
+    },
+    {
+      "day": "2026-10-28",
+      "provider": "tavily",
+      "model": "tavily-search",
+      "calls": 56,
+      "tokens_in": 0,
+      "tokens_cached": 0,
+      "tokens_out": 0,
+      "cost_ledger": 0.448,
+      "credits": 56.0,
+      "cost_recomputed": 0.448
+    },
+    {
+      "day": "2026-10-28",
+      "provider": "tokenfactory",
+      "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "calls": 116,
+      "tokens_in": 145551,
+      "tokens_cached": 42608,
+      "tokens_out": 86611,
+      "cost_ledger": 0.074686,
+      "cost_recomputed": 0.074686
+    },
+    {
+      "day": "2026-10-28",
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "calls": 322,
+      "tokens_in": 628830,
+      "tokens_cached": 8704,
+      "tokens_out": 1284700,
+      "cost_ledger": 4.47527,
+      "cost_recomputed": 4.47527
+    },
+    {
+      "day": "2026-10-28",
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3.5-Super-VL",
+      "calls": 966,
+      "tokens_in": 2835401,
+      "tokens_cached": 280704,
+      "tokens_out": 339385,
+      "cost_ledger": 1.088698,
+      "cost_recomputed": 1.088698
+    },
+    {
+      "day": "2026-10-28",
+      "provider": "tokenfactory",
+      "model": "nvidia/Nemotron-3_5-Lightning",
+      "calls": 1508,
+      "tokens_in": 1190961,
+      "tokens_cached": 0,
+      "tokens_out": 430283,
+      "cost_ledger": 0.174726,
+      "cost_recomputed": 0.174726
+    }
+  ],
+  "prices": [
+    {
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "engine": [
+        1.0,
+        0.12,
+        3.0
+      ],
+      "engine_source": "engine/src/lull/ledger.py `PRICES` (unchanged since the ledger's first commit)",
+      "published": [
+        1.0,
+        0.12,
+        3.0
+      ],
+      "published_source": "research notes, research-models.md (2026-10-27), condensed from the Token Factory model catalog (tokenfactory.nebius.com/api/public/models_info)"
+    },
+    {
+      "model": "nvidia/Nemotron-3.5-Super-VL",
+      "engine": [
+        0.3,
+        0.06,
+        0.9
+      ],
+      "engine_source": "engine/src/lull/ledger.py `PRICES` (unchanged since the ledger's first commit)",
+      "published": [
+        0.3,
+        0.06,
+        0.9
+      ],
+      "published_source": "research notes, research-models.md (2026-10-27), condensed from the Token Factory model catalog (tokenfactory.nebius.com/api/public/models_info)"
+    },
+    {
+      "model": "nvidia/Nemotron-3_5-Lightning",
+      "engine": [
+        0.06,
+        0.06,
+        0.24
+      ],
+      "engine_source": "engine/src/lull/ledger.py `PRICES` (unchanged since the ledger's first commit)",
+      "published": [
+        0.06,
+        null,
+        0.24
+      ],
+      "published_source": "research notes, research-models.md (2026-10-27), condensed from the Token Factory model catalog (tokenfactory.nebius.com/api/public/models_info)"
+    },
+    {
+      "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "engine": [
+        0.2,
+        0.05,
+        0.6
+      ],
+      "engine_source": "eval/suite_a/score.py `SECOND_JUDGE_PRICE` (Token Factory `/v1/models?verbose=true`, read 2026-10-28)",
+      "published": null,
+      "published_source": null
+    }
+  ]
+}

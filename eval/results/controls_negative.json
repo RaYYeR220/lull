@@ -1,0 +1,3394 @@
+{
+  "control": "negative",
+  "complete": true,
+  "date": "2026-10-28T14:33:25+00:00",
+  "git_commit": "63307fd8eb0b266a148a0105ff9f8d6c98053701",
+  "preregistration": {
+    "tag": "controls-prereg-2",
+    "commit": "f30231c37c0d7a7a07593f8d9ba3a8decbbdb129",
+    "committed": "2026-10-28T05:21:36+01:00"
+  },
+  "verifier": {
+    "model": "nvidia/Nemotron-3.5-Super-VL",
+    "temperature": 0.0,
+    "max_tokens": 1500,
+    "split_model": "nvidia/Nemotron-3_5-Lightning",
+    "split_temperature": 0.0,
+    "split_max_tokens": 1200,
+    "sentence_gate": true,
+    "clip_pad_s": 1.0,
+    "clip_cap_s": 12.0,
+    "clip_min_s": 4.0,
+    "clip_see_s": 2.0,
+    "clip_max_s": 20.0,
+    "clip_height": 360,
+    "thinking": false
+  },
+  "inputs": [
+    {
+      "label": "a01",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a01-20261028T115030Z",
+      "run_id": "suite-a-a01-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a01\\video.mp4"
+    },
+    {
+      "label": "a02",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a02-20261028T115030Z",
+      "run_id": "suite-a-a02-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a02\\video.mp4"
+    },
+    {
+      "label": "a03",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a03-20261028T115030Z",
+      "run_id": "suite-a-a03-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a03\\video.mp4"
+    },
+    {
+      "label": "a04",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a04-20261028T115030Z",
+      "run_id": "suite-a-a04-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a04\\video.mp4"
+    },
+    {
+      "label": "a05",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a05-20261028T115030Z",
+      "run_id": "suite-a-a05-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a05\\video.mp4"
+    },
+    {
+      "label": "a06",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a06-20261028T115030Z",
+      "run_id": "suite-a-a06-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a06\\video.mp4"
+    },
+    {
+      "label": "a07",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a07-20261028T115030Z",
+      "run_id": "suite-a-a07-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a07\\video.mp4"
+    },
+    {
+      "label": "a08",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a08-20261028T115030Z",
+      "run_id": "suite-a-a08-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a08\\video.mp4"
+    },
+    {
+      "label": "a09",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a09-20261028T115030Z",
+      "run_id": "suite-a-a09-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a09\\video.mp4"
+    },
+    {
+      "label": "a10",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a10-20261028T115030Z",
+      "run_id": "suite-a-a10-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a10\\video.mp4"
+    },
+    {
+      "label": "a11",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a11-20261028T115030Z",
+      "run_id": "suite-a-a11-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a11\\video.mp4"
+    },
+    {
+      "label": "a12",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a12-20261028T115030Z",
+      "run_id": "suite-a-a12-20261028T115030Z",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a12\\video.mp4"
+    },
+    {
+      "label": "ed90",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\ed90",
+      "run_id": "final-ed90",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\inputs\\ed90.mp4"
+    },
+    {
+      "label": "bbb120",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\bbb120",
+      "run_id": "final-bbb120",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\inputs\\bbb120.mp4"
+    },
+    {
+      "label": "tos180",
+      "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\tos180",
+      "run_id": "final-tos180",
+      "video": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\inputs\\tos180.mp4"
+    }
+  ],
+  "metrics": {
+    "cues": 40,
+    "by_rule": {
+      "another slide": {
+        "rows": 11,
+        "false_accept": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 11.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "false_accept_claims": {
+          "value": 0.030303030303030304,
+          "num": 1.0,
+          "den": 33.0,
+          "ci95": [
+            0.0,
+            0.10714285714285714
+          ]
+        },
+        "true_accept": {
+          "value": 1.0,
+          "num": 11.0,
+          "den": 11.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "other events, 30 s away": {
+        "rows": 27,
+        "false_accept": {
+          "value": 0.18518518518518517,
+          "num": 5.0,
+          "den": 27.0,
+          "ci95": [
+            0.037037037037037035,
+            0.3333333333333333
+          ]
+        },
+        "false_accept_claims": {
+          "value": 0.2972972972972973,
+          "num": 22.0,
+          "den": 74.0,
+          "ci95": [
+            0.125,
+            0.4880952380952381
+          ]
+        },
+        "true_accept": {
+          "value": 1.0,
+          "num": 27.0,
+          "den": 27.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "other video": {
+        "rows": 2,
+        "false_accept": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 2.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "false_accept_claims": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 5.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "true_accept": {
+          "value": 1.0,
+          "num": 2.0,
+          "den": 2.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        }
+      }
+    },
+    "headline": {
+      "rules": [
+        "another slide",
+        "other events, 30 s away"
+      ],
+      "upper_bound": true,
+      "rows": 38,
+      "false_accept": {
+        "value": 0.13157894736842105,
+        "num": 5.0,
+        "den": 38.0,
+        "ci95": [
+          0.02631578947368421,
+          0.23684210526315788
+        ]
+      },
+      "false_accept_claims": {
+        "value": 0.21495327102803738,
+        "num": 23.0,
+        "den": 107.0,
+        "ci95": [
+          0.08849557522123894,
+          0.36363636363636365
+        ]
+      },
+      "true_accept": {
+        "value": 1.0,
+        "num": 38.0,
+        "den": 38.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "discriminative_false_accept": {
+        "value": 0.0,
+        "num": 0.0,
+        "den": 11.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "suite_a_rows": 11
+    }
+  },
+  "rows": [
+    {
+      "video": "a01",
+      "run_id": "suite-a-a01-20261028T115030Z",
+      "cue_id": "c002",
+      "track": "standard",
+      "text": "Energy in Living Things.",
+      "true_window": [
+        0.0,
+        12.0
+      ],
+      "mismatch": {
+        "video": "a01",
+        "window": [
+          23.02,
+          35.019999999999996
+        ],
+        "rule": "another slide",
+        "slide": 3
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Energy in Living Things",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Energy in Living Things",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e003": 11.98,
+        "e004": 0.02
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a01-v01"
+      ]
+    },
+    {
+      "video": "a01",
+      "run_id": "suite-a-a01-20261028T115030Z",
+      "cue_id": "x004",
+      "track": "extended",
+      "text": "Slide titled Electron Transport Chain lists steps and graphs ATP production over time.",
+      "true_window": [
+        34.0,
+        46.0
+      ],
+      "mismatch": {
+        "video": "a01",
+        "window": [
+          0.17999999999999972,
+          12.18
+        ],
+        "rule": "another slide",
+        "slide": 1
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide titled Electron Transport Chain",
+          "verdict": "supported",
+          "at": 35.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "lists steps",
+          "verdict": "supported",
+          "at": 35.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "graphs ATP production over time",
+          "verdict": "supported",
+          "at": 35.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide titled Electron Transport Chain lists steps and graphs ATP production over time",
+          "verdict": "supported",
+          "at": 35.0,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide lists steps",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide graphs ATP production over time",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide titled Electron Transport Chain",
+          "verdict": "contradicted",
+          "at": 0.18,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide titled Electron Transport Chain lists steps and graphs ATP production over time",
+          "verdict": "contradicted",
+          "at": 0.18,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e001": 10.82,
+        "e002": 1.18
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        3,
+        4
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a01-v16",
+        "a01-v20"
+      ]
+    },
+    {
+      "video": "a02",
+      "run_id": "suite-a-a02-20261028T115030Z",
+      "cue_id": "x001",
+      "track": "extended",
+      "text": "Slide shows Real GDP Over Time with line graph.",
+      "true_window": [
+        0.0,
+        12.0
+      ],
+      "mismatch": {
+        "video": "a02",
+        "window": [
+          12.920000000000002,
+          24.92
+        ],
+        "rule": "another slide",
+        "slide": 2
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide shows Real GDP Over Time with line graph",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide shows Real GDP Over Time with line graph",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e002": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1
+      ],
+      "discriminative": false,
+      "discriminative_facts": []
+    },
+    {
+      "video": "a02",
+      "run_id": "suite-a-a02-20261028T115030Z",
+      "cue_id": "x002",
+      "track": "extended",
+      "text": "Slide titled Business Cycle Basics shows four bullet points defining expansion, contraction, peak, and trough phases.",
+      "true_window": [
+        11.0,
+        23.0
+      ],
+      "mismatch": {
+        "video": "a02",
+        "window": [
+          26.879999999999995,
+          38.879999999999995
+        ],
+        "rule": "another slide",
+        "slide": 3
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide titled Business Cycle Basics shows four bullet points defining expansion, contraction, peak, and trough phases",
+          "verdict": "supported",
+          "at": 13.0,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide titled Business Cycle Basics shows four bullet points defining expansion, contraction, peak, and trough phases",
+          "verdict": "contradicted",
+          "at": 26.88,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e003": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1,
+        2
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a02-v08"
+      ]
+    },
+    {
+      "video": "a03",
+      "run_id": "suite-a-a03-20261028T115030Z",
+      "cue_id": "x001",
+      "track": "extended",
+      "text": "A slide titled Newton's Three Laws lists three laws: inertia, force causes acceleration, action-reaction pairs; marked 1 of 4.",
+      "true_window": [
+        0.0,
+        12.0
+      ],
+      "mismatch": {
+        "video": "a03",
+        "window": [
+          12.48,
+          24.48
+        ],
+        "rule": "another slide",
+        "slide": 2
+      },
+      "true": {
+        "claims": 7,
+        "supported": 7,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 7,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A slide titled Newton's Three Laws",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "lists three laws",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "inertia",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "force causes acceleration",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "action-reaction pairs",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "marked 1 of 4",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "A slide titled Newton's Three Laws lists three laws: inertia, force causes acceleration, action-reaction pairs; marked 1 of 4",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A slide titled Newton's Three Laws",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "lists three laws",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "inertia",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "force causes acceleration",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "action-reaction pairs",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "marked 1 of 4",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "A slide titled Newton's Three Laws lists three laws: inertia, force causes acceleration, action-reaction pairs; marked 1 of 4",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e002": 11.52,
+        "e003": 0.48
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a03-v01",
+        "a03-v02",
+        "a03-v03"
+      ]
+    },
+    {
+      "video": "a04",
+      "run_id": "suite-a-a04-20261028T115030Z",
+      "cue_id": "c005",
+      "track": "standard",
+      "text": "Slide shows timeline with innovation rate graph.",
+      "true_window": [
+        26.0,
+        38.0
+      ],
+      "mismatch": {
+        "video": "a04",
+        "window": [
+          1.2199999999999998,
+          13.219999999999999
+        ],
+        "rule": "another slide",
+        "slide": 1
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide shows timeline",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "timeline with innovation rate graph",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide shows timeline with innovation rate graph",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide shows timeline",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "timeline with innovation rate graph",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide shows timeline with innovation rate graph",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e001": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        2,
+        3
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a04-v19"
+      ]
+    },
+    {
+      "video": "a05",
+      "run_id": "suite-a-a05-20261028T115030Z",
+      "cue_id": "x003",
+      "track": "extended",
+      "text": "A slide titled Trends Over Time shows a line chart: 2020 12.3, 2021 15.7, 2022 14.2, 2023 16.8.",
+      "true_window": [
+        19.8,
+        30.9
+      ],
+      "mismatch": {
+        "video": "a05",
+        "window": [
+          0.030000000000001137,
+          11.129999999999999
+        ],
+        "rule": "another slide",
+        "slide": 1
+      },
+      "true": {
+        "claims": 6,
+        "supported": 6,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 6,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "a slide titled Trends Over Time shows a line chart",
+          "verdict": "supported",
+          "at": 19.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "2020 12.3",
+          "verdict": "supported",
+          "at": 19.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "2021 15.7",
+          "verdict": "supported",
+          "at": 19.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "2022 14.2",
+          "verdict": "supported",
+          "at": 19.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "2023 16.8",
+          "verdict": "supported",
+          "at": 19.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "A slide titled Trends Over Time shows a line chart: 2020 12.3, 2021 15.7, 2022 14.2, 2023 16.8",
+          "verdict": "supported",
+          "at": 19.8,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "a slide titled Trends Over Time shows a line chart",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "2020 12.3",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "2021 15.7",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "2022 14.2",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "2023 16.8",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "A slide titled Trends Over Time shows a line chart: 2020 12.3, 2021 15.7, 2022 14.2, 2023 16.8",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e001": 10.87,
+        "e002": 0.23
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        2,
+        3,
+        4
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a05-v15",
+        "a05-v16"
+      ]
+    },
+    {
+      "video": "a05",
+      "run_id": "suite-a-a05-20261028T115030Z",
+      "cue_id": "x004",
+      "track": "extended",
+      "text": "A slide titled Variability and Spread defines range, standard deviation, variance, and spread.",
+      "true_window": [
+        28.9,
+        40.9
+      ],
+      "mismatch": {
+        "video": "a06",
+        "window": [
+          24.740000000000002,
+          36.74
+        ],
+        "rule": "other video",
+        "slide": 3
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A slide titled Variability and Spread defines range, standard deviation, variance, and spread",
+          "verdict": "supported",
+          "at": 29.9,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A slide titled Variability and Spread defines range, standard deviation, variance, and spread",
+          "verdict": "contradicted",
+          "at": 24.74,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e003": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        3,
+        4
+      ],
+      "discriminative": false,
+      "discriminative_facts": []
+    },
+    {
+      "video": "a07",
+      "run_id": "suite-a-a07-20261028T115030Z",
+      "cue_id": "c006",
+      "track": "standard",
+      "text": "Slide: Annual Rainfall by Region.",
+      "true_window": [
+        26.5,
+        38.5
+      ],
+      "mismatch": {
+        "video": "a07",
+        "window": [
+          42.0,
+          54.0
+        ],
+        "rule": "another slide",
+        "slide": 4
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 5,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide",
+          "verdict": "supported",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Annual Rainfall",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "by Region",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide: Annual Rainfall by Region.",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Annual Rainfall",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "by Region",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Region",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide: Annual Rainfall by Region",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e004": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        2,
+        3
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a07-v08"
+      ]
+    },
+    {
+      "video": "a09",
+      "run_id": "suite-a-a09-20261028T115030Z",
+      "cue_id": "c005",
+      "track": "standard",
+      "text": "The slide changes to Baroque Art Features.",
+      "true_window": [
+        25.0,
+        37.0
+      ],
+      "mismatch": {
+        "video": "a09",
+        "window": [
+          41.46,
+          53.46
+        ],
+        "rule": "another slide",
+        "slide": 4
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 1,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The slide changes",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "to Baroque Art Features",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "The slide changes to Baroque Art Features",
+          "verdict": "supported",
+          "at": 27.5,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The slide changes",
+          "verdict": "supported",
+          "at": 51.46,
+          "kind": "atomic"
+        },
+        {
+          "text": "to Baroque Art Features",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The slide changes to Baroque Art Features",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e005": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        2,
+        3
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a09-v12"
+      ]
+    },
+    {
+      "video": "a10",
+      "run_id": "suite-a-a10-20261028T115030Z",
+      "cue_id": "x003",
+      "track": "extended",
+      "text": "Slide lists resting heart rate, exercise increase, age effect, and a line chart.",
+      "true_window": [
+        21.2,
+        33.2
+      ],
+      "mismatch": {
+        "video": "a10",
+        "window": [
+          0.019999999999997797,
+          12.020000000000001
+        ],
+        "rule": "another slide",
+        "slide": 1
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide lists resting heart rate, exercise increase, age effect, and a line chart",
+          "verdict": "supported",
+          "at": 23.2,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide lists resting heart rate, exercise increase, age effect, and a line chart",
+          "verdict": "contradicted",
+          "at": 0.02,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e001": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        2,
+        3
+      ],
+      "discriminative": false,
+      "discriminative_facts": []
+    },
+    {
+      "video": "a11",
+      "run_id": "suite-a-a11-20261028T115030Z",
+      "cue_id": "x001",
+      "track": "extended",
+      "text": "Slide titled Global Temperature Rise lists: human activity drives warming, greenhouse gases trap heat, carbon dioxide levels increased, average temperatures rising worldwide.",
+      "true_window": [
+        0.0,
+        10.3
+      ],
+      "mismatch": {
+        "video": "a11",
+        "window": [
+          31.689999999999998,
+          41.989999999999995
+        ],
+        "rule": "another slide",
+        "slide": 4
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide titled Global Temperature Rise lists: human activity drives warming, greenhouse gases trap heat, carbon dioxide levels increased, average temperatures rising worldwide",
+          "verdict": "supported",
+          "at": 0.0,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide titled Global Temperature Rise lists: human activity drives warming, greenhouse gases trap heat, carbon dioxide levels increased, average temperatures rising worldwide",
+          "verdict": "contradicted",
+          "at": 31.69,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e004": 10.3
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1,
+        2
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a11-v01",
+        "a11-v04"
+      ]
+    },
+    {
+      "video": "a11",
+      "run_id": "suite-a-a11-20261028T115030Z",
+      "cue_id": "c005",
+      "track": "standard",
+      "text": "Slide shows emissions by source bar chart.",
+      "true_window": [
+        29.8,
+        41.8
+      ],
+      "mismatch": {
+        "video": "a12",
+        "window": [
+          26.259999999999998,
+          38.26
+        ],
+        "rule": "other video",
+        "slide": 3
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Slide shows emissions",
+          "verdict": "supported",
+          "at": 30.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "emissions by source",
+          "verdict": "supported",
+          "at": 30.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "source bar chart",
+          "verdict": "supported",
+          "at": 30.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide shows emissions by source bar chart",
+          "verdict": "supported",
+          "at": 30.8,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Slide shows emissions",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "emissions by source",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "source bar chart",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Slide shows emissions by source bar chart",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e003": 12.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        3,
+        4
+      ],
+      "discriminative": false,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "c002",
+      "track": "standard",
+      "text": "A grassy field with scattered trees stretches under a pink and blue sky.",
+      "true_window": [
+        2.7,
+        14.7
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          45.0,
+          57.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "A grassy field with scattered trees stretches under a pink and blue sky",
+          "verdict": "supported",
+          "at": 12.7,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A grassy field with scattered trees stretches under a pink and blue sky",
+          "verdict": "supported",
+          "at": 51.0,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e007": 3.7,
+        "e008": 8.3
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "c006",
+      "track": "standard",
+      "text": "A tree with a hollow at its base stands alone in a grassy field.",
+      "true_window": [
+        24.7,
+        36.7
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          67.0,
+          79.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A tree with a hollow at its base stands alone",
+          "verdict": "supported",
+          "at": 27.7,
+          "kind": "atomic"
+        },
+        {
+          "text": "A tree stands alone in a grassy field",
+          "verdict": "supported",
+          "at": 27.7,
+          "kind": "atomic"
+        },
+        {
+          "text": "A tree with a hollow stands alone in a grassy field",
+          "verdict": "supported",
+          "at": 27.7,
+          "kind": "atomic"
+        },
+        {
+          "text": "A tree with a hollow at its base stands alone in a grassy field",
+          "verdict": "supported",
+          "at": 27.7,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A tree with a hollow at its base stands alone in a grassy field",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e010": 4.7,
+        "e011": 3.0,
+        "e012": 2.0,
+        "e013": 2.3
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "c009",
+      "track": "standard",
+      "text": "Grey rabbit stretches, yawns, steps from hollow.",
+      "true_window": [
+        47.7,
+        59.7
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          5.5,
+          17.5
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Grey rabbit stretches",
+          "verdict": "supported",
+          "at": 53.7,
+          "kind": "atomic"
+        },
+        {
+          "text": "rabbit yawns",
+          "verdict": "supported",
+          "at": 54.7,
+          "kind": "atomic"
+        },
+        {
+          "text": "rabbit steps from hollow",
+          "verdict": "supported",
+          "at": 57.7,
+          "kind": "atomic"
+        },
+        {
+          "text": "Grey rabbit stretches, yawns, steps from hollow",
+          "verdict": "supported",
+          "at": 57.7,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Grey rabbit stretches",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "rabbit yawns",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "rabbit steps from hollow",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Grey rabbit stretches, yawns, steps from hollow",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e002": 10.2,
+        "e003": 1.8
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "c016",
+      "track": "standard",
+      "text": "In a moment, the rabbit holds the red apple in its forepaws and eats it standing.",
+      "true_window": [
+        89.7,
+        100.7
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          48.5,
+          59.5
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "the rabbit holds the red apple in its forepaws and eats it standing",
+          "verdict": "supported",
+          "at": 91.7,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "the rabbit holds the red apple in its forepaws and eats it standing",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e007": 0.2,
+        "e008": 10.0,
+        "e009": 0.8
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "x020",
+      "track": "extended",
+      "text": "The rabbit darts away from a low tree branch while a brown animal watches from a higher branch.",
+      "true_window": [
+        103.281,
+        108.781
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          67.5,
+          73.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The rabbit darts away from a low tree branch",
+          "verdict": "supported",
+          "at": 105.281,
+          "kind": "atomic"
+        },
+        {
+          "text": "a brown animal watches from a higher branch",
+          "verdict": "supported",
+          "at": 104.281,
+          "kind": "atomic"
+        },
+        {
+          "text": "The rabbit darts away from a low tree branch while a brown animal watches from a higher branch",
+          "verdict": "supported",
+          "at": 104.781,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The rabbit darts away from a low tree branch",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "a brown animal watches from a higher branch",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The rabbit darts away from a low tree branch while a brown animal watches from a higher branch",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e010": 4.2,
+        "e011": 1.3
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "c019",
+      "track": "standard",
+      "text": "The white rabbit stands in the field, holding a small brown object in its forepaws.",
+      "true_window": [
+        106.781,
+        111.281
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          72.0,
+          76.5
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 5,
+        "supported": 5,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 1,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The white rabbit stands in the field",
+          "verdict": "supported",
+          "at": 108.781,
+          "kind": "atomic"
+        },
+        {
+          "text": "The white rabbit holds a small brown object in its forepaws",
+          "verdict": "supported",
+          "at": 108.781,
+          "kind": "atomic"
+        },
+        {
+          "text": "The rabbit holds a small brown object",
+          "verdict": "supported",
+          "at": 108.781,
+          "kind": "atomic"
+        },
+        {
+          "text": "The rabbit stands in the field",
+          "verdict": "supported",
+          "at": 108.781,
+          "kind": "atomic"
+        },
+        {
+          "text": "The white rabbit stands in the field, holding a small brown object in its forepaws",
+          "verdict": "supported",
+          "at": 108.781,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The white rabbit stands in the field",
+          "verdict": "supported",
+          "at": 74.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "The white rabbit holds a small brown object",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The white rabbit holds a small brown object in its forepaws",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The white rabbit stands in the field holding a small brown object in its forepaws",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e011": 2.7,
+        "e012": 1.8
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "x023",
+      "track": "extended",
+      "text": "A butterfly lands on the rabbit's nose, pauses, then flutters off while the rabbit watches it go.",
+      "true_window": [
+        109.281,
+        117.281
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          71.0,
+          79.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A butterfly lands on the rabbit's nose, pauses, then flutters off while the rabbit watches it go",
+          "verdict": "supported",
+          "at": 111.281,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A butterfly lands on the rabbit's nose, pauses, then flutters off while the rabbit watches it go",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e010": 0.7,
+        "e011": 3.0,
+        "e012": 2.0,
+        "e013": 2.3
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "bbb120",
+      "run_id": "final-bbb120",
+      "cue_id": "c020",
+      "track": "standard",
+      "text": "In a moment, the rabbit leaps up on its hind legs, reaching for a butterfly near a tree.",
+      "true_window": [
+        115.281,
+        120.0
+      ],
+      "mismatch": {
+        "video": "bbb120",
+        "window": [
+          80.5,
+          85.219
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 6,
+        "supported": 6,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 6,
+        "supported": 6,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "the rabbit leaps up on its hind legs",
+          "verdict": "supported",
+          "at": 117.281,
+          "kind": "atomic"
+        },
+        {
+          "text": "the rabbit reaches for a butterfly",
+          "verdict": "supported",
+          "at": 117.281,
+          "kind": "atomic"
+        },
+        {
+          "text": "a butterfly near a tree",
+          "verdict": "supported",
+          "at": 117.281,
+          "kind": "atomic"
+        },
+        {
+          "text": "the rabbit leaps up",
+          "verdict": "supported",
+          "at": 117.281,
+          "kind": "atomic"
+        },
+        {
+          "text": "the rabbit reaches for a butterfly near a tree",
+          "verdict": "supported",
+          "at": 117.281,
+          "kind": "atomic"
+        },
+        {
+          "text": "the rabbit leaps up on its hind legs, reaching for a butterfly near a tree",
+          "verdict": "supported",
+          "at": 117.281,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "the rabbit leaps up on its hind legs",
+          "verdict": "supported",
+          "at": 84.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "the rabbit reaches for a butterfly",
+          "verdict": "supported",
+          "at": 84.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "a butterfly near a tree",
+          "verdict": "supported",
+          "at": 84.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "the rabbit leaps up",
+          "verdict": "supported",
+          "at": 84.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "a butterfly",
+          "verdict": "supported",
+          "at": 84.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "the rabbit leaps up on its hind legs, reaching for a butterfly near a tree",
+          "verdict": "supported",
+          "at": 84.5,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e013": 1.2,
+        "e014": 3.519
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "ed90",
+      "run_id": "final-ed90",
+      "cue_id": "c010",
+      "track": "standard",
+      "text": "Both stand facing each other, gesturing.",
+      "true_window": [
+        65.0,
+        73.0
+      ],
+      "mismatch": {
+        "video": "ed90",
+        "window": [
+          27.0,
+          35.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "Both stand",
+          "verdict": "supported",
+          "at": 68.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "Both face each other",
+          "verdict": "supported",
+          "at": 68.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "Both gesture",
+          "verdict": "supported",
+          "at": 68.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "Both stand facing each other, gesturing",
+          "verdict": "supported",
+          "at": 68.0,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Both stand",
+          "verdict": "supported",
+          "at": 32.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "Both face each other",
+          "verdict": "supported",
+          "at": 32.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "Both gesture",
+          "verdict": "supported",
+          "at": 32.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "Both stand facing each other, gesturing",
+          "verdict": "supported",
+          "at": 32.0,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e006": 4.0,
+        "e007": 4.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "ed90",
+      "run_id": "final-ed90",
+      "cue_id": "c012",
+      "track": "standard",
+      "text": "The bald person stands close to the younger person, looking upward and speaking.",
+      "true_window": [
+        77.0,
+        83.0
+      ],
+      "mismatch": {
+        "video": "ed90",
+        "window": [
+          41.0,
+          47.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The bald person stands close to the younger person, looking upward and speaking",
+          "verdict": "supported",
+          "at": 80.0,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The bald person stands close to the younger person, looking upward and speaking",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e008": 6.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "ed90",
+      "run_id": "final-ed90",
+      "cue_id": "c013",
+      "track": "standard",
+      "text": "The two figures fall through the dark space, tumbling among the wires and platforms.",
+      "true_window": [
+        81.0,
+        90.0
+      ],
+      "mismatch": {
+        "video": "ed90",
+        "window": [
+          42.0,
+          51.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "The two figures fall through the dark space, tumbling among the wires and platforms",
+          "verdict": "supported",
+          "at": 82.0,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The two figures fall through the dark space, tumbling among the wires and platforms",
+          "verdict": "supported",
+          "at": 47.0,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e008": 8.8,
+        "e009": 0.2
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x005",
+      "track": "extended",
+      "text": "A massive mechanical robot stands motionless on the bridge that crosses the plaza.",
+      "true_window": [
+        11.4,
+        15.7
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          46.0,
+          50.3
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 1,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A massive mechanical robot stands motionless on the bridge",
+          "verdict": "supported",
+          "at": 11.4,
+          "kind": "atomic"
+        },
+        {
+          "text": "the bridge crosses the plaza",
+          "verdict": "supported",
+          "at": 11.4,
+          "kind": "atomic"
+        },
+        {
+          "text": "A massive mechanical robot stands motionless on the bridge that crosses the plaza",
+          "verdict": "supported",
+          "at": 11.4,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A massive mechanical robot stands motionless on the bridge",
+          "verdict": "supported",
+          "at": 46.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "the bridge crosses the plaza",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "A massive mechanical robot stands motionless on the bridge that crosses the plaza",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e011": 1.4,
+        "e012": 2.9
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "c002",
+      "track": "standard",
+      "text": "In a moment, the red-jacketed man puts an arm around the older man and points forward.",
+      "true_window": [
+        17.8,
+        25.4
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          55.5,
+          63.099999999999994
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "the red-jacketed man puts an arm around the older man",
+          "verdict": "supported",
+          "at": 20.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "the red-jacketed man points forward",
+          "verdict": "supported",
+          "at": 21.8,
+          "kind": "atomic"
+        },
+        {
+          "text": "the red-jacketed man puts an arm around the older man and points forward",
+          "verdict": "supported",
+          "at": 21.8,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "the red-jacketed man puts an arm around the older man",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "the red-jacketed man points forward",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "the red-jacketed man puts an arm around the older man and points forward",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e013": 7.6
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "c004",
+      "track": "standard",
+      "text": "The trio faces the robot while glowing green digital lines materialize around the machine.",
+      "true_window": [
+        42.2,
+        48.4
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          6.0,
+          12.199999999999996
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The trio faces the robot",
+          "verdict": "supported",
+          "at": 44.2,
+          "kind": "atomic"
+        },
+        {
+          "text": "the robot while glowing green digital lines materialize around the machine",
+          "verdict": "supported",
+          "at": 44.2,
+          "kind": "atomic"
+        },
+        {
+          "text": "The trio faces the robot while glowing green digital lines materialize around the machine",
+          "verdict": "supported",
+          "at": 44.2,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The trio faces the robot",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "the robot while glowing green digital lines materialize around the machine",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The trio faces the robot while glowing green digital lines materialize around the machine",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e004": 6.2
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "c005",
+      "track": "standard",
+      "text": "A young man in a blue jacket and jeans walks onto the bridge toward the camera.",
+      "true_window": [
+        46.4,
+        51.3
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          11.5,
+          16.4
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A young man in a blue jacket and jeans walks onto the bridge toward the camera",
+          "verdict": "supported",
+          "at": 50.4,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A young man in a blue jacket and jeans walks onto the bridge toward the camera",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e004": 0.9,
+        "e005": 2.3,
+        "e006": 1.7
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "c006",
+      "track": "standard",
+      "text": "The young man crosses the bridge.",
+      "true_window": [
+        49.3,
+        61.3
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          91.5,
+          103.5
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 3,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The young man crosses the bridge",
+          "verdict": "supported",
+          "at": 55.3,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man",
+          "verdict": "supported",
+          "at": 55.3,
+          "kind": "atomic"
+        },
+        {
+          "text": "the bridge",
+          "verdict": "supported",
+          "at": 55.3,
+          "kind": "atomic"
+        },
+        {
+          "text": "crosses",
+          "verdict": "supported",
+          "at": 55.3,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The young man crosses the bridge",
+          "verdict": "supported",
+          "at": 91.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man",
+          "verdict": "supported",
+          "at": 91.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "the bridge",
+          "verdict": "supported",
+          "at": 91.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "crosses",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e021": 4.4,
+        "e022": 2.1,
+        "e023": 3.2,
+        "e024": 1.0,
+        "e025": 1.2,
+        "e026": 2.3
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x019",
+      "track": "extended",
+      "text": "A tight close-up of the robot's face shows its eyes suddenly igniting with bright white light.",
+      "true_window": [
+        87.1,
+        91.1
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          53.0,
+          57.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A tight close-up of the robot's face shows its eyes suddenly igniting with bright white light",
+          "verdict": "supported",
+          "at": 89.1,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A tight close-up of the robot's face shows its eyes suddenly igniting with bright white light",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e013": 4.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "c012",
+      "track": "standard",
+      "text": "The robot's lit eyes show in close-up.",
+      "true_window": [
+        94.9,
+        99.0
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          129.0,
+          133.1
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "The robot's lit eyes show",
+          "verdict": "supported",
+          "at": 97.9,
+          "kind": "atomic"
+        },
+        {
+          "text": "in close-up",
+          "verdict": "supported",
+          "at": 97.9,
+          "kind": "atomic"
+        },
+        {
+          "text": "The robot's lit eyes show in close-up",
+          "verdict": "supported",
+          "at": 97.9,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The robot's lit eyes show",
+          "verdict": "supported",
+          "at": 131.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "in close-up",
+          "verdict": "supported",
+          "at": 131.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "The robot's lit eyes show in close-up",
+          "verdict": "supported",
+          "at": 131.0,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e036": 1.258,
+        "e037": 2.842
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x023",
+      "track": "extended",
+      "text": "A young woman with a ponytail wears a worried look, then the young man turns to her with a grave expression.",
+      "true_window": [
+        97.0,
+        102.2
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          132.5,
+          137.7
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 3,
+        "supported": 3,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 1,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "a young woman with a ponytail wears a worried look",
+          "verdict": "supported",
+          "at": 99.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "the young man turns to her with a grave expression",
+          "verdict": "supported",
+          "at": 101.0,
+          "kind": "atomic"
+        },
+        {
+          "text": "A young woman with a ponytail wears a worried look, then the young man turns to her with a grave expression",
+          "verdict": "supported",
+          "at": 101.0,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "a young woman with a ponytail wears a worried look",
+          "verdict": "supported",
+          "at": 136.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "the young man turns to her with a grave expression",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "A young woman with a ponytail wears a worried look, then the young man turns to her with a grave expression",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e037": 0.958,
+        "e038": 3.3,
+        "e039": 0.942
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x025",
+      "track": "extended",
+      "text": "The young man in the blue jacket and graphic tee looks at the woman.",
+      "true_window": [
+        99.558,
+        103.558
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          65.5,
+          69.5
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 6,
+        "supported": 6,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 3,
+        "supported": 1,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The young man in the blue jacket",
+          "verdict": "supported",
+          "at": 101.558,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man looks at the woman",
+          "verdict": "supported",
+          "at": 101.558,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man in the blue jacket and graphic tee",
+          "verdict": "supported",
+          "at": 101.558,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man in the blue jacket looks at the woman",
+          "verdict": "supported",
+          "at": 101.558,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man in the blue jacket and graphic tee looks at the woman",
+          "verdict": "supported",
+          "at": 101.558,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man in the blue jacket and graphic tee looks at the woman",
+          "verdict": "supported",
+          "at": 101.558,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The young man in the blue jacket",
+          "verdict": "supported",
+          "at": 65.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man looks at the woman",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man in the blue jacket and graphic tee looks at the woman",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e013": 4.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x036",
+      "track": "extended",
+      "text": "A man with close-cropped dark hair braces a scoped rifle against his shoulder, peering through white railings at something below.",
+      "true_window": [
+        127.608,
+        131.608
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          93.5,
+          97.5
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 5,
+        "supported": 5,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 6,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "a man with close-cropped dark hair",
+          "verdict": "supported",
+          "at": 129.608,
+          "kind": "atomic"
+        },
+        {
+          "text": "a man braces a scoped rifle",
+          "verdict": "supported",
+          "at": 129.608,
+          "kind": "atomic"
+        },
+        {
+          "text": "a man braces a scoped rifle against his shoulder",
+          "verdict": "supported",
+          "at": 129.608,
+          "kind": "atomic"
+        },
+        {
+          "text": "a man peering through white railings at something below",
+          "verdict": "supported",
+          "at": 129.608,
+          "kind": "atomic"
+        },
+        {
+          "text": "a man with close-cropped dark hair braces a scoped rifle against his shoulder peering through white railings at something below",
+          "verdict": "supported",
+          "at": 129.608,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "a man with close-cropped dark hair braces a scoped rifle",
+          "verdict": "contradicted",
+          "at": 93.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "a man braces a scoped rifle against his shoulder",
+          "verdict": "contradicted",
+          "at": 93.5,
+          "kind": "atomic"
+        },
+        {
+          "text": "a man peers through white railings at something below",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "white railings",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "something below",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "A man with close-cropped dark hair braces a scoped rifle against his shoulder, peering through white railings at something below",
+          "verdict": "contradicted",
+          "at": 93.5,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e021": 2.4,
+        "e022": 1.6
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x039",
+      "track": "extended",
+      "text": "Two young people stand on a bridge; the woman points toward the man, whose arm is now robotic.",
+      "true_window": [
+        135.758,
+        141.558
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          172.0,
+          177.79999999999998
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Two young people stand on a bridge; the woman points toward the man, whose arm is now robotic",
+          "verdict": "supported",
+          "at": 138.258,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Two young people stand on a bridge; the woman points toward the man, whose arm is now robotic",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e051": 0.158,
+        "e052": 1.3,
+        "e053": 2.5,
+        "e054": 1.1,
+        "e055": 0.742
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "c016",
+      "track": "standard",
+      "text": "A purple-lit room with floating screens and people at desks.",
+      "true_window": [
+        139.558,
+        149.158
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          99.5,
+          109.1
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A purple-lit room with floating screens and people at desks",
+          "verdict": "supported",
+          "at": 140.558,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A purple-lit room with floating screens and people at desks",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e023": 1.7,
+        "e024": 1.0,
+        "e025": 1.2,
+        "e026": 3.958,
+        "e027": 2.1,
+        "e028": 2.0,
+        "e029": 3.3,
+        "e030": 1.942
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x041",
+      "track": "extended",
+      "text": "Glowing pink words float behind the man's head: \"CELIA, I LIKE YOUR ROBOT HAND\" while he raises his mechanical hand.",
+      "true_window": [
+        141.158,
+        145.158
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          107.0,
+          111.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Glowing pink words float behind the man's head",
+          "verdict": "supported",
+          "at": 143.158,
+          "kind": "atomic"
+        },
+        {
+          "text": "CELIA, I LIKE YOUR ROBOT HAND",
+          "verdict": "supported",
+          "at": 143.158,
+          "kind": "atomic"
+        },
+        {
+          "text": "he raises his mechanical hand",
+          "verdict": "supported",
+          "at": 143.158,
+          "kind": "atomic"
+        },
+        {
+          "text": "Glowing pink words float behind the man's head: \"CELIA, I LIKE YOUR ROBOT HAND\" while he raises his mechanical hand",
+          "verdict": "supported",
+          "at": 143.158,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Glowing pink words float behind the man's head",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "CELIA, I LIKE YOUR ROBOT HAND",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "he raises his mechanical hand",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "Glowing pink words float behind the man's head: \"CELIA, I LIKE YOUR ROBOT HAND\" while he raises his mechanical hand",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e028": 0.158,
+        "e029": 2.958,
+        "e030": 3.842
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x047",
+      "track": "extended",
+      "text": "The young man slowly brings his robotic hand up to his own face, pressing it near his cheek with eyes closed.",
+      "true_window": [
+        157.158,
+        161.158
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          123.0,
+          127.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 6,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "The young man slowly brings his robotic hand up to his own face, pressing it near his cheek with eyes closed",
+          "verdict": "supported",
+          "at": 159.158,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "The young man slowly brings his robotic hand up",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man brings his robotic hand up to his own face",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man slowly brings his robotic hand up to his own face",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man slowly brings his robotic hand up to his own face with eyes closed",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man slowly brings his robotic hand up to his own face pressing it near his cheek",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "The young man slowly brings his robotic hand up to his own face pressing it near his cheek with eyes closed",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e035": 4.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x049",
+      "track": "extended",
+      "text": "A man with curly hair and round glasses lets out a raw, open-mouthed scream, face contorted.",
+      "true_window": [
+        162.158,
+        166.158
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          128.0,
+          132.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 4,
+        "supported": 4,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 4,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "A man with curly hair and round glasses",
+          "verdict": "supported",
+          "at": 164.158,
+          "kind": "atomic"
+        },
+        {
+          "text": "lets out a raw open-mouthed scream",
+          "verdict": "supported",
+          "at": 164.158,
+          "kind": "atomic"
+        },
+        {
+          "text": "face contorted",
+          "verdict": "supported",
+          "at": 164.158,
+          "kind": "atomic"
+        },
+        {
+          "text": "A man with curly hair and round glasses lets out a raw, open-mouthed scream, face contorted",
+          "verdict": "supported",
+          "at": 164.158,
+          "kind": "sentence"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "A man with curly hair and round glasses",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "lets out a raw open-mouthed scream",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "face contorted",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        },
+        {
+          "text": "A man with curly hair and round glasses lets out a raw, open-mouthed scream, face contorted",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "sentence"
+        }
+      ],
+      "event_overlap": {
+        "e035": 0.958,
+        "e036": 1.3,
+        "e037": 1.742
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "tos180",
+      "run_id": "final-tos180",
+      "cue_id": "x052",
+      "track": "extended",
+      "text": "Celia fixes her eyes on the robotic hand, her face frozen in shock, mouth hanging open.",
+      "true_window": [
+        170.808,
+        174.808
+      ],
+      "mismatch": {
+        "video": "tos180",
+        "window": [
+          136.5,
+          140.5
+        ],
+        "rule": "other events, 30 s away",
+        "slide": null
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "Celia fixes her eyes on the robotic hand, her face frozen in shock, mouth hanging open",
+          "verdict": "supported",
+          "at": 172.808,
+          "kind": "atomic"
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "Celia fixes her eyes on the robotic hand, her face frozen in shock, mouth hanging open",
+          "verdict": "not_visible",
+          "at": null,
+          "kind": "atomic"
+        }
+      ],
+      "event_overlap": {
+        "e038": 0.258,
+        "e039": 3.742
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [],
+      "discriminative": null,
+      "discriminative_facts": []
+    }
+  ],
+  "skipped": [],
+  "spend_usd": 0.082494
+}

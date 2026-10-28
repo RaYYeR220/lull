@@ -82,6 +82,16 @@ def test_thinking_flag_passthrough(ledger):
     assert srv.bodies[0]["chat_template_kwargs"] == {"enable_thinking": True}
 
 
+def test_seed_is_sent_only_when_given(ledger):
+    client, srv, _ = make(ledger, ok(), ok(), ok("hi"))
+    call(client)
+    call(client, seed=41)
+    client.text(LIGHTNING, [], run_id="r1", stage="s", role="x", seed=7)
+    assert "seed" not in srv.bodies[0]
+    assert srv.bodies[1]["seed"] == 41 and "response_format" in srv.bodies[1]
+    assert srv.bodies[2]["seed"] == 7 and "response_format" not in srv.bodies[2]
+
+
 def test_text_returns_string_without_response_format(ledger):
     client, srv, _ = make(ledger, ok("hello"))
     out = client.text(LIGHTNING, [], run_id="r1", stage="s", role="x")

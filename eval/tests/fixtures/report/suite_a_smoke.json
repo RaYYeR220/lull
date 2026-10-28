@@ -1,0 +1,2425 @@
+{
+  "_fixture": "FIXTURE: a smoke run's output (a clip / a subset), copied for the report's tests; complete is false, as the scorer wrote it. Never results.",
+  "suite": "A",
+  "complete": false,
+  "note": "partial run (a smoke on a subset): not Suite A results",
+  "date": "2026-10-28T02:29:35+00:00",
+  "git_commit": "439ebeab39857496d472bf27acd5b2a16e64ad01",
+  "git_dirty": false,
+  "preregistration": {
+    "tag": "suite-a-prereg",
+    "commit": "194d4d0803aa4a9195abbb450b35d7d132631ae1",
+    "committed": "2026-10-28T02:12:13+01:00"
+  },
+  "key_sha256": "354967ad20310ab6013c5fd884520f57120dbaa56d81b927f2d0c3ec35b7ce96",
+  "ledger_calls_after_preregistration": true,
+  "engine_fingerprint": "0.2.0+f861597faa9b7766",
+  "invocation": {
+    "stamp": "20261028T022935Z",
+    "mode": "subset",
+    "reuse": true,
+    "videos": [
+      "a01",
+      "a02"
+    ],
+    "engine_fingerprint": "0.2.0+f861597faa9b7766",
+    "started_utc": "2026-10-28T02:29:35+00:00",
+    "complete": false,
+    "runs": {
+      "a01": "suite-a-a01-20261028T011729Z",
+      "a02": "suite-a-a02-20261028T011729Z"
+    }
+  },
+  "counting_invocation": null,
+  "judge_model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+  "judge": {
+    "temperature": 0.0,
+    "thinking": true,
+    "max_tokens": 16000,
+    "note": "the primary judge is also the engine's planner (plan stage)"
+  },
+  "second_judge_model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+  "second_judge": {
+    "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    "thinking": false,
+    "temperature": 0.0,
+    "aggregate": {
+      "recall": {
+        "value": 0.2926829268292683,
+        "num": 12.0,
+        "den": 41.0,
+        "ci95": [
+          0.11764705882352941,
+          0.4166666666666667
+        ]
+      },
+      "hallucination": {
+        "value": 0.0,
+        "num": 0.0,
+        "den": 27.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "hallucination_voiced_text": {
+        "value": 0.5833333333333334,
+        "num": 7.0,
+        "den": 12.0,
+        "ci95": [
+          0.5,
+          0.625
+        ]
+      }
+    },
+    "agreement": {
+      "facts": {
+        "n": 41,
+        "agree": 38,
+        "agreement": 0.926829268292683,
+        "kappa": 0.8093023255813955
+      },
+      "claims": {
+        "n": 27,
+        "agree": 27,
+        "agreement": 1.0,
+        "kappa": null
+      },
+      "voiced_cues": {
+        "n": 7,
+        "agree": 7,
+        "agreement": 1.0,
+        "kappa": 1.0
+      }
+    }
+  },
+  "engine_models": [
+    "nvidia/Nemotron-3-Ultra-550b-a55b",
+    "nvidia/Nemotron-3.5-Super-VL",
+    "nvidia/Nemotron-3_5-Lightning"
+  ],
+  "run_options": {
+    "mode": "standard",
+    "profile": "education",
+    "voice": "Sofia",
+    "research": false,
+    "source_url": null
+  },
+  "hardware": {
+    "os": "Windows-11-10.0.26300-SP0",
+    "python": "3.13.13",
+    "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+    "cpu_count": 12,
+    "gpus": [
+      "NVIDIA GeForce RTX 4060, 8188 MiB, 610.88"
+    ],
+    "speech_server": "http://127.0.0.1:8089 (local)",
+    "models": "remote: Nebius Token Factory"
+  },
+  "spend_usd": 0.228528,
+  "referenced_run_ids": [
+    "suite-a-a01-20261028T011729Z",
+    "suite-a-a02-20261028T011729Z",
+    "suite-a-judge-a01-20261028T011729Z",
+    "suite-a-judge-a01-20261028T021853Z",
+    "suite-a-judge-a02-20261028T011729Z",
+    "suite-a-judge-a02-20261028T021853Z",
+    "suite-a-judge2-a01-20261028T020159Z",
+    "suite-a-judge2-a01-20261028T021853Z",
+    "suite-a-judge2-a02-20261028T020159Z",
+    "suite-a-judge2-a02-20261028T021853Z",
+    "suite-a-probe-a01-20261028T020159Z",
+    "suite-a-probe-a01-20261028T021853Z",
+    "suite-a-probe-a01-20261028T022122Z",
+    "suite-a-probe2-a01-20261028T022122Z"
+  ],
+  "runs_inventory": [
+    {
+      "run_id": "suite-a-a01-20261028T011729Z",
+      "kind": "pipeline",
+      "outcome": "published",
+      "engine_fingerprint": "0.2.0+f861597faa9b7766",
+      "started_utc": "2026-10-28T01:17:29+00:00",
+      "calls": 11,
+      "cost_usd": 0.018427,
+      "first_ts": 1793150270.2545378,
+      "last_ts": 1793150304.4640942
+    },
+    {
+      "run_id": "suite-a-a02-20261028T011729Z",
+      "kind": "pipeline",
+      "outcome": "published",
+      "engine_fingerprint": "0.2.0+f861597faa9b7766",
+      "started_utc": "2026-10-28T01:17:29+00:00",
+      "calls": 13,
+      "cost_usd": 0.016844,
+      "first_ts": 1793150358.1477938,
+      "last_ts": 1793150393.809662
+    },
+    {
+      "run_id": "suite-a-judge-a01-20261028T011729Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 2,
+      "cost_usd": 0.026469,
+      "first_ts": 1793150333.7324388,
+      "last_ts": 1793150342.2050974
+    },
+    {
+      "run_id": "suite-a-judge-a01-20261028T020159Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 1,
+      "cost_usd": 0.013832,
+      "first_ts": 1793152948.85428,
+      "last_ts": 1793152948.85428
+    },
+    {
+      "run_id": "suite-a-judge-a01-20261028T020651Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 1,
+      "cost_usd": 0.011336,
+      "first_ts": 1793153222.0725217,
+      "last_ts": 1793153222.0725217
+    },
+    {
+      "run_id": "suite-a-judge-a01-20261028T021853Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 4,
+      "cost_usd": 0.01552,
+      "first_ts": 1793153935.551537,
+      "last_ts": 1793153956.6479776
+    },
+    {
+      "run_id": "suite-a-judge-a02-20261028T011729Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 2,
+      "cost_usd": 0.019834,
+      "first_ts": 1793150414.6963701,
+      "last_ts": 1793150424.5009117
+    },
+    {
+      "run_id": "suite-a-judge-a02-20261028T020159Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 1,
+      "cost_usd": 0.01097,
+      "first_ts": 1793152969.689246,
+      "last_ts": 1793152969.689246
+    },
+    {
+      "run_id": "suite-a-judge-a02-20261028T020651Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 1,
+      "cost_usd": 0.01064,
+      "first_ts": 1793153240.9099808,
+      "last_ts": 1793153240.9099808
+    },
+    {
+      "run_id": "suite-a-judge-a02-20261028T021853Z",
+      "kind": "judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 3,
+      "cost_usd": 0.009118,
+      "first_ts": 1793153969.6568444,
+      "last_ts": 1793153979.3083081
+    },
+    {
+      "run_id": "suite-a-judge2-a01-20261028T020159Z",
+      "kind": "second judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 2,
+      "cost_usd": 0.002203,
+      "first_ts": 1793152956.6804147,
+      "last_ts": 1793152959.7597206
+    },
+    {
+      "run_id": "suite-a-judge2-a01-20261028T020651Z",
+      "kind": "second judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 1,
+      "cost_usd": 0.000639,
+      "first_ts": 1793153228.855033,
+      "last_ts": 1793153228.855033
+    },
+    {
+      "run_id": "suite-a-judge2-a01-20261028T021853Z",
+      "kind": "second judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 5,
+      "cost_usd": 0.001347,
+      "first_ts": 1793153960.850003,
+      "last_ts": 1793153965.3143325
+    },
+    {
+      "run_id": "suite-a-judge2-a02-20261028T020159Z",
+      "kind": "second judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 2,
+      "cost_usd": 0.001981,
+      "first_ts": 1793152974.5838218,
+      "last_ts": 1793152986.4338388
+    },
+    {
+      "run_id": "suite-a-judge2-a02-20261028T020651Z",
+      "kind": "second judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 1,
+      "cost_usd": 0.000765,
+      "first_ts": 1793153249.1769133,
+      "last_ts": 1793153249.1769133
+    },
+    {
+      "run_id": "suite-a-judge2-a02-20261028T021853Z",
+      "kind": "second judge",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 4,
+      "cost_usd": 0.001205,
+      "first_ts": 1793153986.0463002,
+      "last_ts": 1793153993.0809424
+    },
+    {
+      "run_id": "suite-a-probe-a01-20261028T011729Z",
+      "kind": "probe",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 2,
+      "cost_usd": 0.041963,
+      "first_ts": 1793150447.6337698,
+      "last_ts": 1793150463.774028
+    },
+    {
+      "run_id": "suite-a-probe-a01-20261028T020159Z",
+      "kind": "probe",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 2,
+      "cost_usd": 0.051694,
+      "first_ts": 1793153001.2581291,
+      "last_ts": 1793153065.122585
+    },
+    {
+      "run_id": "suite-a-probe-a01-20261028T020651Z",
+      "kind": "probe",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 1,
+      "cost_usd": 0.037508,
+      "first_ts": 1793153284.6704333,
+      "last_ts": 1793153284.6704333
+    },
+    {
+      "run_id": "suite-a-probe-a01-20261028T021853Z",
+      "kind": "probe",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 4,
+      "cost_usd": 0.04867,
+      "first_ts": 1793154031.3533428,
+      "last_ts": 1793154049.4539313
+    },
+    {
+      "run_id": "suite-a-probe-a01-20261028T022122Z",
+      "kind": "probe",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 2,
+      "cost_usd": 0.014631,
+      "first_ts": 1793154089.5554767,
+      "last_ts": 1793154098.702038
+    },
+    {
+      "run_id": "suite-a-probe2-a01-20261028T022122Z",
+      "kind": "second-judge probe",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 5,
+      "cost_usd": 0.000585,
+      "first_ts": 1793154099.4069157,
+      "last_ts": 1793154105.6189573
+    },
+    {
+      "run_id": "suite-a-specs",
+      "kind": "specs",
+      "outcome": "spent",
+      "engine_fingerprint": null,
+      "started_utc": null,
+      "calls": 117,
+      "cost_usd": 0.017572,
+      "first_ts": 1793148173.9753866,
+      "last_ts": 1793149054.369268
+    }
+  ],
+  "aggregate": {
+    "videos": 2,
+    "failed_runs": [],
+    "minutes": 1.483,
+    "silence_s": 45.498,
+    "pauses": 16,
+    "pauses_ge_2s": 13,
+    "overlap_s_total": 0.0,
+    "extended_freeze_in_speech": 0,
+    "capacity_violations": 0,
+    "recall_standard": {
+      "value": 0.07317073170731707,
+      "num": 3.0,
+      "den": 41.0,
+      "ci95": [
+        0.058823529411764705,
+        0.08333333333333333
+      ]
+    },
+    "recall_tie_aware_standard": {
+      "value": 0.07317073170731707,
+      "num": 3.0,
+      "den": 41.0,
+      "ci95": [
+        0.058823529411764705,
+        0.08333333333333333
+      ]
+    },
+    "recall_tie_aware_with_extended": {
+      "value": 0.21951219512195122,
+      "num": 9.0,
+      "den": 41.0,
+      "ci95": [
+        0.11764705882352941,
+        0.2916666666666667
+      ]
+    },
+    "recall_with_extended": {
+      "value": 0.21951219512195122,
+      "num": 9.0,
+      "den": 41.0,
+      "ci95": [
+        0.11764705882352941,
+        0.2916666666666667
+      ]
+    },
+    "timely_recall_with_extended": {
+      "value": 0.07317073170731707,
+      "num": 3.0,
+      "den": 41.0,
+      "ci95": [
+        0.058823529411764705,
+        0.08333333333333333
+      ]
+    },
+    "hallucination_claims": {
+      "value": 0.0,
+      "num": 0.0,
+      "den": 27.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "hallucination_cues": {
+      "value": 0.0,
+      "num": 0.0,
+      "den": 7.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "redundancy_cues": {
+      "value": 0.0,
+      "num": 0.0,
+      "den": 7.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "spoken_facts_restated": {
+      "value": 0.1,
+      "num": 1.0,
+      "den": 10.0,
+      "ci95": [
+        0.0,
+        0.16666666666666666
+      ]
+    },
+    "decoys_stated": 0,
+    "decoys_total": 8,
+    "decoy_number_hits": 0,
+    "hallucination_voiced_text": {
+      "value": 0.7142857142857143,
+      "num": 10.0,
+      "den": 14.0,
+      "ci95": [
+        0.6,
+        0.7777777777777778
+      ]
+    },
+    "voiced_unverifiable": {
+      "value": 0.0,
+      "num": 0.0,
+      "den": 14.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "voiced_cues_with_unsupported": {
+      "value": 0.42857142857142855,
+      "num": 3.0,
+      "den": 7.0,
+      "ci95": [
+        0.3333333333333333,
+        0.5
+      ]
+    },
+    "claims_not_in_cue_text": {
+      "value": 0.5185185185185185,
+      "num": 14.0,
+      "den": 27.0,
+      "ci95": [
+        0.25,
+        0.7333333333333333
+      ]
+    },
+    "hallucination_claims_in_cue_text": {
+      "value": 0.0,
+      "num": 0.0,
+      "den": 13.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "decoys_absent_part": 0,
+    "recall_by_kind": {
+      "bullet": {
+        "standard": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 21.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "with_extended": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 21.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "chart_trend": {
+        "standard": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 2.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "with_extended": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 2.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "chart_value": {
+        "standard": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 4.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "with_extended": {
+          "value": 0.25,
+          "num": 1.0,
+          "den": 4.0,
+          "ci95": [
+            0.0,
+            0.5
+          ]
+        }
+      },
+      "label": {
+        "standard": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 8.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "with_extended": {
+          "value": 0.25,
+          "num": 2.0,
+          "den": 8.0,
+          "ci95": [
+            0.0,
+            0.4
+          ]
+        }
+      },
+      "title": {
+        "standard": {
+          "value": 0.5,
+          "num": 3.0,
+          "den": 6.0,
+          "ci95": [
+            0.5,
+            0.5
+          ]
+        },
+        "with_extended": {
+          "value": 1.0,
+          "num": 6.0,
+          "den": 6.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        }
+      }
+    },
+    "exact_title_standard": {
+      "value": 0.5,
+      "num": 3.0,
+      "den": 6.0,
+      "ci95": [
+        0.5,
+        0.5
+      ]
+    },
+    "exact_chart_value_standard": {
+      "value": 0.0,
+      "num": 0.0,
+      "den": 4.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "exact_title_with_extended": {
+      "value": 1.0,
+      "num": 6.0,
+      "den": 6.0,
+      "ci95": [
+        1.0,
+        1.0
+      ]
+    },
+    "exact_chart_value_with_extended": {
+      "value": 0.25,
+      "num": 1.0,
+      "den": 4.0,
+      "ci95": [
+        0.0,
+        0.5
+      ]
+    },
+    "exact_tie_aware_chart_value_standard": {
+      "value": 0.0,
+      "num": 0.0,
+      "den": 4.0,
+      "ci95": [
+        0.0,
+        0.0
+      ]
+    },
+    "exact_tie_aware_chart_value_with_extended": {
+      "value": 0.25,
+      "num": 1.0,
+      "den": 4.0,
+      "ci95": [
+        0.0,
+        0.5
+      ]
+    },
+    "cost": {
+      "model_usd": 0.035271,
+      "tavily_usd": 0,
+      "model_usd_per_min": 0.023789,
+      "tavily_usd_per_min": 0.0,
+      "per_min_ci95": [
+        0.02276812191103789,
+        0.025015841584158417
+      ]
+    },
+    "processing": {
+      "seconds": 130.02,
+      "s_per_min": 87.7,
+      "s_per_min_ci95": [
+        82.77800658978583,
+        93.6059405940594
+      ]
+    },
+    "cue_counts": {
+      "verified": 4,
+      "edited": 0,
+      "approved": 0,
+      "held": 0,
+      "extended": 3
+    }
+  },
+  "judge_probe": {
+    "videos": [
+      "a01"
+    ],
+    "per_video": {
+      "a01": {
+        "facts_credited_to_own_cue": [
+          24,
+          24
+        ],
+        "decoys_credited_to_own_cue": [
+          4,
+          4
+        ],
+        "fact_claims_supported": [
+          24,
+          24
+        ],
+        "decoy_claims_unsupported": [
+          4,
+          4
+        ],
+        "negatives_not_credited": [
+          15,
+          15
+        ],
+        "negative_claims_unsupported": [
+          6,
+          6
+        ],
+        "by_negative_type": {
+          "wrong_value": [
+            2,
+            2
+          ],
+          "title_swap": [
+            4,
+            4
+          ],
+          "gist_only": [
+            6,
+            6
+          ],
+          "bullet_partial": [
+            3,
+            3
+          ]
+        },
+        "cross_credits": {
+          "fact_to_other_fact_cue": 0,
+          "decoy_to_fact_cue": 0,
+          "fact_to_decoy_cue": 0
+        }
+      }
+    },
+    "total": {
+      "facts_credited_to_own_cue": [
+        24,
+        24
+      ],
+      "decoys_credited_to_own_cue": [
+        4,
+        4
+      ],
+      "fact_claims_supported": [
+        24,
+        24
+      ],
+      "decoy_claims_unsupported": [
+        4,
+        4
+      ],
+      "negatives_not_credited": [
+        15,
+        15
+      ],
+      "negative_claims_unsupported": [
+        6,
+        6
+      ],
+      "by_negative_type": {
+        "bullet_partial": [
+          3,
+          3
+        ],
+        "gist_only": [
+          6,
+          6
+        ],
+        "title_swap": [
+          4,
+          4
+        ],
+        "wrong_value": [
+          2,
+          2
+        ]
+      },
+      "cross_credits": {
+        "fact_to_other_fact_cue": 0,
+        "decoy_to_fact_cue": 0,
+        "fact_to_decoy_cue": 0
+      }
+    },
+    "voiced": {
+      "per_video": {
+        "a01": {
+          "sensitivity": [
+            2,
+            2
+          ],
+          "specificity": [
+            3,
+            3
+          ],
+          "by_type": {
+            "positive": [
+              2,
+              2
+            ],
+            "wrong_number": [
+              1,
+              1
+            ],
+            "swapped_label": [
+              1,
+              1
+            ],
+            "invented_bullet": [
+              1,
+              1
+            ]
+          }
+        }
+      },
+      "second_judge_per_video": {
+        "a01": {
+          "sensitivity": [
+            2,
+            2
+          ],
+          "specificity": [
+            3,
+            3
+          ],
+          "by_type": {
+            "positive": [
+              2,
+              2
+            ],
+            "wrong_number": [
+              1,
+              1
+            ],
+            "swapped_label": [
+              1,
+              1
+            ],
+            "invented_bullet": [
+              1,
+              1
+            ]
+          }
+        }
+      },
+      "total": {
+        "sensitivity": [
+          2,
+          2
+        ],
+        "specificity": [
+          3,
+          3
+        ],
+        "by_type": {
+          "invented_bullet": [
+            1,
+            1
+          ],
+          "positive": [
+            2,
+            2
+          ],
+          "swapped_label": [
+            1,
+            1
+          ],
+          "wrong_number": [
+            1,
+            1
+          ]
+        }
+      },
+      "second_judge_total": {
+        "sensitivity": [
+          2,
+          2
+        ],
+        "specificity": [
+          3,
+          3
+        ],
+        "by_type": {
+          "invented_bullet": [
+            1,
+            1
+          ],
+          "positive": [
+            2,
+            2
+          ],
+          "swapped_label": [
+            1,
+            1
+          ],
+          "wrong_number": [
+            1,
+            1
+          ]
+        }
+      }
+    }
+  },
+  "videos": [
+    {
+      "id": "a01",
+      "subject": "biology",
+      "duration_s": 48.56,
+      "run_id": "suite-a-a01-20261028T011729Z",
+      "engine_fingerprint": "0.2.0+f861597faa9b7766",
+      "started_utc": "2026-10-28T01:17:29+00:00",
+      "finished_utc": null,
+      "failed": null,
+      "silence": {
+        "seconds": 25.5716,
+        "pauses": 9,
+        "pauses_ge_2s": 7
+      },
+      "published": {
+        "standard": 2,
+        "extended": 2
+      },
+      "overlap_s": 0.0,
+      "extended_freeze_in_speech": [],
+      "capacity_violations": [],
+      "exact_match": {
+        "standard": {
+          "title": {
+            "matched": 2,
+            "of": 4
+          },
+          "chart_value": {
+            "matched": 0,
+            "of": 2
+          }
+        },
+        "with_extended": {
+          "title": {
+            "matched": 4,
+            "of": 4
+          },
+          "chart_value": {
+            "matched": 1,
+            "of": 2
+          }
+        }
+      },
+      "decoy_number_hits": [],
+      "cost_model_usd": 0.018427,
+      "cost_tavily_usd": 0,
+      "processing_s": 66.995,
+      "calls": 11,
+      "cue_counts": {
+        "verified": 2,
+        "edited": 0,
+        "approved": 0,
+        "held": 0,
+        "extended": 2
+      },
+      "engine_overlap_s": 0.0,
+      "engine_coverage": {
+        "important_events": 4,
+        "salient_events": 4,
+        "described": 2,
+        "ratio": 0.5,
+        "described_with_extended": 4,
+        "ratio_with_extended": 1.0,
+        "undescribed": [],
+        "repetitive": []
+      },
+      "engine_models": [
+        "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "nvidia/Nemotron-3.5-Super-VL",
+        "nvidia/Nemotron-3_5-Lightning"
+      ],
+      "extended_produced": true,
+      "recall": {
+        "standard": [
+          2,
+          24
+        ],
+        "with_extended": [
+          7,
+          24
+        ],
+        "timely_with_extended": [
+          2,
+          24
+        ],
+        "by_kind": {
+          "bullet": {
+            "standard": [
+              0,
+              12
+            ],
+            "with_extended": [
+              0,
+              12
+            ]
+          },
+          "chart_trend": {
+            "standard": [
+              0,
+              1
+            ],
+            "with_extended": [
+              0,
+              1
+            ]
+          },
+          "chart_value": {
+            "standard": [
+              0,
+              2
+            ],
+            "with_extended": [
+              1,
+              2
+            ]
+          },
+          "label": {
+            "standard": [
+              0,
+              5
+            ],
+            "with_extended": [
+              2,
+              5
+            ]
+          },
+          "title": {
+            "standard": [
+              2,
+              4
+            ],
+            "with_extended": [
+              4,
+              4
+            ]
+          }
+        }
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4,
+        "by_decoy": {
+          "a01-d01": [],
+          "a01-d02": [],
+          "a01-d03": [],
+          "a01-d04": []
+        }
+      },
+      "hallucination": {
+        "claims": [
+          0,
+          12
+        ],
+        "by_track": {
+          "standard": [
+            0,
+            6
+          ],
+          "extended": [
+            0,
+            6
+          ]
+        },
+        "cues": [
+          0,
+          4
+        ]
+      },
+      "redundancy": {
+        "cues": [
+          0,
+          4
+        ],
+        "redundant_cues": [],
+        "spoken_facts_restated": [
+          0,
+          4
+        ]
+      },
+      "supplementary": {
+        "recall_tie_aware": {
+          "standard": [
+            2,
+            24
+          ],
+          "with_extended": [
+            7,
+            24
+          ]
+        },
+        "exact_tie_aware": {
+          "standard": {
+            "title": {
+              "matched": 2,
+              "of": 4
+            },
+            "chart_value": {
+              "matched": 0,
+              "of": 2
+            }
+          },
+          "with_extended": {
+            "title": {
+              "matched": 4,
+              "of": 4
+            },
+            "chart_value": {
+              "matched": 1,
+              "of": 2
+            }
+          }
+        },
+        "claims_not_in_cue_text": [
+          3,
+          12
+        ],
+        "unsupported_claims_in_cue_text": [
+          0,
+          9
+        ],
+        "decoys_absent_part": [],
+        "hallucination_voiced_text": [
+          7,
+          9
+        ],
+        "voiced_unverifiable": [
+          0,
+          9
+        ],
+        "voiced_cues_with_unsupported": [
+          2,
+          4
+        ]
+      },
+      "judge_problems": [],
+      "detail": {
+        "facts": [
+          {
+            "id": "a01-v01",
+            "kind": "title",
+            "cue_ids": [
+              "c002"
+            ],
+            "reason": "Cue c002 states the slide title exactly."
+          },
+          {
+            "id": "a01-v02",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v03",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v04",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v05",
+            "kind": "title",
+            "cue_ids": [
+              "x002"
+            ],
+            "reason": "Cue x002 mentions the slide title."
+          },
+          {
+            "id": "a01-v06",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v07",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v08",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v09",
+            "kind": "label",
+            "cue_ids": [],
+            "reason": "No cue states the chart title."
+          },
+          {
+            "id": "a01-v10",
+            "kind": "label",
+            "cue_ids": [
+              "x002"
+            ],
+            "reason": "Cue x002 includes 'per glucose' indicating the vertical axis label."
+          },
+          {
+            "id": "a01-v11",
+            "kind": "chart_value",
+            "cue_ids": [
+              "x002"
+            ],
+            "reason": "Cue x002 gives the value 36 for aerobic respiration."
+          },
+          {
+            "id": "a01-v12",
+            "kind": "title",
+            "cue_ids": [
+              "c003"
+            ],
+            "reason": "Cue c003 states the slide title exactly."
+          },
+          {
+            "id": "a01-v13",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v14",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v15",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v16",
+            "kind": "title",
+            "cue_ids": [
+              "x004"
+            ],
+            "reason": "Cue x004 mentions the slide title."
+          },
+          {
+            "id": "a01-v17",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v18",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v19",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet."
+          },
+          {
+            "id": "a01-v20",
+            "kind": "label",
+            "cue_ids": [
+              "x004"
+            ],
+            "reason": "Cue x004 describes the chart as 'ATP production over time' matching the title."
+          },
+          {
+            "id": "a01-v21",
+            "kind": "label",
+            "cue_ids": [],
+            "reason": "No cue mentions the horizontal axis label."
+          },
+          {
+            "id": "a01-v22",
+            "kind": "label",
+            "cue_ids": [],
+            "reason": "No cue mentions the vertical axis label."
+          },
+          {
+            "id": "a01-v23",
+            "kind": "chart_value",
+            "cue_ids": [],
+            "reason": "No cue provides the chart values."
+          },
+          {
+            "id": "a01-v24",
+            "kind": "chart_trend",
+            "cue_ids": [],
+            "reason": "No cue describes the chart trend."
+          }
+        ],
+        "claims": [
+          {
+            "key": "c002#1",
+            "cue": "c002",
+            "track": "standard",
+            "claim": "The slide is titled 'Energy in Living Things'.",
+            "verdict": "supported",
+            "reason": "Slide 1 title is exactly 'Energy in Living Things'."
+          },
+          {
+            "key": "c003#1",
+            "cue": "c003",
+            "track": "standard",
+            "claim": "The slide is titled Glycolysis and Krebs Cycle.",
+            "verdict": "supported",
+            "reason": "Slide 3 title is exactly 'Glycolysis and Krebs Cycle'."
+          },
+          {
+            "key": "c003#2",
+            "cue": "c003",
+            "track": "standard",
+            "claim": "The slide lists Glycolysis occurs in cytoplasm.",
+            "verdict": "supported",
+            "reason": "Slide 3 first bullet is 'Glycolysis occurs in cytoplasm'."
+          },
+          {
+            "key": "c003#3",
+            "cue": "c003",
+            "track": "standard",
+            "claim": "The slide lists Krebs cycle in mitochondrial matrix.",
+            "verdict": "supported",
+            "reason": "Slide 3 second bullet is 'Krebs cycle in mitochondrial matrix'."
+          },
+          {
+            "key": "c003#4",
+            "cue": "c003",
+            "track": "standard",
+            "claim": "The slide lists NADH and FADH2 are carriers.",
+            "verdict": "supported",
+            "reason": "Slide 3 third bullet is 'NADH and FADH2 are carriers'."
+          },
+          {
+            "key": "c003#5",
+            "cue": "c003",
+            "track": "standard",
+            "claim": "The slide lists CO2 is released as waste product.",
+            "verdict": "supported",
+            "reason": "Slide 3 fourth bullet is 'CO2 is released as waste product'."
+          },
+          {
+            "key": "x002#1",
+            "cue": "x002",
+            "track": "extended",
+            "claim": "Slide titled ATP Yield Comparison shows bar chart",
+            "verdict": "supported",
+            "reason": "Slide 2 title is 'ATP Yield Comparison' and it has a bar chart on the right half."
+          },
+          {
+            "key": "x002#2",
+            "cue": "x002",
+            "track": "extended",
+            "claim": "aerobic respiration 36 ATP",
+            "verdict": "supported",
+            "reason": "Slide 2 bar chart shows 'Aerobic' = 36 with vertical axis 'ATP per Glucose'."
+          },
+          {
+            "key": "x002#3",
+            "cue": "x002",
+            "track": "extended",
+            "claim": "anaerobic 2",
+            "verdict": "supported",
+            "reason": "Slide 2 bar chart shows 'Anaerobic' = 2."
+          },
+          {
+            "key": "x002#4",
+            "cue": "x002",
+            "track": "extended",
+            "claim": "fermentation 2",
+            "verdict": "supported",
+            "reason": "Slide 2 bar chart shows 'Fermentation' = 2."
+          },
+          {
+            "key": "x002#5",
+            "cue": "x002",
+            "track": "extended",
+            "claim": "per glucose",
+            "verdict": "supported",
+            "reason": "Slide 2 vertical-axis label is 'ATP per Glucose'."
+          },
+          {
+            "key": "x004#1",
+            "cue": "x004",
+            "track": "extended",
+            "claim": "Slide: Electron Transport Chain shows chart of ATP production over time.",
+            "verdict": "supported",
+            "reason": "Slide 4 title is 'Electron Transport Chain' and it has a line chart titled 'ATP Production Over Time'."
+          }
+        ],
+        "cues": [
+          {
+            "id": "c002",
+            "track": "standard",
+            "status": "verified",
+            "start": 6.14,
+            "text": "Energy in Living Things."
+          },
+          {
+            "id": "c003",
+            "track": "standard",
+            "status": "verified",
+            "start": 23.22,
+            "text": "Glycolysis and Krebs Cycle."
+          },
+          {
+            "id": "x002",
+            "track": "extended",
+            "status": "extended",
+            "start": 9.08,
+            "text": "Slide titled ATP Yield Comparison shows bar chart: aerobic respiration 36 ATP, anaerobic 2, fermentation 2 per glucose."
+          },
+          {
+            "id": "x004",
+            "track": "extended",
+            "status": "extended",
+            "start": 32.56,
+            "text": "Slide: Electron Transport Chain shows chart of ATP production over time."
+          }
+        ],
+        "cue_verdicts": {
+          "c002": {
+            "id": "c002",
+            "restates_narration": false
+          },
+          "c003": {
+            "id": "c003",
+            "restates_narration": false
+          },
+          "x002": {
+            "id": "x002",
+            "restates_narration": false
+          },
+          "x004": {
+            "id": "x004",
+            "restates_narration": false
+          }
+        },
+        "voiced": {
+          "c002": {
+            "statements": [
+              {
+                "text": "Energy in Living Things",
+                "verdict": "supported",
+                "reason": "The slide title on screen reads exactly 'Energy in Living Things' (0.00-12.36 s)."
+              }
+            ]
+          },
+          "c003": {
+            "statements": [
+              {
+                "text": "Glycolysis and Krebs Cycle.",
+                "verdict": "supported",
+                "reason": "The slide title reads 'Glycolysis and Krebs Cycle' exactly as stated in the on_screen facts."
+              }
+            ]
+          },
+          "x002": {
+            "statements": [
+              {
+                "text": "Slide titled ATP Yield Comparison",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide title is 'Energy in Living Things', not 'ATP Yield Comparison'."
+              },
+              {
+                "text": "shows bar chart",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide contains only bullet points; no bar chart is present."
+              },
+              {
+                "text": "aerobic respiration 36 ATP",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide does not display any ATP yield values; the listed bullets contain no numerical data."
+              },
+              {
+                "text": "anaerobic 2",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide does not display any ATP yield values; the listed bullets contain no numerical data."
+              },
+              {
+                "text": "fermentation 2 per glucose",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide does not display any ATP yield values; the listed bullets contain no numerical data."
+              }
+            ]
+          },
+          "x004": {
+            "statements": [
+              {
+                "text": "Electron Transport Chain",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide title is 'Glycolysis and Krebs Cycle', not 'Electron Transport Chain'."
+              },
+              {
+                "text": "shows chart of ATP production over time",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide displays bullet points about glycolysis and the Krebs cycle; no chart of ATP production over time is present."
+              }
+            ]
+          }
+        }
+      },
+      "second_judge": {
+        "recall": {
+          "standard": [
+            2,
+            24
+          ],
+          "with_extended": [
+            10,
+            24
+          ],
+          "timely_with_extended": [
+            2,
+            24
+          ],
+          "by_kind": {
+            "bullet": {
+              "standard": [
+                0,
+                12
+              ],
+              "with_extended": [
+                0,
+                12
+              ]
+            },
+            "chart_trend": {
+              "standard": [
+                0,
+                1
+              ],
+              "with_extended": [
+                0,
+                1
+              ]
+            },
+            "chart_value": {
+              "standard": [
+                0,
+                2
+              ],
+              "with_extended": [
+                1,
+                2
+              ]
+            },
+            "label": {
+              "standard": [
+                0,
+                5
+              ],
+              "with_extended": [
+                5,
+                5
+              ]
+            },
+            "title": {
+              "standard": [
+                2,
+                4
+              ],
+              "with_extended": [
+                4,
+                4
+              ]
+            }
+          }
+        },
+        "hallucination": {
+          "claims": [
+            0,
+            12
+          ],
+          "by_track": {
+            "standard": [
+              0,
+              6
+            ],
+            "extended": [
+              0,
+              6
+            ]
+          },
+          "cues": [
+            0,
+            4
+          ]
+        },
+        "decoys": {
+          "stated": [],
+          "of": 4,
+          "by_decoy": {
+            "a01-d01": [],
+            "a01-d02": [],
+            "a01-d03": [],
+            "a01-d04": []
+          }
+        },
+        "redundancy": {
+          "cues": [
+            0,
+            4
+          ],
+          "redundant_cues": [],
+          "spoken_facts_restated": [
+            1,
+            4
+          ]
+        },
+        "supplementary": {
+          "recall_tie_aware": {
+            "standard": [
+              2,
+              24
+            ],
+            "with_extended": [
+              10,
+              24
+            ]
+          },
+          "exact_tie_aware": {
+            "standard": {
+              "title": {
+                "matched": 2,
+                "of": 4
+              },
+              "chart_value": {
+                "matched": 0,
+                "of": 2
+              }
+            },
+            "with_extended": {
+              "title": {
+                "matched": 4,
+                "of": 4
+              },
+              "chart_value": {
+                "matched": 1,
+                "of": 2
+              }
+            }
+          },
+          "claims_not_in_cue_text": [
+            3,
+            12
+          ],
+          "unsupported_claims_in_cue_text": [
+            0,
+            9
+          ],
+          "decoys_absent_part": [],
+          "hallucination_voiced_text": [
+            5,
+            8
+          ],
+          "voiced_unverifiable": [
+            1,
+            8
+          ],
+          "voiced_cues_with_unsupported": [
+            2,
+            4
+          ]
+        },
+        "judge_problems": []
+      }
+    },
+    {
+      "id": "a02",
+      "subject": "economics",
+      "duration_s": 40.4,
+      "run_id": "suite-a-a02-20261028T011729Z",
+      "engine_fingerprint": "0.2.0+f861597faa9b7766",
+      "started_utc": "2026-10-28T01:17:29+00:00",
+      "finished_utc": null,
+      "failed": null,
+      "silence": {
+        "seconds": 19.926,
+        "pauses": 7,
+        "pauses_ge_2s": 6
+      },
+      "published": {
+        "standard": 2,
+        "extended": 1
+      },
+      "overlap_s": 0.0,
+      "extended_freeze_in_speech": [],
+      "capacity_violations": [],
+      "exact_match": {
+        "standard": {
+          "title": {
+            "matched": 1,
+            "of": 2
+          },
+          "chart_value": {
+            "matched": 0,
+            "of": 2
+          }
+        },
+        "with_extended": {
+          "title": {
+            "matched": 2,
+            "of": 2
+          },
+          "chart_value": {
+            "matched": 0,
+            "of": 2
+          }
+        }
+      },
+      "decoy_number_hits": [],
+      "cost_model_usd": 0.016844,
+      "cost_tavily_usd": 0,
+      "processing_s": 63.028,
+      "calls": 13,
+      "cue_counts": {
+        "verified": 2,
+        "edited": 0,
+        "approved": 0,
+        "held": 0,
+        "extended": 1
+      },
+      "engine_overlap_s": 0.0,
+      "engine_coverage": {
+        "important_events": 3,
+        "salient_events": 3,
+        "described": 2,
+        "ratio": 0.667,
+        "described_with_extended": 3,
+        "ratio_with_extended": 1.0,
+        "undescribed": [],
+        "repetitive": []
+      },
+      "engine_models": [
+        "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "nvidia/Nemotron-3.5-Super-VL",
+        "nvidia/Nemotron-3_5-Lightning"
+      ],
+      "extended_produced": true,
+      "recall": {
+        "standard": [
+          1,
+          17
+        ],
+        "with_extended": [
+          2,
+          17
+        ],
+        "timely_with_extended": [
+          1,
+          17
+        ],
+        "by_kind": {
+          "bullet": {
+            "standard": [
+              0,
+              9
+            ],
+            "with_extended": [
+              0,
+              9
+            ]
+          },
+          "chart_trend": {
+            "standard": [
+              0,
+              1
+            ],
+            "with_extended": [
+              0,
+              1
+            ]
+          },
+          "chart_value": {
+            "standard": [
+              0,
+              2
+            ],
+            "with_extended": [
+              0,
+              2
+            ]
+          },
+          "label": {
+            "standard": [
+              0,
+              3
+            ],
+            "with_extended": [
+              0,
+              3
+            ]
+          },
+          "title": {
+            "standard": [
+              1,
+              2
+            ],
+            "with_extended": [
+              2,
+              2
+            ]
+          }
+        }
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4,
+        "by_decoy": {
+          "a02-d01": [],
+          "a02-d02": [],
+          "a02-d03": [],
+          "a02-d04": []
+        }
+      },
+      "hallucination": {
+        "claims": [
+          0,
+          15
+        ],
+        "by_track": {
+          "standard": [
+            0,
+            10
+          ],
+          "extended": [
+            0,
+            5
+          ]
+        },
+        "cues": [
+          0,
+          3
+        ]
+      },
+      "redundancy": {
+        "cues": [
+          0,
+          3
+        ],
+        "redundant_cues": [],
+        "spoken_facts_restated": [
+          1,
+          6
+        ]
+      },
+      "supplementary": {
+        "recall_tie_aware": {
+          "standard": [
+            1,
+            17
+          ],
+          "with_extended": [
+            2,
+            17
+          ]
+        },
+        "exact_tie_aware": {
+          "standard": {
+            "title": {
+              "matched": 1,
+              "of": 2
+            },
+            "chart_value": {
+              "matched": 0,
+              "of": 2
+            }
+          },
+          "with_extended": {
+            "title": {
+              "matched": 2,
+              "of": 2
+            },
+            "chart_value": {
+              "matched": 0,
+              "of": 2
+            }
+          }
+        },
+        "claims_not_in_cue_text": [
+          11,
+          15
+        ],
+        "unsupported_claims_in_cue_text": [
+          0,
+          4
+        ],
+        "decoys_absent_part": [],
+        "hallucination_voiced_text": [
+          3,
+          5
+        ],
+        "voiced_unverifiable": [
+          0,
+          5
+        ],
+        "voiced_cues_with_unsupported": [
+          1,
+          3
+        ]
+      },
+      "judge_problems": [],
+      "detail": {
+        "facts": [
+          {
+            "id": "a02-v01",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet text."
+          },
+          {
+            "id": "a02-v02",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet text."
+          },
+          {
+            "id": "a02-v03",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "No cue mentions this bullet text."
+          },
+          {
+            "id": "a02-v04",
+            "kind": "label",
+            "cue_ids": [],
+            "reason": "No cue mentions the horizontal axis label."
+          },
+          {
+            "id": "a02-v05",
+            "kind": "label",
+            "cue_ids": [],
+            "reason": "No cue mentions the vertical axis label."
+          },
+          {
+            "id": "a02-v06",
+            "kind": "chart_value",
+            "cue_ids": [],
+            "reason": "No cue mentions any specific chart value."
+          },
+          {
+            "id": "a02-v07",
+            "kind": "chart_trend",
+            "cue_ids": [],
+            "reason": "No cue describes the chart trend."
+          },
+          {
+            "id": "a02-v08",
+            "kind": "title",
+            "cue_ids": [
+              "c003"
+            ],
+            "reason": "Cue c003 states the slide title 'Business Cycle Basics'."
+          },
+          {
+            "id": "a02-v09",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "Cue c003 only states the slide title, not the bullets."
+          },
+          {
+            "id": "a02-v10",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "Cue c003 only states the slide title, not the bullets."
+          },
+          {
+            "id": "a02-v11",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "Cue c003 only states the slide title, not the bullets."
+          },
+          {
+            "id": "a02-v12",
+            "kind": "title",
+            "cue_ids": [
+              "x003"
+            ],
+            "reason": "Cue x003 states 'Slide Unemployment Rate Comparison'."
+          },
+          {
+            "id": "a02-v13",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "Cue x003 mentions the bar chart but not this bullet text."
+          },
+          {
+            "id": "a02-v14",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "Cue x003 does not mention this bullet text."
+          },
+          {
+            "id": "a02-v15",
+            "kind": "bullet",
+            "cue_ids": [],
+            "reason": "Cue x003 does not mention this bullet text."
+          },
+          {
+            "id": "a02-v16",
+            "kind": "label",
+            "cue_ids": [],
+            "reason": "Cue x003 does not mention the vertical axis label."
+          },
+          {
+            "id": "a02-v17",
+            "kind": "chart_value",
+            "cue_ids": [],
+            "reason": "Cue x003 does not mention any specific bar value."
+          }
+        ],
+        "claims": [
+          {
+            "key": "c001#1",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "A slide titled Real GDP Over Time is shown.",
+            "verdict": "supported",
+            "reason": "Slide 1 title is exactly 'Real GDP Over Time'."
+          },
+          {
+            "key": "c001#2",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "A line graph titled Real GDP Growth is shown.",
+            "verdict": "supported",
+            "reason": "Right half shows a line chart titled 'Real GDP Growth' per slide 1 spec."
+          },
+          {
+            "key": "c001#3",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "The graph shows years 2018 to 2023 on the x-axis.",
+            "verdict": "supported",
+            "reason": "Horizontal axis categories are 2018 through 2023 as listed."
+          },
+          {
+            "key": "c001#4",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "The graph shows values in billions of dollars on the y-axis.",
+            "verdict": "supported",
+            "reason": "Vertical axis label is 'Billions of $' per slide 1."
+          },
+          {
+            "key": "c001#5",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "The graph plots values 20.5, 21, 19.6, 21.4, 22.1, and 22.8.",
+            "verdict": "supported",
+            "reason": "Values printed above points match 20.5, 21, 19.6, 21.4, 22.1, 22.8 exactly."
+          },
+          {
+            "key": "c001#6",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "Bullet points explain that Real GDP measures total output of goods and services.",
+            "verdict": "supported",
+            "reason": "First bullet point matches this wording."
+          },
+          {
+            "key": "c001#7",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "Bullet points explain that Real GDP adjusts for inflation to compare across different years.",
+            "verdict": "supported",
+            "reason": "Second bullet point matches this wording."
+          },
+          {
+            "key": "c001#8",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "Bullet points explain that Real GDP shows the general trend of economic expansion.",
+            "verdict": "supported",
+            "reason": "Third bullet point matches this wording."
+          },
+          {
+            "key": "c001#9",
+            "cue": "c001",
+            "track": "standard",
+            "claim": "Bullet points explain that Real GDP is used to determine the phase of the business cycle.",
+            "verdict": "supported",
+            "reason": "Fourth bullet point matches this wording."
+          },
+          {
+            "key": "c003#1",
+            "cue": "c003",
+            "track": "standard",
+            "claim": "Business Cycle Basics",
+            "verdict": "supported",
+            "reason": "Slide 2 title is 'Business Cycle Basics' and cue starts while that slide is on screen."
+          },
+          {
+            "key": "x003#1",
+            "cue": "x003",
+            "track": "extended",
+            "claim": "A slide titled Unemployment Rate Comparison is shown.",
+            "verdict": "supported",
+            "reason": "Slide 3 title is exactly 'Unemployment Rate Comparison'."
+          },
+          {
+            "key": "x003#2",
+            "cue": "x003",
+            "track": "extended",
+            "claim": "A bar chart titled Unemployment by Sector is shown.",
+            "verdict": "supported",
+            "reason": "Right half shows a bar chart titled 'Unemployment by Sector' per slide 3 spec."
+          },
+          {
+            "key": "x003#3",
+            "cue": "x003",
+            "track": "extended",
+            "claim": "The bar chart displays unemployment rates for Manufacturing, Services, Construction, Technology, Retail, and Agriculture.",
+            "verdict": "supported",
+            "reason": "Horizontal axis categories match the six sectors in the given order."
+          },
+          {
+            "key": "x003#4",
+            "cue": "x003",
+            "track": "extended",
+            "claim": "The chart shows Manufacturing at 4.2, Services at 3.8, Construction at 5.1, Technology at 2.9, Retail at 4.6, and Agriculture at 3.5.",
+            "verdict": "supported",
+            "reason": "Values printed above bars match 4.2, 3.8, 5.1, 2.9, 4.6, 3.5 exactly."
+          },
+          {
+            "key": "x003#5",
+            "cue": "x003",
+            "track": "extended",
+            "claim": "Bullet points on the left define unemployment rate and note it varies across sectors.",
+            "verdict": "supported",
+            "reason": "Left bullets define unemployment rate (first) and note variation across sectors (third)."
+          }
+        ],
+        "cues": [
+          {
+            "id": "c001",
+            "track": "standard",
+            "status": "verified",
+            "start": 0.2,
+            "text": "Slide Real GDP Over Time."
+          },
+          {
+            "id": "c003",
+            "track": "standard",
+            "status": "verified",
+            "start": 19.42,
+            "text": "Business Cycle Basics."
+          },
+          {
+            "id": "x003",
+            "track": "extended",
+            "status": "extended",
+            "start": 22.0,
+            "text": "Slide Unemployment Rate Comparison displays bar chart of unemployment by sector."
+          }
+        ],
+        "cue_verdicts": {
+          "c001": {
+            "id": "c001",
+            "restates_narration": false
+          },
+          "c003": {
+            "id": "c003",
+            "restates_narration": false
+          },
+          "x003": {
+            "id": "x003",
+            "restates_narration": false
+          }
+        },
+        "voiced": {
+          "c001": {
+            "statements": [
+              {
+                "text": "Real GDP Over Time",
+                "verdict": "supported",
+                "reason": "The on-screen facts confirm the slide title reads 'Real GDP Over Time' exactly, and the narrator also says it."
+              }
+            ]
+          },
+          "c003": {
+            "statements": [
+              {
+                "text": "Business Cycle Basics.",
+                "verdict": "supported",
+                "reason": "The slide title reads 'Business Cycle Basics' exactly as stated."
+              }
+            ]
+          },
+          "x003": {
+            "statements": [
+              {
+                "text": "Slide Unemployment Rate Comparison",
+                "verdict": "unsupported",
+                "reason": "The on-screen slide title is 'Business Cycle Basics', not 'Unemployment Rate Comparison'."
+              },
+              {
+                "text": "displays bar chart",
+                "verdict": "unsupported",
+                "reason": "The slide shows bullet points about business cycle phases; a bar chart is listed under 'nowhere_in_the_video'."
+              },
+              {
+                "text": "bar chart of unemployment by sector",
+                "verdict": "unsupported",
+                "reason": "No bar chart appears in the video; the slide contains only text bullets about expansion, contraction, trough, and peak."
+              }
+            ]
+          }
+        }
+      },
+      "second_judge": {
+        "recall": {
+          "standard": [
+            1,
+            17
+          ],
+          "with_extended": [
+            2,
+            17
+          ],
+          "timely_with_extended": [
+            1,
+            17
+          ],
+          "by_kind": {
+            "bullet": {
+              "standard": [
+                0,
+                9
+              ],
+              "with_extended": [
+                0,
+                9
+              ]
+            },
+            "chart_trend": {
+              "standard": [
+                0,
+                1
+              ],
+              "with_extended": [
+                0,
+                1
+              ]
+            },
+            "chart_value": {
+              "standard": [
+                0,
+                2
+              ],
+              "with_extended": [
+                0,
+                2
+              ]
+            },
+            "label": {
+              "standard": [
+                0,
+                3
+              ],
+              "with_extended": [
+                0,
+                3
+              ]
+            },
+            "title": {
+              "standard": [
+                1,
+                2
+              ],
+              "with_extended": [
+                2,
+                2
+              ]
+            }
+          }
+        },
+        "hallucination": {
+          "claims": [
+            0,
+            15
+          ],
+          "by_track": {
+            "standard": [
+              0,
+              10
+            ],
+            "extended": [
+              0,
+              5
+            ]
+          },
+          "cues": [
+            0,
+            3
+          ]
+        },
+        "decoys": {
+          "stated": [],
+          "of": 4,
+          "by_decoy": {
+            "a02-d01": [],
+            "a02-d02": [],
+            "a02-d03": [],
+            "a02-d04": []
+          }
+        },
+        "redundancy": {
+          "cues": [
+            1,
+            3
+          ],
+          "redundant_cues": [
+            "c003"
+          ],
+          "spoken_facts_restated": [
+            1,
+            6
+          ]
+        },
+        "supplementary": {
+          "recall_tie_aware": {
+            "standard": [
+              1,
+              17
+            ],
+            "with_extended": [
+              2,
+              17
+            ]
+          },
+          "exact_tie_aware": {
+            "standard": {
+              "title": {
+                "matched": 1,
+                "of": 2
+              },
+              "chart_value": {
+                "matched": 0,
+                "of": 2
+              }
+            },
+            "with_extended": {
+              "title": {
+                "matched": 2,
+                "of": 2
+              },
+              "chart_value": {
+                "matched": 0,
+                "of": 2
+              }
+            }
+          },
+          "claims_not_in_cue_text": [
+            11,
+            15
+          ],
+          "unsupported_claims_in_cue_text": [
+            0,
+            4
+          ],
+          "decoys_absent_part": [],
+          "hallucination_voiced_text": [
+            2,
+            4
+          ],
+          "voiced_unverifiable": [
+            0,
+            4
+          ],
+          "voiced_cues_with_unsupported": [
+            1,
+            3
+          ]
+        },
+        "judge_problems": []
+      }
+    }
+  ],
+  "bundle": {
+    "path": "<projects>/lull-eval\\eval\\suite_a\\out\\bundles\\suite_a_partial_20261028T022935Z.tar.gz",
+    "sha256": "5805c90084f81a02e69ed88341481c51bd219b4a5860a67ce028c22b4795b97c"
+  }
+}

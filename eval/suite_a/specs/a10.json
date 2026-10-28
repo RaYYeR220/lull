@@ -1,0 +1,328 @@
+{
+  "id": "a10",
+  "subject": "medicine",
+  "title": "Introduction to Cardiovascular Medicine",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Blood Pressure Overview",
+      "bullets": [
+        "Systolic pressure during heart contraction",
+        "Diastolic pressure during heart relaxation",
+        "Normal adult range is 120/80 mmHg",
+        "Hypertension increases stroke risk"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Blood Pressure Readings",
+        "x_label": "Pressure Type",
+        "y_label": "Pressure (mmHg)",
+        "points": [
+          {
+            "label": "Systolic",
+            "value": 120.0
+          },
+          {
+            "label": "Diastolic",
+            "value": 80.0
+          },
+          {
+            "label": "Pulse Pressure",
+            "value": 40.0
+          }
+        ]
+      },
+      "narration": [
+        "Systolic pressure occurs during heart contraction.",
+        "Systolic pressure relates to the heart's contraction phase."
+      ],
+      "pauses": [
+        2.7,
+        3.1
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Heart Function Basics",
+      "bullets": [
+        "Heart pumps ~5 liters per minute at rest",
+        "Cardiac output varies with activity level",
+        "Stroke volume depends on preload and afterload",
+        "Heart rate regulated by autonomic nervous system"
+      ],
+      "chart": null,
+      "narration": [
+        "Cardiac output varies with activity level.",
+        "Cardiac output changes based on activity level."
+      ],
+      "pauses": [
+        1.7,
+        3.3
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Heart Rate Over Time",
+      "bullets": [
+        "Resting heart rate varies by fitness level",
+        "Exercise increases heart rate significantly",
+        "Recovery rate indicates cardiovascular health",
+        "Age affects maximum heart rate capacity"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Heart Rate Changes",
+        "x_label": "Time (minutes)",
+        "y_label": "Beats per minute",
+        "points": [
+          {
+            "label": "Rest",
+            "value": 72.0
+          },
+          {
+            "label": "Exercise",
+            "value": 150.0
+          },
+          {
+            "label": "Recovery",
+            "value": 85.0
+          }
+        ]
+      },
+      "narration": [
+        "Recovery rate indicates cardiovascular health.",
+        "Recovery rate serves as a measure of cardiovascular health."
+      ],
+      "pauses": [
+        2.2,
+        3.0
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a10-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Blood Pressure Overview\".",
+      "anchor": "Blood Pressure Overview",
+      "value": null
+    },
+    {
+      "id": "a10-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Normal adult range is 120/80 mmHg\".",
+      "anchor": "Normal adult range is 120/80 mmHg",
+      "value": null
+    },
+    {
+      "id": "a10-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Hypertension increases stroke risk\".",
+      "anchor": "Hypertension increases stroke risk",
+      "value": null
+    },
+    {
+      "id": "a10-v04",
+      "slide": 1,
+      "kind": "label",
+      "text": "A bar chart is titled \"Blood Pressure Readings\".",
+      "anchor": "Blood Pressure Readings",
+      "value": null
+    },
+    {
+      "id": "a10-v05",
+      "slide": 1,
+      "kind": "chart_value",
+      "anchor": "Systolic",
+      "value": 120.0,
+      "text": "The highest value in the bar chart \"Blood Pressure Readings\" is 120, for \"Systolic\"."
+    },
+    {
+      "id": "a10-v06",
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Heart Function Basics\".",
+      "anchor": "Heart Function Basics",
+      "value": null
+    },
+    {
+      "id": "a10-v07",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Heart pumps ~5 liters per minute at rest\".",
+      "anchor": "Heart pumps ~5 liters per minute at rest",
+      "value": null
+    },
+    {
+      "id": "a10-v08",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Stroke volume depends on preload and afterload\".",
+      "anchor": "Stroke volume depends on preload and afterload",
+      "value": null
+    },
+    {
+      "id": "a10-v09",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Heart rate regulated by autonomic nervous system\".",
+      "anchor": "Heart rate regulated by autonomic nervous system",
+      "value": null
+    },
+    {
+      "id": "a10-v10",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Heart Rate Over Time\".",
+      "anchor": "Heart Rate Over Time",
+      "value": null
+    },
+    {
+      "id": "a10-v11",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Resting heart rate varies by fitness level\".",
+      "anchor": "Resting heart rate varies by fitness level",
+      "value": null
+    },
+    {
+      "id": "a10-v12",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Exercise increases heart rate significantly\".",
+      "anchor": "Exercise increases heart rate significantly",
+      "value": null
+    },
+    {
+      "id": "a10-v13",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Age affects maximum heart rate capacity\".",
+      "anchor": "Age affects maximum heart rate capacity",
+      "value": null
+    },
+    {
+      "id": "a10-v14",
+      "slide": 3,
+      "kind": "label",
+      "text": "A line chart is titled \"Heart Rate Changes\".",
+      "anchor": "Heart Rate Changes",
+      "value": null
+    },
+    {
+      "id": "a10-v15",
+      "slide": 3,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Time (minutes)\".",
+      "anchor": "Time (minutes)",
+      "value": null
+    },
+    {
+      "id": "a10-v16",
+      "slide": 3,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Beats per minute\".",
+      "anchor": "Beats per minute",
+      "value": null
+    },
+    {
+      "id": "a10-v17",
+      "slide": 3,
+      "kind": "chart_value",
+      "anchor": "Exercise",
+      "value": 150.0,
+      "text": "The highest value in the line chart \"Heart Rate Changes\" is 150, for \"Exercise\"."
+    },
+    {
+      "id": "a10-v18",
+      "slide": 3,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Heart Rate Changes\" the values end higher than they start, from \"Rest\" to \"Recovery\"."
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a10-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Systolic pressure during heart contraction\".",
+      "anchor": "Systolic pressure during heart contraction"
+    },
+    {
+      "id": "a10-s02",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Cardiac output varies with activity level\".",
+      "anchor": "Cardiac output varies with activity level"
+    },
+    {
+      "id": "a10-s03",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Recovery rate indicates cardiovascular health\".",
+      "anchor": "Recovery rate indicates cardiovascular health"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Diastolic pressure during heart relaxation\".",
+      "anchor": "Diastolic pressure during heart relaxation"
+    },
+    {
+      "slide": 1,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Pressure Type\".",
+      "anchor": "Pressure Type"
+    },
+    {
+      "slide": 1,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Pressure (mmHg)\".",
+      "anchor": "Pressure (mmHg)"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a10-d01",
+      "kind": "slide_title",
+      "text": "The slide shows a diagram of the heart chambers."
+    },
+    {
+      "id": "a10-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Stroke Volume at 75.7."
+    },
+    {
+      "id": "a10-d03",
+      "kind": "image",
+      "text": "A diagram of the electrical conduction system is shown."
+    },
+    {
+      "id": "a10-d04",
+      "kind": "bullet",
+      "text": "Beta blockers decrease heart rate as a bullet point."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 1110,
+      "attempt": 1,
+      "prompt_sha256": "f5fa9ca4c42643c793b87c75e26c723de5153e9ce7d3956776e26b17bd3b028c"
+    },
+    "narration": {
+      "seed": 1210,
+      "attempt": 1,
+      "prompt_sha256": "98e2daa8b0b0fec6d46d687048ff3fbd93d0c2d955996c020c28922a355b447f"
+    }
+  }
+}

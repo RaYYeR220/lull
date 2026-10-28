@@ -1,0 +1,390 @@
+{
+  "id": "a01",
+  "subject": "biology",
+  "title": "Cellular Respiration Overview",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Energy in Living Things",
+      "bullets": [
+        "Cells need constant energy input",
+        "ATP is the universal energy carrier",
+        "Glucose stores chemical energy",
+        "Respiration releases stored energy"
+      ],
+      "chart": null,
+      "narration": [
+        "Cells need constant energy input for survival.",
+        "Energy input allows cells to function properly."
+      ],
+      "pauses": [
+        2.4,
+        4.0
+      ]
+    },
+    {
+      "index": 2,
+      "title": "ATP Yield Comparison",
+      "bullets": [
+        "Aerobic respiration produces most ATP",
+        "Efficiency varies by substrate type",
+        "Oxygen availability affects output",
+        "Pathway steps determine yield"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "ATP Molecules Produced",
+        "x_label": "Respiration Type",
+        "y_label": "ATP per Glucose",
+        "points": [
+          {
+            "label": "Aerobic",
+            "value": 36.0
+          },
+          {
+            "label": "Anaerobic",
+            "value": 2.0
+          },
+          {
+            "label": "Fermentation",
+            "value": 2.0
+          }
+        ]
+      },
+      "narration": [
+        "Efficiency varies depending on substrate type.",
+        "Different substrates affect how efficiently energy is used."
+      ],
+      "pauses": [
+        2.4,
+        1.9
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Glycolysis and Krebs Cycle",
+      "bullets": [
+        "Glycolysis occurs in cytoplasm",
+        "Krebs cycle in mitochondrial matrix",
+        "NADH and FADH2 are carriers",
+        "CO2 is released as waste product"
+      ],
+      "chart": null,
+      "narration": [
+        "NADH and FADH2 act as carriers in the process.",
+        "These molecules transport energy carriers."
+      ],
+      "pauses": [
+        3.9,
+        3.1
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Electron Transport Chain",
+      "bullets": [
+        "Electrons passed along protein complexes",
+        "Proton gradient drives ATP synthase",
+        "Oxygen is final electron acceptor",
+        "Water is formed as byproduct"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "ATP Production Over Time",
+        "x_label": "Time (seconds)",
+        "y_label": "ATP Molecules",
+        "points": [
+          {
+            "label": "Start",
+            "value": 0.5
+          },
+          {
+            "label": "Peak",
+            "value": 30.2
+          },
+          {
+            "label": "End",
+            "value": 36.0
+          }
+        ]
+      },
+      "narration": [
+        "Water is formed as a byproduct of the process.",
+        "This occurs when electrons are transferred."
+      ],
+      "pauses": [
+        1.9,
+        3.9
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a01-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Energy in Living Things\".",
+      "anchor": "Energy in Living Things",
+      "value": null
+    },
+    {
+      "id": "a01-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"ATP is the universal energy carrier\".",
+      "anchor": "ATP is the universal energy carrier",
+      "value": null
+    },
+    {
+      "id": "a01-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Glucose stores chemical energy\".",
+      "anchor": "Glucose stores chemical energy",
+      "value": null
+    },
+    {
+      "id": "a01-v04",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Respiration releases stored energy\".",
+      "anchor": "Respiration releases stored energy",
+      "value": null
+    },
+    {
+      "id": "a01-v05",
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"ATP Yield Comparison\".",
+      "anchor": "ATP Yield Comparison",
+      "value": null
+    },
+    {
+      "id": "a01-v06",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Aerobic respiration produces most ATP\".",
+      "anchor": "Aerobic respiration produces most ATP",
+      "value": null
+    },
+    {
+      "id": "a01-v07",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Oxygen availability affects output\".",
+      "anchor": "Oxygen availability affects output",
+      "value": null
+    },
+    {
+      "id": "a01-v08",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Pathway steps determine yield\".",
+      "anchor": "Pathway steps determine yield",
+      "value": null
+    },
+    {
+      "id": "a01-v09",
+      "slide": 2,
+      "kind": "label",
+      "text": "A bar chart is titled \"ATP Molecules Produced\".",
+      "anchor": "ATP Molecules Produced",
+      "value": null
+    },
+    {
+      "id": "a01-v10",
+      "slide": 2,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"ATP per Glucose\".",
+      "anchor": "ATP per Glucose",
+      "value": null
+    },
+    {
+      "id": "a01-v11",
+      "slide": 2,
+      "kind": "chart_value",
+      "anchor": "Aerobic",
+      "value": 36.0,
+      "text": "The highest value in the bar chart \"ATP Molecules Produced\" is 36, for \"Aerobic\"."
+    },
+    {
+      "id": "a01-v12",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Glycolysis and Krebs Cycle\".",
+      "anchor": "Glycolysis and Krebs Cycle",
+      "value": null
+    },
+    {
+      "id": "a01-v13",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Glycolysis occurs in cytoplasm\".",
+      "anchor": "Glycolysis occurs in cytoplasm",
+      "value": null
+    },
+    {
+      "id": "a01-v14",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Krebs cycle in mitochondrial matrix\".",
+      "anchor": "Krebs cycle in mitochondrial matrix",
+      "value": null
+    },
+    {
+      "id": "a01-v15",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"CO2 is released as waste product\".",
+      "anchor": "CO2 is released as waste product",
+      "value": null
+    },
+    {
+      "id": "a01-v16",
+      "slide": 4,
+      "kind": "title",
+      "text": "The slide title reads \"Electron Transport Chain\".",
+      "anchor": "Electron Transport Chain",
+      "value": null
+    },
+    {
+      "id": "a01-v17",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Electrons passed along protein complexes\".",
+      "anchor": "Electrons passed along protein complexes",
+      "value": null
+    },
+    {
+      "id": "a01-v18",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Proton gradient drives ATP synthase\".",
+      "anchor": "Proton gradient drives ATP synthase",
+      "value": null
+    },
+    {
+      "id": "a01-v19",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Oxygen is final electron acceptor\".",
+      "anchor": "Oxygen is final electron acceptor",
+      "value": null
+    },
+    {
+      "id": "a01-v20",
+      "slide": 4,
+      "kind": "label",
+      "text": "A line chart is titled \"ATP Production Over Time\".",
+      "anchor": "ATP Production Over Time",
+      "value": null
+    },
+    {
+      "id": "a01-v21",
+      "slide": 4,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Time (seconds)\".",
+      "anchor": "Time (seconds)",
+      "value": null
+    },
+    {
+      "id": "a01-v22",
+      "slide": 4,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"ATP Molecules\".",
+      "anchor": "ATP Molecules",
+      "value": null
+    },
+    {
+      "id": "a01-v23",
+      "slide": 4,
+      "kind": "chart_value",
+      "anchor": "End",
+      "value": 36.0,
+      "text": "The highest value in the line chart \"ATP Production Over Time\" is 36, for \"End\"."
+    },
+    {
+      "id": "a01-v24",
+      "slide": 4,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"ATP Production Over Time\" the values rise at every step, from \"Start\" to \"End\"."
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a01-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Cells need constant energy input\".",
+      "anchor": "Cells need constant energy input"
+    },
+    {
+      "id": "a01-s02",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Efficiency varies by substrate type\".",
+      "anchor": "Efficiency varies by substrate type"
+    },
+    {
+      "id": "a01-s03",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"NADH and FADH2 are carriers\".",
+      "anchor": "NADH and FADH2 are carriers"
+    },
+    {
+      "id": "a01-s04",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Water is formed as byproduct\".",
+      "anchor": "Water is formed as byproduct"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 2,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Respiration Type\".",
+      "anchor": "Respiration Type"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a01-d01",
+      "kind": "slide_title",
+      "text": "The slide title is Photosynthesis Steps."
+    },
+    {
+      "id": "a01-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows NADH at 2.7."
+    },
+    {
+      "id": "a01-d03",
+      "kind": "image",
+      "text": "A diagram of a cell membrane is shown."
+    },
+    {
+      "id": "a01-d04",
+      "kind": "bullet",
+      "text": "Bullets appear in random order on screen."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 1101,
+      "attempt": 1,
+      "prompt_sha256": "9882355948fbc702b81a7bbfd6f6f06efa0a064c2c46bed1b62c11a383ad46b0"
+    },
+    "narration": {
+      "seed": 1201,
+      "attempt": 1,
+      "prompt_sha256": "c275192d3e222ff40b92cfec470289810e60b13c9af9dc1a3662166692402fc9"
+    }
+  }
+}

@@ -1,0 +1,4500 @@
+{
+  "file": "usgs/aquatic_connectivity_AD.mp4",
+  "sha256": "a8f24c4e7522a19ac429f36e2a6bcdf1ea92cf2bb4c58987dbad92f030baf3b6",
+  "asr_models": [
+    "parakeet-tdt-0.6b-v3.oss-align.q8_0"
+  ],
+  "request": "POST /v1/audio/transcriptions response_format=verbose_json, word timestamps (lull.speech.NemoSpeechHTTP.transcribe), 16 kHz mono PCM of audio stream 0:a:0",
+  "words": [
+    {
+      "text": "The",
+      "start": 0.0,
+      "end": 0.16
+    },
+    {
+      "text": "letters",
+      "start": 0.16,
+      "end": 0.56
+    },
+    {
+      "text": "USGS",
+      "start": 0.56,
+      "end": 1.2
+    },
+    {
+      "text": "and",
+      "start": 1.2,
+      "end": 1.36
+    },
+    {
+      "text": "Word",
+      "start": 1.36,
+      "end": 1.52
+    },
+    {
+      "text": "Science",
+      "start": 1.68,
+      "end": 1.92
+    },
+    {
+      "text": "for",
+      "start": 2.08,
+      "end": 2.24
+    },
+    {
+      "text": "a",
+      "start": 2.24,
+      "end": 2.32
+    },
+    {
+      "text": "Changing",
+      "start": 2.32,
+      "end": 2.64
+    },
+    {
+      "text": "World",
+      "start": 2.64,
+      "end": 2.8
+    },
+    {
+      "text": "appear",
+      "start": 2.96,
+      "end": 3.28
+    },
+    {
+      "text": "in",
+      "start": 3.28,
+      "end": 3.36
+    },
+    {
+      "text": "white",
+      "start": 3.36,
+      "end": 3.52
+    },
+    {
+      "text": "to",
+      "start": 3.6,
+      "end": 3.76
+    },
+    {
+      "text": "then",
+      "start": 3.76,
+      "end": 3.92
+    },
+    {
+      "text": "fade",
+      "start": 3.92,
+      "end": 4.24
+    },
+    {
+      "text": "to",
+      "start": 4.24,
+      "end": 4.4
+    },
+    {
+      "text": "black.",
+      "start": 4.4,
+      "end": 4.8
+    },
+    {
+      "text": "On",
+      "start": 4.8,
+      "end": 4.96
+    },
+    {
+      "text": "screen",
+      "start": 5.12,
+      "end": 5.52
+    },
+    {
+      "text": "text",
+      "start": 5.52,
+      "end": 5.84
+    },
+    {
+      "text": "reads",
+      "start": 5.84,
+      "end": 6.24
+    },
+    {
+      "text": "The",
+      "start": 6.4,
+      "end": 6.48
+    },
+    {
+      "text": "importance",
+      "start": 6.64,
+      "end": 6.96
+    },
+    {
+      "text": "of",
+      "start": 6.96,
+      "end": 7.12
+    },
+    {
+      "text": "aquatic",
+      "start": 7.12,
+      "end": 7.76
+    },
+    {
+      "text": "connectivity",
+      "start": 7.76,
+      "end": 8.56
+    },
+    {
+      "text": "for",
+      "start": 8.56,
+      "end": 8.72
+    },
+    {
+      "text": "maintaining",
+      "start": 8.72,
+      "end": 9.28
+    },
+    {
+      "text": "cold",
+      "start": 9.28,
+      "end": 9.52
+    },
+    {
+      "text": "water",
+      "start": 9.52,
+      "end": 9.84
+    },
+    {
+      "text": "species",
+      "start": 9.84,
+      "end": 10.32
+    },
+    {
+      "text": "in",
+      "start": 10.32,
+      "end": 10.48
+    },
+    {
+      "text": "the",
+      "start": 10.48,
+      "end": 10.72
+    },
+    {
+      "text": "face",
+      "start": 10.72,
+      "end": 10.88
+    },
+    {
+      "text": "of",
+      "start": 10.88,
+      "end": 11.04
+    },
+    {
+      "text": "climate",
+      "start": 11.04,
+      "end": 11.44
+    },
+    {
+      "text": "change,",
+      "start": 11.44,
+      "end": 11.92
+    },
+    {
+      "text": "while",
+      "start": 11.92,
+      "end": 12.16
+    },
+    {
+      "text": "a",
+      "start": 12.16,
+      "end": 12.24
+    },
+    {
+      "text": "photo",
+      "start": 12.24,
+      "end": 12.56
+    },
+    {
+      "text": "of",
+      "start": 12.56,
+      "end": 12.64
+    },
+    {
+      "text": "a",
+      "start": 12.64,
+      "end": 12.8
+    },
+    {
+      "text": "brook",
+      "start": 12.8,
+      "end": 13.12
+    },
+    {
+      "text": "trout",
+      "start": 13.12,
+      "end": 13.36
+    },
+    {
+      "text": "swims",
+      "start": 13.52,
+      "end": 13.92
+    },
+    {
+      "text": "across",
+      "start": 13.92,
+      "end": 14.24
+    },
+    {
+      "text": "the",
+      "start": 14.24,
+      "end": 14.4
+    },
+    {
+      "text": "bottom",
+      "start": 14.4,
+      "end": 14.72
+    },
+    {
+      "text": "of",
+      "start": 14.72,
+      "end": 14.8
+    },
+    {
+      "text": "the",
+      "start": 14.8,
+      "end": 14.96
+    },
+    {
+      "text": "screen",
+      "start": 14.96,
+      "end": 15.44
+    },
+    {
+      "text": "from",
+      "start": 15.44,
+      "end": 15.68
+    },
+    {
+      "text": "right",
+      "start": 15.68,
+      "end": 15.92
+    },
+    {
+      "text": "to",
+      "start": 15.92,
+      "end": 16.16
+    },
+    {
+      "text": "left.",
+      "start": 16.16,
+      "end": 17.04
+    },
+    {
+      "text": "The",
+      "start": 17.04,
+      "end": 17.28
+    },
+    {
+      "text": "scene",
+      "start": 17.28,
+      "end": 17.68
+    },
+    {
+      "text": "shows",
+      "start": 17.68,
+      "end": 18.0
+    },
+    {
+      "text": "a",
+      "start": 18.0,
+      "end": 18.08
+    },
+    {
+      "text": "drawing",
+      "start": 18.08,
+      "end": 18.4
+    },
+    {
+      "text": "of",
+      "start": 18.4,
+      "end": 18.48
+    },
+    {
+      "text": "a",
+      "start": 18.48,
+      "end": 18.64
+    },
+    {
+      "text": "stream",
+      "start": 18.64,
+      "end": 18.96
+    },
+    {
+      "text": "network",
+      "start": 18.96,
+      "end": 19.28
+    },
+    {
+      "text": "with",
+      "start": 19.28,
+      "end": 19.44
+    },
+    {
+      "text": "the",
+      "start": 19.44,
+      "end": 19.6
+    },
+    {
+      "text": "mainstem",
+      "start": 19.6,
+      "end": 20.16
+    },
+    {
+      "text": "and",
+      "start": 20.24,
+      "end": 20.4
+    },
+    {
+      "text": "tributaries",
+      "start": 20.4,
+      "end": 21.28
+    },
+    {
+      "text": "highlighted",
+      "start": 21.28,
+      "end": 21.92
+    },
+    {
+      "text": "to",
+      "start": 21.92,
+      "end": 22.08
+    },
+    {
+      "text": "illustrate",
+      "start": 22.08,
+      "end": 22.56
+    },
+    {
+      "text": "suitable",
+      "start": 22.56,
+      "end": 23.04
+    },
+    {
+      "text": "cold",
+      "start": 23.04,
+      "end": 23.28
+    },
+    {
+      "text": "water",
+      "start": 23.28,
+      "end": 23.52
+    },
+    {
+      "text": "brook",
+      "start": 23.52,
+      "end": 23.84
+    },
+    {
+      "text": "trout",
+      "start": 23.84,
+      "end": 24.0
+    },
+    {
+      "text": "habitat.",
+      "start": 24.16,
+      "end": 24.72
+    },
+    {
+      "text": "A",
+      "start": 24.72,
+      "end": 24.88
+    },
+    {
+      "text": "photo",
+      "start": 24.88,
+      "end": 25.12
+    },
+    {
+      "text": "of",
+      "start": 25.12,
+      "end": 25.2
+    },
+    {
+      "text": "a",
+      "start": 25.2,
+      "end": 25.28
+    },
+    {
+      "text": "brook",
+      "start": 25.28,
+      "end": 25.6
+    },
+    {
+      "text": "trout",
+      "start": 25.6,
+      "end": 25.84
+    },
+    {
+      "text": "swims",
+      "start": 26.0,
+      "end": 26.32
+    },
+    {
+      "text": "in",
+      "start": 26.32,
+      "end": 26.56
+    },
+    {
+      "text": "place",
+      "start": 26.56,
+      "end": 26.8
+    },
+    {
+      "text": "at",
+      "start": 26.8,
+      "end": 26.96
+    },
+    {
+      "text": "the",
+      "start": 26.96,
+      "end": 27.04
+    },
+    {
+      "text": "bottom",
+      "start": 27.04,
+      "end": 27.44
+    },
+    {
+      "text": "right",
+      "start": 27.44,
+      "end": 27.68
+    },
+    {
+      "text": "of",
+      "start": 27.68,
+      "end": 27.76
+    },
+    {
+      "text": "the",
+      "start": 27.76,
+      "end": 27.92
+    },
+    {
+      "text": "screen.",
+      "start": 27.92,
+      "end": 28.72
+    },
+    {
+      "text": "Consider",
+      "start": 28.72,
+      "end": 29.2
+    },
+    {
+      "text": "a",
+      "start": 29.2,
+      "end": 29.36
+    },
+    {
+      "text": "stream",
+      "start": 29.36,
+      "end": 29.76
+    },
+    {
+      "text": "network",
+      "start": 29.76,
+      "end": 30.16
+    },
+    {
+      "text": "that",
+      "start": 30.16,
+      "end": 30.4
+    },
+    {
+      "text": "currently",
+      "start": 30.4,
+      "end": 30.88
+    },
+    {
+      "text": "provides",
+      "start": 30.88,
+      "end": 31.2
+    },
+    {
+      "text": "cold",
+      "start": 31.2,
+      "end": 31.52
+    },
+    {
+      "text": "water",
+      "start": 31.52,
+      "end": 31.76
+    },
+    {
+      "text": "habitat",
+      "start": 31.76,
+      "end": 32.24
+    },
+    {
+      "text": "for",
+      "start": 32.24,
+      "end": 32.48
+    },
+    {
+      "text": "brook",
+      "start": 32.48,
+      "end": 32.8
+    },
+    {
+      "text": "trout",
+      "start": 32.8,
+      "end": 33.12
+    },
+    {
+      "text": "in",
+      "start": 33.36,
+      "end": 33.52
+    },
+    {
+      "text": "the",
+      "start": 33.52,
+      "end": 33.68
+    },
+    {
+      "text": "main",
+      "start": 33.68,
+      "end": 34.0
+    },
+    {
+      "text": "stem",
+      "start": 34.0,
+      "end": 34.32
+    },
+    {
+      "text": "and",
+      "start": 34.48,
+      "end": 34.64
+    },
+    {
+      "text": "its",
+      "start": 34.64,
+      "end": 34.88
+    },
+    {
+      "text": "tributaries.",
+      "start": 34.88,
+      "end": 36.16
+    },
+    {
+      "text": "The",
+      "start": 36.16,
+      "end": 36.32
+    },
+    {
+      "text": "brook",
+      "start": 36.32,
+      "end": 36.72
+    },
+    {
+      "text": "trout",
+      "start": 36.72,
+      "end": 37.04
+    },
+    {
+      "text": "population",
+      "start": 37.2,
+      "end": 37.76
+    },
+    {
+      "text": "supported",
+      "start": 37.76,
+      "end": 38.24
+    },
+    {
+      "text": "by",
+      "start": 38.24,
+      "end": 38.4
+    },
+    {
+      "text": "this",
+      "start": 38.4,
+      "end": 38.64
+    },
+    {
+      "text": "stream",
+      "start": 38.64,
+      "end": 39.04
+    },
+    {
+      "text": "network",
+      "start": 39.04,
+      "end": 39.52
+    },
+    {
+      "text": "would",
+      "start": 39.76,
+      "end": 40.0
+    },
+    {
+      "text": "exist",
+      "start": 40.0,
+      "end": 40.32
+    },
+    {
+      "text": "as",
+      "start": 40.32,
+      "end": 40.56
+    },
+    {
+      "text": "a",
+      "start": 40.56,
+      "end": 40.72
+    },
+    {
+      "text": "single,",
+      "start": 40.72,
+      "end": 41.28
+    },
+    {
+      "text": "large,",
+      "start": 41.28,
+      "end": 41.92
+    },
+    {
+      "text": "continuous",
+      "start": 41.92,
+      "end": 42.8
+    },
+    {
+      "text": "population.",
+      "start": 42.8,
+      "end": 44.08
+    },
+    {
+      "text": "A",
+      "start": 44.08,
+      "end": 44.24
+    },
+    {
+      "text": "photo",
+      "start": 44.24,
+      "end": 44.64
+    },
+    {
+      "text": "of",
+      "start": 44.64,
+      "end": 44.8
+    },
+    {
+      "text": "a",
+      "start": 44.8,
+      "end": 44.88
+    },
+    {
+      "text": "stream",
+      "start": 44.88,
+      "end": 45.28
+    },
+    {
+      "text": "bed",
+      "start": 45.28,
+      "end": 45.44
+    },
+    {
+      "text": "during",
+      "start": 45.6,
+      "end": 45.76
+    },
+    {
+      "text": "a",
+      "start": 45.76,
+      "end": 45.92
+    },
+    {
+      "text": "drought",
+      "start": 45.92,
+      "end": 46.32
+    },
+    {
+      "text": "with",
+      "start": 46.32,
+      "end": 46.48
+    },
+    {
+      "text": "low",
+      "start": 46.48,
+      "end": 46.72
+    },
+    {
+      "text": "flowing",
+      "start": 46.8,
+      "end": 47.2
+    },
+    {
+      "text": "water",
+      "start": 47.2,
+      "end": 47.52
+    },
+    {
+      "text": "appears",
+      "start": 47.52,
+      "end": 48.0
+    },
+    {
+      "text": "on",
+      "start": 48.0,
+      "end": 48.24
+    },
+    {
+      "text": "screen,",
+      "start": 48.24,
+      "end": 48.72
+    },
+    {
+      "text": "then",
+      "start": 48.72,
+      "end": 49.04
+    },
+    {
+      "text": "fades",
+      "start": 49.04,
+      "end": 49.44
+    },
+    {
+      "text": "away.",
+      "start": 49.44,
+      "end": 50.0
+    },
+    {
+      "text": "Imagine",
+      "start": 50.0,
+      "end": 50.4
+    },
+    {
+      "text": "that",
+      "start": 50.4,
+      "end": 50.64
+    },
+    {
+      "text": "in",
+      "start": 50.64,
+      "end": 50.8
+    },
+    {
+      "text": "the",
+      "start": 50.8,
+      "end": 50.88
+    },
+    {
+      "text": "future,",
+      "start": 50.88,
+      "end": 51.28
+    },
+    {
+      "text": "due",
+      "start": 51.28,
+      "end": 51.44
+    },
+    {
+      "text": "to",
+      "start": 51.44,
+      "end": 51.6
+    },
+    {
+      "text": "climate",
+      "start": 51.6,
+      "end": 52.08
+    },
+    {
+      "text": "change,",
+      "start": 52.08,
+      "end": 52.8
+    },
+    {
+      "text": "portions",
+      "start": 52.8,
+      "end": 53.2
+    },
+    {
+      "text": "of",
+      "start": 53.2,
+      "end": 53.36
+    },
+    {
+      "text": "the",
+      "start": 53.36,
+      "end": 53.52
+    },
+    {
+      "text": "stream",
+      "start": 53.52,
+      "end": 53.84
+    },
+    {
+      "text": "network",
+      "start": 53.84,
+      "end": 54.32
+    },
+    {
+      "text": "will",
+      "start": 54.32,
+      "end": 54.48
+    },
+    {
+      "text": "become",
+      "start": 54.48,
+      "end": 54.8
+    },
+    {
+      "text": "too",
+      "start": 54.8,
+      "end": 55.04
+    },
+    {
+      "text": "warm",
+      "start": 55.04,
+      "end": 55.36
+    },
+    {
+      "text": "to",
+      "start": 55.36,
+      "end": 55.6
+    },
+    {
+      "text": "serve",
+      "start": 55.6,
+      "end": 55.84
+    },
+    {
+      "text": "as",
+      "start": 55.84,
+      "end": 56.0
+    },
+    {
+      "text": "year-round",
+      "start": 56.0,
+      "end": 56.56
+    },
+    {
+      "text": "brook",
+      "start": 56.56,
+      "end": 56.88
+    },
+    {
+      "text": "trout",
+      "start": 56.88,
+      "end": 57.12
+    },
+    {
+      "text": "habitat.",
+      "start": 57.28,
+      "end": 58.0
+    },
+    {
+      "text": "Suitable",
+      "start": 58.0,
+      "end": 58.48
+    },
+    {
+      "text": "habitat",
+      "start": 58.48,
+      "end": 59.04
+    },
+    {
+      "text": "is",
+      "start": 59.04,
+      "end": 59.2
+    },
+    {
+      "text": "then",
+      "start": 59.2,
+      "end": 59.36
+    },
+    {
+      "text": "fragmented",
+      "start": 59.36,
+      "end": 60.08
+    },
+    {
+      "text": "into",
+      "start": 60.08,
+      "end": 60.32
+    },
+    {
+      "text": "smaller",
+      "start": 60.32,
+      "end": 60.8
+    },
+    {
+      "text": "pockets",
+      "start": 60.8,
+      "end": 61.2
+    },
+    {
+      "text": "of",
+      "start": 61.2,
+      "end": 61.36
+    },
+    {
+      "text": "cold",
+      "start": 61.36,
+      "end": 61.6
+    },
+    {
+      "text": "water",
+      "start": 61.6,
+      "end": 61.92
+    },
+    {
+      "text": "in",
+      "start": 61.92,
+      "end": 62.08
+    },
+    {
+      "text": "the",
+      "start": 62.08,
+      "end": 62.24
+    },
+    {
+      "text": "tributary",
+      "start": 62.24,
+      "end": 62.88
+    },
+    {
+      "text": "stream.",
+      "start": 62.88,
+      "end": 63.52
+    },
+    {
+      "text": "Arrows",
+      "start": 63.52,
+      "end": 64.0
+    },
+    {
+      "text": "appear",
+      "start": 64.0,
+      "end": 64.32
+    },
+    {
+      "text": "to",
+      "start": 64.32,
+      "end": 64.48
+    },
+    {
+      "text": "show",
+      "start": 64.48,
+      "end": 64.72
+    },
+    {
+      "text": "the",
+      "start": 64.72,
+      "end": 64.8
+    },
+    {
+      "text": "movement",
+      "start": 64.8,
+      "end": 65.12
+    },
+    {
+      "text": "between",
+      "start": 65.12,
+      "end": 65.52
+    },
+    {
+      "text": "highlighted",
+      "start": 65.52,
+      "end": 66.08
+    },
+    {
+      "text": "tributaries.",
+      "start": 66.08,
+      "end": 66.96
+    },
+    {
+      "text": "With",
+      "start": 66.96,
+      "end": 67.2
+    },
+    {
+      "text": "sufficient",
+      "start": 67.2,
+      "end": 67.68
+    },
+    {
+      "text": "movement",
+      "start": 67.68,
+      "end": 68.0
+    },
+    {
+      "text": "of",
+      "start": 68.0,
+      "end": 68.24
+    },
+    {
+      "text": "fish",
+      "start": 68.24,
+      "end": 68.56
+    },
+    {
+      "text": "among",
+      "start": 68.56,
+      "end": 68.88
+    },
+    {
+      "text": "these",
+      "start": 68.88,
+      "end": 69.12
+    },
+    {
+      "text": "pockets,",
+      "start": 69.12,
+      "end": 69.68
+    },
+    {
+      "text": "it",
+      "start": 69.68,
+      "end": 69.84
+    },
+    {
+      "text": "might",
+      "start": 69.84,
+      "end": 70.08
+    },
+    {
+      "text": "be",
+      "start": 70.08,
+      "end": 70.32
+    },
+    {
+      "text": "possible",
+      "start": 70.32,
+      "end": 70.72
+    },
+    {
+      "text": "to",
+      "start": 70.72,
+      "end": 70.96
+    },
+    {
+      "text": "maintain",
+      "start": 70.96,
+      "end": 71.6
+    },
+    {
+      "text": "one",
+      "start": 71.6,
+      "end": 71.92
+    },
+    {
+      "text": "single",
+      "start": 71.92,
+      "end": 72.48
+    },
+    {
+      "text": "population",
+      "start": 72.48,
+      "end": 72.88
+    },
+    {
+      "text": "of",
+      "start": 72.88,
+      "end": 73.04
+    },
+    {
+      "text": "brook",
+      "start": 73.04,
+      "end": 73.36
+    },
+    {
+      "text": "trout.",
+      "start": 73.36,
+      "end": 73.84
+    },
+    {
+      "text": "A",
+      "start": 73.84,
+      "end": 74.0
+    },
+    {
+      "text": "photo",
+      "start": 74.0,
+      "end": 74.32
+    },
+    {
+      "text": "appears",
+      "start": 74.32,
+      "end": 74.72
+    },
+    {
+      "text": "that",
+      "start": 74.72,
+      "end": 74.8
+    },
+    {
+      "text": "shows",
+      "start": 74.8,
+      "end": 75.12
+    },
+    {
+      "text": "a",
+      "start": 75.12,
+      "end": 75.2
+    },
+    {
+      "text": "dried",
+      "start": 75.2,
+      "end": 75.52
+    },
+    {
+      "text": "up",
+      "start": 75.6,
+      "end": 75.76
+    },
+    {
+      "text": "stream",
+      "start": 75.76,
+      "end": 76.08
+    },
+    {
+      "text": "channel",
+      "start": 76.08,
+      "end": 76.48
+    },
+    {
+      "text": "surrounded",
+      "start": 76.48,
+      "end": 76.96
+    },
+    {
+      "text": "by",
+      "start": 76.96,
+      "end": 77.12
+    },
+    {
+      "text": "vegetation",
+      "start": 77.12,
+      "end": 77.92
+    },
+    {
+      "text": "and",
+      "start": 77.92,
+      "end": 78.16
+    },
+    {
+      "text": "overhanging",
+      "start": 78.16,
+      "end": 78.88
+    },
+    {
+      "text": "trees.",
+      "start": 78.88,
+      "end": 79.44
+    },
+    {
+      "text": "Another",
+      "start": 79.44,
+      "end": 79.76
+    },
+    {
+      "text": "photo",
+      "start": 79.76,
+      "end": 80.16
+    },
+    {
+      "text": "shows",
+      "start": 80.16,
+      "end": 80.4
+    },
+    {
+      "text": "a",
+      "start": 80.4,
+      "end": 80.56
+    },
+    {
+      "text": "flooding",
+      "start": 80.56,
+      "end": 81.04
+    },
+    {
+      "text": "river",
+      "start": 81.04,
+      "end": 81.36
+    },
+    {
+      "text": "during",
+      "start": 81.36,
+      "end": 81.6
+    },
+    {
+      "text": "a",
+      "start": 81.6,
+      "end": 81.68
+    },
+    {
+      "text": "tropical",
+      "start": 81.68,
+      "end": 82.16
+    },
+    {
+      "text": "storm.",
+      "start": 82.16,
+      "end": 82.56
+    },
+    {
+      "text": "Both",
+      "start": 82.56,
+      "end": 82.8
+    },
+    {
+      "text": "photos",
+      "start": 82.8,
+      "end": 83.2
+    },
+    {
+      "text": "then",
+      "start": 83.2,
+      "end": 83.44
+    },
+    {
+      "text": "fade",
+      "start": 83.44,
+      "end": 83.76
+    },
+    {
+      "text": "away.",
+      "start": 83.76,
+      "end": 84.24
+    },
+    {
+      "text": "Otherwise,",
+      "start": 84.24,
+      "end": 84.72
+    },
+    {
+      "text": "we",
+      "start": 84.72,
+      "end": 84.88
+    },
+    {
+      "text": "are",
+      "start": 84.88,
+      "end": 85.04
+    },
+    {
+      "text": "left",
+      "start": 85.04,
+      "end": 85.28
+    },
+    {
+      "text": "with",
+      "start": 85.28,
+      "end": 85.44
+    },
+    {
+      "text": "five",
+      "start": 85.44,
+      "end": 85.76
+    },
+    {
+      "text": "smaller,",
+      "start": 85.76,
+      "end": 86.4
+    },
+    {
+      "text": "isolated",
+      "start": 86.4,
+      "end": 87.2
+    },
+    {
+      "text": "populations,",
+      "start": 87.2,
+      "end": 88.08
+    },
+    {
+      "text": "which",
+      "start": 88.08,
+      "end": 88.32
+    },
+    {
+      "text": "would",
+      "start": 88.32,
+      "end": 88.48
+    },
+    {
+      "text": "be",
+      "start": 88.48,
+      "end": 88.72
+    },
+    {
+      "text": "more",
+      "start": 88.72,
+      "end": 88.88
+    },
+    {
+      "text": "vulnerable",
+      "start": 88.88,
+      "end": 89.36
+    },
+    {
+      "text": "to",
+      "start": 89.36,
+      "end": 89.52
+    },
+    {
+      "text": "the",
+      "start": 89.52,
+      "end": 89.6
+    },
+    {
+      "text": "loss",
+      "start": 89.6,
+      "end": 89.84
+    },
+    {
+      "text": "of",
+      "start": 89.84,
+      "end": 90.0
+    },
+    {
+      "text": "genetic",
+      "start": 90.0,
+      "end": 90.48
+    },
+    {
+      "text": "diversity",
+      "start": 90.48,
+      "end": 91.12
+    },
+    {
+      "text": "over",
+      "start": 91.12,
+      "end": 91.44
+    },
+    {
+      "text": "time",
+      "start": 91.44,
+      "end": 91.68
+    },
+    {
+      "text": "or",
+      "start": 91.84,
+      "end": 92.08
+    },
+    {
+      "text": "extinction",
+      "start": 92.08,
+      "end": 92.72
+    },
+    {
+      "text": "due",
+      "start": 92.72,
+      "end": 92.88
+    },
+    {
+      "text": "to",
+      "start": 92.88,
+      "end": 93.04
+    },
+    {
+      "text": "random",
+      "start": 93.04,
+      "end": 93.36
+    },
+    {
+      "text": "events",
+      "start": 93.36,
+      "end": 93.76
+    },
+    {
+      "text": "such",
+      "start": 93.84,
+      "end": 94.0
+    },
+    {
+      "text": "as",
+      "start": 94.0,
+      "end": 94.16
+    },
+    {
+      "text": "droughts,",
+      "start": 94.16,
+      "end": 94.8
+    },
+    {
+      "text": "floods,",
+      "start": 94.8,
+      "end": 95.44
+    },
+    {
+      "text": "or",
+      "start": 95.44,
+      "end": 95.68
+    },
+    {
+      "text": "human-caused",
+      "start": 95.68,
+      "end": 96.32
+    },
+    {
+      "text": "degradation.",
+      "start": 96.48,
+      "end": 97.6
+    },
+    {
+      "text": "With",
+      "start": 97.6,
+      "end": 97.92
+    },
+    {
+      "text": "occasional",
+      "start": 97.92,
+      "end": 98.48
+    },
+    {
+      "text": "movements",
+      "start": 98.48,
+      "end": 98.96
+    },
+    {
+      "text": "of",
+      "start": 98.96,
+      "end": 99.2
+    },
+    {
+      "text": "fish",
+      "start": 99.2,
+      "end": 99.52
+    },
+    {
+      "text": "from",
+      "start": 99.52,
+      "end": 99.76
+    },
+    {
+      "text": "one",
+      "start": 99.76,
+      "end": 100.0
+    },
+    {
+      "text": "population",
+      "start": 100.0,
+      "end": 100.56
+    },
+    {
+      "text": "to",
+      "start": 100.56,
+      "end": 100.72
+    },
+    {
+      "text": "another,",
+      "start": 100.72,
+      "end": 101.36
+    },
+    {
+      "text": "the",
+      "start": 101.36,
+      "end": 101.6
+    },
+    {
+      "text": "individual",
+      "start": 101.6,
+      "end": 102.24
+    },
+    {
+      "text": "populations",
+      "start": 102.24,
+      "end": 102.88
+    },
+    {
+      "text": "can",
+      "start": 102.96,
+      "end": 103.12
+    },
+    {
+      "text": "be",
+      "start": 103.12,
+      "end": 103.36
+    },
+    {
+      "text": "linked",
+      "start": 103.36,
+      "end": 103.76
+    },
+    {
+      "text": "together",
+      "start": 103.76,
+      "end": 104.16
+    },
+    {
+      "text": "to",
+      "start": 104.16,
+      "end": 104.4
+    },
+    {
+      "text": "form",
+      "start": 104.4,
+      "end": 104.64
+    },
+    {
+      "text": "a",
+      "start": 104.64,
+      "end": 104.88
+    },
+    {
+      "text": "larger",
+      "start": 104.88,
+      "end": 105.28
+    },
+    {
+      "text": "regional",
+      "start": 105.52,
+      "end": 106.16
+    },
+    {
+      "text": "population.",
+      "start": 106.16,
+      "end": 107.04
+    },
+    {
+      "text": "Aquatic",
+      "start": 107.04,
+      "end": 107.68
+    },
+    {
+      "text": "connectivity",
+      "start": 107.68,
+      "end": 108.4
+    },
+    {
+      "text": "would",
+      "start": 108.4,
+      "end": 108.56
+    },
+    {
+      "text": "then",
+      "start": 108.56,
+      "end": 108.72
+    },
+    {
+      "text": "allow",
+      "start": 108.72,
+      "end": 109.12
+    },
+    {
+      "text": "movement",
+      "start": 109.12,
+      "end": 109.6
+    },
+    {
+      "text": "of",
+      "start": 109.6,
+      "end": 109.92
+    },
+    {
+      "text": "surplus",
+      "start": 109.92,
+      "end": 110.48
+    },
+    {
+      "text": "fish",
+      "start": 110.48,
+      "end": 110.8
+    },
+    {
+      "text": "from",
+      "start": 110.8,
+      "end": 111.04
+    },
+    {
+      "text": "one",
+      "start": 111.04,
+      "end": 111.36
+    },
+    {
+      "text": "population",
+      "start": 111.36,
+      "end": 112.0
+    },
+    {
+      "text": "to",
+      "start": 112.16,
+      "end": 112.48
+    },
+    {
+      "text": "other",
+      "start": 112.48,
+      "end": 112.8
+    },
+    {
+      "text": "populations",
+      "start": 112.8,
+      "end": 113.36
+    },
+    {
+      "text": "that",
+      "start": 113.36,
+      "end": 113.52
+    },
+    {
+      "text": "are",
+      "start": 113.52,
+      "end": 113.68
+    },
+    {
+      "text": "unable",
+      "start": 113.68,
+      "end": 114.08
+    },
+    {
+      "text": "to",
+      "start": 114.08,
+      "end": 114.24
+    },
+    {
+      "text": "maintain",
+      "start": 114.24,
+      "end": 114.8
+    },
+    {
+      "text": "stable",
+      "start": 114.8,
+      "end": 115.12
+    },
+    {
+      "text": "numbers",
+      "start": 115.12,
+      "end": 115.52
+    },
+    {
+      "text": "on",
+      "start": 115.52,
+      "end": 115.84
+    },
+    {
+      "text": "their",
+      "start": 115.84,
+      "end": 116.16
+    },
+    {
+      "text": "own.",
+      "start": 116.16,
+      "end": 117.04
+    },
+    {
+      "text": "These",
+      "start": 117.04,
+      "end": 117.44
+    },
+    {
+      "text": "occasional",
+      "start": 117.44,
+      "end": 118.08
+    },
+    {
+      "text": "movements",
+      "start": 118.08,
+      "end": 118.64
+    },
+    {
+      "text": "among",
+      "start": 118.64,
+      "end": 119.12
+    },
+    {
+      "text": "populations",
+      "start": 119.12,
+      "end": 119.76
+    },
+    {
+      "text": "also",
+      "start": 119.84,
+      "end": 120.08
+    },
+    {
+      "text": "facilitate",
+      "start": 120.08,
+      "end": 120.64
+    },
+    {
+      "text": "gene",
+      "start": 120.8,
+      "end": 121.28
+    },
+    {
+      "text": "flow",
+      "start": 121.28,
+      "end": 121.6
+    },
+    {
+      "text": "that",
+      "start": 121.76,
+      "end": 122.0
+    },
+    {
+      "text": "can",
+      "start": 122.0,
+      "end": 122.16
+    },
+    {
+      "text": "help",
+      "start": 122.16,
+      "end": 122.48
+    },
+    {
+      "text": "maintain",
+      "start": 122.48,
+      "end": 122.8
+    },
+    {
+      "text": "healthy",
+      "start": 122.8,
+      "end": 123.28
+    },
+    {
+      "text": "genetics",
+      "start": 123.28,
+      "end": 124.0
+    },
+    {
+      "text": "over",
+      "start": 124.0,
+      "end": 124.32
+    },
+    {
+      "text": "time.",
+      "start": 124.32,
+      "end": 125.04
+    },
+    {
+      "text": "They",
+      "start": 125.04,
+      "end": 125.44
+    },
+    {
+      "text": "also",
+      "start": 125.44,
+      "end": 125.68
+    },
+    {
+      "text": "provide",
+      "start": 125.68,
+      "end": 126.0
+    },
+    {
+      "text": "a",
+      "start": 126.0,
+      "end": 126.16
+    },
+    {
+      "text": "mechanism",
+      "start": 126.16,
+      "end": 126.64
+    },
+    {
+      "text": "for",
+      "start": 126.64,
+      "end": 126.88
+    },
+    {
+      "text": "colonizing",
+      "start": 126.88,
+      "end": 127.6
+    },
+    {
+      "text": "habitat",
+      "start": 127.6,
+      "end": 128.16
+    },
+    {
+      "text": "made",
+      "start": 128.16,
+      "end": 128.48
+    },
+    {
+      "text": "vacant",
+      "start": 128.48,
+      "end": 129.04
+    },
+    {
+      "text": "by",
+      "start": 129.04,
+      "end": 129.2
+    },
+    {
+      "text": "the",
+      "start": 129.2,
+      "end": 129.36
+    },
+    {
+      "text": "extinction",
+      "start": 129.36,
+      "end": 129.92
+    },
+    {
+      "text": "of",
+      "start": 129.92,
+      "end": 130.08
+    },
+    {
+      "text": "a",
+      "start": 130.08,
+      "end": 130.24
+    },
+    {
+      "text": "local",
+      "start": 130.24,
+      "end": 130.64
+    },
+    {
+      "text": "population.",
+      "start": 130.64,
+      "end": 131.52
+    },
+    {
+      "text": "A",
+      "start": 131.52,
+      "end": 131.68
+    },
+    {
+      "text": "photo",
+      "start": 131.68,
+      "end": 132.08
+    },
+    {
+      "text": "appears",
+      "start": 132.08,
+      "end": 132.56
+    },
+    {
+      "text": "showing",
+      "start": 132.56,
+      "end": 132.88
+    },
+    {
+      "text": "a",
+      "start": 132.88,
+      "end": 132.96
+    },
+    {
+      "text": "dried",
+      "start": 132.96,
+      "end": 133.36
+    },
+    {
+      "text": "up",
+      "start": 133.44,
+      "end": 133.68
+    },
+    {
+      "text": "river",
+      "start": 133.68,
+      "end": 134.0
+    },
+    {
+      "text": "that",
+      "start": 134.0,
+      "end": 134.16
+    },
+    {
+      "text": "flows",
+      "start": 134.16,
+      "end": 134.64
+    },
+    {
+      "text": "beneath",
+      "start": 134.64,
+      "end": 134.96
+    },
+    {
+      "text": "a",
+      "start": 134.96,
+      "end": 135.12
+    },
+    {
+      "text": "road",
+      "start": 135.12,
+      "end": 135.44
+    },
+    {
+      "text": "bridge.",
+      "start": 135.44,
+      "end": 135.92
+    },
+    {
+      "text": "Then",
+      "start": 135.92,
+      "end": 136.16
+    },
+    {
+      "text": "it",
+      "start": 136.16,
+      "end": 136.32
+    },
+    {
+      "text": "disappears.",
+      "start": 136.32,
+      "end": 137.12
+    },
+    {
+      "text": "Two",
+      "start": 137.12,
+      "end": 137.36
+    },
+    {
+      "text": "tributaries",
+      "start": 137.36,
+      "end": 138.08
+    },
+    {
+      "text": "are",
+      "start": 138.08,
+      "end": 138.24
+    },
+    {
+      "text": "highlighted",
+      "start": 138.24,
+      "end": 138.72
+    },
+    {
+      "text": "in",
+      "start": 138.72,
+      "end": 138.8
+    },
+    {
+      "text": "the",
+      "start": 138.8,
+      "end": 138.96
+    },
+    {
+      "text": "stream",
+      "start": 138.96,
+      "end": 139.36
+    },
+    {
+      "text": "network",
+      "start": 139.36,
+      "end": 139.84
+    },
+    {
+      "text": "drawing,",
+      "start": 139.84,
+      "end": 140.24
+    },
+    {
+      "text": "while",
+      "start": 140.24,
+      "end": 140.48
+    },
+    {
+      "text": "the",
+      "start": 140.48,
+      "end": 140.64
+    },
+    {
+      "text": "three",
+      "start": 140.64,
+      "end": 140.88
+    },
+    {
+      "text": "remaining",
+      "start": 140.88,
+      "end": 141.28
+    },
+    {
+      "text": "tributaries",
+      "start": 141.28,
+      "end": 142.0
+    },
+    {
+      "text": "are",
+      "start": 142.0,
+      "end": 142.24
+    },
+    {
+      "text": "not",
+      "start": 142.24,
+      "end": 142.4
+    },
+    {
+      "text": "highlighted",
+      "start": 142.4,
+      "end": 142.96
+    },
+    {
+      "text": "to",
+      "start": 143.04,
+      "end": 143.2
+    },
+    {
+      "text": "show",
+      "start": 143.2,
+      "end": 143.52
+    },
+    {
+      "text": "unoccupied",
+      "start": 143.52,
+      "end": 144.24
+    },
+    {
+      "text": "habitat.",
+      "start": 144.24,
+      "end": 144.96
+    },
+    {
+      "text": "Over",
+      "start": 144.96,
+      "end": 145.28
+    },
+    {
+      "text": "time,",
+      "start": 145.28,
+      "end": 145.52
+    },
+    {
+      "text": "it",
+      "start": 145.52,
+      "end": 145.68
+    },
+    {
+      "text": "is",
+      "start": 145.68,
+      "end": 145.84
+    },
+    {
+      "text": "likely",
+      "start": 145.84,
+      "end": 146.16
+    },
+    {
+      "text": "that",
+      "start": 146.16,
+      "end": 146.4
+    },
+    {
+      "text": "some",
+      "start": 146.4,
+      "end": 146.64
+    },
+    {
+      "text": "event,",
+      "start": 146.64,
+      "end": 147.2
+    },
+    {
+      "text": "such",
+      "start": 147.2,
+      "end": 147.44
+    },
+    {
+      "text": "as",
+      "start": 147.44,
+      "end": 147.6
+    },
+    {
+      "text": "an",
+      "start": 147.6,
+      "end": 147.76
+    },
+    {
+      "text": "extended",
+      "start": 147.76,
+      "end": 148.32
+    },
+    {
+      "text": "drought,",
+      "start": 148.32,
+      "end": 149.12
+    },
+    {
+      "text": "would",
+      "start": 149.12,
+      "end": 149.36
+    },
+    {
+      "text": "cause",
+      "start": 149.36,
+      "end": 149.68
+    },
+    {
+      "text": "the",
+      "start": 149.68,
+      "end": 149.76
+    },
+    {
+      "text": "loss",
+      "start": 149.76,
+      "end": 150.08
+    },
+    {
+      "text": "of",
+      "start": 150.08,
+      "end": 150.24
+    },
+    {
+      "text": "one",
+      "start": 150.24,
+      "end": 150.4
+    },
+    {
+      "text": "or",
+      "start": 150.4,
+      "end": 150.64
+    },
+    {
+      "text": "more",
+      "start": 150.64,
+      "end": 150.8
+    },
+    {
+      "text": "of",
+      "start": 150.8,
+      "end": 150.88
+    },
+    {
+      "text": "the",
+      "start": 150.88,
+      "end": 151.04
+    },
+    {
+      "text": "small",
+      "start": 151.04,
+      "end": 151.52
+    },
+    {
+      "text": "local",
+      "start": 151.52,
+      "end": 151.84
+    },
+    {
+      "text": "brook",
+      "start": 151.84,
+      "end": 152.24
+    },
+    {
+      "text": "trout",
+      "start": 152.24,
+      "end": 152.56
+    },
+    {
+      "text": "populations.",
+      "start": 152.8,
+      "end": 154.08
+    },
+    {
+      "text": "When",
+      "start": 154.08,
+      "end": 154.48
+    },
+    {
+      "text": "normal",
+      "start": 154.48,
+      "end": 154.88
+    },
+    {
+      "text": "conditions",
+      "start": 154.88,
+      "end": 155.36
+    },
+    {
+      "text": "return,",
+      "start": 155.36,
+      "end": 155.92
+    },
+    {
+      "text": "areas",
+      "start": 155.92,
+      "end": 156.32
+    },
+    {
+      "text": "of",
+      "start": 156.32,
+      "end": 156.48
+    },
+    {
+      "text": "suitable",
+      "start": 156.48,
+      "end": 156.88
+    },
+    {
+      "text": "cold",
+      "start": 156.88,
+      "end": 157.2
+    },
+    {
+      "text": "water",
+      "start": 157.2,
+      "end": 157.44
+    },
+    {
+      "text": "habitat",
+      "start": 157.44,
+      "end": 158.16
+    },
+    {
+      "text": "would",
+      "start": 158.16,
+      "end": 158.32
+    },
+    {
+      "text": "be",
+      "start": 158.32,
+      "end": 158.48
+    },
+    {
+      "text": "vacant.",
+      "start": 158.48,
+      "end": 159.28
+    },
+    {
+      "text": "Arrows",
+      "start": 159.28,
+      "end": 159.76
+    },
+    {
+      "text": "appear",
+      "start": 159.76,
+      "end": 160.08
+    },
+    {
+      "text": "to",
+      "start": 160.08,
+      "end": 160.24
+    },
+    {
+      "text": "show",
+      "start": 160.24,
+      "end": 160.48
+    },
+    {
+      "text": "the",
+      "start": 160.48,
+      "end": 160.64
+    },
+    {
+      "text": "movement",
+      "start": 160.64,
+      "end": 160.96
+    },
+    {
+      "text": "between",
+      "start": 160.96,
+      "end": 161.36
+    },
+    {
+      "text": "two",
+      "start": 161.36,
+      "end": 161.52
+    },
+    {
+      "text": "highlighted",
+      "start": 161.52,
+      "end": 162.16
+    },
+    {
+      "text": "tributaries",
+      "start": 162.16,
+      "end": 163.12
+    },
+    {
+      "text": "and",
+      "start": 163.12,
+      "end": 163.44
+    },
+    {
+      "text": "three",
+      "start": 163.44,
+      "end": 163.92
+    },
+    {
+      "text": "not",
+      "start": 163.92,
+      "end": 164.24
+    },
+    {
+      "text": "highlighted",
+      "start": 164.24,
+      "end": 164.8
+    },
+    {
+      "text": "tributaries.",
+      "start": 164.8,
+      "end": 165.6
+    },
+    {
+      "text": "Aquatic",
+      "start": 165.6,
+      "end": 166.08
+    },
+    {
+      "text": "connectivity",
+      "start": 166.08,
+      "end": 166.72
+    },
+    {
+      "text": "allows",
+      "start": 166.72,
+      "end": 167.12
+    },
+    {
+      "text": "fish",
+      "start": 167.12,
+      "end": 167.44
+    },
+    {
+      "text": "from",
+      "start": 167.44,
+      "end": 167.68
+    },
+    {
+      "text": "occupied",
+      "start": 167.68,
+      "end": 168.32
+    },
+    {
+      "text": "habitat",
+      "start": 168.32,
+      "end": 169.2
+    },
+    {
+      "text": "to",
+      "start": 169.2,
+      "end": 169.44
+    },
+    {
+      "text": "reach",
+      "start": 169.44,
+      "end": 169.84
+    },
+    {
+      "text": "areas",
+      "start": 169.84,
+      "end": 170.32
+    },
+    {
+      "text": "of",
+      "start": 170.32,
+      "end": 170.48
+    },
+    {
+      "text": "vacant",
+      "start": 170.48,
+      "end": 170.96
+    },
+    {
+      "text": "cold",
+      "start": 170.96,
+      "end": 171.2
+    },
+    {
+      "text": "water",
+      "start": 171.2,
+      "end": 171.44
+    },
+    {
+      "text": "habitat.",
+      "start": 171.44,
+      "end": 172.08
+    },
+    {
+      "text": "Two",
+      "start": 172.08,
+      "end": 172.32
+    },
+    {
+      "text": "of",
+      "start": 172.32,
+      "end": 172.4
+    },
+    {
+      "text": "the",
+      "start": 172.4,
+      "end": 172.56
+    },
+    {
+      "text": "three",
+      "start": 172.56,
+      "end": 172.8
+    },
+    {
+      "text": "not",
+      "start": 172.8,
+      "end": 173.04
+    },
+    {
+      "text": "highlighted",
+      "start": 173.04,
+      "end": 173.6
+    },
+    {
+      "text": "tributaries",
+      "start": 173.6,
+      "end": 174.4
+    },
+    {
+      "text": "are",
+      "start": 174.4,
+      "end": 174.64
+    },
+    {
+      "text": "now",
+      "start": 174.64,
+      "end": 174.88
+    },
+    {
+      "text": "highlighted.",
+      "start": 174.88,
+      "end": 175.84
+    },
+    {
+      "text": "The",
+      "start": 175.84,
+      "end": 176.0
+    },
+    {
+      "text": "movements",
+      "start": 176.0,
+      "end": 176.48
+    },
+    {
+      "text": "of",
+      "start": 176.48,
+      "end": 176.72
+    },
+    {
+      "text": "fish",
+      "start": 176.72,
+      "end": 177.12
+    },
+    {
+      "text": "among",
+      "start": 177.12,
+      "end": 177.44
+    },
+    {
+      "text": "cold",
+      "start": 177.44,
+      "end": 177.68
+    },
+    {
+      "text": "water",
+      "start": 177.68,
+      "end": 178.0
+    },
+    {
+      "text": "habitat",
+      "start": 178.0,
+      "end": 178.64
+    },
+    {
+      "text": "pockets",
+      "start": 178.64,
+      "end": 179.28
+    },
+    {
+      "text": "allows",
+      "start": 179.28,
+      "end": 179.76
+    },
+    {
+      "text": "for",
+      "start": 179.76,
+      "end": 179.92
+    },
+    {
+      "text": "the",
+      "start": 179.92,
+      "end": 180.0
+    },
+    {
+      "text": "re-establishment",
+      "start": 180.0,
+      "end": 180.72
+    },
+    {
+      "text": "of",
+      "start": 180.72,
+      "end": 180.88
+    },
+    {
+      "text": "brook",
+      "start": 180.88,
+      "end": 181.28
+    },
+    {
+      "text": "trout",
+      "start": 181.28,
+      "end": 181.52
+    },
+    {
+      "text": "populations",
+      "start": 181.76,
+      "end": 182.4
+    },
+    {
+      "text": "in",
+      "start": 182.4,
+      "end": 182.56
+    },
+    {
+      "text": "some",
+      "start": 182.56,
+      "end": 182.72
+    },
+    {
+      "text": "of",
+      "start": 182.72,
+      "end": 182.88
+    },
+    {
+      "text": "the",
+      "start": 182.88,
+      "end": 183.04
+    },
+    {
+      "text": "areas",
+      "start": 183.04,
+      "end": 183.44
+    },
+    {
+      "text": "that",
+      "start": 183.44,
+      "end": 183.68
+    },
+    {
+      "text": "were",
+      "start": 183.68,
+      "end": 183.84
+    },
+    {
+      "text": "previously",
+      "start": 183.84,
+      "end": 184.4
+    },
+    {
+      "text": "vacant.",
+      "start": 184.4,
+      "end": 185.04
+    },
+    {
+      "text": "A",
+      "start": 185.04,
+      "end": 185.2
+    },
+    {
+      "text": "new",
+      "start": 185.2,
+      "end": 185.44
+    },
+    {
+      "text": "arrow",
+      "start": 185.44,
+      "end": 185.84
+    },
+    {
+      "text": "appears",
+      "start": 185.84,
+      "end": 186.32
+    },
+    {
+      "text": "showing",
+      "start": 186.4,
+      "end": 186.8
+    },
+    {
+      "text": "movement",
+      "start": 186.8,
+      "end": 187.12
+    },
+    {
+      "text": "from",
+      "start": 187.12,
+      "end": 187.28
+    },
+    {
+      "text": "a",
+      "start": 187.28,
+      "end": 187.44
+    },
+    {
+      "text": "highlighted",
+      "start": 187.44,
+      "end": 188.08
+    },
+    {
+      "text": "tributary",
+      "start": 188.08,
+      "end": 188.96
+    },
+    {
+      "text": "to",
+      "start": 188.96,
+      "end": 189.12
+    },
+    {
+      "text": "the",
+      "start": 189.12,
+      "end": 189.36
+    },
+    {
+      "text": "last",
+      "start": 189.36,
+      "end": 189.68
+    },
+    {
+      "text": "not",
+      "start": 189.68,
+      "end": 189.92
+    },
+    {
+      "text": "highlighted",
+      "start": 189.92,
+      "end": 190.48
+    },
+    {
+      "text": "tributary.",
+      "start": 190.48,
+      "end": 191.12
+    },
+    {
+      "text": "This",
+      "start": 191.12,
+      "end": 191.28
+    },
+    {
+      "text": "last",
+      "start": 191.28,
+      "end": 191.52
+    },
+    {
+      "text": "tributary",
+      "start": 191.52,
+      "end": 192.24
+    },
+    {
+      "text": "has",
+      "start": 192.24,
+      "end": 192.4
+    },
+    {
+      "text": "now",
+      "start": 192.4,
+      "end": 192.56
+    },
+    {
+      "text": "become",
+      "start": 192.56,
+      "end": 192.8
+    },
+    {
+      "text": "highlighted.",
+      "start": 192.8,
+      "end": 193.6
+    },
+    {
+      "text": "Newly",
+      "start": 193.6,
+      "end": 194.0
+    },
+    {
+      "text": "re-established",
+      "start": 194.0,
+      "end": 194.8
+    },
+    {
+      "text": "populations",
+      "start": 194.8,
+      "end": 195.44
+    },
+    {
+      "text": "can",
+      "start": 195.44,
+      "end": 195.68
+    },
+    {
+      "text": "then",
+      "start": 195.68,
+      "end": 195.84
+    },
+    {
+      "text": "serve",
+      "start": 195.84,
+      "end": 196.16
+    },
+    {
+      "text": "as",
+      "start": 196.16,
+      "end": 196.32
+    },
+    {
+      "text": "stepping",
+      "start": 196.32,
+      "end": 196.88
+    },
+    {
+      "text": "stones,",
+      "start": 196.88,
+      "end": 197.52
+    },
+    {
+      "text": "allowing",
+      "start": 197.52,
+      "end": 198.0
+    },
+    {
+      "text": "brook",
+      "start": 198.0,
+      "end": 198.32
+    },
+    {
+      "text": "trout",
+      "start": 198.32,
+      "end": 198.56
+    },
+    {
+      "text": "to",
+      "start": 198.64,
+      "end": 198.72
+    },
+    {
+      "text": "recolonize",
+      "start": 198.72,
+      "end": 199.52
+    },
+    {
+      "text": "more",
+      "start": 199.52,
+      "end": 199.76
+    },
+    {
+      "text": "distant",
+      "start": 199.76,
+      "end": 200.16
+    },
+    {
+      "text": "areas",
+      "start": 200.16,
+      "end": 200.56
+    },
+    {
+      "text": "of",
+      "start": 200.56,
+      "end": 200.72
+    },
+    {
+      "text": "vacant",
+      "start": 200.72,
+      "end": 201.2
+    },
+    {
+      "text": "habitat.",
+      "start": 201.2,
+      "end": 201.92
+    },
+    {
+      "text": "These",
+      "start": 201.92,
+      "end": 202.16
+    },
+    {
+      "text": "dynamics,",
+      "start": 202.16,
+      "end": 203.36
+    },
+    {
+      "text": "supplementation",
+      "start": 203.36,
+      "end": 204.16
+    },
+    {
+      "text": "of",
+      "start": 204.16,
+      "end": 204.32
+    },
+    {
+      "text": "one",
+      "start": 204.32,
+      "end": 204.56
+    },
+    {
+      "text": "population",
+      "start": 204.56,
+      "end": 205.12
+    },
+    {
+      "text": "by",
+      "start": 205.12,
+      "end": 205.36
+    },
+    {
+      "text": "another,",
+      "start": 205.36,
+      "end": 206.32
+    },
+    {
+      "text": "gene",
+      "start": 206.32,
+      "end": 206.88
+    },
+    {
+      "text": "flow,",
+      "start": 206.88,
+      "end": 207.52
+    },
+    {
+      "text": "and",
+      "start": 207.52,
+      "end": 207.76
+    },
+    {
+      "text": "recolonization",
+      "start": 207.76,
+      "end": 209.12
+    },
+    {
+      "text": "make",
+      "start": 209.44,
+      "end": 209.76
+    },
+    {
+      "text": "regional",
+      "start": 209.76,
+      "end": 210.32
+    },
+    {
+      "text": "populations",
+      "start": 210.32,
+      "end": 210.88
+    },
+    {
+      "text": "more",
+      "start": 210.88,
+      "end": 211.12
+    },
+    {
+      "text": "resilient",
+      "start": 211.12,
+      "end": 211.68
+    },
+    {
+      "text": "to",
+      "start": 211.68,
+      "end": 211.84
+    },
+    {
+      "text": "climate",
+      "start": 211.84,
+      "end": 212.24
+    },
+    {
+      "text": "change",
+      "start": 212.24,
+      "end": 212.64
+    },
+    {
+      "text": "than",
+      "start": 212.64,
+      "end": 212.88
+    },
+    {
+      "text": "single",
+      "start": 212.88,
+      "end": 213.28
+    },
+    {
+      "text": "isolated",
+      "start": 213.36,
+      "end": 214.24
+    },
+    {
+      "text": "populations.",
+      "start": 214.24,
+      "end": 215.68
+    },
+    {
+      "text": "This",
+      "start": 215.68,
+      "end": 216.0
+    },
+    {
+      "text": "aquatic",
+      "start": 216.0,
+      "end": 216.56
+    },
+    {
+      "text": "connectivity",
+      "start": 216.56,
+      "end": 217.2
+    },
+    {
+      "text": "is",
+      "start": 217.2,
+      "end": 217.28
+    },
+    {
+      "text": "an",
+      "start": 217.28,
+      "end": 217.44
+    },
+    {
+      "text": "essential",
+      "start": 217.44,
+      "end": 217.92
+    },
+    {
+      "text": "mechanism",
+      "start": 217.92,
+      "end": 218.48
+    },
+    {
+      "text": "for",
+      "start": 218.48,
+      "end": 218.72
+    },
+    {
+      "text": "maintaining",
+      "start": 218.72,
+      "end": 219.28
+    },
+    {
+      "text": "populations",
+      "start": 219.28,
+      "end": 219.76
+    },
+    {
+      "text": "of",
+      "start": 219.76,
+      "end": 220.0
+    },
+    {
+      "text": "aquatic",
+      "start": 220.0,
+      "end": 220.64
+    },
+    {
+      "text": "organisms,",
+      "start": 220.64,
+      "end": 221.6
+    },
+    {
+      "text": "and",
+      "start": 221.6,
+      "end": 221.92
+    },
+    {
+      "text": "will",
+      "start": 221.92,
+      "end": 222.08
+    },
+    {
+      "text": "be",
+      "start": 222.08,
+      "end": 222.32
+    },
+    {
+      "text": "especially",
+      "start": 222.32,
+      "end": 222.88
+    },
+    {
+      "text": "important",
+      "start": 222.88,
+      "end": 223.2
+    },
+    {
+      "text": "for",
+      "start": 223.2,
+      "end": 223.36
+    },
+    {
+      "text": "maintaining",
+      "start": 223.36,
+      "end": 223.92
+    },
+    {
+      "text": "cold",
+      "start": 223.92,
+      "end": 224.24
+    },
+    {
+      "text": "water",
+      "start": 224.24,
+      "end": 224.56
+    },
+    {
+      "text": "species,",
+      "start": 224.56,
+      "end": 225.28
+    },
+    {
+      "text": "such",
+      "start": 225.28,
+      "end": 225.52
+    },
+    {
+      "text": "as",
+      "start": 225.52,
+      "end": 225.68
+    },
+    {
+      "text": "brook",
+      "start": 225.68,
+      "end": 226.08
+    },
+    {
+      "text": "trout",
+      "start": 226.08,
+      "end": 226.4
+    },
+    {
+      "text": "that",
+      "start": 226.64,
+      "end": 226.88
+    },
+    {
+      "text": "are",
+      "start": 226.88,
+      "end": 227.04
+    },
+    {
+      "text": "likely",
+      "start": 227.04,
+      "end": 227.36
+    },
+    {
+      "text": "to",
+      "start": 227.36,
+      "end": 227.44
+    },
+    {
+      "text": "be",
+      "start": 227.44,
+      "end": 227.6
+    },
+    {
+      "text": "adversely",
+      "start": 227.6,
+      "end": 228.16
+    },
+    {
+      "text": "affected",
+      "start": 228.16,
+      "end": 228.64
+    },
+    {
+      "text": "by",
+      "start": 228.64,
+      "end": 228.8
+    },
+    {
+      "text": "climate",
+      "start": 228.8,
+      "end": 229.2
+    },
+    {
+      "text": "change.",
+      "start": 229.2,
+      "end": 229.92
+    },
+    {
+      "text": "A",
+      "start": 229.92,
+      "end": 230.08
+    },
+    {
+      "text": "photo",
+      "start": 230.08,
+      "end": 230.48
+    },
+    {
+      "text": "appears",
+      "start": 230.48,
+      "end": 230.88
+    },
+    {
+      "text": "that",
+      "start": 230.88,
+      "end": 231.04
+    },
+    {
+      "text": "shows",
+      "start": 231.04,
+      "end": 231.28
+    },
+    {
+      "text": "a",
+      "start": 231.28,
+      "end": 231.44
+    },
+    {
+      "text": "culvert",
+      "start": 231.44,
+      "end": 231.92
+    },
+    {
+      "text": "with",
+      "start": 232.08,
+      "end": 232.24
+    },
+    {
+      "text": "shallow",
+      "start": 232.24,
+      "end": 232.64
+    },
+    {
+      "text": "water",
+      "start": 232.64,
+      "end": 232.88
+    },
+    {
+      "text": "in",
+      "start": 232.88,
+      "end": 233.04
+    },
+    {
+      "text": "the",
+      "start": 233.04,
+      "end": 233.2
+    },
+    {
+      "text": "pipe",
+      "start": 233.2,
+      "end": 233.52
+    },
+    {
+      "text": "and",
+      "start": 233.6,
+      "end": 233.84
+    },
+    {
+      "text": "an",
+      "start": 233.84,
+      "end": 234.0
+    },
+    {
+      "text": "outlet",
+      "start": 234.0,
+      "end": 234.4
+    },
+    {
+      "text": "drop.",
+      "start": 234.4,
+      "end": 235.04
+    },
+    {
+      "text": "Unfortunately,",
+      "start": 235.04,
+      "end": 236.0
+    },
+    {
+      "text": "aquatic",
+      "start": 236.0,
+      "end": 236.56
+    },
+    {
+      "text": "connectivity",
+      "start": 236.56,
+      "end": 237.2
+    },
+    {
+      "text": "can",
+      "start": 237.2,
+      "end": 237.36
+    },
+    {
+      "text": "be",
+      "start": 237.36,
+      "end": 237.52
+    },
+    {
+      "text": "disrupted",
+      "start": 237.52,
+      "end": 238.08
+    },
+    {
+      "text": "by",
+      "start": 238.08,
+      "end": 238.24
+    },
+    {
+      "text": "roadstream",
+      "start": 238.24,
+      "end": 238.88
+    },
+    {
+      "text": "crossings",
+      "start": 238.88,
+      "end": 239.44
+    },
+    {
+      "text": "with",
+      "start": 239.44,
+      "end": 239.6
+    },
+    {
+      "text": "undersized",
+      "start": 239.6,
+      "end": 240.32
+    },
+    {
+      "text": "culverts.",
+      "start": 240.32,
+      "end": 241.84
+    },
+    {
+      "text": "Shallow",
+      "start": 241.84,
+      "end": 242.4
+    },
+    {
+      "text": "water",
+      "start": 242.4,
+      "end": 242.64
+    },
+    {
+      "text": "at",
+      "start": 242.64,
+      "end": 242.8
+    },
+    {
+      "text": "low",
+      "start": 242.8,
+      "end": 243.12
+    },
+    {
+      "text": "flows,",
+      "start": 243.12,
+      "end": 243.6
+    },
+    {
+      "text": "high",
+      "start": 243.6,
+      "end": 243.92
+    },
+    {
+      "text": "velocity",
+      "start": 243.92,
+      "end": 244.48
+    },
+    {
+      "text": "at",
+      "start": 244.48,
+      "end": 244.64
+    },
+    {
+      "text": "moderate",
+      "start": 244.64,
+      "end": 245.12
+    },
+    {
+      "text": "and",
+      "start": 245.12,
+      "end": 245.28
+    },
+    {
+      "text": "higher",
+      "start": 245.28,
+      "end": 245.68
+    },
+    {
+      "text": "flows,",
+      "start": 245.68,
+      "end": 246.16
+    },
+    {
+      "text": "and",
+      "start": 246.16,
+      "end": 246.32
+    },
+    {
+      "text": "outlet",
+      "start": 246.32,
+      "end": 246.8
+    },
+    {
+      "text": "drops",
+      "start": 246.8,
+      "end": 247.28
+    },
+    {
+      "text": "that",
+      "start": 247.28,
+      "end": 247.44
+    },
+    {
+      "text": "require",
+      "start": 247.44,
+      "end": 247.84
+    },
+    {
+      "text": "fish",
+      "start": 247.84,
+      "end": 248.08
+    },
+    {
+      "text": "to",
+      "start": 248.08,
+      "end": 248.32
+    },
+    {
+      "text": "leap",
+      "start": 248.32,
+      "end": 248.64
+    },
+    {
+      "text": "just",
+      "start": 248.64,
+      "end": 248.8
+    },
+    {
+      "text": "to",
+      "start": 248.8,
+      "end": 248.96
+    },
+    {
+      "text": "get",
+      "start": 248.96,
+      "end": 249.12
+    },
+    {
+      "text": "into",
+      "start": 249.12,
+      "end": 249.28
+    },
+    {
+      "text": "the",
+      "start": 249.28,
+      "end": 249.44
+    },
+    {
+      "text": "culvert",
+      "start": 249.44,
+      "end": 250.0
+    },
+    {
+      "text": "are",
+      "start": 250.4,
+      "end": 250.64
+    },
+    {
+      "text": "some",
+      "start": 250.64,
+      "end": 250.8
+    },
+    {
+      "text": "common",
+      "start": 250.8,
+      "end": 251.28
+    },
+    {
+      "text": "problems",
+      "start": 251.28,
+      "end": 251.6
+    },
+    {
+      "text": "found",
+      "start": 251.6,
+      "end": 251.92
+    },
+    {
+      "text": "at",
+      "start": 251.92,
+      "end": 252.08
+    },
+    {
+      "text": "road",
+      "start": 252.08,
+      "end": 252.4
+    },
+    {
+      "text": "stream",
+      "start": 252.4,
+      "end": 252.8
+    },
+    {
+      "text": "crossings.",
+      "start": 252.8,
+      "end": 253.76
+    },
+    {
+      "text": "A",
+      "start": 253.76,
+      "end": 253.92
+    },
+    {
+      "text": "drawing",
+      "start": 253.92,
+      "end": 254.32
+    },
+    {
+      "text": "of",
+      "start": 254.32,
+      "end": 254.4
+    },
+    {
+      "text": "the",
+      "start": 254.4,
+      "end": 254.56
+    },
+    {
+      "text": "stream",
+      "start": 254.56,
+      "end": 254.88
+    },
+    {
+      "text": "network",
+      "start": 254.88,
+      "end": 255.36
+    },
+    {
+      "text": "now",
+      "start": 255.36,
+      "end": 255.6
+    },
+    {
+      "text": "overlaid",
+      "start": 255.6,
+      "end": 256.16
+    },
+    {
+      "text": "by",
+      "start": 256.16,
+      "end": 256.32
+    },
+    {
+      "text": "a",
+      "start": 256.32,
+      "end": 256.48
+    },
+    {
+      "text": "road",
+      "start": 256.48,
+      "end": 256.8
+    },
+    {
+      "text": "with",
+      "start": 256.8,
+      "end": 257.12
+    },
+    {
+      "text": "culverts",
+      "start": 257.12,
+      "end": 257.84
+    },
+    {
+      "text": "shown",
+      "start": 257.84,
+      "end": 258.08
+    },
+    {
+      "text": "at",
+      "start": 258.08,
+      "end": 258.24
+    },
+    {
+      "text": "the",
+      "start": 258.24,
+      "end": 258.32
+    },
+    {
+      "text": "roadstream",
+      "start": 258.32,
+      "end": 259.04
+    },
+    {
+      "text": "crossings.",
+      "start": 259.04,
+      "end": 259.76
+    },
+    {
+      "text": "Only",
+      "start": 259.76,
+      "end": 260.16
+    },
+    {
+      "text": "two",
+      "start": 260.16,
+      "end": 260.4
+    },
+    {
+      "text": "of",
+      "start": 260.4,
+      "end": 260.56
+    },
+    {
+      "text": "the",
+      "start": 260.56,
+      "end": 260.72
+    },
+    {
+      "text": "five",
+      "start": 260.72,
+      "end": 261.12
+    },
+    {
+      "text": "tributaries",
+      "start": 261.12,
+      "end": 261.84
+    },
+    {
+      "text": "are",
+      "start": 261.84,
+      "end": 262.0
+    },
+    {
+      "text": "highlighted.",
+      "start": 262.0,
+      "end": 262.72
+    },
+    {
+      "text": "It",
+      "start": 262.72,
+      "end": 262.88
+    },
+    {
+      "text": "is",
+      "start": 262.88,
+      "end": 263.04
+    },
+    {
+      "text": "not",
+      "start": 263.04,
+      "end": 263.2
+    },
+    {
+      "text": "unusual",
+      "start": 263.2,
+      "end": 263.68
+    },
+    {
+      "text": "for",
+      "start": 263.68,
+      "end": 263.92
+    },
+    {
+      "text": "aquatic",
+      "start": 263.92,
+      "end": 264.4
+    },
+    {
+      "text": "connectivity",
+      "start": 264.4,
+      "end": 265.04
+    },
+    {
+      "text": "to",
+      "start": 265.04,
+      "end": 265.2
+    },
+    {
+      "text": "be",
+      "start": 265.2,
+      "end": 265.36
+    },
+    {
+      "text": "disrupted",
+      "start": 265.36,
+      "end": 266.0
+    },
+    {
+      "text": "by",
+      "start": 266.0,
+      "end": 266.16
+    },
+    {
+      "text": "multiple",
+      "start": 266.16,
+      "end": 266.72
+    },
+    {
+      "text": "barriers,",
+      "start": 266.72,
+      "end": 267.6
+    },
+    {
+      "text": "such",
+      "start": 267.6,
+      "end": 267.92
+    },
+    {
+      "text": "as",
+      "start": 267.92,
+      "end": 268.08
+    },
+    {
+      "text": "dams",
+      "start": 268.08,
+      "end": 268.48
+    },
+    {
+      "text": "and",
+      "start": 268.48,
+      "end": 268.64
+    },
+    {
+      "text": "roadstream",
+      "start": 268.64,
+      "end": 269.28
+    },
+    {
+      "text": "crossings",
+      "start": 269.28,
+      "end": 269.84
+    },
+    {
+      "text": "within",
+      "start": 270.0,
+      "end": 270.32
+    },
+    {
+      "text": "the",
+      "start": 270.32,
+      "end": 270.48
+    },
+    {
+      "text": "same",
+      "start": 270.48,
+      "end": 270.72
+    },
+    {
+      "text": "stream",
+      "start": 270.72,
+      "end": 271.04
+    },
+    {
+      "text": "network.",
+      "start": 271.04,
+      "end": 271.68
+    },
+    {
+      "text": "Arrows",
+      "start": 271.68,
+      "end": 272.16
+    },
+    {
+      "text": "appear",
+      "start": 272.16,
+      "end": 272.48
+    },
+    {
+      "text": "going",
+      "start": 272.56,
+      "end": 272.8
+    },
+    {
+      "text": "from",
+      "start": 272.8,
+      "end": 272.96
+    },
+    {
+      "text": "the",
+      "start": 272.96,
+      "end": 273.12
+    },
+    {
+      "text": "highlighted",
+      "start": 273.12,
+      "end": 273.68
+    },
+    {
+      "text": "tributaries",
+      "start": 273.68,
+      "end": 274.32
+    },
+    {
+      "text": "to",
+      "start": 274.32,
+      "end": 274.48
+    },
+    {
+      "text": "point",
+      "start": 274.48,
+      "end": 274.64
+    },
+    {
+      "text": "at",
+      "start": 274.8,
+      "end": 274.96
+    },
+    {
+      "text": "the",
+      "start": 274.96,
+      "end": 275.04
+    },
+    {
+      "text": "roadstream",
+      "start": 275.04,
+      "end": 275.68
+    },
+    {
+      "text": "crossings.",
+      "start": 275.68,
+      "end": 276.48
+    },
+    {
+      "text": "When",
+      "start": 276.48,
+      "end": 276.72
+    },
+    {
+      "text": "aquatic",
+      "start": 276.72,
+      "end": 277.2
+    },
+    {
+      "text": "connectivity",
+      "start": 277.2,
+      "end": 277.84
+    },
+    {
+      "text": "is",
+      "start": 277.84,
+      "end": 278.0
+    },
+    {
+      "text": "blocked",
+      "start": 278.0,
+      "end": 278.4
+    },
+    {
+      "text": "by",
+      "start": 278.4,
+      "end": 278.56
+    },
+    {
+      "text": "poorly",
+      "start": 278.56,
+      "end": 278.96
+    },
+    {
+      "text": "designed",
+      "start": 278.96,
+      "end": 279.36
+    },
+    {
+      "text": "road",
+      "start": 279.36,
+      "end": 279.68
+    },
+    {
+      "text": "crossings,",
+      "start": 279.68,
+      "end": 280.64
+    },
+    {
+      "text": "the",
+      "start": 280.64,
+      "end": 280.8
+    },
+    {
+      "text": "mechanisms",
+      "start": 280.8,
+      "end": 281.6
+    },
+    {
+      "text": "for",
+      "start": 281.6,
+      "end": 281.84
+    },
+    {
+      "text": "maintaining",
+      "start": 281.84,
+      "end": 282.48
+    },
+    {
+      "text": "local",
+      "start": 282.48,
+      "end": 282.88
+    },
+    {
+      "text": "populations",
+      "start": 282.88,
+      "end": 283.44
+    },
+    {
+      "text": "are",
+      "start": 283.44,
+      "end": 283.6
+    },
+    {
+      "text": "short-circuited.",
+      "start": 283.6,
+      "end": 284.72
+    },
+    {
+      "text": "When",
+      "start": 284.72,
+      "end": 285.04
+    },
+    {
+      "text": "local",
+      "start": 285.04,
+      "end": 285.36
+    },
+    {
+      "text": "population",
+      "start": 285.36,
+      "end": 285.84
+    },
+    {
+      "text": "extinctions",
+      "start": 285.84,
+      "end": 286.56
+    },
+    {
+      "text": "occur,",
+      "start": 286.56,
+      "end": 287.36
+    },
+    {
+      "text": "habitat",
+      "start": 287.36,
+      "end": 288.0
+    },
+    {
+      "text": "will",
+      "start": 288.0,
+      "end": 288.16
+    },
+    {
+      "text": "remain",
+      "start": 288.16,
+      "end": 288.56
+    },
+    {
+      "text": "unoccupied",
+      "start": 288.56,
+      "end": 289.44
+    },
+    {
+      "text": "because",
+      "start": 289.68,
+      "end": 290.0
+    },
+    {
+      "text": "dispersing",
+      "start": 290.0,
+      "end": 290.64
+    },
+    {
+      "text": "fish",
+      "start": 290.64,
+      "end": 290.96
+    },
+    {
+      "text": "are",
+      "start": 290.96,
+      "end": 291.12
+    },
+    {
+      "text": "not",
+      "start": 291.12,
+      "end": 291.28
+    },
+    {
+      "text": "able",
+      "start": 291.28,
+      "end": 291.52
+    },
+    {
+      "text": "to",
+      "start": 291.52,
+      "end": 291.68
+    },
+    {
+      "text": "reach",
+      "start": 291.68,
+      "end": 291.92
+    },
+    {
+      "text": "those",
+      "start": 291.92,
+      "end": 292.16
+    },
+    {
+      "text": "areas",
+      "start": 292.16,
+      "end": 292.64
+    },
+    {
+      "text": "to",
+      "start": 292.64,
+      "end": 292.8
+    },
+    {
+      "text": "re-establish",
+      "start": 292.8,
+      "end": 293.68
+    },
+    {
+      "text": "populations.",
+      "start": 293.68,
+      "end": 294.64
+    },
+    {
+      "text": "This",
+      "start": 294.64,
+      "end": 294.96
+    },
+    {
+      "text": "is",
+      "start": 294.96,
+      "end": 295.2
+    },
+    {
+      "text": "just",
+      "start": 295.2,
+      "end": 295.44
+    },
+    {
+      "text": "one",
+      "start": 295.44,
+      "end": 295.6
+    },
+    {
+      "text": "example",
+      "start": 295.6,
+      "end": 296.08
+    },
+    {
+      "text": "to",
+      "start": 296.08,
+      "end": 296.24
+    },
+    {
+      "text": "show",
+      "start": 296.24,
+      "end": 296.48
+    },
+    {
+      "text": "why",
+      "start": 296.48,
+      "end": 296.72
+    },
+    {
+      "text": "aquatic",
+      "start": 296.72,
+      "end": 297.28
+    },
+    {
+      "text": "connectivity",
+      "start": 297.28,
+      "end": 298.24
+    },
+    {
+      "text": "is",
+      "start": 298.24,
+      "end": 298.56
+    },
+    {
+      "text": "important",
+      "start": 298.56,
+      "end": 298.88
+    },
+    {
+      "text": "for",
+      "start": 298.88,
+      "end": 299.12
+    },
+    {
+      "text": "maintaining",
+      "start": 299.12,
+      "end": 299.68
+    },
+    {
+      "text": "cold",
+      "start": 299.68,
+      "end": 300.0
+    },
+    {
+      "text": "water",
+      "start": 300.0,
+      "end": 300.4
+    },
+    {
+      "text": "species",
+      "start": 300.4,
+      "end": 300.96
+    },
+    {
+      "text": "in",
+      "start": 300.96,
+      "end": 301.12
+    },
+    {
+      "text": "the",
+      "start": 301.12,
+      "end": 301.36
+    },
+    {
+      "text": "face",
+      "start": 301.36,
+      "end": 301.52
+    },
+    {
+      "text": "of",
+      "start": 301.52,
+      "end": 301.68
+    },
+    {
+      "text": "climate",
+      "start": 301.68,
+      "end": 302.08
+    },
+    {
+      "text": "change.",
+      "start": 302.08,
+      "end": 302.64
+    },
+    {
+      "text": "A",
+      "start": 302.64,
+      "end": 302.8
+    },
+    {
+      "text": "photo",
+      "start": 302.8,
+      "end": 303.12
+    },
+    {
+      "text": "appears",
+      "start": 303.12,
+      "end": 303.52
+    },
+    {
+      "text": "of",
+      "start": 303.52,
+      "end": 303.6
+    },
+    {
+      "text": "a",
+      "start": 303.6,
+      "end": 303.76
+    },
+    {
+      "text": "road",
+      "start": 303.76,
+      "end": 304.08
+    },
+    {
+      "text": "stream",
+      "start": 304.08,
+      "end": 304.56
+    },
+    {
+      "text": "crossing",
+      "start": 304.56,
+      "end": 305.12
+    },
+    {
+      "text": "with",
+      "start": 305.12,
+      "end": 305.28
+    },
+    {
+      "text": "an",
+      "start": 305.28,
+      "end": 305.44
+    },
+    {
+      "text": "open",
+      "start": 305.44,
+      "end": 305.76
+    },
+    {
+      "text": "bottom",
+      "start": 305.76,
+      "end": 306.24
+    },
+    {
+      "text": "arch",
+      "start": 306.24,
+      "end": 306.64
+    },
+    {
+      "text": "constructed",
+      "start": 306.72,
+      "end": 307.28
+    },
+    {
+      "text": "to",
+      "start": 307.28,
+      "end": 307.44
+    },
+    {
+      "text": "meet",
+      "start": 307.44,
+      "end": 307.68
+    },
+    {
+      "text": "the",
+      "start": 307.68,
+      "end": 307.84
+    },
+    {
+      "text": "Massachusetts",
+      "start": 307.84,
+      "end": 308.64
+    },
+    {
+      "text": "River",
+      "start": 308.64,
+      "end": 308.96
+    },
+    {
+      "text": "and",
+      "start": 308.96,
+      "end": 309.12
+    },
+    {
+      "text": "Stream",
+      "start": 309.12,
+      "end": 309.44
+    },
+    {
+      "text": "Crossing",
+      "start": 309.44,
+      "end": 309.92
+    },
+    {
+      "text": "Standards.",
+      "start": 309.92,
+      "end": 310.64
+    },
+    {
+      "text": "Fortunately,",
+      "start": 310.64,
+      "end": 311.68
+    },
+    {
+      "text": "we",
+      "start": 311.68,
+      "end": 311.84
+    },
+    {
+      "text": "can",
+      "start": 311.84,
+      "end": 312.0
+    },
+    {
+      "text": "build",
+      "start": 312.0,
+      "end": 312.32
+    },
+    {
+      "text": "road",
+      "start": 312.32,
+      "end": 312.64
+    },
+    {
+      "text": "stream",
+      "start": 312.64,
+      "end": 313.04
+    },
+    {
+      "text": "crossings",
+      "start": 313.04,
+      "end": 313.52
+    },
+    {
+      "text": "that",
+      "start": 313.52,
+      "end": 313.68
+    },
+    {
+      "text": "allow",
+      "start": 313.68,
+      "end": 314.0
+    },
+    {
+      "text": "relatively",
+      "start": 314.0,
+      "end": 314.56
+    },
+    {
+      "text": "unobstructed",
+      "start": 314.56,
+      "end": 315.36
+    },
+    {
+      "text": "passage",
+      "start": 315.36,
+      "end": 315.84
+    },
+    {
+      "text": "for",
+      "start": 315.84,
+      "end": 316.0
+    },
+    {
+      "text": "fish",
+      "start": 316.0,
+      "end": 316.32
+    },
+    {
+      "text": "and",
+      "start": 316.32,
+      "end": 316.48
+    },
+    {
+      "text": "other",
+      "start": 316.48,
+      "end": 316.72
+    },
+    {
+      "text": "aquatic",
+      "start": 316.72,
+      "end": 317.36
+    },
+    {
+      "text": "organisms.",
+      "start": 317.36,
+      "end": 318.64
+    },
+    {
+      "text": "The",
+      "start": 318.64,
+      "end": 318.96
+    },
+    {
+      "text": "Massachusetts",
+      "start": 318.96,
+      "end": 319.76
+    },
+    {
+      "text": "River",
+      "start": 319.76,
+      "end": 320.08
+    },
+    {
+      "text": "and",
+      "start": 320.08,
+      "end": 320.16
+    },
+    {
+      "text": "Stream",
+      "start": 320.16,
+      "end": 320.56
+    },
+    {
+      "text": "Crossing",
+      "start": 320.56,
+      "end": 320.96
+    },
+    {
+      "text": "standards",
+      "start": 320.96,
+      "end": 321.52
+    },
+    {
+      "text": "provide",
+      "start": 321.52,
+      "end": 322.0
+    },
+    {
+      "text": "general",
+      "start": 322.0,
+      "end": 322.4
+    },
+    {
+      "text": "standards",
+      "start": 322.4,
+      "end": 322.88
+    },
+    {
+      "text": "that",
+      "start": 322.88,
+      "end": 323.04
+    },
+    {
+      "text": "should",
+      "start": 323.04,
+      "end": 323.36
+    },
+    {
+      "text": "be",
+      "start": 323.36,
+      "end": 323.68
+    },
+    {
+      "text": "met",
+      "start": 323.68,
+      "end": 324.0
+    },
+    {
+      "text": "when",
+      "start": 324.0,
+      "end": 324.24
+    },
+    {
+      "text": "constructing",
+      "start": 324.24,
+      "end": 324.88
+    },
+    {
+      "text": "new",
+      "start": 324.88,
+      "end": 325.2
+    },
+    {
+      "text": "or",
+      "start": 325.2,
+      "end": 325.36
+    },
+    {
+      "text": "replacement",
+      "start": 325.36,
+      "end": 326.08
+    },
+    {
+      "text": "crossings",
+      "start": 326.08,
+      "end": 326.88
+    },
+    {
+      "text": "to",
+      "start": 326.88,
+      "end": 327.12
+    },
+    {
+      "text": "ensure",
+      "start": 327.12,
+      "end": 327.52
+    },
+    {
+      "text": "that",
+      "start": 327.52,
+      "end": 327.68
+    },
+    {
+      "text": "those",
+      "start": 327.68,
+      "end": 328.0
+    },
+    {
+      "text": "crossings",
+      "start": 328.0,
+      "end": 328.56
+    },
+    {
+      "text": "do",
+      "start": 328.56,
+      "end": 328.72
+    },
+    {
+      "text": "not",
+      "start": 328.72,
+      "end": 328.88
+    },
+    {
+      "text": "disrupt",
+      "start": 328.88,
+      "end": 329.36
+    },
+    {
+      "text": "aquatic",
+      "start": 329.36,
+      "end": 329.84
+    },
+    {
+      "text": "connectivity",
+      "start": 329.84,
+      "end": 330.64
+    },
+    {
+      "text": "in",
+      "start": 330.64,
+      "end": 330.8
+    },
+    {
+      "text": "river",
+      "start": 330.8,
+      "end": 331.12
+    },
+    {
+      "text": "and",
+      "start": 331.12,
+      "end": 331.28
+    },
+    {
+      "text": "stream",
+      "start": 331.28,
+      "end": 331.68
+    },
+    {
+      "text": "ecosystems.",
+      "start": 331.68,
+      "end": 332.64
+    },
+    {
+      "text": "Credits",
+      "start": 332.64,
+      "end": 333.12
+    },
+    {
+      "text": "role.org.",
+      "start": 333.2,
+      "end": 358.4
+    },
+    {
+      "text": "The",
+      "start": 358.4,
+      "end": 358.48
+    },
+    {
+      "text": "letters",
+      "start": 358.48,
+      "end": 358.88
+    },
+    {
+      "text": "USGS",
+      "start": 358.88,
+      "end": 359.52
+    },
+    {
+      "text": "and",
+      "start": 359.52,
+      "end": 359.68
+    },
+    {
+      "text": "Words",
+      "start": 359.68,
+      "end": 360.0
+    },
+    {
+      "text": "Science",
+      "start": 360.0,
+      "end": 360.32
+    },
+    {
+      "text": "for",
+      "start": 360.32,
+      "end": 360.48
+    },
+    {
+      "text": "a",
+      "start": 360.48,
+      "end": 360.56
+    },
+    {
+      "text": "Changing",
+      "start": 360.56,
+      "end": 360.88
+    },
+    {
+      "text": "World",
+      "start": 360.88,
+      "end": 361.12
+    },
+    {
+      "text": "appear",
+      "start": 361.2,
+      "end": 361.52
+    },
+    {
+      "text": "in",
+      "start": 361.52,
+      "end": 361.6
+    },
+    {
+      "text": "white.",
+      "start": 361.6,
+      "end": 361.92
+    }
+  ]
+}

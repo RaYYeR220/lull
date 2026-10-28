@@ -90,6 +90,12 @@ def _parse_json(content: str) -> dict:
     return out
 
 
+def _seeded(seed: int | None) -> dict:
+    """The request's `seed` field when one is given. The provider may still not reproduce an
+    answer for a fixed seed: it is a request, not a guarantee."""
+    return {} if seed is None else {"seed": int(seed)}
+
+
 class TokenFactory:
     def __init__(
         self,
@@ -140,12 +146,14 @@ class TokenFactory:
         max_tokens: int = 4000,
         temperature: float = 0.6,
         estimate: float = 0.01,
+        seed: int | None = None,
     ) -> dict:
         extra = {
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {"name": stage, "schema": schema, "strict": True},
-            }
+            },
+            **_seeded(seed),
         }
         return self._complete(  # type: ignore[return-value]
             model, messages, extra, _parse_json, run_id, stage, role,
@@ -164,9 +172,10 @@ class TokenFactory:
         max_tokens: int = 4000,
         temperature: float = 0.6,
         estimate: float = 0.01,
+        seed: int | None = None,
     ) -> str:
         return self._complete(  # type: ignore[return-value]
-            model, messages, {}, lambda c: c, run_id, stage, role,
+            model, messages, _seeded(seed), lambda c: c, run_id, stage, role,
             thinking, max_tokens, temperature, estimate,
         )  # fmt: skip
 

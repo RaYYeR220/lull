@@ -1,0 +1,360 @@
+{
+  "id": "a03",
+  "subject": "physics",
+  "title": "Fundamentals of Classical Mechanics",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Newton's Three Laws",
+      "bullets": [
+        "Inertia keeps objects at rest or moving",
+        "Force causes acceleration in motion",
+        "Action and reaction are always paired"
+      ],
+      "chart": null,
+      "narration": [
+        "Inertia keeps objects at rest or moving through space.",
+        "This idea shows how objects stay still or keep going."
+      ],
+      "pauses": [
+        2.5,
+        2.7
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Velocity Over Time",
+      "bullets": [
+        "Constant acceleration changes speed",
+        "Gravity affects falling objects",
+        "Initial velocity sets the start"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Speed vs Time",
+        "x_label": "Time (s)",
+        "y_label": "Velocity (m/s)",
+        "points": [
+          {
+            "label": "t=0s",
+            "value": 0.5
+          },
+          {
+            "label": "t=2s",
+            "value": 2.5
+          },
+          {
+            "label": "t=4s",
+            "value": 4.5
+          },
+          {
+            "label": "t=6s",
+            "value": 6.5
+          },
+          {
+            "label": "t=8s",
+            "value": 8.5
+          }
+        ]
+      },
+      "narration": [
+        "Initial velocity sets the start of a journey.",
+        "This concept defines how motion begins from a point."
+      ],
+      "pauses": [
+        2.7,
+        3.9
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Mass and Force",
+      "bullets": [
+        "Larger mass needs more force",
+        "Acceleration depends on mass",
+        "Weight is gravity's pull"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Force vs Mass",
+        "x_label": "Mass (kg)",
+        "y_label": "Force (N)",
+        "points": [
+          {
+            "label": "10kg",
+            "value": 5.0
+          },
+          {
+            "label": "20kg",
+            "value": 10.0
+          },
+          {
+            "label": "30kg",
+            "value": 15.0
+          },
+          {
+            "label": "40kg",
+            "value": 20.0
+          }
+        ]
+      },
+      "narration": [
+        "Weight is gravity's pull on an object.",
+        "This force comes from the pull of gravity."
+      ],
+      "pauses": [
+        3.1,
+        2.0
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Vector Quantities",
+      "bullets": [
+        "Direction matters in vectors",
+        "Net force determines motion",
+        "Units are standard SI"
+      ],
+      "chart": null,
+      "narration": [
+        "Direction matters in vectors for motion.",
+        "This property shows how angle affects movement."
+      ],
+      "pauses": [
+        3.5,
+        1.9
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a03-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Newton's Three Laws\".",
+      "anchor": "Newton's Three Laws",
+      "value": null
+    },
+    {
+      "id": "a03-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Force causes acceleration in motion\".",
+      "anchor": "Force causes acceleration in motion",
+      "value": null
+    },
+    {
+      "id": "a03-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Action and reaction are always paired\".",
+      "anchor": "Action and reaction are always paired",
+      "value": null
+    },
+    {
+      "id": "a03-v04",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Constant acceleration changes speed\".",
+      "anchor": "Constant acceleration changes speed",
+      "value": null
+    },
+    {
+      "id": "a03-v05",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Gravity affects falling objects\".",
+      "anchor": "Gravity affects falling objects",
+      "value": null
+    },
+    {
+      "id": "a03-v06",
+      "slide": 2,
+      "kind": "label",
+      "text": "A line chart is titled \"Speed vs Time\".",
+      "anchor": "Speed vs Time",
+      "value": null
+    },
+    {
+      "id": "a03-v07",
+      "slide": 2,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Time (s)\".",
+      "anchor": "Time (s)",
+      "value": null
+    },
+    {
+      "id": "a03-v08",
+      "slide": 2,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Velocity (m/s)\".",
+      "anchor": "Velocity (m/s)",
+      "value": null
+    },
+    {
+      "id": "a03-v09",
+      "slide": 2,
+      "kind": "chart_value",
+      "anchor": "t=8s",
+      "value": 8.5,
+      "text": "The highest value in the line chart \"Speed vs Time\" is 8.5, for \"t=8s\"."
+    },
+    {
+      "id": "a03-v10",
+      "slide": 2,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Speed vs Time\" the values rise at every step, from \"t=0s\" to \"t=8s\"."
+    },
+    {
+      "id": "a03-v11",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Larger mass needs more force\".",
+      "anchor": "Larger mass needs more force",
+      "value": null
+    },
+    {
+      "id": "a03-v12",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Acceleration depends on mass\".",
+      "anchor": "Acceleration depends on mass",
+      "value": null
+    },
+    {
+      "id": "a03-v13",
+      "slide": 3,
+      "kind": "label",
+      "text": "A bar chart is titled \"Force vs Mass\".",
+      "anchor": "Force vs Mass",
+      "value": null
+    },
+    {
+      "id": "a03-v14",
+      "slide": 3,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Mass (kg)\".",
+      "anchor": "Mass (kg)",
+      "value": null
+    },
+    {
+      "id": "a03-v15",
+      "slide": 3,
+      "kind": "chart_value",
+      "anchor": "40kg",
+      "value": 20.0,
+      "text": "The highest value in the bar chart \"Force vs Mass\" is 20, for \"40kg\"."
+    },
+    {
+      "id": "a03-v16",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Net force determines motion\".",
+      "anchor": "Net force determines motion",
+      "value": null
+    },
+    {
+      "id": "a03-v17",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Units are standard SI\".",
+      "anchor": "Units are standard SI",
+      "value": null
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a03-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Inertia keeps objects at rest or moving\".",
+      "anchor": "Inertia keeps objects at rest or moving"
+    },
+    {
+      "id": "a03-s02",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Initial velocity sets the start\".",
+      "anchor": "Initial velocity sets the start"
+    },
+    {
+      "id": "a03-s03",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Weight is gravity's pull\".",
+      "anchor": "Weight is gravity's pull"
+    },
+    {
+      "id": "a03-s04",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Direction matters in vectors\".",
+      "anchor": "Direction matters in vectors"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Velocity Over Time\".",
+      "anchor": "Velocity Over Time"
+    },
+    {
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Mass and Force\".",
+      "anchor": "Mass and Force"
+    },
+    {
+      "slide": 3,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Force (N)\".",
+      "anchor": "Force (N)"
+    },
+    {
+      "slide": 4,
+      "kind": "title",
+      "text": "The slide title reads \"Vector Quantities\".",
+      "anchor": "Vector Quantities"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a03-d01",
+      "kind": "slide_title",
+      "text": "The slide covers Conservation of Energy."
+    },
+    {
+      "id": "a03-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Acceleration at 3.7."
+    },
+    {
+      "id": "a03-d03",
+      "kind": "image",
+      "text": "A diagram of a pulley system is shown."
+    },
+    {
+      "id": "a03-d04",
+      "kind": "bullet",
+      "text": "Friction always increases speed."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 2103,
+      "attempt": 2,
+      "prompt_sha256": "bf5105b1eb8ea61df5bdae0f69ee2ce8f68afdcbad6f7c198f73f3572318bef7"
+    },
+    "narration": {
+      "seed": 2203,
+      "attempt": 1,
+      "prompt_sha256": "c9cc9705a89215ad2b811eaf83537797570ab2f2c8f9ee7b6027efc5c235f8de"
+    }
+  }
+}

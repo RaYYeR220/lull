@@ -1,0 +1,194 @@
+{
+  "video": "csc_intro",
+  "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+  "temperature": 0.0,
+  "thinking": false,
+  "max_tokens": 8000,
+  "chunk": 10,
+  "context": 3,
+  "refs_sha256": "a6e4c391d8fd4a4a7d81475166dd88369556de834d77f63616723af12e6a6bcb",
+  "prompt_template_sha256": "510f3e87d48d1174825ab0da21b431326f16ec85afe707822612d63a3cdf03ca",
+  "facts": [
+    {
+      "id": "usgs-001.1",
+      "ref_cue_id": "usgs-001",
+      "source": "usgs_ad",
+      "text": "The video opens with narration over footage of erupting volcanoes.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-001.2",
+      "ref_cue_id": "usgs-001",
+      "source": "usgs_ad",
+      "text": "The video opens with narration over footage of geologists using tools to sample rocks.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-002.1",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "A split screen view shows mountains.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-002.2",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "A split screen view shows forests.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-002.3",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "A split screen view shows coasts.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-002.4",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "A split screen view shows deserts.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-002.5",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "A split screen view shows the seafloor.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-003.1",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "The video then shows USGS scientists working in a variety of different settings.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-003.2",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "USGS scientists work on the Arctic tundra.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-003.3",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "USGS scientists work in salt marshes.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-003.4",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "USGS scientists work on offshore research vessels.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-003.5",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "USGS scientists work on volcanic craters.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-003.6",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "USGS scientists work in tropical coral reefs.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    },
+    {
+      "id": "usgs-004.1",
+      "ref_cue_id": "usgs-004",
+      "source": "usgs_ad",
+      "text": "The video closes with text that reads, Hashtag Climate Champions, USGS Science for a Changing World.",
+      "kind": "on_screen_text",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "before_program",
+      "block": "b001",
+      "block_s": 19.2
+    }
+  ],
+  "calls": [
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-001",
+        "usgs-002",
+        "usgs-003",
+        "usgs-004"
+      ],
+      "request_sha256": "2b177ba7575c0c6e38eb0b5e707cf4ef2ace8c7dfce6c9899f48dccc1fcfbebb"
+    }
+  ],
+  "problems": []
+}

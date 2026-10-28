@@ -1,0 +1,248 @@
+{
+  "a01": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1101,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 1201,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a02": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1102,
+      "ok": false,
+      "errors": [
+        "decoy 'Real GDP equals total spending.': is too close to what a slide shows"
+      ]
+    },
+    {
+      "step": "slides",
+      "attempt": 2,
+      "seed": 2102,
+      "ok": false,
+      "errors": [
+        "decoy 'Real GDP equals total spending.': is too close to what a slide shows"
+      ]
+    },
+    {
+      "step": "slides",
+      "attempt": 3,
+      "seed": 3102,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 3202,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a03": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1103,
+      "ok": false,
+      "errors": [
+        "decoy 'The bar chart shows Fermentation at 4.3.': copies the example from the instructions"
+      ]
+    },
+    {
+      "step": "slides",
+      "attempt": 2,
+      "seed": 2103,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 2203,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a04": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1104,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 1204,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a05": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1105,
+      "ok": false,
+      "errors": [
+        "decoy 'The line chart shows Temperature at 16.7.': is too close to what a slide shows"
+      ]
+    },
+    {
+      "step": "slides",
+      "attempt": 2,
+      "seed": 2105,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 2205,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a06": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1106,
+      "ok": false,
+      "errors": [
+        "slide 1: chart value 0.36 must be > 0 with one decimal at most"
+      ]
+    },
+    {
+      "step": "slides",
+      "attempt": 2,
+      "seed": 2106,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 2206,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a07": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1107,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 1207,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a08": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1108,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 1208,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a09": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1109,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 1209,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a10": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1110,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 1210,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a11": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1111,
+      "ok": false,
+      "errors": [
+        "slide 2: needs a bullet with no number and no word like rise or fall"
+      ]
+    },
+    {
+      "step": "slides",
+      "attempt": 2,
+      "seed": 2111,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 2211,
+      "ok": true,
+      "errors": []
+    }
+  ],
+  "a12": [
+    {
+      "step": "slides",
+      "attempt": 1,
+      "seed": 1112,
+      "ok": true,
+      "errors": []
+    },
+    {
+      "step": "narration",
+      "attempt": 1,
+      "seed": 1212,
+      "ok": true,
+      "errors": []
+    }
+  ]
+}
