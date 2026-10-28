@@ -6,6 +6,7 @@ import pytest
 from lull.stages import watch as watch_mod
 from lull.stages.watch import (
     EVENT_SCHEMA,
+    confirm_said,
     load_prompt,
     merge_events,
     parse_events,
@@ -158,10 +159,47 @@ def test_merge_keeps_distinct_events():
     assert len(merge_events(per_window)) == 4
 
 
-def test_merge_never_merges_within_one_window():
+def test_merge_folds_near_duplicates_within_one_window():
+    """One shot reported as per-second slices becomes one event."""
+    w = _span(30, 130)
+    tag = "#CLIMATECHAMPIONS"
+    per_window = [(w, [
+        _ve(9.0, 10.0, "on_screen_text", "The tag #CLIMATECHAMPIONS on black", sal=4, verb=tag),
+        _ve(10.0, 11.0, "on_screen_text", "Hashtag #CLIMATECHAMPIONS shown on black", sal=5,
+            verb=tag),
+        _ve(11.5, 12.5, "on_screen_text", "Hashtag #CLIMATECHAMPIONS on black", sal=4, verb=tag),
+        _ve(12.5, 13.5, "on_screen_text", "USGS logo with the tagline science for a changing world",
+            sal=5, verb="USGS science for a changing world"),
+        _ve(13.5, 14.5, "on_screen_text", "USGS logo and tagline", sal=4,
+            verb="USGS science for a changing world"),
+        _ve(10, 12, text="a person waves"), _ve(11, 13, text="a person waves"),
+    ])]  # fmt: skip
+    out = merge_events(per_window)
+    assert [(e.kind, e.t_start, e.t_end, e.salience) for e in out] == [
+        ("on_screen_text", 39.0, 42.5, 5),
+        ("action", 40.0, 43.0, 3),
+        ("on_screen_text", 42.5, 44.5, 5),
+    ]
+    assert [e.id for e in out] == ["e001", "e002", "e003"]
+    assert out[0].verbatim_text == tag
+    assert out[2].text == "USGS logo with the tagline science for a changing world"
+
+
+def test_merge_within_a_window_needs_same_kind_similar_text_and_at_most_1_5_s_apart():
     w = _span(0, 100)
-    per_window = [(w, [_ve(10, 12, text="a person waves"), _ve(11, 13, text="a person waves")])]
-    assert len(merge_events(per_window)) == 2
+    cases = [
+        [_ve(10, 11, "action", "a person waves"), _ve(11, 12, "gesture", "a person waves")],
+        [_ve(10, 11, text="a person waves"), _ve(11, 12, text="a dog runs across the yard")],
+        [_ve(10, 11, text="a person waves"), _ve(12.6, 13, text="a person waves")],  # 1.6 s
+        # adjacent means the last event of that kind: another action in between breaks the run
+        [_ve(10, 11, text="a person waves"), _ve(11, 12, text="a dog runs across the yard"),
+         _ve(12, 13, text="a person waves")],
+    ]  # fmt: skip
+    for events in cases:
+        assert len(merge_events([(w, events)])) == len(events), events
+    edge = [_ve(10, 11, text="a person waves"), _ve(12.5, 13, text="a person waves")]  # 1.5 s
+    (one,) = merge_events([(w, edge)])
+    assert (one.t_start, one.t_end) == (10, 13)
 
 
 def test_merge_only_between_overlapping_windows():
@@ -174,10 +212,10 @@ def test_merge_only_between_overlapping_windows():
 
 def test_merge_is_one_to_one():
     w1, w2 = _span(0, 100), _span(90, 200)
-    per_window = [
-        (w1, [_ve(95, 96, text="a person waves at the camera")]),
-        (w2, [_ve(5, 6, text="a person waves at the camera"),
-              _ve(6, 7, text="a person waves at the camera again")]),
+    per_window = [  # the two in w2 are each like the one in w1, not like each other
+        (w1, [_ve(95, 96, text="a person waves at the camera and smiles")]),
+        (w2, [_ve(5, 6, text="a person waves at the camera, laughing"),
+              _ve(6, 7, text="a person smiles and waves, nodding")]),
     ]  # fmt: skip
     out = merge_events(per_window)
     assert len(out) == 2
@@ -380,7 +418,7 @@ def test_watch_returns_absolute_times(two_window_video: Path, tmp_path: Path):
         {"events": [_ev(2.0, 5.0, "setting", "a plain red screen", sal=2),
                     _ev(103.5, 150.0, "scene_change", "the screen turns blue", sal=4)]},
         {"events": [_ev(10.0, 10.5, "scene_change", "the screen turns blue", sal=4),
-                    _ev(20.0, 25.0, "object", "a blue field fills the frame")]},
+                    _ev(20.0, 25.0, "object", "a blue field fills the frame", said=True)]},
     ])  # fmt: skip
     out = watch(two_window_video, tmp_path, words, fake, run_id="r1", profile="education")
 
@@ -414,6 +452,7 @@ def test_watch_returns_absolute_times(two_window_video: Path, tmp_path: Path):
     assert (out[1].t_start, out[1].t_end) == pytest.approx((103.5, 104.5), abs=0.05)
     assert (out[2].t_start, out[2].t_end) == pytest.approx((114.0, 119.0), abs=0.05)
     assert all(0 <= e.t_start <= e.t_end <= 125.5 for e in out)
+    assert out[2].said_in_dialogue is False  # nobody says "blue field" near 114-119 s
 
 
 def test_watch_raises_when_a_window_answer_is_all_malformed(two_window_video: Path, tmp_path: Path):
@@ -440,3 +479,95 @@ def test_watch_no_speech_and_proxy_fallback(
     assert len(proxied) == 2 and all(mb == 100 for _, mb in proxied)
     assert "(no speech in this window)" in _user_text(fake.calls[0])
     assert "entertainment" in _user_text(fake.calls[1])
+
+
+# -- said in dialogue; scene cuts keep look-alikes apart ------------------------------------------
+
+
+def _w(text, start, end=None):
+    return Word(text=text, start=start, end=start + 0.4 if end is None else end, speaker=1)
+
+
+def test_said_in_dialogue_is_kept_only_when_the_words_are_said_near_it():
+    """The model's flag stands only when at least 30 % of the event's content words are
+    said within 5 s of it; the code never sets the flag itself."""
+    words = [_w("Safe", 0.2), _w("here.", 0.7), _w("Water", 30.0), _w("use", 30.5),
+             _w("by", 31.0), _w("sector", 31.5), _w("is", 32.0), _w("high.", 32.5)]  # fmt: skip
+    events = [
+        _ve(1.0, 3.0, "action", "The person climbs out of the window onto a ledge", said=True),
+        _ve(33.0, 36.0, "slide", "A slide titled Water use by sector", said=True),  # 2.5 s off
+        _ve(60.0, 62.0, "slide", "A slide titled Water use by sector", said=True),  # too far
+        _ve(31.0, 32.0, "slide", "Water use by sector", said=False),  # never set by code
+        # 3 of 10 content words said: exactly 30 % is enough
+        _ve(29.0, 33.0, "chart", "chart water use sector bars rise fall left right top",
+            said=True),
+    ]  # fmt: skip
+    out = confirm_said(events, words)
+    assert [e.said_in_dialogue for e in out] == [False, True, False, False, True]
+    assert [e.text for e in out] == [e.text for e in events]
+
+
+def test_the_fold_never_crosses_a_scene_cut():
+    """A cut between two look-alike events keeps them apart (the pipeline fixture's red
+    and blue screens are a Jaccard-0.5 pair one second apart)."""
+    w = _span(0, 12)
+    pair = [_ve(0.0, 6.0, "setting", "A plain red screen."),
+            _ve(7.0, 12.0, "setting", "A plain blue screen.")]  # fmt: skip
+    assert len(merge_events([(w, pair)])) == 1  # no cut known: they fold
+    assert len(merge_events([(w, pair)], cuts=[6.0])) == 2
+    slices = [_ve(9.0, 10.0, "on_screen_text", "Tag #A on black", verb="#A"),
+              _ve(10.0, 11.0, "on_screen_text", "Tag #A on black", verb="#A")]  # fmt: skip
+    assert len(merge_events([(_span(30, 130), slices)], cuts=[20.0, 45.0])) == 1  # cuts elsewhere
+    assert len(merge_events([(_span(30, 130), slices)], cuts=[40.0])) == 2  # absolute times
+
+
+# -- words that prove nothing about the dialogue --------------------------------------------------
+
+
+def test_said_in_dialogue_ignores_pronouns_fragments_and_auxiliaries():
+    """Pronouns, 's/'t fragments, be/have/do forms and this/that prove nothing: "she" and
+    "him" said nearby do not mean the dialogue conveys the hand-over."""
+    words = [_w("It's", 1.0), _w("fine,", 1.4), _w("she", 1.8), _w("told", 2.2), _w("him.", 2.6)]
+    event = _ve(2.0, 4.0, "action", "She hands him the man's key.", said=True)
+    assert confirm_said([event], words)[0].said_in_dialogue is False
+    said = _ve(2.0, 4.0, "action", "She hands him the key; that is fine, he was told.",
+               said=True)  # fmt: skip
+    assert confirm_said([said], words)[0].said_in_dialogue is True  # fine + told: 2 of 4
+
+
+def test_said_in_dialogue_ignores_reflexives_and_modals():
+    words = [_w("He", 1.0), _w("could", 1.3), _w("do", 1.6), _w("it", 1.9), _w("himself.", 2.2)]
+    event = _ve(2.0, 4.0, "action", "He could see himself in the mirror.", said=True)
+    assert confirm_said([event], words)[0].said_in_dialogue is False
+
+
+def test_each_window_that_worked_is_kept_when_a_later_one_fails(two_window_video, tmp_path):
+    """A model error on window 2 stops watch, but window 1's answer was kept (memo): the next
+    attempt asks for window 2 only."""
+    from lull.tf import TFError
+
+    kept: dict = {}
+
+    def memo(name, inputs, compute):
+        key = (name, repr(sorted(inputs.items())))
+        if key not in kept:
+            kept[key] = compute()
+        return kept[key]
+
+    good = [{"events": [_ev(2.0, 5.0, "setting", "a plain red screen", sal=2)]},
+            {"events": [_ev(20.0, 25.0, "object", "a blue field fills the frame")]}]  # fmt: skip
+
+    class Fails(FakeTF):
+        def json(self, model, messages, schema, **kw):
+            if len(self.calls) == 1:
+                self.calls.append(kw)
+                raise TFError("HTTP 503 after retries")
+            return super().json(model, messages, schema, **kw)
+
+    first = Fails([good[0]])
+    with pytest.raises(TFError):
+        watch(two_window_video, tmp_path, [], first, run_id="r", profile="education", memo=memo)
+    again = FakeTF([good[1]])
+    out = watch(two_window_video, tmp_path, [], again, run_id="r", profile="education", memo=memo)
+    assert len(again.calls) == 1 and "31.0" in _user_text(again.calls[0])  # window 2 only
+    assert [e.text for e in out] == ["a plain red screen", "a blue field fills the frame"]

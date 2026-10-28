@@ -1,13 +1,18 @@
 import hashlib
 import json
 import math
+import re
+import shutil
 import subprocess
 import wave
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+import lull
+from locks import assert_locked
 from lull import media
 from lull.ledger import CallRecord, Ledger
 from lull.media import MediaError, Probe, loudness_profile
@@ -18,6 +23,7 @@ from lull.stages.publish import (
     coverage,
     f113_flags,
     publish,
+    timecode,
     to_extended_vtt,
     to_vtt,
     tts_disclosure,
@@ -67,7 +73,7 @@ def _sine_wav(path: Path, seconds: float, freq: float, amp: float, rate: int = 2
 
 
 def _ledger(tmp_path: Path, run_id: str = "r1") -> Ledger:
-    led = Ledger(tmp_path / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
+    led = Ledger(tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
     for role, model, cost in [("watch", SUPER, 0.004), ("verify", SUPER, 0.002),
                               ("verify", SUPER, 0.002), ("repair", LIGHT, 0.0001)]:  # fmt: skip
         led.record(CallRecord(run_id=run_id, stage="s", role=role, provider="tokenfactory",
@@ -189,33 +195,35 @@ def _freezes(ext, **kw):
 def test_extended_freezes_wait_for_a_standard_cue_and_merge_close_cues():
     std = [_cue("c001", 3.5, 1.0)]  # speaks 3.5-4.5
     ext = [
-        _cue("x001", 0.02, 1.0, gap=None, status="extended"),  # at the very start -> frame 0
+        _cue("x001", 0.02, 1.0, gap=None, status="extended"),  # silence: 0.3 s on (frame 8)
         _cue("x002", 4.0, 2.0, gap=None, status="extended"),  # inside c001 -> after it (4.52)
-        _cue("x003", 4.55, 1.0, gap=None, status="extended"),  # within 0.1 s of x002's freeze
+        _cue("x003", 4.25, 1.0, gap=None, status="extended"),  # 4.55: within 0.1 s of x002's
         _cue("x004", 30.0, 1.0, gap=None, status="extended"),  # past the end -> clamped
     ]
     assert _freezes(ext, standard=std) == [
-        (0, 25, ["x001"]), (113, 75, ["x002", "x003"]), (247, 25, ["x004"])
+        (8, 25, ["x001"]), (113, 75, ["x002", "x003"]), (247, 25, ["x004"])
     ]  # fmt: skip
 
 
-def test_extended_freezes_snap_to_speech_free_frames_and_whole_frame_pauses():
+def test_extended_freezes_wait_for_speech_to_end_on_whole_frames():
     speech = [Span(start=0.0, end=0.83), Span(start=2.013, end=3.0), Span(start=6.0, end=6.5)]
     ext = [
-        _cue("x001", 0.5, 0.53, gap=None, status="extended"),  # speech from 0 -> its end
-        _cue("x002", 2.5, 0.71, gap=None, status="extended"),  # mid-word -> before 2.013
-        _cue("x003", 5.0, 1.0, gap=None, status="extended"),  # already speech-free
-        _cue("x004", 6.5, 0.2, gap=None, status="extended"),  # at a span's end: speech-free
+        _cue("x001", 0.5, 0.53, gap=None, status="extended"),  # in speech -> its end
+        _cue("x002", 2.5, 0.71, gap=None, status="extended"),  # in speech -> its end (3.0)
+        _cue("x003", 5.0, 1.0, gap=None, status="extended"),  # speech-free: 0.3 s on
+        _cue("x004", 6.5, 0.2, gap=None, status="extended"),  # at a span's end: 0.3 s on
     ]
     got = _freezes(ext, speech=speech)
-    # x001: 0.83 -> frame 21 (0.84: moved later, so rounded up, out of the speech)
-    # x002: 2.013 -> frame 50 (2.00, down); x004: 6.5 -> 6.48 is speech, so frame 163 (6.52)
+    # without words each speech span is one sentence: a freeze waits for its end, never
+    # holding before its visual. x001: 0.83 -> frame 21 (0.84, rounded up); x002: 3.0 ->
+    # frame 75; x003: 5.3 -> frame 133; x004: 6.8 -> frame 170.
     # pauses: 0.53 s -> 14 frames, 0.71 s -> 18 frames (rounded up to whole frames)
-    assert got == [(21, 14, ["x001"]), (50, 18, ["x002"]), (125, 25, ["x003"]),
-                   (163, 5, ["x004"])]  # fmt: skip
-    for frame, _, _ in got:
+    assert got == [(21, 14, ["x001"]), (75, 18, ["x002"]), (133, 25, ["x003"]),
+                   (170, 5, ["x004"])]  # fmt: skip
+    for (frame, _, _), c in zip(got, ext, strict=True):
         t = frame / 25
         assert not any(sp.start < t < sp.end for sp in speech), f"freeze at {t} is mid-speech"
+        assert t >= c.start, f"freeze at {t} comes before its visual at {c.start}"
 
 
 def test_cue_gain_levels_cues_to_the_programme_within_bounds():
@@ -304,12 +312,15 @@ def test_coverage_counts_salient_events_in_voiced_cues():
     ext = [_cue("x001", 4.0, 1.0, gap=None, status="extended", ev=["e5"])]
     cov = coverage(cues, ext, events, extended_produced=True)
     assert cov == {
-        "salient_events": 4,
+        "important_events": 4,
+        "salient_events": 4,  # the old name, kept for readers of older summaries
         "described": 1,
         "ratio": 0.25,
         "described_with_extended": 2,
         "ratio_with_extended": 0.5,
         "undescribed": ["e2", "e3"],
+        "repetitive": [],
+        "watch_salient": 4,
     }
     assert coverage(cues, ext, events, extended_produced=False)["described_with_extended"] == 1
     assert coverage([], [], [_ev("e9", 0, 1, salience=2)], extended_produced=False)["ratio"] is None
@@ -371,6 +382,65 @@ def test_wcag_without_a_voiced_standard_track():
     assert "described.mp4" not in rows["1.2.5"]["via"]
 
 
+def _cov(salient: int, described: int, with_ext: int | None = None) -> dict:
+    with_ext = described if with_ext is None else with_ext
+    return {"important_events": salient, "described": described,
+            "ratio": round(described / salient, 3) if salient else None,
+            "described_with_extended": with_ext,
+            "ratio_with_extended": round(with_ext / salient, 3) if salient else None,
+            "undescribed": []}  # fmt: skip
+
+
+def test_wcag_met_needs_four_in_five_salient_events_described():
+    """1.2.5 and 1.2.7 are met only with salient coverage >= 0.8; 1.2.7
+    counts the extended descriptions too. 1.2.3 does not depend on coverage."""
+    rows = _wcag(extended_produced=True, coverage=_cov(10, 7, 8))
+    assert rows["1.2.3"]["status"] == "met"
+    assert rows["1.2.5"]["status"] == "needs review"
+    assert rows["1.2.5"]["reasons"] == ["3 important events undescribed (7 of 10 described)"]
+    assert rows["1.2.7"]["status"] == "met" and rows["1.2.7"]["reasons"] == []
+    rows = _wcag(extended_produced=True, coverage=_cov(10, 7, 7))
+    assert rows["1.2.7"]["status"] == "needs review"
+    assert rows["1.2.7"]["reasons"] == ["3 important events undescribed (7 of 10 described)"]
+    rows = _wcag(coverage=_cov(5, 4), reviewed=False)
+    assert rows["1.2.5"]["status"] == "met (automated checks)"
+    rows = _wcag(coverage=_cov(4, 3))
+    assert rows["1.2.5"]["reasons"] == ["1 important event undescribed (3 of 4 described)"]
+    rows = _wcag(coverage=_cov(0, 0))  # nothing salient: nothing to miss
+    assert rows["1.2.5"]["status"] == "met"
+    # continuous speech: the extended version is the described version, so it counts
+    rows = _wcag(standard=0, extended_produced=True, coverage=_cov(5, 0, 4))
+    assert rows["1.2.5"]["status"] == "met"
+    rows = _wcag(standard=0, extended_produced=True, coverage=_cov(5, 0, 3))
+    assert rows["1.2.5"]["reasons"] == ["2 important events undescribed (3 of 5 described)"]
+
+
+def test_events_the_dialogue_conveys_are_never_counted_undescribed():
+    """Events left out of the plan because the dialogue already says them (R21: said in
+    dialogue, salience under 5) are neither salient for coverage nor F113 candidates."""
+    events = [
+        _ev("e1", 1.0, 3.0, salience=4).model_copy(update={"said_in_dialogue": True}),
+        _ev("e2", 1.0, 3.0, salience=5).model_copy(update={"said_in_dialogue": True}),
+        _ev("e3", 7.0, 9.0, salience=4).model_copy(update={"said_in_dialogue": True}),
+    ]
+    cov = coverage([], [], events, extended_produced=False)
+    assert cov["important_events"] == 1 and cov["undescribed"] == ["e2"]
+    flags = f113_flags([_gap("g001", 0.5, 4.0), _gap("g002", 6.5, 9.5)], [], events)
+    assert [f["event_ids"] for f in flags] == [["e2"]]
+
+
+def test_a_duplicate_the_plan_dropped_counts_with_its_twin():
+    events = [_ev("e1", 1.0, 3.0, salience=5), _ev("e2", 6.0, 8.0, salience=5),
+              _ev("e3", 12.0, 13.0, salience=4)]  # fmt: skip
+    cues = [_cue("c001", 1.0, 1.0, ev=["e1"])]
+    dup = {"e2": "e1", "e3": "e9"}
+    cov = coverage(cues, [], events, extended_produced=False, duplicates=dup)
+    assert (cov["described"], cov["undescribed"]) == (2, ["e3"])
+    gaps = [_gap("g001", 1.0, 4.0), _gap("g002", 5.5, 9.0), _gap("g003", 11.5, 14.0)]
+    flags = f113_flags(gaps, cues, events, duplicates=dup)
+    assert [f["gap_id"] for f in flags] == ["g003"]
+
+
 def test_tts_disclosure_says_reviewed_only_when_every_cue_was_edited():
     edited = [_cue("c001", 1.0, 1.0, status="edited")]
     assert tts_disclosure(edited) == (
@@ -424,7 +494,8 @@ def fake_media(monkeypatch):
     def fake_levels(video, info, cues):
         return mixer.Levels(programme=-23.0, cues={str(c.audio_path): -20.0 for c in cues})
 
-    monkeypatch.setattr(media, "probe", lambda p: media.Probe(60.0, 640, 360, 25.0, True, "h264"))
+    mp4 = media.Probe(60.0, 640, 360, 25.0, True, "h264", format_name="mov,mp4,m4a,3gp,3g2,mj2")
+    monkeypatch.setattr(media, "probe", lambda p: mp4)
     monkeypatch.setattr(mixer, "measure_levels", fake_levels)
     monkeypatch.setattr(mixer, "mix", fake_mix)
     monkeypatch.setattr(mixer, "extended_video", fake_extended)
@@ -454,7 +525,7 @@ def test_publish_refuses_on_overlap_and_writes_nothing(tmp_path, fake_media):
 
 
 def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
-    """Continuous speech: no standard cue at all, publish still succeeds (Review Focus 2)."""
+    """Continuous speech: no standard cue at all, publish still succeeds."""
     video = tmp_path / "talk.mp4"
     video.write_bytes(b"video bytes")
     events = [_ev("e1", 10.0, 14.0, kind="slide", salience=5, text="A slide titled Results.")]
@@ -463,6 +534,9 @@ def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
     (run / "keyframes").mkdir(parents=True)  # left by an earlier run of the same directory
     (run / "keyframes" / "c009.jpg").write_bytes(b"old")
     (run / "extended.mp4").write_bytes(b"old")
+    (run / "manifest.json").write_text(  # that earlier publish's manifest
+        json.dumps({"outputs": {"extended.mp4": {}, "keyframes/c009.jpg": {}}}), encoding="utf-8"
+    )
     (run / ".mix-old").mkdir()
     res = publish(run, video, [], ext, events, [], None, _ledger(tmp_path), "r1", RunOptions(),
                   speech=[Span(start=0.0, end=60.0)])  # fmt: skip
@@ -532,7 +606,7 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
         assert meta == {"sha256": _sha(run / name), "bytes": (run / name).stat().st_size}
     s = m["summary"]
     assert s["cues"] == {"verified": 1, "edited": 0, "approved": 0, "held": 1, "extended": 1}
-    assert s["coverage"]["described"] == 1 and s["coverage"]["salient_events"] == 2
+    assert s["coverage"]["described"] == 1 and s["coverage"]["important_events"] == 2
     assert s["overlap_seconds"] == 0.0
     assert s["overlap"] == {"speech_s": 0.0, "between_cues_s": 0.0, "outside_pauses_s": 0.0,
                             "total_s": 0.0}  # fmt: skip
@@ -547,7 +621,7 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     assert s["cost_per_min"] == pytest.approx(0.0081)
     by = {(g["role"], g["model"]): g for g in s["calls_by_role_model"]}
     assert by[("verify", SUPER)]["calls"] == 2
-    assert m["versions"]["engine"] == "0.1.0"
+    assert m["versions"]["engine"] == lull.__version__
     assert m["versions"]["models"] == sorted([SUPER, LIGHT])
     assert m["options"]["voice"] == "Sofia"
 
@@ -574,7 +648,97 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     assert [c["id"] for c in data["extended"]] == ["x001"]
     assert data["cues"][0]["audio_path"] == "work/audio/c001.wav"  # relative to the run
     ext_vtt = (run / "extended.vtt").read_text(encoding="utf-8")
-    assert "x001\n00:00:30.000 --> 00:00:31.000\n" in ext_vtt  # written regardless
+    assert "x001\n00:00:30.320 --> 00:00:31.320\n" in ext_vtt  # written regardless (0.3 s on)
+
+
+def test_cues_json_carries_the_timeline_the_studio_and_the_site_draw(tmp_path, fake_media):
+    """cues.json also holds the pauses (the windows the scheduler filled), the speech spans
+    and, for each voiced extended cue, its freeze point."""
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0), _gap("g002", 20.0, 23.0)]
+    events = [_ev("e1", 2.0, 4.0), _ev("e2", 11.0, 12.0)]
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")]
+    ext = [_cue("x002", 11.0, 1.0, gap=None, status="extended", ev=["e2"], audio="x.wav"),
+           _cue("x003", 13.0, None, gap=None, status="held", ev=["e2"])]  # fmt: skip
+    speech = [Span(start=0.0, end=1.8), Span(start=10.0, end=12.5)]
+    run = tmp_path / "run"
+    publish(run, video, cues, ext, events, gaps, None, _ledger(tmp_path), "r1", RunOptions(),
+            speech=speech)  # fmt: skip
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    assert data["gaps"] == [g.model_dump(mode="json") for g in gaps]
+    assert data["speech"] == [{"start": 0.0, "end": 1.8}, {"start": 10.0, "end": 12.5}]
+    assert [(c["id"], c.get("freeze_at")) for c in data["extended"]] == [
+        ("x002", 12.52), ("x003", None)  # x002 waits for the speech under its visual to end
+    ]  # fmt: skip
+    assert "freeze_at" not in data["cues"][0]
+
+
+def _snapshot(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def test_a_failed_publish_leaves_the_previous_outputs_untouched(tmp_path, fake_media, monkeypatch):
+    """Publish is atomic: everything is written into a staging folder first and moved into
+    place only when every output and the manifest are done."""
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0)]
+    events = [_ev("e1", 2.0, 4.0, kind="slide", salience=5)]
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio=str(tmp_path / "c001.wav"))]
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended", ev=["e1"],
+                audio=str(tmp_path / "x001.wav"))]  # fmt: skip
+    run = tmp_path / "run"
+    args = (events, gaps, None, _ledger(tmp_path), "r1", RunOptions())
+    published = publish(run, video, cues, ext, *args, speech=[])
+    before = _snapshot(run)
+    assert "manifest.json" in before and "cues.json" in before and "keyframes/c001.jpg" in before
+
+    def broken_mix(*a, **kw):
+        raise MediaError("ffmpeg failed (exit 1): the mix broke")
+
+    monkeypatch.setattr(mixer, "mix", broken_mix)
+    other = [_cue("c001", 2.0, 1.2, ev=["e1"], text="Another line.", audio="y.wav")]
+    with pytest.raises(MediaError, match="the mix broke"):
+        publish(run, video, other, [], *args, speech=[])
+    assert _snapshot(run) == before  # byte for byte, nothing added or removed
+    assert published.manifest.read_bytes() == before["manifest.json"]
+
+
+def test_a_new_publish_replaces_the_outputs_and_drops_the_ones_it_no_longer_makes(
+    tmp_path, fake_media, monkeypatch
+):
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0)]
+    events = [_ev("e1", 2.0, 4.0, kind="slide", salience=5)]
+    run = tmp_path / "run"
+    args = (events, gaps, None, _ledger(tmp_path), "r1", RunOptions())
+    (run / "notes.txt").parent.mkdir(parents=True)
+    (run / "notes.txt").write_text("mine", encoding="utf-8")  # not an output: left alone
+
+    def with_extended(video, cues_extended, out_dir, **kw):
+        if not cues_extended:
+            return None
+        dst = out_dir / mixer.EXTENDED_VIDEO
+        dst.write_bytes(b"extended")
+        return dst
+
+    monkeypatch.setattr(mixer, "extended_video", with_extended)
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended", ev=["e1"], audio="x.wav")]
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")]
+    first = publish(run, video, cues, ext, *args, speech=[])
+    assert (run / "extended.mp4").exists() and "extended.mp4" in first.files
+    assert sorted(p.name for p in (run / "keyframes").iterdir()) == ["c001.jpg", "x001.jpg"]
+    second = publish(run, video, cues, [], *args, speech=[])
+    assert not (run / "extended.mp4").exists() and "extended.mp4" not in second.files
+    assert sorted(p.name for p in (run / "keyframes").iterdir()) == ["c001.jpg"]
+    assert (run / "notes.txt").read_text(encoding="utf-8") == "mine"
+    assert [p.name for p in run.iterdir() if p.name.startswith(".")] == []
+    m = json.loads(second.manifest.read_text(encoding="utf-8"))
+    assert set(m["outputs"]) == set(second.files)
+    for name, path in second.files.items():
+        assert path == run / name and path.exists()
 
 
 # -- real ffmpeg -----------------------------------------------------------------------------
@@ -595,8 +759,9 @@ def published(tmp_path_factory):
     """One real publish on a 6 s, 25 fps fixture.
 
     c001 (verified, 1 s) at 2.0 s; c002 held; x001 (0.53 s) for a visual at 1.0 s and x002
-    (0.71 s) for one at 4.0 s, both mid-speech: they freeze at 0.60 s and 3.60 s, for 14 and
-    18 frames (0.56 s, 0.72 s). Extended timeline: x001 at 0.60, c001 at 2.56, x002 at 4.16,
+    (0.71 s) for one at 4.0 s, both mid-speech: each freezes 0.3 s after its visual, where its
+    speech has ended (1.32 s and 4.32 s, on frames), for 14 and 18 frames (0.56 s, 0.72 s).
+    Extended timeline: x001 at 1.32, c001 at 2.56, x002 at 4.88,
     7.28 s in all.
     """
     root = tmp_path_factory.mktemp("publish")
@@ -629,9 +794,45 @@ def published(tmp_path_factory):
         _cue("x002", 4.0, 0.71, gap=None, status="extended", ev=["e4"], audio=str(wavs["x002"])),
     ]
     run = root / "run"
-    res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1", RunOptions(),
-                  speech=SPEECH)  # fmt: skip
-    return {"video": video, "run": run, "res": res, "root": root}
+    commands: list[list[str]] = []
+    real = subprocess.run
+
+    def spy(cmd, *args, **kwargs):
+        commands.append([str(c) for c in cmd])
+        return real(cmd, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(media.subprocess, "run", spy)
+        res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1",
+                      RunOptions(), speech=SPEECH)  # fmt: skip
+    return {"video": video, "run": run, "res": res, "root": root, "commands": commands}
+
+
+def test_publish_reads_every_input_as_a_local_file(published):
+    """The probe, levels, mix, extended version and keyframes all open their inputs with
+    -protocol_whitelist file,pipe."""
+    ffmpeg = [c for c in published["commands"] if Path(c[0]).stem.lower() == "ffmpeg"]
+    assert len(ffmpeg) >= 4  # levels, premix + mix, premix + extended, keyframes
+    for cmd in published["commands"]:
+        if "-version" in cmd:
+            continue  # the version check reads no file
+        assert_locked(cmd)
+        for i, arg in enumerate(cmd):  # a cue's voice (and the premix) is read as WAV only
+            if arg == "-i" and cmd[i + 1].lower().endswith(".wav"):
+                assert cmd[i - 4 : i - 2] == ["-format_whitelist", "wav"], cmd
+
+
+def test_publish_refuses_a_video_that_is_not_mp4_matroska_or_webm(tmp_path, fake_media,
+                                                                   monkeypatch):  # fmt: skip
+    playlist = media.Probe(60.0, 640, 360, 25.0, True, "h264", format_name="hls")
+    monkeypatch.setattr(media, "probe", lambda p: playlist)
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"#EXTM3U")
+    run = tmp_path / "run"
+    with pytest.raises(MediaError):
+        publish(run, video, [], [], [], [], None, _ledger(tmp_path), "r1", RunOptions(),
+                speech=[])  # fmt: skip
+    assert not run.exists() or not any(run.iterdir())
 
 
 def _streams(path: Path) -> tuple[list[dict], float]:
@@ -732,13 +933,13 @@ def test_extended_mp4_stays_in_sync_across_two_pauses(published):
     lo, hi, loud, _ = _analyse(res.files["extended.mp4"], published["root"])
     assert loud["input_i"] == pytest.approx(-24.0, abs=0.5)
     voice = loudness_profile(hi, hop=0.005)
-    for target in (0.60, 2.56, 4.16):  # x001, c001 (moved by x001's pause), x002
+    for target in (1.32, 2.56, 4.88):  # x001, c001 (moved by x001's pause), x002
         onset = _onset(voice, target - 0.3)
         print(f"extended: cue wanted at {target:.2f} s, starts at {onset:.3f} s")
         assert onset == pytest.approx(target, abs=FRAME), f"cue at {onset}, wanted {target}"
     programme = loudness_profile(lo)
-    playing = _mean_db(programme, [(1.25, 2.3), (5.0, 7.1)])
-    for pause in ((0.65, 1.1), (4.2, 4.8)):  # the programme is silent while the picture holds
+    playing = _mean_db(programme, [(0.1, 1.25), (5.7, 7.1)])
+    for pause in ((1.37, 1.83), (4.93, 5.55)):  # the programme is silent while the picture holds
         assert playing - _mean_db(programme, [pause]) >= 30.0
 
 
@@ -760,6 +961,946 @@ def test_published_files_match_manifest(published):
     vtt = (run / "descriptions.vtt").read_text(encoding="utf-8")
     assert "c001\n00:00:02.000 --> 00:00:03.000\n" in vtt
     ext_vtt = (run / "extended.vtt").read_text(encoding="utf-8")
-    assert "NOTE extended pause=0.530\n\nx001\n00:00:00.600 --> 00:00:01.130\n" in ext_vtt
-    assert "NOTE extended pause=0.710\n\nx002\n00:00:03.600 --> 00:00:04.310\n" in ext_vtt
+    assert "NOTE extended pause=0.530\n\nx001\n00:00:01.320 --> 00:00:01.850\n" in ext_vtt
+    assert "NOTE extended pause=0.710\n\nx002\n00:00:04.320 --> 00:00:05.030\n" in ext_vtt
     assert [p.name for p in run.iterdir() if p.name.startswith(".")] == []  # no temp dirs left
+
+
+# -- edge cases ------------------------------------------------------------------------------
+
+
+def test_a_freeze_pulled_back_from_the_end_never_lands_in_speech():
+    """The last freeze is kept MIN_SEGMENT inside the video; when that moves it into speech it
+    goes back to where the speech starts."""
+    speech = [Span(start=9.7, end=9.95)]
+    ext = [_cue("x001", 9.98, 0.4, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, speech=speech)
+    assert frame == 242  # 9.68 s, just before the speech; 9.88 s would be mid-word
+    assert not any(sp.start < frame / 25 < sp.end for sp in speech)
+
+
+def test_the_frame_rate_comes_from_the_probed_fraction():
+    ntsc = Probe(10.0, 640, 360, 29.97, True, "h264", "aac", fps_rational="30000/1001")
+    assert mixer.frame_rate(ntsc) == Fraction(30000, 1001)  # the float would give 2997/100
+    assert mixer.frame_rate(Probe(10.0, 640, 360, 29.97, True, "h264")) == Fraction(2997, 100)
+    odd = Probe(10.0, 640, 360, 25.0, True, "h264", fps_rational="0/0")
+    assert mixer.frame_rate(odd) == 25
+
+
+def test_probe_keeps_the_frame_rate_fraction(tone_slides):
+    assert media.probe(tone_slides).fps_rational == "30/1"
+
+
+def test_a_mix_without_a_voiced_line_is_titled_as_the_original(tmp_path):
+    video = tmp_path / "v.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                    "-i", "color=c=gray:s=160x90:r=25:d=2", "-f", "lavfi",
+                    "-i", "sine=frequency=440:duration=2", "-c:v", "libx264", "-pix_fmt",
+                    "yuv420p", "-c:a", "aac", "-t", "2", str(video)],
+                   check=True, capture_output=True)  # fmt: skip
+    held = [_cue("c001", 0.5, None, status="held")]
+    res = mixer.mix(video, held, tmp_path / "out")
+    for path in (res.ad_audio, res.ad_video):
+        streams, _ = _streams(path)
+        titles = [s["tags"]["handler_name"] for s in streams if s["codec_type"] == "audio"]
+        assert titles[0] == "Original (no description)", (path.name, titles)
+        assert "Described" not in titles
+
+
+def test_the_reason_the_extended_version_failed_names_no_local_path(
+    tmp_path, fake_media, monkeypatch
+):
+    def broken(video, cues_extended, out_dir, **kw):
+        raise MediaError(
+            r"ffmpeg failed (exit 1): C:\Users\someone\runs\talk\.extended-x1\premix.wav:"
+            " Invalid data; /home/someone/runs/talk/work/x001.wav missing; \\\\host\\share\\a.mp4"
+        )
+
+    monkeypatch.setattr(mixer, "extended_video", broken)
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended", audio="x.wav")]
+    res = publish(tmp_path / "run", video, [], ext, [_ev("e1", 2.0, 4.0)], [], None,
+                  _ledger(tmp_path), "r1", RunOptions(), speech=[])  # fmt: skip
+    reason = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]["extended_error"]
+    assert reason == ("ffmpeg failed (exit 1): premix.wav: Invalid data; x001.wav missing; a.mp4")
+
+
+# -- rollback during the move, one publisher at a time ---------------------------
+
+
+def _tree(root: Path) -> tuple[dict[str, bytes], list[str]]:
+    """Every file's bytes and every entry's name (empty folders included)."""
+    return _snapshot(root), sorted(p.relative_to(root).as_posix() for p in root.rglob("*"))
+
+
+def _publish_args(tmp_path: Path):
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    gaps = [_gap("g001", 2.0, 5.0)]
+    events = [_ev("e1", 2.0, 4.0, kind="slide", salience=5)]
+    return video, (events, gaps, None, _ledger(tmp_path), "r1", RunOptions())
+
+
+def test_a_failure_while_moving_the_outputs_in_rolls_everything_back(
+    tmp_path, fake_media, monkeypatch
+):
+    """The old outputs move to a backup folder, the new ones move in, the backup goes only
+    after success. A move that fails at any point puts every old file back in place."""
+    from lull.stages import publish as pub
+
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    cues = [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")]
+    other = [_cue("c001", 2.0, 1.2, ev=["e1"], text="Another line.", audio="y.wav")]
+    real = pub._move
+    failed_at = []
+    for n in range(1, 40):
+        publish(run, video, cues, [], *args, speech=[])  # a good publish to fall back to
+        before = _tree(run)
+        calls = {"n": 0}
+
+        def flaky(src, dst, _n=n, _calls=calls):
+            _calls["n"] += 1
+            if _calls["n"] == _n:
+                raise OSError(f"disk said no on move {_n}")
+            return real(src, dst)
+
+        monkeypatch.setattr(pub, "_move", flaky)
+        try:
+            publish(run, video, other, [], *args, speech=[])
+        except OSError:
+            failed_at.append(n)
+            assert _tree(run) == before, f"not rolled back after a failure on move {n}"
+        else:
+            break  # n is past the last move: the publish went through
+        finally:
+            monkeypatch.setattr(pub, "_move", real)
+    assert len(failed_at) >= 10  # the backup moves and the moves in were all tried
+    assert "Another line." in (run / "descriptions.vtt").read_text(encoding="utf-8")
+
+
+def test_publishes_of_one_run_take_turns(tmp_path, fake_media, monkeypatch):
+    """A publish holds run_dir/.publish.lock (created exclusively); another one waits for
+    it instead of clearing the first one's staging folder."""
+    import threading
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_POLL_S", 0.05)
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    lock.write_text("someone else", encoding="utf-8")
+    busy = run / ".publish-busy"  # the other publish's staging folder
+    busy.mkdir()
+
+    def finish() -> None:
+        time.sleep(0.4)
+        shutil.rmtree(busy)
+        lock.unlink()
+
+    t = threading.Thread(target=finish)
+    t0 = time.monotonic()
+    t.start()
+    publish(run, video, [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")], [], *args, speech=[])
+    t.join()
+    assert time.monotonic() - t0 >= 0.35  # it waited its turn
+    assert (run / "manifest.json").exists() and not lock.exists()
+
+
+def test_a_stale_publish_lock_is_broken(tmp_path, fake_media, caplog):
+    import os
+    import time
+
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    lock.write_text("crashed", encoding="utf-8")
+    old = time.time() - 11 * 60
+    os.utime(lock, (old, old))
+    (run / ".publish-crashed").mkdir()  # its staging folder
+    with caplog.at_level("WARNING", logger="lull.stages.publish"):
+        publish(run, video, [], [], *args, speech=[])
+    assert "stale" in caplog.text
+    assert not lock.exists() and not (run / ".publish-crashed").exists()
+
+
+def test_a_backup_left_by_a_crash_is_put_back_before_the_next_publish(tmp_path):
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    (run / ".publish-old-x1").mkdir(parents=True)
+    (run / ".publish-old-x1" / "manifest.json").write_text("old manifest", encoding="utf-8")
+    (run / ".publish-old-x1" / "report.html").write_text("old report", encoding="utf-8")
+    (run / "report.html").write_text("new report", encoding="utf-8")  # already moved in
+    pub._recover(run)
+    assert (run / "manifest.json").read_text(encoding="utf-8") == "old manifest"
+    # no manifest was in place: the old outputs all come back
+    assert (run / "report.html").read_text(encoding="utf-8") == "old report"
+    assert not (run / ".publish-old-x1").exists()
+
+
+def test_coverage_and_f113_count_only_the_events_a_line_still_describes():
+    """A cue that lost e2's sentence describes e1 only; a free pause during e2 is F113."""
+    events = [_ev("e1", 1.0, 3.0, salience=5), _ev("e2", 1.5, 9.0, salience=4)]
+    cue = _cue("c001", 1.0, 1.5, ev=["e1", "e2"], described=["e1"])
+    cov = coverage([cue], [], events, extended_produced=False)
+    assert (cov["described"], cov["undescribed"]) == (1, ["e2"])
+    gaps = [_gap("g001", 1.0, 3.0), _gap("g002", 5.0, 8.0)]
+    assert [(f["gap_id"], f["event_ids"]) for f in f113_flags(gaps, [cue], events)] == [
+        ("g002", ["e2"])
+    ]
+    legacy = cue.model_copy(update={"described": None})  # a cue finalised before: all events
+    assert coverage([legacy], [], events, extended_produced=False)["described"] == 2
+
+
+# -- recovery and the lock -------------------------------------------------------------
+
+
+def _files(root: Path) -> dict[str, str]:
+    return {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+            for p in root.rglob("*") if p.is_file()}  # fmt: skip
+
+
+def test_a_crash_while_moving_in_restores_every_backed_up_output(tmp_path):
+    """No manifest in place: the commit stopped in its second phase, so every backed-up item
+    goes back over whatever the new publish had already moved in."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    backup = run / ".publish-old-x1"
+    (backup / "keyframes").mkdir(parents=True)
+    for name, text in [
+        ("manifest.json", "old manifest"),
+        ("report.html", "old report"),
+        ("cues.json", "old cues"),
+        ("keyframes/c001.jpg", "old frame"),
+    ]:
+        (backup / name).write_text(text, encoding="utf-8")  # fmt: skip
+    (run / "keyframes").mkdir()
+    (run / "keyframes" / "c009.jpg").write_text("new frame", encoding="utf-8")
+    (run / "report.html").write_text("new report", encoding="utf-8")
+    pub._recover(run)
+    assert _files(run) == {
+        "manifest.json": "old manifest", "report.html": "old report", "cues.json": "old cues",
+        "keyframes/c001.jpg": "old frame",
+    }  # fmt: skip
+
+
+def test_a_backup_left_after_a_finished_commit_is_just_removed(tmp_path):
+    """The new manifest is in place and the backup holds the old one: the commit finished
+    and only removing the backup failed."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    backup = run / ".publish-old-x2"
+    backup.mkdir(parents=True)
+    (backup / "manifest.json").write_text("old manifest", encoding="utf-8")
+    (backup / "report.html").write_text("old report", encoding="utf-8")
+    (run / "manifest.json").write_text("new manifest", encoding="utf-8")
+    (run / "report.html").write_text("new report", encoding="utf-8")
+    pub._recover(run)
+    assert _files(run) == {"manifest.json": "new manifest", "report.html": "new report"}
+
+
+def test_a_lock_that_cannot_be_written_is_not_left_behind(tmp_path, monkeypatch):
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    run.mkdir()
+
+    def broken(*a, **kw):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pub.os, "fdopen", broken)
+    with pytest.raises(OSError, match="disk full"):
+        with pub._lock(run):
+            pass
+    assert not (run / ".publish.lock").exists()
+
+
+def test_a_held_lock_is_kept_fresh_by_a_heartbeat(tmp_path, monkeypatch):
+    import os
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_HEARTBEAT_S", 0.05)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    with pub._lock(run):
+        pid, host, _, token = lock.read_text(encoding="utf-8").split()
+        assert len(token) == 32  # a random token of its own
+        assert int(pid) == os.getpid() and host
+        old = time.time() - 1000
+        os.utime(lock, (old, old))
+        deadline = time.monotonic() + 3
+        while lock.stat().st_mtime < old + 500 and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert lock.stat().st_mtime > old + 500  # touched again while held
+    assert not lock.exists()
+
+
+def test_a_lock_is_broken_only_when_quiet_and_its_holder_is_gone_or_very_old(tmp_path):
+    """Stale (no heartbeat for LOCK_QUIET_S) is not enough: the holder must be a process that
+    no longer runs on this host, or the lock must be older than LOCK_STALE_S (10 min)."""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    from lull.stages import publish as pub
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    here = socket.gethostname()
+    lock = tmp_path / ".publish.lock"
+
+    def breakable(content: str, age: float) -> bool:
+        lock.write_text(content, encoding="utf-8")
+        t = time.time() - age
+        os.utime(lock, (t, t))
+        return pub._breakable(lock)
+
+    alive = f"{os.getpid()} {here} 0\n"
+    dead = f"{gone.pid} {here} 0\n"
+    elsewhere = f"{os.getpid()} another-host 0\n"
+    assert not breakable(alive, 180)  # quiet, but its publisher still runs here
+    assert breakable(alive, 11 * 60)  # quiet for longer than any publish
+    assert breakable(dead, 180)  # its publisher is gone
+    assert not breakable(dead, 30)  # recently touched: not stale
+    assert not breakable(elsewhere, 180)  # cannot check a process on another host
+    assert breakable(elsewhere, 11 * 60)
+    assert not breakable("garbage", 180) and breakable("garbage", 11 * 60)
+
+
+# -- the events a description is owed ---------------------------------------------------
+
+
+IMPORTANT = [
+    _ev("e1", 1.0, 3.0, salience=5),  # plan 4: important, described
+    _ev("e2", 5.5, 7.0, salience=4, text="The two keep walking."),  # plan 2: repetitive
+    _ev("e3", 9.5, 11.0, salience=3),  # plan 3: important although watch said 3
+    _ev("e4", 13.5, 15.0, salience=4),  # no plan priority: watch salience counts
+    _ev("e5", 17.5, 19.0, salience=2),  # no plan priority, not salient
+    _ev("e6", 21.5, 23.0, salience=4).model_copy(update={"said_in_dialogue": True}),  # R21
+]
+PRIORITY = {"e1": 4, "e2": 2, "e3": 3}
+
+
+def test_coverage_and_f113_count_what_the_plan_rates_important():
+    """Important = plan priority >= 3; without a plan priority, watch
+    salience >= 4. Watch-salient events the plan rated 1-2 are judged repetitive: listed, not
+    counted as undescribed and never F113."""
+    cues = [_cue("c001", 1.0, 1.5, ev=["e1"])]
+    cov = coverage(cues, [], IMPORTANT, extended_produced=False, priority=PRIORITY)
+    assert (cov["important_events"], cov["described"]) == (3, 1)
+    assert cov["undescribed"] == ["e3", "e4"] and cov["repetitive"] == ["e2"]
+    gaps = [_gap(f"g00{i}", 5.0 + 4 * (i - 1), 7.5 + 4 * (i - 1)) for i in range(1, 6)]
+    flags = f113_flags(gaps, cues, IMPORTANT, priority=PRIORITY)
+    assert [f["event_ids"] for f in flags] == [["e3"], ["e4"]]
+    # without a plan the watch salience decides, as before
+    assert coverage(cues, [], IMPORTANT, extended_produced=False)["important_events"] == 3
+
+
+def test_the_report_lists_what_the_planner_judged_repetitive(tmp_path, fake_media):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    cues = [_cue("c001", 1.0, 1.5, ev=["e1"])]
+    gaps = [_gap("g001", 1.0, 3.0)]
+    run = tmp_path / "run"
+    res = publish(run, video, cues, [], IMPORTANT, gaps, None, _ledger(tmp_path), "r1",
+                  RunOptions(), speech=[], priority=PRIORITY)  # fmt: skip
+    summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert summary["repetitive"] == [{"id": "e2", "text": "The two keep walking."}]
+    assert summary["coverage"]["important_events"] == 3
+    reasons = {r["criterion"]: r["reasons"] for r in summary["wcag"]}
+    assert "2 important events undescribed (1 of 3 described)" in reasons["1.2.5"]
+    html = (run / "report.html").read_text(encoding="utf-8")
+    assert "judged repetitive by the planner" in html and "The two keep walking." in html
+    assert "1 of 3 important events described" in html
+
+
+# -- coverage the planner cannot game ----------------------------------------
+
+
+def test_wcag_refuses_a_pass_when_the_planner_demotes_too_many_salient_events():
+    """More than 25 % of the watch-salient events judged repetitive blocks 1.2.5 and
+    1.2.7 (rating everything 1-2 must not buy a pass); 25 % exactly is allowed."""
+    many = _cov(5, 5) | {"watch_salient": 8, "repetitive": ["e1", "e2", "e3"]}
+    rows = _wcag(extended_produced=True, coverage=many)
+    reason = "3 of 8 salient events judged repetitive by the planner (limit 25 %)"
+    assert rows["1.2.5"]["status"] == "needs review" and reason in rows["1.2.5"]["reasons"]
+    assert rows["1.2.7"]["status"] == "needs review" and reason in rows["1.2.7"]["reasons"]
+    assert rows["1.2.3"]["status"] == "met"
+    few = _cov(6, 6) | {"watch_salient": 8, "repetitive": ["e1", "e2"]}
+    assert _wcag(extended_produced=True, coverage=few)["1.2.5"]["status"] == "met"
+
+
+def test_wcag_when_no_event_is_rated_important():
+    """Nothing important although the watch saw salient events: review. Nothing important and
+    nothing salient (a talking head, G203): met, with no description needed."""
+    demoted = _cov(0, 0) | {"watch_salient": 3, "repetitive": ["e1", "e2", "e3"]}
+    rows = _wcag(coverage=demoted)
+    assert rows["1.2.5"]["status"] == "needs review"
+    assert "no event was rated important" in rows["1.2.5"]["reasons"]
+    talking_head = _cov(0, 0) | {"watch_salient": 0, "repetitive": []}
+    rows = _wcag(standard=0, coverage=talking_head)
+    g203 = "met (no visual information beyond the soundtrack)"
+    assert [rows[c]["status"] for c in ("1.2.3", "1.2.5", "1.2.7")] == [g203] * 3
+    assert all("G203" in rows[c]["via"] for c in rows)
+    assert _wcag(standard=0, held=1, coverage=talking_head)["1.2.5"]["status"] == "needs review"
+
+
+def test_coverage_reports_how_many_events_the_watch_found_salient():
+    events = [_ev("e1", 0, 1, salience=5), _ev("e2", 1, 2, salience=4),
+              _ev("e3", 2, 3, salience=3)]  # fmt: skip
+    cov = coverage([], [], events, extended_produced=False, priority={"e1": 1, "e3": 4})
+    assert (cov["watch_salient"], cov["repetitive"], cov["important_events"]) == (2, ["e1"], 2)
+
+
+def test_the_report_escapes_text_from_the_models(tmp_path, fake_media):
+    """The report environment autoescapes: an event or a held reason holding markup shows as
+    text, never as markup."""
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    evil = "<script>alert(1)</script>"
+    events = [_ev("e1", 1.0, 3.0, salience=5, text=f"A sign reads {evil}")]
+    cues = [_cue("c001", 1.0, None, status="held", ev=["e1"], note=f"held: {evil}")]
+    run = tmp_path / "run"
+    publish(run, video, cues, [], events, [_gap("g001", 1.0, 4.0)], None, _ledger(tmp_path),
+            "r1", RunOptions(), speech=[])  # fmt: skip
+    html = (run / "report.html").read_text(encoding="utf-8")
+    assert "<script>alert" not in html and "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_the_report_renders_a_summary_from_an_older_engine(tmp_path, fake_media, monkeypatch):
+    """Older summaries have no `repetitive` and no `important_events`: the template falls back
+    instead of failing."""
+    from lull.stages import publish as pub
+
+    seen = {}
+    real = pub._render_report
+
+    def keep(context):
+        seen["context"] = context
+        return real(context)
+
+    monkeypatch.setattr(pub, "_render_report", keep)
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    publish(tmp_path / "run", video, [_cue("c001", 1.0, 1.0, ev=["e1"])], [],
+            [_ev("e1", 1.0, 3.0)], [_gap("g001", 1.0, 3.0)], None, _ledger(tmp_path), "r1",
+            RunOptions(), speech=[])  # fmt: skip
+    old = dict(seen["context"])
+    summary = {k: v for k, v in old["summary"].items() if k != "repetitive"}
+    summary["coverage"] = {
+        k: v
+        for k, v in summary["coverage"].items()
+        if k not in ("important_events", "repetitive", "watch_salient")
+    }
+    html = real({**old, "summary": summary})
+    assert "1 of 1 important events described" in html
+
+
+# -- a lock is touched and released only by its owner ------------------------
+
+
+def _other_lock(path: Path, age: float = 0.0, pid: int | None = None) -> str:
+    import os
+    import socket
+    import time
+
+    text = f"{pid or os.getpid()} {socket.gethostname()} {time.time():.0f} someone-elses-token\n"
+    path.write_text(text, encoding="utf-8")
+    if age:
+        t = time.time() - age
+        os.utime(path, (t, t))
+    return text
+
+
+def test_a_lock_someone_else_took_over_is_neither_touched_nor_released(tmp_path, monkeypatch):
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_HEARTBEAT_S", 0.05)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    with pub._lock(run):
+        theirs = _other_lock(lock, age=1000)  # broken and re-taken by another publisher
+        stamp = lock.stat().st_mtime
+        time.sleep(0.3)  # several heartbeats
+        assert lock.stat().st_mtime == stamp  # not ours: never touched
+    assert lock.read_text(encoding="utf-8") == theirs  # and not released either
+
+
+def test_two_waiters_breaking_one_stale_lock_never_both_win(tmp_path):
+    import subprocess
+    import sys
+    import threading
+
+    from lull.stages import publish as pub
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    lock = tmp_path / ".publish.lock"
+    for _ in range(5):
+        _other_lock(lock, age=300, pid=gone.pid)  # its publisher is gone: breakable
+        start = threading.Barrier(2)
+        won: list[bool] = []
+
+        def breaker(start=start, won=won) -> None:
+            start.wait()
+            won.append(pub._break(lock))
+
+        threads = [threading.Thread(target=breaker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert sorted(won) == [False, True]
+        assert not lock.exists()
+        assert [p.name for p in tmp_path.iterdir()] == []  # the aside copy is gone too
+
+
+def test_breaking_a_lock_that_turns_out_fresh_puts_it_back(tmp_path):
+    from lull.stages import publish as pub
+
+    lock = tmp_path / ".publish.lock"
+    fresh = _other_lock(lock)  # a live publisher, just written
+    assert pub._break(lock) is False
+    assert lock.read_text(encoding="utf-8") == fresh
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".publish.lock"]
+
+
+def test_a_lock_whose_heartbeat_cannot_start_is_released(tmp_path, monkeypatch):
+    from lull.stages import publish as pub
+
+    class Broken:
+        def __init__(self, *a, **kw):
+            pass
+
+        def start(self):
+            raise RuntimeError("no threads left")
+
+    monkeypatch.setattr(pub.threading, "Thread", Broken)
+    run = tmp_path / "run"
+    run.mkdir()
+    with pytest.raises(RuntimeError, match="no threads"):
+        with pub._lock(run):
+            pass
+    assert not (run / ".publish.lock").exists()
+
+
+def test_a_lock_whose_content_cannot_be_written_is_not_left_behind(tmp_path, monkeypatch):
+    from lull.stages import publish as pub
+
+    real = pub.os.fdopen
+
+    class Full:
+        def __init__(self, f):
+            self.f = f
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.f.close()
+
+        def write(self, text):
+            raise OSError("no space left")
+
+    monkeypatch.setattr(pub.os, "fdopen", lambda fd, *a, **kw: Full(real(fd, *a, **kw)))
+    run = tmp_path / "run"
+    run.mkdir()
+    with pytest.raises(OSError, match="no space"):
+        with pub._lock(run):
+            pass
+    assert not (run / ".publish.lock").exists()
+
+
+def test_alive_tells_a_running_process_from_a_finished_one():
+    import os
+    import subprocess
+    import sys
+
+    from lull.stages import publish as pub
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    assert pub._alive(os.getpid()) is True
+    assert pub._alive(gone.pid) is False
+    assert pub._alive(0) is False and pub._alive(-5) is False
+
+
+# -- waiters and a live lock ----------------------------------------------------------------------
+
+
+def test_waiters_never_disturb_a_live_lock(tmp_path, monkeypatch, caplog):
+    """A holder with a running heartbeat and three waiters polling for about 3 s: the lock
+    file is never missing or replaced while held, no waiter gets in, the heartbeat is still
+    running at the end, and after the release the waiters take turns, one at a time."""
+    import threading
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_HEARTBEAT_S", 0.05)
+    monkeypatch.setattr(pub, "LOCK_POLL_S", 0.01)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    held, release = threading.Event(), threading.Event()
+    problems: list[str] = []
+    times: dict[str, float] = {}
+    turns: list[tuple[float, float]] = []
+
+    def holder() -> None:
+        with pub._lock(run):
+            held.set()
+            release.wait(20)
+            if not any(t.name == "publish-lock" and t.is_alive() for t in threading.enumerate()):
+                problems.append("the heartbeat stopped")
+            times["released"] = time.monotonic()
+
+    def waiter() -> None:
+        with pub._lock(run):
+            t0 = time.monotonic()
+            time.sleep(0.05)
+            turns.append((t0, time.monotonic()))
+
+    with caplog.at_level("WARNING", logger="lull.stages.publish"):
+        h = threading.Thread(target=holder)
+        h.start()
+        assert held.wait(5)
+        token = pub._owner(lock)
+        waiters = [threading.Thread(target=waiter) for _ in range(3)]
+        for w in waiters:
+            w.start()
+        end = time.monotonic() + 3.0
+        while time.monotonic() < end and not problems:
+            if pub._owner(lock) != token:
+                problems.append("the lock went missing or changed while held")
+        release.set()
+        h.join(20)
+        for w in waiters:
+            w.join(20)
+    assert problems == []
+    assert "no longer ours" not in caplog.text and "broke" not in caplog.text
+    assert len(turns) == 3 and all(t0 >= times["released"] for t0, _ in turns)
+    turns.sort()
+    assert all(b[0] >= a[1] for a, b in zip(turns, turns[1:], strict=False))  # one at a time
+    assert not lock.exists()
+
+
+def test_the_report_explains_a_pass_without_visual_information(tmp_path, fake_media):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    run = tmp_path / "run"
+    res = publish(run, video, [], [], [], [], None, _ledger(tmp_path), "r1", RunOptions(),
+                  speech=[Span(start=0.0, end=60.0)])  # fmt: skip
+    rows = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]["wcag"]
+    assert {r["status"] for r in rows} == {"met (no visual information beyond the soundtrack)"}
+    html = (run / "report.html").read_text(encoding="utf-8")
+    assert "needs no description" in html
+
+
+# -- what this attempt cost -------------------------------------------------------------------
+
+
+def test_the_report_states_this_attempts_spend_and_all_runs_apart(tmp_path, fake_media):
+    """Model spend of this attempt, its web searches (counted, notional $ for reference) and
+    the model spend of every attempt under the run id, each labelled."""
+    led = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
+
+    def row(ts, cost, provider="tokenfactory", model=SUPER):
+        led.record(CallRecord(run_id="r1", stage="s", role="watch", provider=provider,
+                              model=model, tokens_in=10, tokens_cached=0, tokens_out=5,
+                              latency_s=1.0, cost_usd=cost, ts=ts))  # fmt: skip
+
+    row(100.0, 0.01)  # an earlier attempt under the same run id
+    row(200.0, 0.02)
+    row(201.0, 0.008, provider="tavily", model="tavily-search")
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    res = publish(tmp_path / "run", video, [], [], [], [], None, led, "r1", RunOptions(),
+                  speech=[], since=150.0)  # fmt: skip
+    s = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert s["spend"] == {
+        "model_usd_this_run": 0.02, "tavily_searches_this_run": 1,
+        "tavily_notional_usd_this_run": 0.008, "model_usd_all_runs": 0.03,
+    }  # fmt: skip
+    assert s["cost_usd"] == 0.02
+    assert sum(g["calls"] for g in s["calls_by_role_model"]) == 2  # this attempt's calls
+    html = " ".join((tmp_path / "run" / "report.html").read_text(encoding="utf-8").split())
+    assert "Model spend, this run" in html and "all runs under run id r1" in html
+    assert "1 web search" in html
+
+
+# -- where the picture freezes for an extended description ------------------------------------
+
+
+def _say(*sentences: tuple[float, str], step: float = 0.45, gap: float = 0.05) -> list:
+    """Words of each sentence, from its start, `step` s per word with `gap` s between."""
+    from lull.types import Word
+
+    out = []
+    for t, text in sentences:
+        for w in text.split():
+            out.append(Word(text=w, start=round(t, 3), end=round(t + step - gap, 3)))
+            t += step
+    return out
+
+
+def test_a_freeze_never_comes_before_its_visual_and_waits_for_the_sentence():
+    """A slide changes at 2.5 s, in the middle of a sentence: the picture holds at the end of
+    that sentence (4.2 s), on the new slide, not where the speech began (on the old one)."""
+    words = _say((0.0, "This is slide one."), (2.0, "Now the chart shows growth."))
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    assert frame / 25 == pytest.approx(4.2, abs=0.04)  # "growth." ends at 4.2 s
+    assert frame / 25 >= 2.5 + 0.3
+
+
+def test_a_freeze_in_silence_waits_a_moment_after_its_visual():
+    words = _say((0.0, "Hello there."))  # ends at 0.85 s
+    ext = [_cue("x001", 3.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    assert frame / 25 == pytest.approx(3.3, abs=0.04)
+
+
+def test_a_freeze_takes_a_gap_between_words_when_no_sentence_ends_soon():
+    """No sentence boundary within FREEZE_WAIT_S: the first gap of 0.15 s or more between
+    words after the visual will do."""
+    from lull.types import Word
+
+    words = [Word(text=f"w{i}", start=round(i * 0.4, 3), end=round(i * 0.4 + 0.35, 3))
+             for i in range(30)]  # 0-12 s, 0.05 s gaps, no punctuation  # fmt: skip
+    words[12] = words[12].model_copy(update={"end": 4.98})  # 4.98 to 5.2: a 0.22 s gap
+    words[13] = words[13].model_copy(update={"start": 5.2})
+    ext = [_cue("x001", 1.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    assert frame / 25 == pytest.approx(5.0, abs=0.04)
+
+
+def test_script_both_tracks_and_cues_json_place_every_cue_at_the_same_time(published):
+    """One timeline: a voiced extended cue sits at its freeze point in script.md, in
+    extended.vtt and in cues.json (freeze_at); a standard cue at its start in all three."""
+    run = published["run"]
+    script = (run / "script.md").read_text(encoding="utf-8")
+    in_script = dict(
+        (m.group(3), (m.group(1), m.group(2)))
+        for m in re.finditer(r"^- (\S+) to (\S+) · (\w+) · ", script, re.M)
+    )
+    in_vtt: dict[str, tuple[str, str]] = {}
+    for name in ("descriptions.vtt", "extended.vtt"):
+        text = (run / name).read_text(encoding="utf-8")
+        for m in re.finditer(r"^(\w+)\n(\S+) --> (\S+)$", text, re.M):
+            in_vtt[m.group(1)] = (m.group(2), m.group(3))
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    in_json = {
+        c["id"]: c.get("freeze_at", c["start"])
+        for c in data["cues"] + data["extended"]
+        if c["audio_dur"] is not None and c["status"] != "held"
+    }
+    assert set(in_script) == set(in_vtt) == set(in_json) == {"c001", "x001", "x002"}
+    for cid, (a, b) in in_vtt.items():
+        assert in_script[cid] == (a, b), cid
+        assert timecode(in_json[cid]) == a, cid
+    assert in_vtt["x002"][0] == "00:00:04.320"  # the freeze point, not the visual (4.0 s)
+
+
+def test_claims_judged_on_another_text_are_never_published(tmp_path, fake_media):
+    """A cue whose text changed after its last check (an edit) publishes no claim: each
+    verdict belongs to the text it was given to."""
+    from lull.types import Check
+
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    claim = Claim(text="a door opens", verdict="supported", at=2.5)
+    same = _cue("c001", 2.0, 1.0, claims=[claim], audio="c.wav",
+                checks=[Check(text="A door opens.", claims=[claim])])  # fmt: skip
+    edited = _cue("c002", 20.0, 1.0, gap="g002", status="edited", text="A gate swings shut.",
+                  claims=[claim], audio="d.wav",
+                  checks=[Check(text="A door opens.", claims=[claim])])  # fmt: skip
+    gaps = [_gap("g001", 2.0, 5.0), _gap("g002", 20.0, 23.0)]
+    run = tmp_path / "run"
+    publish(run, video, [same, edited], [], [_ev("e1", 2.0, 4.0)], gaps, None,
+            _ledger(tmp_path), "r1", RunOptions(), speech=[])  # fmt: skip
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    assert [(c["id"], len(c["claims"])) for c in data["cues"]] == [("c001", 1), ("c002", 0)]
+    assert "a door opens" not in (run / "script.md").read_text(encoding="utf-8").split("c002")[1]
+
+
+def test_a_lock_file_that_cannot_be_created_for_a_moment_is_tried_again(tmp_path, monkeypatch):
+    """Windows refuses to create a file whose name another thread has just deleted
+    (FileNotFoundError or PermissionError, for a moment): the waiter tries again; one that
+    keeps failing raises."""
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_POLL_S", 0.001)
+    real = pub.os.open
+    fails = iter([FileNotFoundError(2, "gone"), PermissionError(13, "pending")])
+
+    def flaky(path, flags, *a):
+        err = next(fails, None)
+        if err is not None and str(path).endswith(".publish.lock"):
+            raise err
+        return real(path, flags, *a)
+
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setattr(pub.os, "open", flaky)
+    with pub._lock(run):
+        assert (run / ".publish.lock").exists()
+
+    def never(path, flags, *a):
+        raise PermissionError(13, "denied")
+
+    monkeypatch.setattr(pub.os, "open", never)
+    with pytest.raises(PermissionError), pub._lock(run):
+        pass
+
+
+# -- files publish did not write ------------------------------------------------------------------
+
+
+def test_publish_never_replaces_files_it_did_not_write(tmp_path, fake_media):
+    """A run folder that holds files under output names but no manifest (someone else's) is
+    refused, untouched; so is an input video that sits in the run folder under an output name
+    (publishing would move it aside and delete it)."""
+    from lull.stages.publish import PublishError
+
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "report.html").write_text("my notes", encoding="utf-8")
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    args = ([], [], None, _ledger(tmp_path), "r1", RunOptions())
+    with pytest.raises(PublishError, match="report.html"):
+        publish(run, video, [], [], *args, speech=[])
+    assert _files(run) == {"report.html": "my notes"}
+
+    inside = tmp_path / "out"
+    inside.mkdir()
+    own = inside / "described.mp4"
+    own.write_bytes(b"the only copy")
+    with pytest.raises(PublishError, match="described.mp4"):
+        publish(inside, own, [], [], *args, speech=[])
+    assert own.read_bytes() == b"the only copy"
+
+    publish(run.parent / "fresh", video, [], [], *args, speech=[])  # an empty folder is fine
+    publish(run.parent / "fresh", video, [], [], *args, speech=[])  # and so is its own output
+
+
+def test_outputs_of_a_first_publish_that_crashed_are_cleared(tmp_path, fake_media):
+    """A first publish (no previous manifest) that stopped while moving its outputs in left
+    them without a manifest: they are its own, so the next publish clears them, not refuses."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    (run / ".publish-old-x3").mkdir(parents=True)  # its backup: nothing was there before
+    (run / "cues.json").write_text("half", encoding="utf-8")
+    (run / "notes.txt").write_text("mine", encoding="utf-8")  # not an output name: kept
+    pub._recover(run)
+    assert _files(run) == {"notes.txt": "mine"}
+
+
+def test_a_release_that_meets_a_reader_tries_again(tmp_path, monkeypatch):
+    """Windows cannot delete a file another thread is reading (a waiter judging the lock):
+    the release tries again rather than leave a live-looking lock behind."""
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "OWNER_RECHECK_S", 0.001)
+    run = tmp_path / "run"
+    run.mkdir()
+    real = Path.unlink
+    busy = iter([True, True])
+
+    def unlink(self, missing_ok=False):
+        if self.name == ".publish.lock" and next(busy, False):
+            raise PermissionError(32, "in use by another process")
+        return real(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    with pub._lock(run):
+        pass
+    assert not (run / ".publish.lock").exists()
+
+
+def _continuous(seconds: float = 30.0) -> list:
+    """Unpunctuated words of 0.35 s with 0.05 s between them: no sentence ends, no gap."""
+    from lull.types import Word
+
+    return [Word(text=f"w{i}", start=round(i * 0.4, 3), end=round(i * 0.4 + 0.35, 3))
+            for i in range(int(seconds / 0.4))]  # fmt: skip
+
+
+def test_in_continuous_speech_the_freeze_takes_the_next_word_boundary():
+    """No sentence ends and no gap opens within FREEZE_WAIT_S: the picture holds at the end of
+    the word running 0.3 s after the visual (2.35 s), never 28 s later at the end of the
+    speech, and never inside a word."""
+    words = _continuous()
+    ext = [_cue("x001", 2.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    t = frame / 25
+    assert 2.3 <= t <= 2.4, t
+    assert not any(w.start < t < w.end for w in words), f"freeze at {t} is mid-word"
+    assert mixer.hold(2.0, words=words) == (2.35, "word")
+
+
+def test_a_continuous_speech_freeze_is_noted_on_the_cue(tmp_path, fake_media):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    ext = [_cue("x001", 2.0, 1.0, gap=None, status="extended", audio="x.wav")]
+    run = tmp_path / "run"
+    words = _continuous(60.0)
+    speech = [Span(start=0.0, end=words[-1].end)]
+    publish(run, video, [], ext, [_ev("e1", 2.0, 4.0)], [], None, _ledger(tmp_path), "r1",
+            RunOptions(), speech=speech, words=words)  # fmt: skip
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    assert "freeze at a word boundary in continuous speech" in data["extended"][0]["note"]
+
+
+def test_wordless_speech_also_holds_a_freeze_back():
+    """A laugh or a song the recogniser gave no words (a diarised turn, 3-8 s) is speech too:
+    a visual at 4.0 s freezes when it ends, not in the middle of it."""
+    from lull.types import Word
+
+    words = [Word(text="Hello", start=0.0, end=0.4), Word(text="there.", start=0.5, end=1.0)]
+    speech = [Span(start=0.0, end=1.0), Span(start=3.0, end=8.0)]
+    ext = [_cue("x001", 4.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words, speech=speech)
+    assert frame / 25 == pytest.approx(8.0, abs=0.04)
+
+
+def test_a_publish_from_the_cache_keeps_the_spend_and_models_of_the_run(tmp_path, fake_media):
+    """A rerun whose every stage came from the cache makes no model call: its publish keeps
+    the spend, the calls and the models of the publish that made the outputs, read from that
+    manifest, instead of reporting $0 and no model."""
+    led = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
+    led.record(CallRecord(run_id="r1", stage="s", role="watch", provider="tokenfactory",
+                          model=SUPER, tokens_in=10, tokens_cached=0, tokens_out=5,
+                          latency_s=1.0, cost_usd=0.02, ts=100.0))  # fmt: skip
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    run = tmp_path / "run"
+    args = (run, video, [], [], [], [], None, led, "r1", RunOptions())
+    first = json.loads(publish(*args, speech=[], since=50.0).manifest.read_text(encoding="utf-8"))
+    again = json.loads(publish(*args, speech=[], since=500.0).manifest.read_text(encoding="utf-8"))
+    assert again["versions"]["models"] == first["versions"]["models"] == [SUPER]
+    assert again["summary"]["spend"] == first["summary"]["spend"]
+    assert again["summary"]["cost_usd"] == 0.02
+    assert again["summary"]["calls_by_role_model"] == first["summary"]["calls_by_role_model"]
+    assert again["summary"]["spend_from_cache"] is True
+    assert first["summary"]["spend_from_cache"] is False
+    html = " ".join((run / "report.html").read_text(encoding="utf-8").split())
+    assert "Every stage of this attempt came from the cache" in html

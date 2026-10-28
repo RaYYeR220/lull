@@ -228,3 +228,79 @@ def test_from_settings_ok(ledger, monkeypatch):
 
 def test_model_constants():
     assert ULTRA == "nvidia/Nemotron-3-Ultra-550b-a55b"
+
+
+# -- edge cases -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("error", [httpx.ReadTimeout("slow"), httpx.RemoteProtocolError("cut")])
+def test_a_request_that_may_have_reached_the_server_is_not_sent_again(ledger, error):
+    """Only a failure to connect is retried: a read timeout or a dropped answer may be a call
+    the provider ran (and billed), so sending it again could pay twice."""
+    sent = {"n": 0}
+
+    def handler(req):
+        sent["n"] += 1
+        raise error
+
+    sleeps: list[float] = []
+    client = TokenFactory("k", ledger, transport=httpx.MockTransport(handler), sleep=sleeps.append)
+    with pytest.raises(TFError, match="network error"):
+        call(client)
+    assert sent["n"] == 1 and sleeps == []
+
+
+def test_a_connect_timeout_is_retried(ledger):
+    sent = {"n": 0}
+
+    def handler(req):
+        sent["n"] += 1
+        if sent["n"] < 3:
+            raise httpx.ConnectTimeout("no route")
+        return ok()
+
+    sleeps: list[float] = []
+    client = TokenFactory("k", ledger, transport=httpx.MockTransport(handler), sleep=sleeps.append)
+    assert call(client) == {"a": 1} and sleeps == [1, 2]
+
+
+def test_leading_reasoning_is_dropped_before_parsing(ledger):
+    client, _, _ = make(ledger, ok('<think>\nlet me see {"a": 0}\n</think>\n\n{"a": 3}'))
+    assert call(client) == {"a": 3}
+    client, _, _ = make(ledger, ok('<think>left open {"a": 0}'), ok('{"a": 4}'))
+    assert call(client) == {"a": 4}  # an unclosed reasoning block is not an answer
+
+
+def test_json_that_is_not_an_object_is_unparseable(ledger):
+    client, srv, _ = make(ledger, ok("[1, 2]"), ok('"a"'))
+    with pytest.raises(TFError, match="truncated"):
+        call(client)
+    assert len(srv.bodies) == 2
+
+
+def test_the_cap_is_checked_again_before_a_retry(tmp_path):
+    led = Ledger(tmp_path / "t.db", cap_run=0.0015, cap_day=10, cap_total=10)
+    usage = {"prompt_tokens": 10_000, "completion_tokens": 1_000}  # Lightning: $0.00084
+    client, srv, _ = make(led, ok('{"a":', finish="length", usage=usage), ok())
+    with pytest.raises(BudgetExceeded) as e:
+        call(client, estimate=0.001)  # 0.00084 spent + 0.001 > 0.0015
+    assert e.value.scope == "run" and len(srv.bodies) == 1
+
+
+def test_client_closes_as_a_context_manager(ledger):
+    with TokenFactory("k", ledger, transport=httpx.MockTransport(Server(ok()))) as client:
+        assert call(client) == {"a": 1}
+    assert client._http.is_closed
+
+
+def test_an_answer_without_usage_is_charged_at_its_estimate(ledger, caplog):
+    """A 200 answer that reports no token usage still costs something: it is recorded at the
+    call's estimate so the caps see it."""
+    resp = httpx.Response(
+        200, json={"choices": [{"message": {"content": '{"a": 1}'}, "finish_reason": "stop"}]}
+    )
+    client, _, _ = make(ledger, resp)
+    with caplog.at_level("WARNING", logger="lull.tf"):
+        assert call(client, estimate=0.0123) == {"a": 1}
+    [rec] = ledger.calls("r1")
+    assert rec.cost_usd == pytest.approx(0.0123) and "usage" in caplog.text

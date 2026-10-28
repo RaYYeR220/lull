@@ -114,3 +114,84 @@ def test_split_gaps_takes_the_window_and_breath():
     assert len(out) == 5  # 10 s > 1.5 x 2 s, ceil(10 / 2) = 5
     assert out[1].usable_start - out[0].usable_end == pytest.approx(0.5)
     assert split_gaps([], wps=3.0) == []
+
+
+# -- boundaries ------------------------------------------------------------------
+
+
+def test_usable_windows_round_inward_and_capacity_follows_the_rounded_window():
+    # 1.00004 + 0.2 rounds up to 1.201, 5.10006 - 0.2 rounds down to 4.9: never into a guard
+    [g] = find_gaps([Span(start=0.0, end=1.00004), Span(start=5.10006, end=9.0)], 9.0, wps=3.0)
+    assert (g.usable_start, g.usable_end) == (1.201, 4.9)
+    assert g.capacity_words == capacity_words(4.9 - 1.201, 3.0) == 11
+    # float noise never pushes a whole-millisecond edge outward or inward
+    [h] = find_gaps([Span(start=0.0, end=2.0), Span(start=5.0, end=6.0)], 6.0)
+    assert (h.usable_start, h.usable_end) == (2.2, 4.8)
+
+
+def test_a_silence_exactly_min_usable_long_after_guards_is_kept():
+    [g] = find_gaps([Span(start=0.0, end=2.0), Span(start=3.6, end=5.0)], 5.0)
+    assert (g.usable_start, g.usable_end) == (2.2, 3.4)
+    assert find_gaps([Span(start=0.0, end=2.0), Span(start=3.599, end=5.0)], 5.0) == []
+
+
+def test_find_gaps_takes_unsorted_touching_and_zero_length_speech():
+    speech = [Span(start=6.0, end=7.0), Span(start=0.0, end=1.0), Span(start=1.0, end=2.0),
+              Span(start=4.0, end=4.0)]  # fmt: skip
+    gaps = find_gaps(speech, 10.0)
+    assert [(g.usable_start, g.usable_end) for g in gaps] == [(2.2, 3.8), (4.2, 5.8), (7.2, 9.8)]
+
+
+def test_protected_sound_over_speech_or_at_the_edge():
+    speech = [Span(start=2.0, end=3.0)]
+    prot = [Span(start=2.5, end=4.0), Span(start=0.0, end=0.3)]  # over speech; at the start
+    gaps = find_gaps(speech, 10.0, protected=prot)
+    assert [(g.usable_start, g.usable_end) for g in gaps] == [(0.5, 1.8), (4.2, 9.8)]
+    assert gaps[0].protected == [Span(start=0.0, end=0.3)]
+    assert find_gaps([], 10.0, protected=[Span(start=9.0, end=10.0)])[0].usable_end == 8.8
+
+
+def test_guard_zero_and_an_empty_video():
+    [g] = find_gaps([Span(start=1.0, end=2.0)], 4.0, guard=0.0)
+    assert (g.start, g.usable_start, g.usable_end, g.end) == (2.0, 2.0, 4.0, 4.0)
+    assert find_gaps([], 0.0) == [] and find_gaps([], -1.0) == []
+    assert find_gaps([Span(start=0.0, end=1.0)], 0.5) == []
+
+
+def test_split_gaps_needs_a_window_longer_than_its_breath():
+    g = Gap(id="g001", start=0, end=30, usable_start=0.2, usable_end=29.8, capacity_words=80)
+    for window, breath in ((0.3, 0.3), (0.2, 0.3), (0.0, 0.0)):
+        with pytest.raises(ValueError, match="max_window"):
+            split_gaps([g], max_window=window, breath=breath, wps=3.0)
+
+
+# -- speech edges come from the words ------------------------------------------------------------
+
+
+def test_speech_edges_come_from_words_and_turns_only_add_wordless_speech():
+    """Where the recogniser heard words, they bound the speech: a diarised turn that bridges a
+    pause between sentences or starts early never widens it. A turn without any word in it (a
+    laugh, singing) still counts as speech."""
+    words = [Word(text="One.", start=1.0, end=2.0), Word(text="Two.", start=3.9, end=5.0)]
+    turns = [Turn(speaker=0, start=0.7, end=5.4), Turn(speaker=1, start=8.0, end=9.0)]
+    assert speech_spans(words, turns) == [
+        Span(start=1.0, end=2.0), Span(start=3.9, end=5.0), Span(start=8.0, end=9.0)
+    ]  # fmt: skip
+    [g] = [g for g in find_gaps(speech_spans(words, turns), 7.0) if g.start == 2.0]
+    assert g.usable_end - g.usable_start == pytest.approx(1.9 - 2 * 0.2)  # the pause survives
+
+
+def test_one_default_voice_rate_everywhere():
+    """A direct caller that passes no rate gets the same one from every function: the rate of
+    a voice that is not calibrated yet."""
+    import inspect
+
+    from lull import timeline, types, voices
+    from lull.stages import schedule
+
+    rate = timeline.UNCALIBRATED_WPS
+    assert schedule.WPS == voices.FALLBACK_WPS == rate
+    assert inspect.signature(find_gaps).parameters["wps"].default == rate
+    for f in (schedule.schedule, schedule.schedule_greedy):
+        assert inspect.signature(f).parameters["wps"].default == rate
+    assert not hasattr(types, "Shot")  # nothing used it

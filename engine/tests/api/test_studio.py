@@ -69,7 +69,7 @@ def _fast(mp: pytest.MonkeyPatch) -> None:
         return mixer.Levels(programme=-23.0, cues={str(c.audio_path): -20.0 for c in cues})
 
     mp.setattr(watch_mod, "cut_clip", clip)
-    mp.setattr(watch_mod, "scene_cuts", lambda src, threshold=0.3: [])
+    mp.setattr(watch_mod, "scene_cuts", lambda src, threshold=0.3: [6.0])  # red/blue
     mp.setattr(fin, "cut_clip", clip)
     mp.setattr(fin, "audio_duration", seconds)
     mp.setattr(voice_mod, "audio_duration", seconds)
@@ -97,7 +97,7 @@ def template(tone_slides, tmp_path_factory) -> Path:
             }
         )
     )
-    ledger = Ledger(root / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
+    ledger = Ledger(root / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
     mp = pytest.MonkeyPatch()
     _fast(mp)
     try:
@@ -155,7 +155,9 @@ def make_app(data, tmp_path, monkeypatch):
         app = create_app(
             ApiSettings(lull_data=data, lull_web_origins="http://web.test", **settings)
         )
-        app.state.live.ledger = Ledger(tmp_path / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
+        app.state.live.ledger = Ledger(
+            tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None
+        )
         app.state.studio.clients = Fakes()
         return app
 
@@ -204,6 +206,11 @@ def snapshot(d: Path) -> dict[str, str]:
         for p in sorted(d.rglob("*"))
         if p.is_file()
     }
+
+
+def take(d: Path, cue_id: str) -> Path:
+    """The take cues.json names for `cue_id` (the engine's own, before any edit)."""
+    return d / cue_of(d, cue_id)["audio_path"]
 
 
 def make_dirty(d: Path) -> None:
@@ -259,6 +266,7 @@ def test_edit_body_must_hold_text(sc, rd, body):
 
 def test_edit_is_verified_voiced_and_stored(sc, rd, fakes, app):
     old_key = stage_entry(rd, "c001")["key"]
+    published = take(rd, "c001")
     r = patch(sc, "c001", NEW_RED)
     assert r.status_code == 200, r.text
     cue = r.json()
@@ -279,12 +287,13 @@ def test_edit_is_verified_voiced_and_stored(sc, rd, fakes, app):
         "/audio/c001.wav"
     )
     assert (rd / stored["audio_path"]).is_file()
-    assert (rd / "work" / "audio" / "c001.wav").is_file()  # the published take is kept
+    assert published.is_file()  # the published take is kept
     entry = stage_entry(rd, "c001")
     assert entry["key"] == old_key
     assert entry["data"]["status"] == "edited" and entry["data"]["text"] == NEW_RED
-    assert Path(entry["data"]["audio_path"]).is_absolute()
-    assert Path(entry["data"]["audio_path"]).resolve() == (rd / stored["audio_path"]).resolve()
+    # relative to the run folder, as the engine keeps its records
+    assert not Path(entry["data"]["audio_path"]).is_absolute()
+    assert (rd / entry["data"]["audio_path"]).resolve() == (rd / stored["audio_path"]).resolve()
     assert cue_of(rd, "c002")["status"] == "verified"  # the others are untouched
 
     detail = sc.get(f"/v1/runs/{RID}").json()
@@ -356,7 +365,7 @@ def test_engine_failure_is_502_with_nothing_stored(sc, rd, app, tmp_path):
 
 
 def test_budget_refusal_is_402_before_any_model_call(sc, rd, app, fakes):
-    ledger = Ledger(rd.parent.parent / "capped.db", cap_run=0.5, cap_day=0, cap_total=0)
+    ledger = Ledger(rd.parent.parent / "capped.db", cap_run=0.5, cap_day=None, cap_total=None)
     ledger.record(
         CallRecord(run_id=RID, stage="watch", role="watch", provider="tokenfactory", model="m",
                    tokens_in=1, tokens_cached=0, tokens_out=1, latency_s=0.1, cost_usd=0.495,
@@ -411,7 +420,7 @@ def test_a_run_that_has_not_finished_cannot_be_edited(sc, data):
 def test_a_rerun_of_the_engine_keeps_the_edit(sc, rd, tone_slides):
     patch(sc, "c001", NEW_RED)
     sc.post(f"/v1/runs/{RID}/cues/c002/approve")
-    ledger = Ledger(rd / "rerun.db", cap_run=0, cap_day=0, cap_total=0)
+    ledger = Ledger(rd / "rerun.db", cap_run=None, cap_day=None, cap_total=None)
     tf, speech = FakeTF(ledger), FakeSpeech()
     run_engine(rd / "input" / "clip.mp4", rd, RunOptions(), tf=tf, speech=speech, tavily=None,
                ledger=ledger, run_id=RID, wps=3.0)  # fmt: skip
@@ -536,7 +545,7 @@ def test_publish_refuses_a_cue_past_its_pause(sc, rd):
 
 
 def test_publish_refuses_a_voiced_cue_whose_audio_is_gone(sc, rd):
-    (rd / "work" / "audio" / "c002.wav").unlink()
+    take(rd, "c002").unlink()
     make_dirty(rd)
     before = snapshot(rd)
     r = sc.post(f"/v1/runs/{RID}/publish")
@@ -686,7 +695,7 @@ def test_cue_audio_route(sc, rd):
     assert sc.get(f"/v1/runs/{RID}/cues/c999/audio").status_code == 404
     doc = cues_doc(rd)
     doc["cues"][0]["audio_path"] = "../../outside.wav"
-    doc["cues"][1]["audio_path"] = str((rd / "work" / "audio" / "c002.wav").resolve())
+    doc["cues"][1]["audio_path"] = str(take(rd, "c002").resolve())
     (rd / "cues.json").write_text(json.dumps(doc))
     (rd.parent.parent / "outside.wav").write_bytes(b"RIFF")
     assert sc.get(f"/v1/runs/{RID}/cues/c001/audio").status_code == 404
@@ -729,7 +738,7 @@ def test_a_failed_edit_keeps_the_current_take(sc, rd, app, failure):
 
 
 def test_approve_needs_the_take_on_disk(sc, rd):
-    (rd / "work" / "audio" / "c001.wav").unlink()
+    take(rd, "c001").unlink()
     r = sc.post(f"/v1/runs/{RID}/cues/c001/approve")
     assert r.status_code == 409 and r.json()["error"] == "invalid_transition"
     assert cue_of(rd, "c001")["status"] == "verified"
@@ -957,7 +966,8 @@ def test_fork_a_showcase_run_into_an_editable_copy(make_app, template, data, fas
         for p in (d / "stages" / "finalize").glob("*.json"):
             audio = json.loads(p.read_text(encoding="utf-8"))["data"].get("audio_path")
             if audio:
-                assert Path(audio).resolve().is_relative_to(d.resolve()) and Path(audio).is_file()
+                f = Path(audio) if Path(audio).is_absolute() else d / audio
+                assert f.resolve().is_relative_to(d.resolve()) and f.is_file()
         for c_ in cues_doc(d)["cues"]:
             assert (d / c_["audio_path"]).is_file()
 
@@ -1021,7 +1031,7 @@ def test_a_cache_invalidation_and_rerun_keep_the_human_edit(sc, rd):
     sc.post(f"/v1/runs/{RID}/cues/c002/approve")
     for cue_id in ("c001", "c002"):  # the cached results are gone
         (rd / "stages" / "finalize" / f"{cue_id}.json").unlink()
-    ledger = Ledger(rd / "rerun.db", cap_run=0, cap_day=0, cap_total=0)
+    ledger = Ledger(rd / "rerun.db", cap_run=None, cap_day=None, cap_total=None)
     tf = FakeTF(ledger)
     run_engine(rd / "input" / "clip.mp4", rd, RunOptions(), tf=tf, speech=FakeSpeech(),
                tavily=None, ledger=ledger, run_id=RID, wps=3.0)  # fmt: skip
@@ -1225,14 +1235,15 @@ def test_a_text_change_refreshes_coverage_with_the_engine_helper(sc, rd, templat
 
     monkeypatch.setattr(fin, "refresh_described", refresh, raising=False)
     assert patch(sc, "c001", NEW_RED).status_code == 200
-    assert seen == [NEW_RED]
+    assert seen and set(seen) == {NEW_RED}  # the edit's text (engine finalize and Studio)
+    after_edit = len(seen)
     doc = _engine_cues(template)
     doc["cues"][0]["event_ids"] = ["e003"]  # moved: the human text comes back, held
     (rd / "cues.json").write_text(json.dumps(doc))
     assert sc.post(f"/v1/runs/{RID}/cues/x002/approve").status_code == 200
-    assert seen == [NEW_RED, NEW_RED]  # put back = a text change too
+    assert seen[after_edit:] == [NEW_RED]  # put back = a text change too
     assert sc.post(f"/v1/runs/{RID}/cues/c002/approve").status_code == 200
-    assert len(seen) == 2  # no text change: nothing to recompute
+    assert len(seen) == after_edit + 1  # no text change: nothing to recompute
 
 
 def test_without_the_engine_helper_stale_coverage_is_dropped():

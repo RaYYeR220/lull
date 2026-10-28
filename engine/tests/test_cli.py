@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import re
 import time
@@ -12,6 +13,7 @@ from lull import cli
 from lull.config import get_settings
 from lull.ledger import CallRecord, Ledger
 from lull.pipeline import run_id_for
+from lull.stages.finalize import OverlapError
 from lull.store import file_sha256
 from pipeline_fakes import CUE_TEXT, FakeSpeech, FakeTF
 
@@ -40,7 +42,9 @@ def _fake_clients(monkeypatch, ledger: Ledger) -> dict:
 
 
 def _free_ledger(home: Path, **caps) -> Ledger:
-    return Ledger(home / "ledger.db", **{"cap_run": 0, "cap_day": 0, "cap_total": 0, **caps})
+    return Ledger(
+        home / "ledger.db", **{"cap_run": None, "cap_day": None, "cap_total": None, **caps}
+    )
 
 
 def test_describe_prints_progress_and_a_summary(
@@ -70,10 +74,10 @@ def test_describe_prints_progress_and_a_summary(
     assert re.search(
         rf"^\s+cue\s+c001\s+verified\s+0:01\.8\b.*{re.escape(CUE_TEXT['c001'])}", r.output, re.M
     )
-    assert "! the recogniser stretched 'Bye.'" in r.output
+    assert "! the recogniser stretched 'Ada.'" in r.output
     assert re.search(r"^\s*cues\s+2 verified, 0 held, 1 extended$", r.output, re.M)
     assert re.search(r"^\s*overlap\s+0\.000 s$", r.output, re.M)
-    assert re.search(r"^\s*cost\s+\$0\.\d{4}\b", r.output, re.M)
+    assert re.search(r"^\s*model spend\s+\$0\.\d{4} this run\b", r.output, re.M), r.output
     assert re.search(rf"^\s*output\s+{re.escape(str(out))}$", r.output, re.M)
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["run_id"] == "demo"
@@ -92,16 +96,18 @@ def test_describe_defaults_run_id_and_output_folder(
     run_dir = tmp_path / "runs" / run_id
     assert (run_dir / "manifest.json").exists()
     assert "voice 'Sofia' is not calibrated" in r.output
-    # cached audio paths are absolute: a rerun from another folder still finds them
+    # cached audio paths are relative to the run folder, wherever the command runs from
     entry = json.loads((run_dir / "stages" / "finalize" / "c001.json").read_text("utf-8"))
-    assert Path(entry["data"]["audio_path"]) == run_dir / "work" / "audio" / "c001.wav"
+    assert entry["data"]["audio_path"].startswith("work/finalize/c001-")
+    assert (run_dir / entry["data"]["audio_path"]).exists()
 
 
 def test_describe_stops_on_the_spend_cap(tone_slides, tmp_path, home, monkeypatch):
     _fake_clients(monkeypatch, _free_ledger(home, cap_run=0.01))  # 12 s needs $0.03
     r = runner.invoke(cli.app, ["describe", str(tone_slides), "--out", str(tmp_path / "o")])
-    assert r.exit_code == 2
+    assert r.exit_code == 3
     assert "spend cap" in r.output and "run cap $0.01" in r.output
+    assert "LULL_CAP_RUN" in r.output and "--run-id" in r.output
     assert not (tmp_path / "o" / "stages").exists()
 
 
@@ -127,6 +133,23 @@ def test_calibrate_voice_prints_and_stores_the_rate(tmp_path, home, monkeypatch)
     assert r.exit_code == 0, r.output
     assert "Aria: 40 words in 16.00 s = 2.500 words/s" in r.output
     assert json.loads((home / "voices.json").read_text(encoding="utf-8")) == {"Aria": 2.5}
+
+
+def test_calibrate_voice_refuses_an_implausible_rate(tmp_path, home, monkeypatch):
+    class Speech:  # 40 words in 2 s: 20 words per second
+        def synthesize(self, text, voice, dst):
+            with wave.open(str(dst), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(22050)
+                w.writeframes(b"\0\0" * 22050 * 2)
+            return Path(dst)
+
+    monkeypatch.setattr(cli, "_speech", lambda: Speech())
+    r = runner.invoke(cli.app, ["calibrate-voice", "--voice", "Aria"])
+    assert r.exit_code == 1
+    assert "20.000 words/s" in r.output and "not saved" in r.output
+    assert not (home / "voices.json").exists()
 
 
 def _call(run_id, role, model, cost):
@@ -168,3 +191,67 @@ def test_lull_entry_point_is_declared():
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     scripts = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["scripts"]
     assert scripts["lull"] == "lull.cli:app"
+
+
+def test_describe_hashes_the_video_once_and_reports_stops(tone_slides, tmp_path, home, monkeypatch):
+    _fake_clients(monkeypatch, _free_ledger(home))
+    seen: list[dict] = []
+    outcome: list[Exception] = [OverlapError(["c002"]), RuntimeError("boom")]
+
+    def fake_run(video, out, opts, **kw):
+        seen.append(kw)
+        raise outcome.pop(0)
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    args = ["describe", str(tone_slides), "--out", str(tmp_path / "o")]
+    r = runner.invoke(cli.app, args)
+    assert r.exit_code == 4 and "nothing published" in r.output and "c002" in r.output
+    assert seen[0]["sha256"] == file_sha256(tone_slides)  # hashed by the CLI, passed on
+    r = runner.invoke(cli.app, args)
+    assert r.exit_code == 1
+    line = next(ln for ln in r.output.splitlines() if ln.startswith("error:"))
+    assert "RuntimeError: boom" in line and str(tmp_path / "o" / "run.log") in line
+    assert "Traceback" not in r.output
+
+
+def test_describe_takes_the_content_profile_and_says_english_only(
+    tone_slides, tmp_path, home, monkeypatch
+):
+    _fake_clients(monkeypatch, _free_ledger(home))
+    seen = {}
+
+    def fake_run(video, out, opts, **kw):
+        seen["opts"] = opts
+        raise OverlapError(["c001"])  # stop right after the options are built
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    r = runner.invoke(cli.app, ["describe", str(tone_slides), "--out", str(tmp_path / "o"),
+                                "--profile", "entertainment", "--mode", "extended"])  # fmt: skip
+    assert r.exit_code == 4
+    assert (seen["opts"].profile, seen["opts"].mode, seen["opts"].language) == (
+        "entertainment", "extended", "en"
+    )  # fmt: skip
+    r = runner.invoke(cli.app, ["describe", str(tone_slides), "--profile", "cinema"])
+    assert r.exit_code == 2
+    raw = runner.invoke(cli.app, ["describe", "--help"], terminal_width=200).output
+    text = " ".join(re.sub(r"[─-╿]", " ", raw).split())  # box drawing aside
+    assert "education" in text and "entertainment" in text
+    assert "English" in text  # descriptions are written in English only
+    assert "full long versions" in text  # what extended mode changes
+
+
+def test_ledger_totals_are_model_spend_and_searches_are_counted_apart(home):
+    """A web search is recorded at its list price but never charged: the run list and a run's
+    total give model spend, and the searches get a line of their own."""
+    ledger = _free_ledger(home)
+    ledger.record(_call("r1", "plan", "nvidia/Nemotron-3-Ultra-550b-a55b", 0.0158))
+    search = _call("r1", "research", "tavily-search", 0.008)
+    ledger.record(
+        dataclasses.replace(search, provider="tavily", tokens_in=0, tokens_cached=0, tokens_out=0)
+    )
+    r = runner.invoke(cli.app, ["ledger"])
+    assert re.search(r"^\s*r1\s+2 calls\s+\$0\.0158", r.output, re.M), r.output
+    r = runner.invoke(cli.app, ["ledger", "--run", "r1"])
+    assert r.exit_code == 0, r.output
+    assert re.search(r"^\s*total\s+2\b.*\$0\.0158", r.output, re.M), r.output
+    assert re.search(r"^\s*searches\s+1\b.*not charged.*\$0\.0080", r.output, re.M), r.output

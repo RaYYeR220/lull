@@ -32,6 +32,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from lull.stages.plan import said_already
+from lull.timeline import UNCALIBRATED_WPS
 from lull.types import Cue, Gap, Variant, VisualEvent
 
 try:
@@ -48,8 +50,9 @@ AHEAD_PENALTY = 1  # objective cost of a look-ahead placement
 AHEAD_PREFIX = "In a moment, "
 AHEAD_WORDS = 3  # words in AHEAD_PREFIX
 LEAD = 6.0  # seconds a look-ahead may come before its visual starts
-SALIENT = 4  # unplaced events at or above this salience become extended candidates
-WPS = 2.36  # voice rate used to time each sentence inside its gap
+SALIENT = 4  # unplaced events at or above this priority become extended candidates
+MIN_PRIORITY = 2  # a standard placement needs at least this priority
+WPS = UNCALIBRATED_WPS  # voice rate used to time each sentence inside its gap
 TIME_LIMIT_S = 5.0
 NUM_WORKERS = 1  # parallel workers race to different co-optimal answers: not reproducible
 TIE_BREAK = True  # prefer the closest gap among equal-value answers
@@ -77,7 +80,7 @@ class _Option:
     ahead: bool
     priority: int
     cost: int  # words the gap must hold, look-ahead prefix included
-    value: int  # the brief's objective term: priority x weight, minus the look-ahead penalty
+    value: int  # the objective term: priority x weight, minus the look-ahead penalty
     rank: int  # 0 = the event's best gap (open during it, then closest); breaks ties only
     limit: int  # most words that may come before this sentence in its gap (R2 per sentence)
 
@@ -134,7 +137,8 @@ def _options(
     gaps: Sequence[Gap], lead: float, ahead_words: int, wps: float,
 ) -> list[_Option]:  # fmt: skip
     """Every (event, variant, gap) triple that is eligible, fits the gap on its own and would
-    start in time if voiced first in it."""
+    start in time if voiced first in it. Events under MIN_PRIORITY get none: a priority-1 line
+    never fills spare room."""
     table = _variant_table(variants)
     gaps = sorted(gaps, key=lambda g: g.id)
     out: list[_Option] = []
@@ -143,6 +147,8 @@ def _options(
         if not mine:
             continue
         p = max(1, int(priority.get(e.id, e.salience)))  # plan sets one per event it answers
+        if p < MIN_PRIORITY:
+            continue
         eligible = [g for g in gaps if _eligible(e, g, lead)]
         # closest first, gaps open during the visual before look-aheads (as the objective has it)
         near = sorted(eligible, key=lambda g: (_is_ahead(e, g), _distance(e, g), g.id))
@@ -163,7 +169,7 @@ def _options(
 
 
 def _value(options: list[_Option], chosen: Iterable[int]) -> int:
-    """The brief's objective for a choice of options."""
+    """The objective for a choice of options."""
     return sum(options[i].value for i in chosen)
 
 
@@ -226,7 +232,7 @@ def _solve(options: list[_Option], hint: list[int], time_limit_s: float) -> list
                 model.add(_words(x, options, before) <= o.limit).only_enforce_if(x[o_i])
     weights = [o.value for o in options]
     if TIE_BREAK:
-        # Lexicographic: one unit of the brief's objective outweighs every tie-break unit
+        # Lexicographic: one unit of the objective outweighs every tie-break unit
         # together (at most one option per event is chosen), so its optimum is kept.
         scale = 1 + sum(max(options[i].rank for i in ix) for ix in per_event.values())
         weights = [o.value * scale - o.rank for o in options]
@@ -257,14 +263,25 @@ def _words(x: list, options: list[_Option], ix: list[int]):
     return cp_model.LinearExpr.weighted_sum([x[i] for i in ix], [options[i].cost for i in ix])
 
 
-def _extended(events: Iterable[VisualEvent], placed: set[str]) -> list[str]:
+def extended_candidates(
+    events: Iterable[VisualEvent], priority: dict[str, int], placed: set[str]
+) -> list[str]:
+    """Unplaced events the plan rates priority >= 4, by start: the ones worth stopping the
+    video for. An event the plan gave no priority counts with its salience (it has no variant
+    then, and the caller reports it undescribed), except one the dialogue already conveys
+    (R21), which was never planned."""
     ordered = sorted(events, key=lambda e: (e.t_start, e.id))
-    return [e.id for e in ordered if e.salience >= SALIENT and e.id not in placed]
+    return [
+        e.id
+        for e in ordered
+        if e.id not in placed and priority.get(e.id, e.salience) >= SALIENT and not said_already(e)
+    ]
 
 
 def _result(
-    options: list[_Option], chosen: list[int], events: Sequence[VisualEvent]
-) -> tuple[list[Placement], list[str]]:
+    options: list[_Option], chosen: list[int], events: Sequence[VisualEvent],
+    priority: dict[str, int],
+) -> tuple[list[Placement], list[str]]:  # fmt: skip
     picked = sorted(
         (options[i] for i in chosen),
         key=lambda o: (o.gap.usable_start, o.gap.id, o.event.t_start, o.event.id),
@@ -273,7 +290,7 @@ def _result(
         Placement(event_id=o.event.id, variant=o.length, gap_id=o.gap.id, ahead=o.ahead)
         for o in picked
     ]
-    return placements, _extended(events, {p.event_id for p in placements})
+    return placements, extended_candidates(events, priority, {p.event_id for p in placements})
 
 
 def schedule(
@@ -287,20 +304,21 @@ def schedule(
     time_limit_s: float = TIME_LIMIT_S,
     wps: float = WPS,
 ) -> tuple[list[Placement], list[str]]:
-    """Placements (in gap order) and the ids of salience >= 4 events left unplaced (by start),
-    which are the extended-mode candidates.
+    """Placements (in gap order) and the ids of the events left unplaced that the plan rates
+    priority >= 4 (by start; see extended_candidates), which are the extended-mode candidates.
 
     An event may sit in gap g when g.usable_start < t_end and g.usable_end > t_start - lead; it
     is a look-ahead when g.usable_end <= t_start and then costs `ahead_words` more words. Inside
     a gap the words voiced before an event's sentence (earlier-starting visuals, ties by id) may
     be at most floor((t_end - usable_start) x wps) - 1. The model maximises
     sum(priority x weight) - 1 per look-ahead, weights short 60, medium 85, long 100. An event
-    missing from `priority` counts with its salience.
+    missing from `priority` counts with its salience; one under MIN_PRIORITY (2) is never
+    placed.
     """
     options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
     greedy = _greedy(options)
     chosen = _solve(options, greedy, time_limit_s) if options else []
-    return _result(options, greedy if chosen is None else chosen, events)
+    return _result(options, greedy if chosen is None else chosen, events, priority)
 
 
 def schedule_greedy(
@@ -315,7 +333,7 @@ def schedule_greedy(
 ) -> tuple[list[Placement], list[str]]:
     """The fallback `schedule` uses without a solver answer: same rules, greedy choice."""
     options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
-    return _result(options, _greedy(options), events)
+    return _result(options, _greedy(options), events, priority)
 
 
 # -- cue text ----------------------------------------------------------------------------
@@ -331,7 +349,7 @@ def _sentence(text: str) -> str:
     return text + "."
 
 
-def _lower_first(text: str, proper_nouns: set[str]) -> str:
+def lower_first(text: str, proper_nouns: set[str]) -> str:
     """First letter lower-cased to follow AHEAD_PREFIX, unless the first word is "I" or one of
     its contractions, an all-caps word of two or more letters ("NASA's", "U.S.", "TV") or a
     known proper noun. Text that starts with a quote is left alone."""
@@ -340,11 +358,13 @@ def _lower_first(text: str, proper_nouns: set[str]) -> str:
     first = text.split(maxsplit=1)[0].replace("’", "'").rstrip(",;:!?")
     letters = re.sub(r"'s$", "", first).replace(".", "").replace("'", "")
     word = re.match(r"\w+", first)
+    names = {n.replace("’", "'") for n in proper_nouns}  # either apostrophe matches
     if (
         first in _FIRST_PERSON
         or (len(letters) >= 2 and letters.isalpha() and letters.isupper())
-        or first.rstrip(".") in proper_nouns
-        or (word and word.group() in proper_nouns)
+        or first.rstrip(".") in names
+        or re.sub(r"'s$", "", first.rstrip(".")) in names
+        or (word and word.group() in names)
     ):
         return text
     return text[0].lower() + text[1:]
@@ -387,6 +407,7 @@ def compose_cues(
     *,
     extended: list[str] | None = None,
     proper_nouns: set[str] | None = None,
+    priority: dict[str, int] | None = None,
 ) -> list[Cue]:
     """One standard cue per gap that holds placements (gap order), then one extended cue per
     extended candidate that has a variant (start order).
@@ -394,8 +415,9 @@ def compose_cues(
     A standard cue `c<gap number>` starts at the gap's usable start and voices its variants in
     visual start order, look-aheads prefixed "In a moment, "; status "verified" is a placeholder
     until finalisation. An extended cue `x<event number>` starts at its visual and voices the
-    longest variant. `extended` defaults to the salience >= 4 events left unplaced; first words
-    in `proper_nouns` keep their capital after the look-ahead prefix.
+    longest variant. `extended` defaults to extended_candidates over the plan's `priority`
+    (the events left unplaced that the plan rates 4 or more); first words in `proper_nouns`
+    keep their capital after the look-ahead prefix.
     """
     names = proper_nouns or set()
     groups: dict[str, list[tuple[VisualEvent, str, bool]]] = defaultdict(list)
@@ -403,7 +425,7 @@ def compose_cues(
     for g, e, p, v in _resolve(placements, variants, events, gaps):
         text = _sentence(v.text)
         if p.ahead:
-            text = AHEAD_PREFIX + _lower_first(text, names)
+            text = AHEAD_PREFIX + lower_first(text, names)
         groups[g.id].append((e, text, p.ahead))
         gap_of[g.id] = g
     cues = [
@@ -419,12 +441,13 @@ def compose_cues(
             claims=[],
             audio_path=None,
             audio_dur=None,
+            parts={e.id: text for e, text, _ in items},
         )
         for gid, items in groups.items()  # insertion order is gap order
     ]
     ev = {e.id: e for e in events}
     if extended is None:
-        extended = _extended(events, {p.event_id for p in placements})
+        extended = extended_candidates(events, priority or {}, {p.event_id for p in placements})
     unknown = [eid for eid in extended if eid not in ev]
     if unknown:
         raise ValueError(f"schedule: unknown extended event(s) {', '.join(unknown)}")
@@ -447,6 +470,7 @@ def compose_cues(
                 claims=[],
                 audio_path=None,
                 audio_dur=None,
+                parts={e.id: _sentence(v.text)},
             )
         )
     return cues
@@ -462,9 +486,11 @@ def placement_report(
     gaps: list[Gap],
     *,
     ahead_words: int = AHEAD_WORDS,
+    priority: dict[str, int] | None = None,
 ) -> dict:
     """What the schedule did with the gaps: placed events (gap order, spoken words each),
-    unplaced salient events, words used against capacity per gap and overall utilisation."""
+    unplaced salient events (extended_candidates over the plan's `priority`), words used
+    against capacity per gap and overall utilisation."""
     rows = _resolve(placements, variants, events, gaps)
     used: dict[str, int] = defaultdict(int)
     members: dict[str, list[str]] = defaultdict(list)
@@ -484,7 +510,9 @@ def placement_report(
     capacity = sum(max(0, g.capacity_words) for g in gaps)
     return {
         "placed": placed,
-        "unplaced_salient": _extended(events, {p.event_id for p in placements}),
+        "unplaced_salient": extended_candidates(
+            events, priority or {}, {p.event_id for p in placements}
+        ),
         "gaps": per_gap,
         "words_used": words_used,
         "capacity_words": capacity,

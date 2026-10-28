@@ -1,7 +1,10 @@
+import subprocess
 from pathlib import Path
 
 import pytest
 
+from lull import media
+from lull.media import loudness_profile
 from lull.stages.listen import ClampedWord, ListenResult, clamp_words, listen, protected_spans
 from lull.timeline import find_gaps, speech_spans
 from lull.types import Span, Turn, Word
@@ -137,17 +140,20 @@ def test_clamp_words_stretched_word_from_elephants_dream():
     assert any(g.usable_start <= 18.1 and g.usable_end >= 35.7 for g in gaps)
 
 
-def test_clamp_words_bounds():
-    long_word = "internationalisation"  # 20 chars: 2.05 s would be allowed, capped at 1.5
+def test_clamp_words_leaves_plausible_words_alone():
+    """Only implausible words are cut: longer than max(2.0 s, 0.25 s per character)."""
+    long_word = "internationalisation"  # 20 chars: implausible only beyond 5.0 s
     words = [
-        Word(text="a", start=0.0, end=0.9),  # 0.34 s allowed, floor 0.3 does not bind
-        Word(text="I", start=1.0, end=1.2),  # short and plausible
-        Word(text=long_word, start=2.0, end=4.0),
-        Word(text=long_word, start=5.0, end=6.5),  # exactly the cap: kept
+        Word(text="world.", start=38.48, end=39.38),  # 0.9 s sentence-final word: untouched
+        Word(text="see.", start=6.64, end=7.76),  # 1.12 s drawn out: untouched
+        Word(text="a", start=10.0, end=12.0),  # exactly 2.0 s: untouched
+        Word(text="a", start=13.0, end=15.5),  # 2.5 s: cut to 0.34 s
+        Word(text=long_word, start=20.0, end=24.9),  # 4.9 s for 20 chars: untouched
+        Word(text=long_word, start=30.0, end=35.5),  # 5.5 s: cut to the 1.5 s cap
     ]
     out, clamped = clamp_words(words)
-    assert [round(w.end, 3) for w in out] == [0.34, 1.2, 3.5, 6.5]
-    assert [c.text for c in clamped] == ["a", long_word]
+    assert [round(w.end, 3) for w in out] == [39.38, 7.76, 12.0, 13.34, 24.9, 31.5]
+    assert [(c.text, c.start) for c in clamped] == [("a", 13.0), (long_word, 30.0)]
     assert clamp_words([]) == ([], [])
 
 
@@ -160,3 +166,84 @@ def test_listen_clamps_before_speech_and_gaps(tone_slides: Path, tmp_path: Path)
     assert res.gaps == find_gaps(res.speech, res.duration, protected=res.protected, wps=3.0)
     assert max(g.usable_end for g in res.gaps) > 11.0  # the stretched tail is usable again
     assert ListenResult.model_validate_json(res.model_dump_json()) == res
+
+
+# -- the audio clock -----------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def late_audio(tmp_path_factory) -> Path:
+    """6 s of picture whose audio stream starts 1 s after the video (a stream-copy trim or a
+    remux does this): a 440 Hz tone for the first 2 s of the stream, i.e. 1.0-3.0 s on the
+    video's clock."""
+    out = tmp_path_factory.mktemp("media") / "late_audio.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=25:d=6",
+         "-itsoffset", "1.0", "-f", "lavfi", "-i", "sine=frequency=440:duration=2,apad=whole_dur=5",
+         "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+         "-t", "6", str(out)],
+        check=True, capture_output=True,
+    )  # fmt: skip
+    return out
+
+
+class _HearsTone:
+    """A speech client that hears a word wherever the WAV it is given is loud."""
+
+    def transcribe(self, wav):
+        loud = [t for t, db in loudness_profile(wav, hop=0.05) if db > -40]
+        return [Word(text="continuing", start=loud[0], end=loud[-1] + 0.05)]  # not clamped
+
+    def diarize(self, wav):
+        return []
+
+
+def test_listen_and_the_mix_hear_late_audio_on_the_video_clock(late_audio, tmp_path):
+    """Speech spans (and so every pause) and the mixed programme use one clock: the tone at
+    1.0-3.0 s of the video is speech at 1.0-3.0 s, and the mix plays it there too. Before,
+    the transcript came 1 s early while the mix kept it in place, so a cue placed after the
+    speech would have overlapped it."""
+    from lull.stages import mix as mixer
+
+    heard = listen(late_audio, tmp_path / "work", _HearsTone(), wps=3.0)
+    [span] = heard.speech
+    assert span.start == pytest.approx(1.0, abs=0.1) and span.end == pytest.approx(3.0, abs=0.1)
+    out = mixer.mix(late_audio, [], tmp_path / "out")
+    wav = media.extract_wav(out.ad_audio, tmp_path / "mixed.wav")
+    loud = [t for t, db in loudness_profile(wav, hop=0.05) if db > -40]
+    assert loud[0] == pytest.approx(span.start, abs=0.1)
+
+
+@pytest.fixture(scope="module")
+def two_sentences(tmp_path_factory) -> Path:
+    """Two 2 s sentences (tones) with a 1.9 s pause between them, 0-2 s and 3.9-5.9 s."""
+    out = tmp_path_factory.mktemp("media") / "two_sentences.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=25:d=7",
+         "-f", "lavfi", "-i", "sine=frequency=300:duration=7",
+         "-af", "volume=enable='between(t,2,3.9)+gte(t,5.9)':volume=0", "-map", "0:v",
+         "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-t", "7",
+         str(out)],
+        check=True, capture_output=True,
+    )  # fmt: skip
+    return out
+
+
+class _WordsAndAWideTurn:
+    """Words where the narration is, and a diarised turn that runs across the pause."""
+
+    def transcribe(self, wav):
+        return [Word(text="sentence.", start=0.05, end=1.95),
+                Word(text="another.", start=3.95, end=5.85)]  # fmt: skip
+
+    def diarize(self, wav):
+        return [Turn(speaker=0, start=0.0, end=6.3)]
+
+
+def test_a_pause_between_sentences_stays_usable(two_sentences, tmp_path):
+    heard = listen(two_sentences, tmp_path / "work", _WordsAndAWideTurn(), wps=3.0)
+    pauses = [g for g in heard.gaps if g.start < 3.0 < g.end]
+    assert pauses, heard.speech
+    assert pauses[0].usable_end - pauses[0].usable_start >= 1.9 - 2 * 0.2 - 0.05

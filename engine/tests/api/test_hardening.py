@@ -272,7 +272,7 @@ def test_ledger_budget_reads_spend(tmp_path):
     from lull.ledger import CallRecord, Ledger
 
     path = tmp_path / "ledger.db"
-    ledger = Ledger(path, cap_run=0, cap_day=0, cap_total=0)
+    ledger = Ledger(path, cap_run=None, cap_day=None, cap_total=None)
     rec = dict(stage="watch", role="watch", provider="tokenfactory", model="m", tokens_in=1,
                tokens_cached=0, tokens_out=1, latency_s=0.1)  # fmt: skip
     ledger.record(CallRecord(run_id="a", cost_usd=0.25, ts=time.time(), **rec))
@@ -507,7 +507,7 @@ def test_health_shows_model_spend_and_tavily_credits_apart(client, tmp_path, mon
     from lull.ledger import CallRecord, Ledger
 
     monkeypatch.setattr(lull.speech.NemoSpeechHTTP, "health", lambda self: True)
-    ledger = Ledger(tmp_path / "home" / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
+    ledger = Ledger(tmp_path / "home" / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
     for provider, model, cost in (
         ("tokenfactory", "nvidia/Nemotron-3-Ultra-550b-a55b", 0.01),
         ("tavily", "tavily-search", 0.016),

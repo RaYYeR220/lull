@@ -244,7 +244,7 @@ def lc(app):
 
 
 def test_post_streams_run_then_engine_events_then_done(lc, live, data, tmp_path):
-    r = post(lc, mode="extended", voice="Aria")
+    r = post(lc, mode="extended", voice="Sofia")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/event-stream")
     assert r.headers["cache-control"].startswith("no-cache")
@@ -275,7 +275,7 @@ def test_post_streams_run_then_engine_events_then_done(lc, live, data, tmp_path)
     stored = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()]
     assert stored == events
     req = json.loads((d / "request.json").read_text("utf-8"))
-    assert req["options"] == {"mode": "extended", "voice": "Aria"}
+    assert req["options"] == {"mode": "extended", "voice": "Sofia"}
     assert req["source"]["name"] == "clip.mp4" and req["source"]["kind"] == "upload"
     assert re.fullmatch(r"[0-9a-f]{16}", req["client"])
     assert "testclient" not in (d / "request.json").read_text("utf-8")
@@ -283,7 +283,7 @@ def test_post_streams_run_then_engine_events_then_done(lc, live, data, tmp_path)
 
     (job,) = live.runner.jobs
     assert job.run_id == run_id and job.run_dir == d and job.video == d / req["input"]
-    assert job.opts.mode == "extended" and job.opts.voice == "Aria"
+    assert job.opts.mode == "extended" and job.opts.voice == "Sofia"
     assert job.duration == 10.0 and job.resumed is False
 
 
@@ -338,7 +338,7 @@ def test_busy_409_while_a_run_is_active(lc, live, data):
 
 
 def test_budget_precheck_402_json_not_stream(lc, live, data, tmp_path):
-    live.ledger = Ledger(tmp_path / "caps.db", cap_run=0, cap_day=0.001, cap_total=0)
+    live.ledger = Ledger(tmp_path / "caps.db", cap_run=None, cap_day=0.001, cap_total=None)
     r = post(lc)
     assert r.status_code == 402
     assert r.headers["content-type"].startswith("application/json")
@@ -603,7 +603,7 @@ def test_resume_busy_409(lc, live, data):
 
 def test_resume_budget_402(lc, live, data, tmp_path):
     d = make_unfinished(data)
-    live.ledger = Ledger(tmp_path / "caps.db", cap_run=0, cap_day=0, cap_total=0.001)
+    live.ledger = Ledger(tmp_path / "caps.db", cap_run=None, cap_day=None, cap_total=0.001)
     r = lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH)
     assert r.status_code == 402 and r.json()["scope"] == "total"
     assert live.runner.jobs == []
@@ -658,7 +658,7 @@ def test_real_pipeline_through_the_api(
     monkeypatch.setattr(live_mod.NemoSpeechHTTP, "from_settings", staticmethod(FakeSpeech))
     live.runner = live_mod._run_pipeline
     live.probe, live.trim = clip.probe, clip.trim
-    live.ledger = Ledger(tmp_path / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
+    live.ledger = Ledger(tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
 
     r = post(lc, tone_slides.read_bytes(), name="tone slides.mp4")
     events = parse_sse(r.text)
@@ -830,7 +830,7 @@ def test_the_stopped_runs_ledger_refuses_further_spend(tmp_path):
     from lull.api.live import RunTimeout, StopLedger
 
     stop = threading.Event()
-    inner = Ledger(tmp_path / "l.db", cap_run=0, cap_day=0, cap_total=0)
+    inner = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
     ledger = StopLedger(inner, stop)
     ledger.check("r", 0.01)
     assert ledger.spent() == 0.0 and ledger.inner is inner
@@ -1173,9 +1173,9 @@ def test_any_failure_inside_the_slot_counts_as_refused(lc, live):
 
 def test_budget_and_busy_refusals_do_not_count(lc, live, tmp_path):
     live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
-    live.ledger = Ledger(tmp_path / "caps.db", cap_run=0, cap_day=0.001, cap_total=0)
+    live.ledger = Ledger(tmp_path / "caps.db", cap_run=None, cap_day=0.001, cap_total=None)
     assert post(lc).status_code == 402
-    live.ledger = Ledger(tmp_path / "free.db", cap_run=0, cap_day=0, cap_total=0)
+    live.ledger = Ledger(tmp_path / "free.db", cap_run=None, cap_day=None, cap_total=None)
     assert post(lc).status_code == 200  # the 402 was not this visitor's doing
 
 

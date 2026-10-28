@@ -1,12 +1,16 @@
-"""Command line: `lull describe`, `lull calibrate-voice` and `lull ledger`.
+"""Command line: `lull describe`, `lull calibrate-voice`, `lull ledger` and
+`lull export-showcase`.
 
 Settings come from the environment or a .env file: NEBIUS_API_KEY, TAVILY_API_KEY (optional),
 LULL_SPEECH_URL (default http://127.0.0.1:8089), LULL_SPEECH_KEY, LULL_HOME (ledger and voice
-rates, default ~/.lull) and the LULL_CAP_* spend caps.
+rates, default ~/.lull), the LULL_CAP_RUN / LULL_CAP_DAY / LULL_CAP_TOTAL model spend caps in
+USD and the LULL_TAVILY_RUN / LULL_TAVILY_DAY web search caps (a count). A cap of 0 refuses
+everything; "none" switches it off.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import sys
 import tempfile
@@ -24,13 +28,15 @@ from lull.config import get_settings
 from lull.ledger import BudgetExceeded, Ledger
 from lull.media import MediaError
 from lull.pipeline import Event, run, run_id_for
+from lull.showcase import ShowcaseError, export_showcase
 from lull.speech import DEFAULT_URL, NemoSpeechHTTP, SpeechClient, SpeechError
 from lull.stages.finalize import OverlapError
+from lull.stages.watch import PROFILES
 from lull.store import file_sha256
-from lull.tavily import Tavily, TavilyError
+from lull.tavily import Tavily
 from lull.tf import LIGHTNING, ULTRA, VL, TFError, TokenFactory
 from lull.types import RunOptions
-from lull.voices import calibrate, voices_path
+from lull.voices import CalibrationError, calibrate, voices_path
 
 app = typer.Typer(
     add_completion=False,
@@ -46,6 +52,9 @@ LOG_FILE = "run.log"
 class Mode(StrEnum):
     standard = "standard"
     extended = "extended"
+
+
+Profile = StrEnum("Profile", {p: p for p in PROFILES})  # the content profiles the prompts know
 
 
 @app.callback()
@@ -82,6 +91,10 @@ def _clients(no_research: bool) -> tuple[Ledger, TokenFactory, SpeechClient, Tav
     speech = _speech()
     tavily = None if no_research else Tavily.from_settings(ledger)
     return ledger, tf, speech, tavily
+
+
+def _one_line(text: str) -> str:
+    return " ".join(text.split())[:500]
 
 
 def _fail(message: str, code: int) -> None:
@@ -170,7 +183,7 @@ def _print_summary(summary: dict, seconds: float, out: Path) -> None:
     for h in summary.get("held", []):
         typer.echo(f"  held      {h['id']}: {h['reason']}")
     typer.echo(f"  overlap   {summary['overlap_seconds']:.3f} s")
-    typer.echo(f"  cost      ${summary['cost_usd']:.4f}")
+    typer.echo(f"  model spend ${summary['cost_usd']:.4f} this run")
     typer.echo(f"  output    {out}")
 
 
@@ -207,9 +220,20 @@ def describe(
         Path | None,
         typer.Option(help="Output folder (default: runs/<run id> under the current folder)."),
     ] = None,
-    mode: Annotated[Mode, typer.Option(help="standard, or extended (the video may pause).")] = (
-        Mode.standard
-    ),
+    mode: Annotated[
+        Mode,
+        typer.Option(
+            help="standard, or extended: the plan writes full long versions for the extended "
+            "track. Both modes also build extended.mp4 when a salient visual fits no pause."
+        ),
+    ] = Mode.standard,
+    profile: Annotated[
+        Profile,
+        typer.Option(
+            help="What matters most: education (slides, charts, on-screen text) or "
+            "entertainment (action, people, setting)."
+        ),  # fmt: skip
+    ] = Profile.education,
     voice: Annotated[str, typer.Option(help="Magpie TTS voice.")] = "Sofia",
     source_url: Annotated[
         str | None, typer.Option(help="A page about the video, read for names and terms.")
@@ -222,35 +246,51 @@ def describe(
         typer.Option(help="Run id for the ledger and cache (default: <video stem>-<sha256[:8]>)."),
     ] = None,
 ) -> None:
-    """Describe VIDEO: audio description fitted to its pauses, verified against its frames."""
-    rid = run_id or run_id_for(video, file_sha256(video))
+    """Describe VIDEO: audio description fitted to its pauses, verified against its frames.
+    Descriptions are written and voiced in English only.
+
+    Exit codes: 0 published; 1 an error (one line, details in the run log); 2 bad usage;
+    3 stopped by a spend cap or the provider's balance; 4 nothing published (overlap)."""
+    sha = file_sha256(video)  # once: the run gets it too
+    rid = run_id or run_id_for(video, sha)
     out = out or Path(RUNS_DIR) / rid
-    opts = RunOptions(mode=mode.value, voice=voice, source_url=source_url)
+    opts = RunOptions(mode=mode.value, profile=profile.value, voice=voice, source_url=source_url)
     ledger, tf, speech, tavily = _clients(no_research)
     printer = _Printer()
+    log_path = out / LOG_FILE
     typer.echo(f"describing {video.name} (run {rid}) into {out}")
     try:
-        with _log_to(out / LOG_FILE):
-            run(
-                video,
-                out,
-                opts,
-                tf=tf,
-                speech=speech,
-                tavily=tavily,
-                ledger=ledger,
-                on_event=printer,
-                run_id=rid,
-            )
+        with _log_to(log_path):
+            try:
+                run(
+                    video,
+                    out,
+                    opts,
+                    tf=tf,
+                    speech=speech,
+                    tavily=tavily,
+                    ledger=ledger,
+                    on_event=printer,
+                    run_id=rid,
+                    sha256=sha,
+                )
+            except Exception as e:  # the traceback goes to the run log, not the console
+                if not isinstance(e, BudgetExceeded | OverlapError):
+                    logging.getLogger("lull").error("describe failed", exc_info=e)
+                raise
     except BudgetExceeded as e:
-        resume = "finished stages are cached: the same command resumes once there is budget"
+        resume = "finished stages are cached: the same command resumes where it stopped"
         if e.scope == "provider":
-            _fail(f"Token Factory refused the call for lack of funds ({e}); {resume}", 2)
-        _fail(f"stopped by the {e.scope} spend cap: {e}; {resume}", 2)
+            _fail(f"Token Factory refused the call for lack of funds ({e}); top up, {resume}", 3)
+        knob = {"run": "LULL_CAP_RUN", "day": "LULL_CAP_DAY", "total": "LULL_CAP_TOTAL"}[e.scope]
+        hint = f"raise {knob}"
+        if e.scope == "run":
+            hint += " or start a fresh ledger entry with another --run-id"
+        _fail(f"stopped by the {e.scope} spend cap: {e}; {hint}; {resume}", 3)
     except OverlapError as e:
-        _fail(f"nothing published: {e}", 3)
-    except (TFError, SpeechError, TavilyError, MediaError) as e:
-        _fail(f"{type(e).__name__}: {e} (log: {out / LOG_FILE})", 1)
+        _fail(f"nothing published: {e}", 4)
+    except Exception as e:  # one line for the person
+        _fail(f"{type(e).__name__}: {_one_line(str(e))} (log: {log_path})", 1)
     finally:
         for client in (tf, tavily):
             close = getattr(client, "close", None)
@@ -269,7 +309,7 @@ def calibrate_voice(
     with tempfile.TemporaryDirectory(prefix="lull-calibrate-") as work:
         try:
             cal = calibrate(speech, voice, Path(work))
-        except (SpeechError, MediaError) as e:
+        except (SpeechError, MediaError, CalibrationError) as e:
             _fail(f"{type(e).__name__}: {e}", 1)
     typer.echo(
         f"{cal.voice}: {cal.words} words in {cal.seconds:.2f} s = {cal.wps:.3f} words/s "
@@ -277,22 +317,34 @@ def calibrate_voice(
     )
 
 
+def _cap(cap: float | None, *, money: bool = True) -> str:
+    if cap is None:
+        return "no cap"
+    return f"cap ${cap:.2f}" if money else f"cap {cap}"
+
+
 @app.command("ledger")
 def ledger_cmd(
     run_id: Annotated[str | None, typer.Option("--run", help="Show one run's calls.")] = None,
 ) -> None:
-    """Model and search spend: every run, or one run by role and model."""
+    """Model spend and web searches: every run, or one run by role and model."""
     led = _ledger()
     if run_id is None:
-        midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        today, total = led.spent(since=midnight.timestamp()), led.spent()
+        midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        today, total = led.spent(since=midnight), led.spent()
         typer.echo(
-            f"spent     today ${today:.4f} (cap ${led.cap_day:.2f}), "
-            f"total ${total:.4f} (cap ${led.cap_total:.2f})"
+            f"model     today ${today:.4f} ({_cap(led.cap_day)}), "
+            f"total ${total:.4f} ({_cap(led.cap_total)})"
+        )
+        typer.echo(
+            f"searches  today {led.searches(since=midnight)} ({_cap(led.tavily_day, money=False)})"
         )
         for r in led.runs():
             when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["last_ts"]))
-            typer.echo(f"  {r['run_id']:<32} {r['calls']:>4} calls  ${r['cost_usd']:.4f}  {when}")
+            searched = f", {r['searches']} searches" if r["searches"] else ""
+            typer.echo(
+                f"  {r['run_id']:<32} {r['calls']:>4} calls  ${r['cost_usd']:.4f}  {when}{searched}"
+            )
         return
     summary = led.summary(run_id)
     if not summary["calls"]:
@@ -315,7 +367,43 @@ def ledger_cmd(
     seconds = sum(g["latency_s"] for g in rows)
     typer.echo(
         f"  {'total':<9} {'':<13} {summary['calls']:>5} {tin:>10,} {cached:>8,} "
-        f"{tout:>8,}  ${summary['total_cost_usd']:.4f}  {seconds:>7.1f}"
+        f"{tout:>8,}  ${summary['model_cost_usd']:.4f}  {seconds:>7.1f}  (model spend)"
+    )
+    if summary["searches"]:
+        listed = summary["total_cost_usd"] - summary["model_cost_usd"]
+        typer.echo(
+            f"  {'searches':<9} {summary['searches']} web searches, counted, not charged "
+            f"(${listed:.4f} at list price)"
+        )
+
+
+@app.command("export-showcase")
+def export_showcase_cmd(
+    run_dir: Annotated[Path, typer.Argument(help="A finished `lull describe` output folder.")],
+    out_dir: Annotated[Path, typer.Argument(help="Where the website's files go.")],
+    id: Annotated[str | None, typer.Option("--id", help="Showcase id (default: folder name).")] = (
+        None
+    ),
+    title: Annotated[str | None, typer.Option(help="Title (default: the video's name).")] = None,
+    credit: Annotated[str, typer.Option(help="Credit line for the video.")] = "",
+) -> None:
+    """Export a finished run for the website: showcase.json, a small video.mp4 with the
+    original sound, the described audio, the description tracks, each cue's audio and the
+    keyframes.
+
+    costUsd is the model spend of the attempt that published the run; showcase.json's
+    summary.spend gives it beside the model spend of every run under the run id and the web
+    searches."""
+    try:
+        path = export_showcase(run_dir, out_dir, id=id, title=title, credit=credit)
+    except (ShowcaseError, MediaError) as e:
+        _fail(f"{type(e).__name__}: {_one_line(str(e))}", 1)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    files = sum(1 for p in Path(out_dir).rglob("*") if p.is_file())
+    typer.echo(
+        f"{data['id']}: {len(data['cues'])} cues, {len(data['gaps'])} pauses, "
+        f"{data['duration']:.1f} s, ${data['costUsd']:.4f}; {files} files in {out_dir} "
+        f"({path.name})"
     )
 
 

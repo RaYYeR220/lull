@@ -6,11 +6,24 @@ import math
 
 from lull.types import Gap, Span, Turn, Word
 
+# words per second of a voice not calibrated yet: the default of every function that takes a
+# rate (the pipeline always passes the calibrated one)
+UNCALIBRATED_WPS = 2.8
+
 EPS = 1e-9
 
 
 def _r(x: float) -> float:
     return round(x, 3)
+
+
+def _ceil3(x: float) -> float:
+    """`x` rounded up to the millisecond (float noise below a micro-millisecond ignored)."""
+    return math.ceil(round(x * 1000, 6)) / 1000
+
+
+def _floor3(x: float) -> float:
+    return math.floor(round(x * 1000, 6)) / 1000
 
 
 def merge_spans(spans: list[Span], join_within: float = 0.0) -> list[Span]:
@@ -26,10 +39,17 @@ def merge_spans(spans: list[Span], join_within: float = 0.0) -> list[Span]:
 
 
 def speech_spans(words: list[Word], turns: list[Turn], join_within: float = 0.25) -> list[Span]:
-    """Union of word spans and diarized turns, merged across tiny pauses."""
-    spans = [Span(start=w.start, end=w.end) for w in words]
-    spans += [Span(start=t.start, end=t.end) for t in turns]
-    return merge_spans(spans, join_within)
+    """Where someone speaks. The recogniser's words bound speech wherever there are words:
+    their spans, merged across tiny pauses. A diarised turn counts only where it holds no word
+    at all (a laugh, singing): one that runs past the words, or across the pause between two
+    sentences, never widens the speech they bound."""
+    spans = merge_spans([Span(start=w.start, end=w.end) for w in words], join_within)
+    wordless = [
+        Span(start=t.start, end=t.end)
+        for t in turns
+        if not any(w.start < t.end and w.end > t.start for w in words)
+    ]
+    return merge_spans(spans + wordless, join_within)
 
 
 def complement(spans: list[Span], start: float, end: float) -> list[Span]:
@@ -72,9 +92,15 @@ def find_gaps(
     guard: float = 0.20,
     min_usable: float = 1.2,
     protected: list[Span] | None = None,
-    wps: float = 3.0,
+    wps: float = UNCALIBRATED_WPS,
 ) -> list[Gap]:
-    """Usable silences. Guard is trimmed from every side (speech, protected, video edge)."""
+    """Usable silences. Guard is trimmed from every side (speech, protected, video edge).
+
+    The usable window is rounded inward to the millisecond (start up, end down), so rounding
+    never reaches into a guard, and its capacity is computed from the rounded window. A window
+    must be at least `min_usable` long; an empty or negative duration has none."""
+    if duration <= 0:
+        return []
     prot = merge_spans(protected or [])
     pieces = complement(prot, 0.0, duration) if prot else [Span(start=0.0, end=duration)]
     silences: list[Span] = []
@@ -82,8 +108,8 @@ def find_gaps(
         silences += complement(speech, piece.start, piece.end)
     gaps: list[Gap] = []
     for s in silences:
-        us, ue = s.start + guard, s.end - guard
-        if ue - us < min_usable - EPS:
+        us, ue = _ceil3(s.start + guard), _floor3(s.end - guard)
+        if ue <= us or ue - us < min_usable - EPS:
             continue
         inside = [p for p in prot if p.start < s.end + EPS and p.end > s.start - EPS]
         gaps.append(
@@ -91,8 +117,8 @@ def find_gaps(
                 id=f"g{len(gaps) + 1:03d}",
                 start=_r(s.start),
                 end=_r(s.end),
-                usable_start=_r(us),
-                usable_end=_r(ue),
+                usable_start=us,
+                usable_end=ue,
                 capacity_words=capacity_words(ue - us, wps),
                 protected=inside,
             )
@@ -107,10 +133,13 @@ def split_gaps(
 
     A gap whose usable length is over 1.5 x max_window becomes n = ceil(usable / max_window)
     equal windows `breath` seconds apart (no extra guard: there is no speech between them),
-    each with its capacity recomputed and no protected spans; the first keeps the gap's start
-    and the last its end. Shorter gaps are kept as they are. All gaps are renumbered g001... in
-    time order.
+    each with its capacity recomputed from its window rounded inward to the millisecond and no
+    protected spans; the first keeps the gap's start and the last its end. Shorter gaps are
+    kept as they are. All gaps are renumbered g001... in time order. `max_window` must be
+    longer than `breath`.
     """
+    if not max_window > breath >= 0:
+        raise ValueError(f"split_gaps: need max_window > breath >= 0, got {max_window}, {breath}")
     out: list[Gap] = []
     for g in sorted(gaps, key=lambda g: (g.usable_start, g.id)):
         usable = g.usable_end - g.usable_start
@@ -120,16 +149,17 @@ def split_gaps(
         n = math.ceil(usable / max_window - EPS)
         width = (usable - (n - 1) * breath) / n
         for i in range(n):
-            us = g.usable_start + i * (width + breath)
-            ue = g.usable_end if i == n - 1 else us + width
+            raw = g.usable_start + i * (width + breath)
+            us = g.usable_start if i == 0 else _ceil3(raw)
+            ue = g.usable_end if i == n - 1 else _floor3(raw + width)
             out.append(
                 Gap(
                     id=g.id,
-                    start=g.start if i == 0 else _r(us),
-                    end=g.end if i == n - 1 else _r(ue),
-                    usable_start=_r(us),
-                    usable_end=_r(ue),
-                    capacity_words=capacity_words(width, wps),
+                    start=g.start if i == 0 else us,
+                    end=g.end if i == n - 1 else ue,
+                    usable_start=us,
+                    usable_end=ue,
+                    capacity_words=capacity_words(ue - us, wps),
                     protected=[],
                 )
             )

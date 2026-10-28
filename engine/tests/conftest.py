@@ -90,7 +90,7 @@ def fast_media(monkeypatch: pytest.MonkeyPatch) -> dict:
         return mixer.Levels(programme=-23.0, cues={str(c.audio_path): -20.0 for c in cues})
 
     monkeypatch.setattr(watch_mod, "cut_clip", clip)
-    monkeypatch.setattr(watch_mod, "scene_cuts", lambda src, threshold=0.3: [])
+    monkeypatch.setattr(watch_mod, "scene_cuts", lambda src, threshold=0.3: [6.0])  # red/blue
     monkeypatch.setattr(fin, "cut_clip", clip)
     monkeypatch.setattr(fin, "audio_duration", seconds)
     monkeypatch.setattr(voice_mod, "audio_duration", seconds)

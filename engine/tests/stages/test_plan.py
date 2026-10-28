@@ -25,7 +25,9 @@ class FakeTF:
 
     def json(self, model, messages, schema, **kw) -> dict:
         self.calls.append({"model": model, "messages": messages, "schema": schema, **kw})
-        return self.responses.pop(0)
+        # once the scripted answers run out: an answer with no items (the plan asks again for
+        # salient events it got no item for)
+        return self.responses.pop(0) if self.responses else {"cast": [], "items": []}
 
 
 def _ev(id_, t0, t1, kind="action", text="A person opens a door.", *, sal=3, verb=None, said=False):
@@ -120,7 +122,7 @@ def test_no_events_left_means_no_model_call():
 
 def test_request_uses_ultra_with_thinking_and_tagged_sections():
     _, fake = _run({"cast": [], "items": []})
-    (call,) = fake.calls
+    call = fake.calls[0]  # the second asks again for the salient events left without an item
     assert call["model"] == ULTRA
     assert call["schema"] == PLAN_SCHEMA
     assert call["thinking"] is True
@@ -178,7 +180,7 @@ def test_request_budget_follows_events_sent():
     events = [_ev(f"e{i:03d}", i, i + 0.5, sal=4) for i in range(1, 101)]
     events.append(_ev("e101", 200, 201, sal=4, said=True))  # filtered out, not counted
     _, fake = _run({"cast": [], "items": [_item("e001")]}, events=events)
-    (call,) = fake.calls
+    call = fake.calls[0]
     assert call["max_tokens"] == 19000
     assert call["estimate"] == pytest.approx(0.10)
 
@@ -349,7 +351,7 @@ def test_prompt_teaches_the_craft():
     assert text.count("Bad:") >= 3 and text.count("Good:") >= 3
 
 
-def test_prompt_fix_round_wording():
+def test_prompt_sets_no_word_ceiling_and_asks_for_short_versions():
     text = load_prompt()
     assert "22" not in text  # no exact word ceiling the model could try to count to
     assert "discards versions that run long" in text
@@ -359,3 +361,169 @@ def test_prompt_fix_round_wording():
     assert "Dana was named at 120.0 s." in text and "S2 (Dana)" not in text
     assert "plots Units (thousands)" in text  # axis label copied verbatim
     assert 'no "shot" or "frame" as camera terms' in text
+
+
+# -- coverage: events without an item are asked for once more --------------------------------
+
+
+def test_salient_events_without_an_item_are_asked_for_again():
+    first = {"cast": [{"descriptor": "a bald person", "name": "Proog"}], "items": [_item("e001")]}
+    second = {
+        "cast": [{"descriptor": "a young person", "name": "Emo"}],
+        "items": [_item("e003", 5, "A bald person stands on a gantry.")],
+    }
+    out, fake = _run(first)
+    assert len(fake.calls) == 2 and out.unanswered == ["e003"]  # the fake's empty answer
+    fake = FakeTF([first, second])
+    out = plan(EVENTS, WORDS, GAPS, RESEARCH, OPTS, fake, run_id="r1")
+    again = _user(fake.calls[1])
+    assert "e003" in again and "e001 [" not in again and "e004" not in again  # salience 2 is not
+    assert again.endswith("Write an item for every event listed.")
+    assert "Write an item for every event listed." not in _user(fake.calls[0])
+    assert (fake.calls[1]["max_tokens"], fake.calls[1]["estimate"]) == budget(1)
+    assert (fake.calls[1]["model"], fake.calls[1]["role"]) == (ULTRA, "plan")
+    assert out.priority == {"e001": 3, "e003": 5}
+    assert [v.event_id for v in out.variants] == ["e001", "e003"]
+    assert out.cast == {"Proog": "a bald person", "Emo": "a young person"}
+    assert out.unanswered == []
+
+
+def test_no_second_call_when_every_salient_event_has_an_item():
+    out, fake = _run({"cast": [], "items": [_item("e001"), _item("e003")]})
+    assert len(fake.calls) == 1 and out.unanswered == []  # e004 (salience 2) may stay out
+
+
+def test_an_unusable_second_answer_keeps_the_first_and_flags_the_rest(caplog):
+    first = {"cast": [], "items": [_item("e001")]}
+    fake = FakeTF([first, {"cast": [], "items": [_item("e999")]}])
+    with caplog.at_level(logging.WARNING, logger="lull.stages.plan"):
+        out = plan(EVENTS, WORDS, GAPS, RESEARCH, OPTS, fake, run_id="r1")
+    assert out.priority == {"e001": 3} and out.unanswered == ["e003"]
+    assert "second answer" in caplog.text
+
+
+def test_prompt_asks_for_an_item_per_event():
+    text = load_prompt()
+    assert "Write an item for every event you are sent." in text
+    assert "Leave an event out entirely" not in text
+
+
+# -- near-duplicate items ---------------------------------------------------
+
+
+RUNS = [
+    _ev("e010", 18.0, 22.0, sal=4, text="The smaller person runs along a platform."),
+    _ev("e011", 29.0, 33.0, sal=4, text="The smaller person runs along a platform again."),
+    _ev("e012", 40.0, 44.0, sal=4, text="The smaller person runs on."),
+    _ev("e013", 41.0, 45.0, sal=4, text="The two people climb a slanted beam."),
+]
+
+
+def test_near_duplicate_items_are_dropped_keeping_the_higher_priority():
+    """ED90: three "The smaller person runs..." lines within 30 s. The short variants'
+    Jaccard is at least 0.6, so one is kept: the higher priority, the earlier on a tie."""
+    answer = {"cast": [], "items": [
+        _item("e010", 2, "The smaller person runs along a narrow platform.", "Medium one."),
+        _item("e011", 3, "The smaller person runs along the narrow platform.", "Medium two."),
+        _item("e012", 3, "Along a narrow platform the smaller person runs.", None, "Long."),
+        _item("e013", 2, "The two people climb a slanted metal beam."),
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=RUNS)
+    assert result.priority == {"e011": 3, "e013": 2}
+    assert result.duplicates == {"e010": "e011", "e012": "e011"}
+    assert sorted({v.event_id for v in result.variants}) == ["e011", "e013"]
+    assert [v.text for v in result.variants if v.event_id == "e011"] == [
+        "The smaller person runs along the narrow platform.", "Medium two."
+    ]  # fmt: skip
+
+
+def test_near_duplicates_need_similar_short_lines_within_30_s():
+    events = [
+        _ev("e020", 0.0, 2.0, sal=4), _ev("e021", 31.0, 33.0, sal=4),  # 31 s apart
+        _ev("e022", 40.0, 41.0, sal=4), _ev("e023", 42.0, 43.0, sal=4),  # unlike
+        _ev("e024", 50.0, 51.0, sal=4), _ev("e025", 80.0, 81.0, sal=4),  # exactly 30 s
+        _ev("e026", 120.0, 121.0, sal=4),
+    ]  # fmt: skip
+    answer = {"cast": [], "items": [
+        _item("e020", 3, "A red door opens slowly."),
+        _item("e021", 3, "A red door opens slowly."),
+        _item("e022", 3, "The smaller person runs along a narrow platform."),
+        _item("e023", 3, "The smaller person runs across a narrow beam."),  # Jaccard 0.5
+        _item("e024", 4, "Snow falls on the empty square.", "Medium."),
+        _item("e025", 4, "Snow falls on an empty square."),
+        _item("e026", 5, "Snow falls on the empty square."),  # 70 s after e024
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=events)
+    assert result.duplicates == {"e025": "e024"}
+    assert set(result.priority) == {"e020", "e021", "e022", "e023", "e024", "e026"}
+
+
+def test_near_duplicates_never_chain_past_30_s():
+    """A dropped item always points at a kept twin within 30 s. Three alike lines 25 s
+    apart with rising priority keep the first and the last; the middle one goes to the last."""
+    events = [_ev("e030", 0.0, 1.0, sal=4), _ev("e031", 25.0, 26.0, sal=4),
+              _ev("e032", 50.0, 51.0, sal=4)]  # fmt: skip
+    answer = {"cast": [], "items": [
+        _item("e030", 2, "Snow falls on the empty square."),
+        _item("e031", 3, "Snow falls on the empty square."),
+        _item("e032", 4, "Snow falls on the empty square."),
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=events)
+    assert result.duplicates == {"e031": "e032"}
+    assert set(result.priority) == {"e030", "e032"}
+    by_id = {e.id: e for e in events}
+    for dropped, kept in result.duplicates.items():
+        assert abs(by_id[dropped].t_start - by_id[kept].t_start) <= 30.0
+
+
+def test_numbered_or_differently_quoted_lines_are_never_near_duplicates():
+    """Step 1/2/3 slides, years, chapter numbers and different quoted text are different
+    content even when the template-like short lines share most words."""
+    slides = [
+        _ev("e040", 0.0, 4.0, "slide", "A slide.", sal=5, verb="Step 1"),
+        _ev("e041", 5.0, 9.0, "slide", "A slide.", sal=5, verb="Step 2"),
+        _ev("e042", 10.0, 14.0, "slide", "A slide.", sal=5, verb="Step 3"),
+        _ev("e043", 15.0, 16.0, "chart", "A chart.", sal=4),
+        _ev("e044", 17.0, 18.0, "chart", "A chart.", sal=4),
+        _ev("e045", 19.0, 20.0, "slide", "A title.", sal=4),
+        _ev("e046", 21.0, 22.0, "slide", "A title.", sal=4),
+        _ev("e047", 23.0, 24.0, "on_screen_text", "A sign.", sal=4),
+        _ev("e048", 25.0, 26.0, "on_screen_text", "A sign.", sal=4),
+        _ev("e049", 27.0, 28.0, "slide", "A slide.", sal=4, verb="Step 3"),  # repeats e042
+    ]  # fmt: skip
+    answer = {"cast": [], "items": [
+        _item("e040", 4, 'A slide reads: "Step 1".'),
+        _item("e041", 4, 'A slide reads: "Step 2".'),
+        _item("e042", 4, 'A slide reads: "Step 3".'),
+        _item("e043", 3, "Sales for 2019 rise sharply."),
+        _item("e044", 3, "Sales for 2020 rise sharply."),
+        _item("e045", 3, "The title Chapter One appears."),
+        _item("e046", 3, "The title Chapter Two appears."),
+        _item("e047", 3, 'A sign reads "Exit" above the door.'),
+        _item("e048", 3, 'A sign reads "Enter" above the door.'),
+        _item("e049", 2, 'A slide reads: "Step 3".'),
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=slides)
+    assert result.duplicates == {"e049": "e042"}  # the same step shown again: still a repeat
+
+
+def test_a_failed_second_call_keeps_the_first_answer(caplog):
+    """The first answer is paid for: a model error on the second call (asked for the events
+    it left out) keeps it, and the rest are flagged, instead of failing the stage."""
+    from lull.tf import TFError
+
+    first = {"cast": [], "items": [_item("e001")]}
+
+    class Flaky(FakeTF):
+        def json(self, model, messages, schema, **kw):
+            if self.calls:
+                self.calls.append(kw)
+                raise TFError("HTTP 503 after retries")
+            return super().json(model, messages, schema, **kw)
+
+    fake = Flaky([first])
+    with caplog.at_level(logging.WARNING, logger="lull.stages.plan"):
+        out = plan(EVENTS, WORDS, GAPS, RESEARCH, OPTS, fake, run_id="r1")
+    assert len(fake.calls) == 2
+    assert out.priority == {"e001": 3} and out.unanswered == ["e003"]
+    assert "second answer" in caplog.text

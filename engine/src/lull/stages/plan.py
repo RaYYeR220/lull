@@ -4,12 +4,14 @@ One reasoning call sees the full transcript, the visual-event inventory, the gap
 glossary, and returns, per event worth describing, a priority and up to three variants (short,
 medium, long) plus a cast registry (name -> descriptor). It never places anything in time: the
 scheduler does that. Word counts are always computed here, never taken from the model.
+Near-duplicate items are dropped afterwards (`drop_near_duplicates`).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from functools import cache
 from importlib.resources import files
 
@@ -17,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from lull.stages.research import LOOKUP_FAILED, ResearchResult
 from lull.stages.watch import NO_SPEECH, transcript_slice
-from lull.tf import ULTRA, TokenFactory
+from lull.tf import ULTRA, TFError, TokenFactory
 from lull.types import Gap, RunOptions, Span, Variant, VisualEvent, Word
 
 log = logging.getLogger(__name__)
@@ -28,6 +30,22 @@ TOKENS_BASE, TOKENS_PER_EVENT = 4000, 150  # reasoning + three variants per even
 ESTIMATE_BASE, ESTIMATE_PER_EVENT, ESTIMATE_CAP = 0.02, 0.0008, 0.25
 TEMPERATURE = 0.6
 LENGTHS = ("short", "medium", "long")
+COVER_SALIENCE = 3  # a sent event this salient with no item is asked for once more
+ASK_AGAIN = "Write an item for every event listed."
+DUP_JACCARD = 0.6  # short lines this alike ...
+DUP_WINDOW_S = 30.0  # ... this close in time say the same thing: one is kept
+_EPS = 1e-9
+_STOP = frozenset(
+    "a an the and or of to in on at by for from with into onto is are its their".split()
+)
+_WORD = re.compile(r"\w+")
+_QUOTED = re.compile(r'"([^"]*)"|“([^”]*)”')
+_NUMBER_WORDS = frozenset(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+    "fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy "
+    "eighty ninety hundred thousand million first second third fourth fifth sixth seventh "
+    "eighth ninth tenth ii iii iv vi vii viii ix".split()
+)
 
 
 def budget(n_sent: int) -> tuple[int, float]:
@@ -76,6 +94,8 @@ class PlanResult(BaseModel):
     variants: list[Variant] = Field(default_factory=list)
     cast: dict[str, str] = Field(default_factory=dict)  # name -> descriptor used before it
     priority: dict[str, int] = Field(default_factory=dict)  # event_id -> 1..5
+    unanswered: list[str] = Field(default_factory=list)  # salient sent events still without one
+    duplicates: dict[str, str] = Field(default_factory=dict)  # dropped event -> the one kept
 
 
 @cache
@@ -85,6 +105,12 @@ def load_prompt() -> str:
     R14 no assumed identity, R15 naming and cast, R16 priorities, R17 general terms, R18 no
     jargon, R19 on-screen text verbatim, R21 no repeating dialogue, R22 charts."""
     return (files("lull") / "prompts" / "plan.md").read_text(encoding="utf-8")
+
+
+def said_already(e: VisualEvent) -> bool:
+    """R21: the dialogue already conveys the event (said in dialogue, salience under 5), so it
+    is not sent to the plan and is never counted as undescribed."""
+    return e.said_in_dialogue and e.salience < 5
 
 
 def count_words(text: str) -> int:
@@ -250,6 +276,118 @@ def parse_plan(out: dict, events: list[VisualEvent]) -> PlanResult:
 # -- stage -------------------------------------------------------------------------------
 
 
+def _ask(
+    events: list[VisualEvent], words: list[Word], gaps: list[Gap], research: ResearchResult,
+    opts: RunOptions, tf: TokenFactory, run_id: str, note: str | None = None,
+) -> PlanResult:  # fmt: skip
+    """One Ultra call about `events`, parsed."""
+    user = _user_text(events, words, gaps, research, opts)
+    if note:
+        user = f"{user}\n\n{note}"
+    messages = [
+        {"role": "system", "content": load_prompt()},
+        {"role": "user", "content": user},
+    ]
+    max_tokens, estimate = budget(len(events))
+    out = tf.json(
+        ULTRA, messages, PLAN_SCHEMA,
+        run_id=run_id, stage="plan", role="plan", thinking=True,
+        max_tokens=max_tokens, temperature=TEMPERATURE, estimate=estimate,
+    )  # fmt: skip
+    return parse_plan(out, events)
+
+
+def _merge(first: PlanResult, second: PlanResult, events: list[VisualEvent]) -> PlanResult:
+    """Both answers as one: variants in event order, the first answer's cast names kept."""
+    order = {e.id: i for i, e in enumerate(events)}
+    variants = sorted(
+        first.variants + second.variants,
+        key=lambda v: (order[v.event_id], LENGTHS.index(v.length)),
+    )
+    cast = dict(first.cast)
+    for name, desc in second.cast.items():
+        if name not in cast:
+            cast[name] = desc
+        elif cast[name] != desc:
+            log.warning("plan: cast %r: kept descriptor %r, not %r", name, cast[name], desc)
+    return PlanResult(variants=variants, cast=cast, priority={**second.priority, **first.priority})
+
+
+def _tokens(text: str) -> set[str]:
+    return {t for t in _WORD.findall(text.lower()) if t not in _STOP}
+
+
+def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanResult:
+    """The plan without items that repeat another.
+
+    Two items are near-duplicates when their short lines (else their first variants) have a
+    token Jaccard of at least DUP_JACCARD and their visuals start at most DUP_WINDOW_S apart,
+    unless they say different numbers, quote different text, or their events show different
+    on-screen text (`_different`): "Step 1" and "Step 2" are two slides, not one shown twice.
+    Items are kept highest priority first (the earlier visual on a tie); an item alike to one
+    already kept is dropped and recorded in `duplicates` as dropped -> kept, so every twin is
+    within DUP_WINDOW_S of what it stands for (no chains) and coverage can count it with it.
+    A dropped item loses its variants and priority.
+    """
+    by_id = {e.id: e for e in events}
+    words: dict[str, set[str]] = {}
+    lines: dict[str, str] = {}
+    for v in result.variants:  # the short line, else the first variant the event has
+        if v.event_id not in words or v.length == "short":
+            words[v.event_id] = _tokens(v.text)
+            lines[v.event_id] = v.text
+    order = sorted(
+        (by_id[eid] for eid in result.priority if eid in by_id and eid in words),
+        key=lambda e: (-result.priority[e.id], e.t_start, e.id),
+    )
+    kept: list[VisualEvent] = []
+    dup: dict[str, str] = dict(result.duplicates)
+    for e in order:
+        alike = [
+            k
+            for k in kept
+            if abs(e.t_start - k.t_start) <= DUP_WINDOW_S + _EPS
+            and _jaccard(words[e.id], words[k.id]) >= DUP_JACCARD - _EPS
+            and not _different(e, k, lines[e.id], lines[k.id])
+        ]
+        if alike:  # the closest kept twin
+            dup[e.id] = min(alike, key=lambda k: (abs(e.t_start - k.t_start), k.t_start)).id
+        else:
+            kept.append(e)
+    if not dup:
+        return result
+    log.info("plan: dropped near-duplicate items %s", ", ".join(f"{d}~{k}" for d, k in dup.items()))
+    return result.model_copy(
+        update={
+            "variants": [v for v in result.variants if v.event_id not in dup],
+            "priority": {eid: p for eid, p in result.priority.items() if eid not in dup},
+            "duplicates": dup,
+        }
+    )
+
+
+def _numbers(text: str) -> set[str]:
+    return {t for t in _WORD.findall(text.lower()) if t in _NUMBER_WORDS or any(c.isdigit()
+            for c in t)}  # fmt: skip
+
+
+def _quotes(text: str) -> set[str]:
+    return {" ".join((a or b).lower().split()) for a, b in _QUOTED.findall(text)}
+
+
+def _different(a: VisualEvent, b: VisualEvent, line_a: str, line_b: str) -> bool:
+    """Two look-alike lines that still describe different content: they say different
+    numbers or quote different text, or their events show different on-screen text."""
+    if _numbers(line_a) != _numbers(line_b) or _quotes(line_a) != _quotes(line_b):
+        return True
+    shown_a, shown_b = (" ".join((e.verbatim_text or "").lower().split()) for e in (a, b))
+    return bool(shown_a and shown_b and shown_a != shown_b)
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+
 def plan(
     events: list[VisualEvent],
     words: list[Word],
@@ -264,19 +402,25 @@ def plan(
 
     Events the dialogue already conveys are left out before the call unless their salience is
     5 (R21); with nothing left there is no call and the plan is empty. The token budget and
-    the spend estimate grow with the number of events sent (see `budget`).
+    the spend estimate grow with the number of events sent (see `budget`). A sent event of
+    salience 3 or more that got no item is asked for once more, in a second call about only
+    those events; the ones still without an item are listed in `unanswered`. Near-duplicate
+    items are dropped last (`drop_near_duplicates`).
     """
-    send = [e for e in events if not (e.said_in_dialogue and e.salience < 5)]
+    send = [e for e in events if not said_already(e)]
     if not send:
         return PlanResult()
-    messages = [
-        {"role": "system", "content": load_prompt()},
-        {"role": "user", "content": _user_text(send, words, gaps, research, opts)},
-    ]
-    max_tokens, estimate = budget(len(send))
-    out = tf.json(
-        ULTRA, messages, PLAN_SCHEMA,
-        run_id=run_id, stage="plan", role="plan", thinking=True,
-        max_tokens=max_tokens, temperature=TEMPERATURE, estimate=estimate,
-    )  # fmt: skip
-    return parse_plan(out, send)
+    result = _ask(send, words, gaps, research, opts, tf, run_id)
+    missing = [e for e in send if e.salience >= COVER_SALIENCE and e.id not in result.priority]
+    if missing:
+        log.info("plan: asking again for %s", ", ".join(e.id for e in missing))
+        try:
+            again = _ask(missing, words, gaps, research, opts, tf, run_id, note=ASK_AGAIN)
+        except (ValueError, TFError) as e:  # the first answer is paid for: keep it
+            log.warning("plan: the second answer was unusable, keeping the first: %s", e)
+            again = PlanResult()
+        result = _merge(result, again, send)
+    unanswered = [e.id for e in missing if e.id not in result.priority]
+    if unanswered:
+        log.warning("plan: no item for %s even when asked again", ", ".join(unanswered))
+    return drop_near_duplicates(result.model_copy(update={"unanswered": unanswered}), send)

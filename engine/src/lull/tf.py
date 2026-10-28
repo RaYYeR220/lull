@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -13,6 +14,8 @@ import httpx
 
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, CallRecord, Ledger, cost_of
+
+log = logging.getLogger(__name__)
 
 ULTRA = "nvidia/Nemotron-3-Ultra-550b-a55b"
 VL = "nvidia/Nemotron-3.5-Super-VL"
@@ -30,6 +33,8 @@ _MIME = {
     ".png": "image/png",
 }
 _FENCE = re.compile(r"^```[a-zA-Z]*\s*\n?(.*?)\n?```$", re.DOTALL)
+_THINK = re.compile(r"^<think>.*?</think>", re.DOTALL)
+_UNSENT = (httpx.ConnectError, httpx.ConnectTimeout)  # the request never reached the server
 
 
 class TFError(Exception):
@@ -63,12 +68,21 @@ def image_part(path: Path) -> dict:
     return {"type": "image_url", "image_url": {"url": url}}
 
 
-def _parse_json(content: str) -> object:
+def _parse_json(content: str) -> dict:
+    """The JSON object in a model answer: a leading <think>...</think> block (reasoning that
+    leaked into the content) and a code fence are dropped; anything but an object raises
+    ValueError, so a stray list or an unclosed reasoning block counts as unparseable."""
     s = content.strip()
+    s = _THINK.sub("", s, count=1).strip()
+    if s.startswith("<think>"):
+        raise ValueError("unclosed <think> block")
     m = _FENCE.match(s)
     if m:
         s = m.group(1).strip()
-    return json.loads(s)
+    out = json.loads(s)
+    if not isinstance(out, dict):
+        raise ValueError(f"expected a JSON object, got {type(out).__name__}")
+    return out
 
 
 class TokenFactory:
@@ -99,6 +113,12 @@ class TokenFactory:
 
     def close(self) -> None:
         self._http.close()
+
+    def __enter__(self) -> TokenFactory:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     # -- public API -----------------------------------------------------------------
 
@@ -162,7 +182,10 @@ class TokenFactory:
                 **extra,
             }
             data, latency = self._post(body, run_id, estimate)
-            self._record(data, model, run_id, stage, role, latency)
+            self._record(data, model, run_id, stage, role, latency, estimate)
+            if not data.get("usage"):
+                log.warning("tf: %s answered without usage; charged at its estimate $%.4f",
+                            model, estimate)  # fmt: skip
             choice = (data.get("choices") or [{}])[0]
             content = (choice.get("message") or {}).get("content") or ""
             if choice.get("finish_reason") == "length" or not content.strip():
@@ -181,11 +204,13 @@ class TokenFactory:
             t0 = time.monotonic()
             try:
                 r = self._http.post("/chat/completions", json=body, headers=headers)
-            except httpx.TransportError as e:
+            except _UNSENT as e:  # never reached the server: safe to send again
                 if i < len(_BACKOFF):
                     self._sleep(_BACKOFF[i])
                     continue
                 raise TFError(f"network error: {e}") from e
+            except httpx.TransportError as e:  # may have run (and been billed): never resent
+                raise TFError(f"network error after sending: {e}") from e
             latency = time.monotonic() - t0
             if r.status_code == 200:
                 try:
@@ -201,8 +226,11 @@ class TokenFactory:
         raise AssertionError("unreachable")  # pragma: no cover
 
     def _record(
-        self, data: dict, model: str, run_id: str, stage: str, role: str, latency: float
-    ) -> None:
+        self, data: dict, model: str, run_id: str, stage: str, role: str, latency: float,
+        estimate: float = 0.0,
+    ) -> None:  # fmt: skip
+        """One ledger row for a call. An answer that reports no usage is charged at the
+        call's estimate, so the caps still see it."""
         usage = data.get("usage") or {}
         details = usage.get("prompt_tokens_details") or {}
         cached = details.get("cached_tokens")
@@ -222,7 +250,7 @@ class TokenFactory:
                 tokens_cached=cached,
                 tokens_out=tout,
                 latency_s=latency,
-                cost_usd=cost_of(model, tin, cached, tout),
+                cost_usd=cost_of(model, tin, cached, tout) if usage else estimate,
                 ts=time.time(),
             )  # fmt: skip
         )

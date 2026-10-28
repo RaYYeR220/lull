@@ -1,8 +1,9 @@
 """Stand-ins for the services a whole pipeline run talks to, shaped for the `tone_slides` video
 (12 s: red 0-6 s, blue 6-12 s; a 440 Hz tone 0-4 s, then silence).
 
-The transcript says "Hi, I am Ada." at 0.3-1.6 s and "Bye." at 11.2 s, a word the recogniser
-stretched to 11.95 s (clamped to 11.81 s). The silence between is 9.2 s usable, which split_gaps
+The transcript says "Hi, I am Ada." at 0.3-1.6 s, the recogniser stretching "Ada." from 0.99 to
+3.5 s (clamped back to 1.6 s), and "Bye." at 11.2-11.95 s. The silence between is 9.2 s usable,
+which split_gaps
 cuts into g001 [1.8, 6.25] and g002 [6.55, 11.0]. The watch answer has three events: red screen
 e001 (0-6 s), a "Lull" logo e002 (0.3-1.5 s, during speech: no gap can hold it, so it becomes
 the extended cue x002) and blue screen e003 (7-12 s). The schedule puts e001 in g001 (cue c001)
@@ -26,8 +27,8 @@ WORDS = [
     Word(text="Hi,", start=0.3, end=0.6),
     Word(text="I", start=0.65, end=0.75),
     Word(text="am", start=0.8, end=0.95),
-    Word(text="Ada.", start=1.0, end=1.6),
-    Word(text="Bye.", start=11.2, end=11.95),  # stretched: clamped to 11.81
+    Word(text="Ada.", start=0.99, end=3.5),  # implausible: clamped to 1.6
+    Word(text="Bye.", start=11.2, end=11.95),  # a drawn-out last word: kept
 ]
 TURNS = [Turn(speaker=0, start=0.3, end=1.6), Turn(speaker=0, start=11.2, end=11.6)]
 
@@ -48,7 +49,7 @@ WATCH = {
     "events": [
         _event(0.0, 6.0, "setting", "A plain red screen."),
         _event(0.3, 1.5, "on_screen_text", "A small logo reads Lull.", "Lull", salience=5),
-        _event(7.0, 12.0, "setting", "A plain blue screen."),
+        _event(7.0, 12.0, "setting", "A plain blue screen."),  # like e001, but past the 6 s cut
     ]
 }
 TERMS = {"terms": [{"term": "Lull", "kind": "work", "why": "the logo"}]}

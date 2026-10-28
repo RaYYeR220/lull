@@ -8,13 +8,16 @@ from lull.stages import finalize as fin
 from lull.stages.finalize import (
     CueContext,
     OverlapError,
+    _lost_ahead,
     assert_no_overlap,
     compress,
     count_ahead,
+    described_events,
     finalize_cue,
     introduce_names,
     names_in,
     overlap_report,
+    refresh_described,
     split_sentences,
 )
 from lull.stages.verify import (
@@ -22,6 +25,7 @@ from lull.stages.verify import (
     UNSPECIFIED,
     VERIFY_SCHEMA,
     clip_window,
+    parse_claims,
     remove_claims,
     verify,
 )
@@ -213,6 +217,11 @@ def test_not_visible_claim_is_removed_and_reverified(tmp_path, video):
     assert rm["schema"] == TEXT_SCHEMA
     assert "in a red coat" in _user_text(rm) and _description(rm) == TEXT
     assert _description(tf.of("verify")[1]) == "A person opens a door."
+    # every verification round is kept: the draft as first checked, then the cut line
+    assert [(c.text, [k.verdict for k in c.claims]) for c in out.checks] == [
+        (TEXT, ["supported", "not_visible", "supported"]),
+        ("A person opens a door.", ["supported", "supported"]),
+    ]
 
 
 def test_contradicted_claim_is_removed(tmp_path, video):
@@ -227,12 +236,15 @@ def test_contradicted_claim_is_removed(tmp_path, video):
     assert out.status == "verified" and "red" not in out.text
 
 
-def _new_failure_each_round(*last_round):
-    """A verifier that rejects a different detail in each of rounds 1-3, then `last_round`."""
+def _new_failure_each_round(*last_round, then=()):
+    """A verifier that rejects a different detail of the line in each of rounds 1-3 ("red",
+    "coat", "opens": every line these tests verify says them), then `last_round`, then the
+    answers in `then`."""
     answers = iter(
-        [_claims(("a person", "supported"), (f"detail {n}", "not_visible")) for n in (1, 2, 3)]
-        + [_claims(*last_round)]
-    )
+        [_claims(("a person", "supported"), (word, "not_visible"))
+         for word in ("red", "coat", "opens")]
+        + [_claims(*last_round), *then]
+    )  # fmt: skip
     return lambda call: next(answers)
 
 
@@ -247,17 +259,25 @@ def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
     removes = iter(["A person in a red coat opens the door.", "A person in a red coat opens it.",
                     TEXT, "A person opens a door."])  # fmt: skip
     tf = FakeTF(
-        verify=_new_failure_each_round(("a red coat", "contradicted"), ("a door", "not_visible")),
+        verify=_new_failure_each_round(
+            ("a red coat", "contradicted"),
+            ("a door", "not_visible"),
+            then=[_claims(("a person", "supported"), ("opens a door", "not_visible"))],
+        ),  # fmt: skip
         remove=lambda call: {"text": next(removes)},
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
-    assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 4
+    assert len(tf.of("verify")) == 5 and len(tf.of("remove")) == 4
     last = _user_text(tf.of("remove")[-1]).split("<remove>", 1)[1]
     assert "a red coat" in last and "a door" not in last
     assert out.text == "A person opens a door."
-    assert [(c.text, c.verdict) for c in out.claims] == [("a door", "not_visible")]
+    # the claims it is held with are those of the cut text, judged on it (a fifth check)
+    assert _description(tf.of("verify")[-1]) == out.text == out.checks[-1].text
+    assert [(c.text, c.verdict) for c in out.claims] == [
+        ("a person", "supported"), ("opens a door", "not_visible")
+    ]  # fmt: skip
     assert "not verified after 4 rounds" in out.note and "a red coat" in out.note
     assert speech.calls == []
     assert (out.audio_path, out.audio_dur) == (None, None)
@@ -294,7 +314,8 @@ def test_contradiction_that_cannot_be_cut_withholds_the_text(tmp_path, video):
     assert tf.roles() == ["verify", "remove"]
     assert out.status == "held" and out.text == ""
     assert "withheld" in out.note
-    assert [c.verdict for c in out.claims] == ["supported"]
+    assert out.claims == []  # nothing is said, so no claim is published; the check is kept
+    assert [k.verdict for k in out.checks[-1].claims] == ["supported", "contradicted"]
 
 
 def test_everything_removed_is_held(tmp_path, video):
@@ -457,21 +478,85 @@ def test_compress_sends_the_note_only_when_given():
     assert "it dropped a visual" not in plain and "it dropped a visual" in noted
 
 
+# -- (d3) a claim cut that drops a sentence its claims did not cover is tried once more --------
+
+TABBY = EV.model_copy(update={"id": "e002", "t_start": 2.5, "t_end": 6.0, "text": "A cat runs."})
+COAT_CAT = "A person in a red coat opens a door. A cat runs past."
+COAT_CLAIMS = _claims(
+    ("a person opens a door", "supported"),
+    ("the person wears a red coat", "not_visible"),
+    ("a cat runs past", "supported"),
+)
+
+
+def _coat_cat(tmp_path, video, tf, speech):
+    cue = _cue(COAT_CAT, event_ids=["e001", "e002"])
+    return _run(tmp_path, video, tf, speech, cue=cue, events={"e001": EV, "e002": TABBY})
+
+
+def test_a_claim_cut_that_drops_another_visual_is_retried_with_a_note(tmp_path, video):
+    tf = FakeTF(
+        verify=[COAT_CLAIMS, _supported("a person opens a door", "a cat runs past")],
+        remove=[
+            {"text": "A person opens a door."},
+            {"text": "A person opens a door. A cat runs past."},
+        ],
+    )
+    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "remove", "verify"]
+    first, retry = (_user_text(c) for c in tf.of("remove"))
+    assert "previous answer" not in first
+    assert 'Your previous answer "A person opens a door." dropped "A cat runs past."' in retry
+    assert out.status == "verified" and out.text == "A person opens a door. A cat runs past."
+    assert "1 claim removed: the person wears a red coat" in out.note
+
+
+def test_a_claim_cut_that_drops_another_visual_twice_is_held_with_the_line(tmp_path, video):
+    tf = FakeTF(verify=[COAT_CLAIMS], remove=[{"text": "A person opens a door."}] * 2)
+    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "remove"]
+    assert out.status == "held" and out.text == COAT_CAT  # nothing contradicted: kept for review
+    assert 'the claim cut dropped "A cat runs past." twice' in out.note
+    assert [c.verdict for c in out.claims] == ["supported", "not_visible", "supported"]
+
+
+def test_a_claim_cut_may_drop_the_sentence_its_claims_were_about(tmp_path, video):
+    tf = FakeTF(
+        verify=[
+            _claims(("a person opens a door", "supported"), ("a cat runs past", "not_visible")),
+            _supported("a person opens a door"),
+        ],
+        remove=[{"text": "A person in a red coat opens a door."}],
+    )
+    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "verify"]
+    assert out.status == "verified" and out.text == "A person in a red coat opens a door."
+
+
+def test_remove_claims_sends_the_note_only_when_given():
+    bad = [Claim(text="red", verdict="not_visible", at=None)]
+    tf = FakeTF(remove=[{"text": "A door opens."}] * 2)
+    remove_claims("A red door opens.", bad, tf, run_id="r1")
+    remove_claims("A red door opens.", bad, tf, run_id="r1", note="it dropped a visual")
+    plain, noted = (_user_text(c) for c in tf.calls)
+    assert "it dropped a visual" not in plain and "it dropped a visual" in noted
+
+
 # -- (e) verification never passes ----------------------------------------------------------
 
 
 def test_verify_always_fails_is_held_after_four_rounds(tmp_path, video):
     """A new claim fails in every round; each is cut, and the fourth failure holds the cue."""
     tf = FakeTF(
-        verify=_new_failure_each_round(("a person", "supported"), ("detail 4", "not_visible")),
+        verify=_new_failure_each_round(("a person", "supported"), ("door", "not_visible")),
         remove=_changed_each_time(),
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
     assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 3
-    assert "not verified after 4 rounds: detail 4 (not visible)" in out.note
-    assert "3 claims removed: detail 1; detail 2; detail 3" in out.note
+    assert "not verified after 4 rounds: door (not visible)" in out.note
+    assert "3 claims removed: red; coat; opens" in out.note
     assert speech.calls == []
     assert out.start == GAP.usable_start
     assert {c["stage"] for c in tf.calls} == {"finalize"}
@@ -532,7 +617,7 @@ def test_on_screen_text_not_read_by_the_cue_does_not_block(tmp_path, video):
     assert out.status == "verified" and tf.roles() == ["verify"]
 
 
-# -- first mention of a cast name (ruling I4) -------------------------------------------------
+# -- first mention of a cast name -------------------------------------------------
 
 
 def test_first_mention_gets_the_descriptor(tmp_path, video):
@@ -601,7 +686,7 @@ def test_introduce_names_leaves_alone():
     assert introduce_names("The proog climbs.", cast, set()) == ("The proog climbs.", set(), [])
 
 
-# -- look-ahead prefixes (I1) ------------------------------------------------------------------
+# -- look-ahead prefixes ------------------------------------------------------------------
 
 CAR = EV.model_copy(update={"id": "e002", "t_start": 6.5, "t_end": 9.0, "text": "A car passes."})
 AHEAD_EVENTS = {"e001": EV, "e002": CAR}
@@ -743,10 +828,12 @@ def test_quote_lost_with_an_unrelated_claim_is_demanded_back(tmp_path, video):
             _claims(('a sign reads "EXIT"', "supported"), ("in a red coat", "not_visible")),
             _supported('a sign reads "EXIT"', "a person opens a door"),
         ],
-        remove=[{"text": "A person opens a door."}],
-        repair=[{"text": 'A sign reads: "EXIT". A person opens a door.'}],
+        # the sign sentence survives but loses its quote (a whole lost sentence is asked back
+        # from the cut itself: see the (d3) tests)
+        remove=[{"text": "A sign above the door. A person opens a door."}],
+        repair=[{"text": 'A sign above the door reads: "EXIT". A person opens a door.'}],
     )
-    cue = _cue('A sign reads: "EXIT". A person in a red coat opens a door.')
+    cue = _cue('A sign above the door reads: "EXIT". A person in a red coat opens a door.')
     out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=cue, ctx=ctx)
     assert tf.roles() == ["verify", "remove", "repair", "verify"]
     assert "R19-verbatim" in _user_text(tf.of("repair")[0])
@@ -979,3 +1066,358 @@ def test_overlap_gate_needs_audio():
     cue = _done("c001", 2.0, 3.0).model_copy(update={"audio_dur": None})
     with pytest.raises(ValueError):
         assert_no_overlap([cue], [])
+
+
+# -- edge cases ------------------------------------------------------------------------------
+
+
+def test_a_quote_inside_a_longer_word_of_a_cut_claim_is_still_demanded(tmp_path, video):
+    """Cutting "a person exits the building" does not cut the sign "EXIT": only a quote the
+    cut claims say as a whole word stops being demanded (R19)."""
+    ctx = CTX.model_copy(update={"verbatim": ["EXIT"]})
+    tf = FakeTF(
+        verify=[
+            _claims(
+                ('a sign reads "EXIT"', "supported"), ("a person exits the building", "not_visible")
+            ),
+            _supported('a sign reads "EXIT"'),
+        ],  # fmt: skip
+        remove=[{"text": "A sign above the door."}],
+        repair=[{"text": 'A sign above the door reads: "EXIT".'}],
+    )
+    cue = _cue('A sign above the door reads: "EXIT". A person exits the building.')
+    out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=cue, ctx=ctx)
+    assert tf.roles() == ["verify", "remove", "repair", "verify"]
+    assert out.status == "verified" and '"EXIT"' in out.text
+
+
+def test_lost_ahead_follows_the_look_ahead_sentence_words_that_are_its_own():
+    """A look-ahead merged into a longer unprefixed sentence is caught (most of its own words
+    survive there), and words it shares with other sentences prove nothing."""
+    merged = (
+        "A woman enters with a lamp while light floods the hall and dust drifts as the door opens."
+    )
+    assert _lost_ahead("A door opens. In a moment, a woman enters with a lamp.", merged)
+    assert not _lost_ahead("Two people walk. In a moment, two people jump.", "Two people walk.")
+    assert _lost_ahead("Two people walk. In a moment, two people jump.", "Two people jump.")
+    assert not _lost_ahead(
+        "A door opens. In a moment, a woman enters.", "A door opens. In a moment, she enters."
+    )
+
+
+# -- which events a finished line still describes ---------------------------
+
+EV2 = VisualEvent(
+    id="e002", t_start=3.0, t_end=6.0, kind="action", text="A cat sleeps on the mat.",
+    verbatim_text=None, salience=4, said_in_dialogue=False,
+)  # fmt: skip
+
+
+def test_a_line_that_lost_an_events_sentence_no_longer_describes_it(tmp_path, video):
+    parts = {"e001": "A person opens a door.", "e002": "A cat sleeps on the mat."}
+    cue = _cue("A person opens a door. A cat sleeps on the mat.", event_ids=["e001", "e002"],
+               parts=parts)  # fmt: skip
+    tf = FakeTF(
+        verify=[
+            _claims(
+                ("a person opens a door", "supported"), ("a cat sleeps on the mat", "not_visible")
+            ),
+            _supported("a person opens a door"),
+        ],  # fmt: skip
+        remove=[{"text": "A person opens a door."}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=cue,
+               events={"e001": EV, "e002": EV2})  # fmt: skip
+    assert out.status == "verified" and out.event_ids == ["e001", "e002"]
+    assert out.described == ["e001"]
+
+
+def test_described_events_follow_their_own_words_through_rewrites():
+    parts = {"e1": "Two people walk.", "e2": "Two people jump over a fence."}
+    assert described_events(parts, "Two people walk, then jump over a fence.") == ["e1", "e2"]
+    assert described_events(parts, "Two people walk.") == ["e1"]  # shared words prove nothing
+    assert described_events(parts, "They jump the fence.") == ["e2"]
+    assert described_events({"e1": "A red door opens."}, "The door swings open.") == ["e1"]
+    assert described_events({}, "Anything.") is None  # no parts: nothing to judge
+    assert described_events(parts, "") == []
+
+
+# -- verification clips and repeated claims -------------------------------------------------------
+
+
+def test_the_verify_clip_is_at_least_4_s():
+    """A 1.3 s fall gets 4 s of clip around it (padded, kept inside the video), still at
+    most 12 s."""
+    assert clip_window([_e(72.0, 73.3)], 90.0) == (70.65, 74.65)
+    assert clip_window([_e(0.2, 0.8)], 30.0) == (0.0, 4.0)  # moved inside the video
+    assert clip_window([_e(29.5, 29.9)], 30.0) == (26.0, 30.0)
+    assert clip_window([_e(0.0, 1.0)], 2.0) == (0.0, 2.0)  # a 2 s video gives what it has
+    assert clip_window([_e(0.0, 20.0)], 30.0) == (4.0, 16.0)  # the cap still holds
+
+
+def test_repeated_claims_are_judged_once():
+    """Identical claims (case and spacing aside) count once; a repeat with a worse verdict
+    makes the kept one worse, never better."""
+    same = [{"text": "Winged figures fly past.", "verdict": "supported", "at": 1.0}] * 24
+    assert len(parse_claims({"claims": same})) == 1
+    mixed = {"claims": [
+        {"text": "A cat sits", "verdict": "supported", "at": 1.0},
+        {"text": "a  CAT sits", "verdict": "not_visible", "at": None},
+        {"text": "A dog barks", "verdict": "supported", "at": 2.0},
+    ]}  # fmt: skip
+    got = parse_claims(mixed)
+    assert [(c.text, c.verdict) for c in got] == [
+        ("A cat sits", "not_visible"), ("A dog barks", "supported")
+    ]  # fmt: skip
+
+
+# -- edits and placement in the pause -------------------------------------------------------------
+
+
+def test_refresh_described_follows_an_edited_text():
+    """The Studio edit path: after a person changes the text, `described` is recomputed from
+    the cue's parts, so coverage never counts an event the new text dropped."""
+    parts = {"e001": "A person opens a door.", "e002": "A cat sleeps on the mat."}
+    cue = _cue("A person opens a door. A cat sleeps on the mat.", event_ids=["e001", "e002"],
+               parts=parts, described=["e001", "e002"], status="edited")  # fmt: skip
+    edited = cue.model_copy(update={"text": "A cat sleeps on the mat."})
+    fresh = refresh_described(edited)
+    assert fresh.described == ["e002"] and edited.described == ["e001", "e002"]
+    assert fresh.model_copy(update={"described": edited.described}) == edited  # nothing else
+    assert refresh_described(_cue("Anything.", parts={})).described is None  # no parts
+
+
+# -- where in its pause a cue starts ----------------------------------------------------------
+
+CHART = VisualEvent(
+    id="e009", t_start=18.0, t_end=25.0, kind="chart",
+    text="A bar chart shows sales rising each year.", verbatim_text=None, salience=5,
+    said_in_dialogue=False,
+)  # fmt: skip
+CHART_LINE = "A bar chart shows sales rising each year."
+
+
+def _pause(us: float, ue: float) -> Gap:
+    return Gap(id="g001", start=us - 0.2, end=ue + 0.2, usable_start=us, usable_end=ue,
+               capacity_words=40)  # fmt: skip
+
+
+def test_a_cue_waits_for_its_visual_within_its_pause(tmp_path, video):
+    """A pause that opens 7.8 s before the chart: the line starts 0.3 s before the chart,
+    not at the start of the pause."""
+    gap = _pause(10.2, 25.0)
+    cue = _cue(CHART_LINE, start=10.2, event_ids=["e009"])
+    tf = FakeTF(verify=[_supported("a bar chart shows sales rising each year")])
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, FakeSpeech([2.7]), cue=cue, gap=gap,
+               events={"e009": CHART}, ctx=ctx)  # fmt: skip
+    assert out.status == "verified" and out.ahead is False and out.text == CHART_LINE
+    assert out.start == pytest.approx(17.7) and out.end == pytest.approx(20.4)
+
+
+def test_a_cue_that_cannot_wait_starts_as_late_as_it_can_with_a_look_ahead(tmp_path, video):
+    """Pause 10.2-19.0 s, chart from 18 s. Waiting for the chart would
+    run into speech, so the line starts earlier, as late as the pause allows, and says so: it
+    is voiced again with "In a moment, " and its fit checked again."""
+    gap = _pause(10.2, 19.0)
+    cue = _cue(CHART_LINE, start=10.2, event_ids=["e009"])
+    tf = FakeTF(verify=[_supported("a bar chart shows sales rising each year")] * 2)
+    speech = FakeSpeech([2.7, 3.7])
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, speech, cue=cue, gap=gap, events={"e009": CHART}, ctx=ctx)
+    assert [c["text"] for c in speech.calls] == [
+        CHART_LINE, "In a moment, a bar chart shows sales rising each year."
+    ]  # fmt: skip
+    # the line changed after it was verified: it is verified again as it is voiced
+    assert [_description(c) for c in tf.of("verify")] == [CHART_LINE, out.text]
+    assert out.checks[-1].text == out.text
+    assert out.status == "verified" and out.ahead is True
+    assert out.text == "In a moment, a bar chart shows sales rising each year."
+    assert out.start == pytest.approx(15.3) and out.end == pytest.approx(19.0)
+    assert "look-ahead" in out.note
+
+
+# -- the published claims are those of the final text -----------------------------------------
+
+
+def test_a_compressed_cue_publishes_only_the_claims_its_final_text_makes(tmp_path, video):
+    """A line compressed after it was verified is verified again, and the claims it carries
+    are the final text's, each judged on that text. What the verifier lists beyond the line
+    (other things the frames show) is not a claim of the line and is never published."""
+    long_text = "A person in a long red coat opens the wooden door of the shed."  # 14 words
+    final = "A person in a red coat opens a door."
+    tf = FakeTF(
+        verify=[
+            _supported("a person", "a long red coat", "opens the wooden door of the shed"),
+            _supported(
+                "a person",
+                "wears a red coat",
+                "opens a door",
+                "the shed has a green roof",
+                "a dog sleeps on the porch",
+            ),
+        ],  # fmt: skip
+        compress=[{"text": final}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([5.6, 3.0]), cue=_cue(long_text))
+    assert out.status == "verified" and out.text == final
+    assert [c.text for c in out.claims] == ["a person", "wears a red coat", "opens a door"]
+    last = out.checks[-1]
+    assert last.text == out.text
+    assert all(c in last.claims for c in out.claims)  # each verdict judged on the final text
+
+
+def test_claims_of_the_text_tolerate_inflection_and_framing_words():
+    from lull.stages.verify import said_in
+
+    text = "Glycolysis and Krebs Cycle. A woman waves at two children."
+    assert said_in("The slide is titled Glycolysis and Krebs Cycle.", text)
+    assert said_in("a woman is waving", text)
+    assert said_in("there are 2 children", text)
+    assert said_in("there are three children", text) is False  # a different number
+    assert said_in("The slide lists Glycolysis occurs in cytoplasm.", text) is False
+    assert said_in("NADH and FADH2 are carriers", text) is False
+    assert said_in("a slide is there", "A slide.")  # nothing but framing: the text says it
+
+
+def test_a_name_read_off_the_screen_gets_no_descriptor_there():
+    """Where the line reads the screen (capitals, or the text watch read) it names nobody:
+    the descriptor goes to the first mention that is a name, if any."""
+    cast = {"BAKE": "a baker", "Proog": PROOG}
+    text, _, inserted = introduce_names("A card reads STEP 2: BAKE.", cast, set())
+    assert (text, inserted) == ("A card reads STEP 2: BAKE.", [])
+    text, _, inserted = introduce_names(
+        "A banner reads Welcome, Proog. Proog waves.", cast, set(), ["Welcome, Proog"]
+    )
+    assert text == f"A banner reads Welcome, Proog. {PROOG[0].upper()}{PROOG[1:]}, Proog, waves."
+    assert inserted == ["Proog"]
+
+
+def test_a_placement_look_ahead_is_not_kept_through_compression(tmp_path, video, monkeypatch):
+    """The line had to start early and got "In a moment, ", which made it too long for the
+    pause. Compression shortens the line itself (its word target less the three prefix words),
+    and placement decides again whether the shorter line needs the prefix. Asking a model to
+    keep a prefix the engine added kept it at its old length round after round."""
+    seen = []
+    real = fin.compress
+
+    def spy(text, target_words, keep, tf, *, run_id, note=None):
+        seen.append((text, target_words))
+        return real(text, target_words, keep, tf, run_id=run_id)
+
+    monkeypatch.setattr(fin, "compress", spy)
+    short = "A bar chart shows sales rising."
+    tf = FakeTF(
+        verify=lambda call: _supported(_description(call).removeprefix("In a moment, ")),
+        compress=[{"text": short}],
+    )
+    speech = FakeSpeech(lambda text: 0.42 * len(text.split()))
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, speech, cue=_cue(CHART_LINE, start=15.0, event_ids=["e009"]),
+               gap=_pause(15.0, 19.0), events={"e009": CHART}, ctx=ctx)  # fmt: skip
+    # 11 words prefixed: 4.62 s for a 4.0 s pause -> floor(11 x 4.0 / 4.62 x 0.95) = 9, less 3
+    assert seen == [(CHART_LINE, 6)]
+    assert out.status == "verified" and out.text == "In a moment, a bar chart shows sales rising."
+    assert out.ahead is True and out.end <= 19.0 + 1e-6
+
+
+def test_a_tempo_that_misses_by_the_padding_is_raised_once(tmp_path, video, monkeypatch):
+    """atempo pads its output to whole frames, so the factor that should fit can miss by a few
+    milliseconds (ed90: 3.344 s for a 3.32 s pause came out at 3.3215 s at 1.008): the factor
+    is raised once rather than the line sent for compression."""
+    factors = []
+
+    def padded(src, dst, factor):
+        factors.append(factor)
+        return _wav(Path(dst), _wav_seconds(src) / factor + 0.004)
+
+    monkeypatch.setattr(fin, "atempo", padded)
+    tf = FakeTF(verify=[_supported("a person", "a red coat", "opens a door")])
+    out = _run(tmp_path, video, tf, FakeSpeech([3.3437]), gap=_pause(2.0, 5.32))
+    assert out.status == "verified" and out.audio_dur <= 3.32
+    assert len(factors) == 2 and factors[0] < factors[1] <= 1.10
+    assert out.tempo == factors[1] and "compress" not in tf.roles()
+
+
+# -- a failed verdict is never filtered away --------------------------------------------------
+
+
+def test_claims_of_drops_only_supported_claims_the_line_does_not_make():
+    """Only the verifier's extras (supported claims about what else the frames show) are left
+    out; every contradicted or not-visible claim stays, however it is worded."""
+    from lull.stages.verify import claims_of
+
+    text = "One person waves at the camera. Thirty students sit in rows."
+    claims = [
+        Claim(text="a person waves", verdict="supported", at=1.0),
+        Claim(text="1 person", verdict="contradicted", at=1.0),  # "one" written as a digit
+        Claim(text="30 students", verdict="not_visible", at=None),  # beyond the number words
+        Claim(text="a dog sleeps by the door", verdict="supported", at=2.0),  # an extra
+    ]
+    assert [c.text for c in claims_of(text, claims)] == [
+        "a person waves", "1 person", "30 students"
+    ]  # fmt: skip
+
+
+def test_a_paraphrased_contradicted_claim_is_never_voiced_as_verified(tmp_path, video):
+    tf = FakeTF(
+        verify=[_claims(("a person waves", "supported"), ("1 person", "contradicted"))],
+        remove=lambda call: {"text": _description(call)},  # the cut finds nothing to cut
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue("One person waves at the camera."))
+    assert out.status == "held" and out.audio_path is None
+    assert tf.roles() == ["verify", "remove"]
+
+
+def test_a_held_cue_keeps_a_contradiction_found_when_its_cut_text_is_checked_again(tmp_path, video):
+    """The check of the cut text finds a new contradiction: the held cue keeps that claim
+    with its verdict and says so, so a reviewer never sees the line as merely unconfirmed."""
+    removes = iter(["A person in a red coat opens the door.", "A person in a red coat opens it.",
+                    TEXT, "A person opens a door."])  # fmt: skip
+    tf = FakeTF(
+        verify=_new_failure_each_round(
+            ("a red coat", "contradicted"),
+            ("a door", "not_visible"),
+            then=[_claims(("a person", "supported"), ("opens a door", "contradicted"))],
+        ),  # fmt: skip
+        remove=lambda call: {"text": next(removes)},
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([]))
+    assert out.status == "held" and out.text == "A person opens a door."
+    assert [(c.text, c.verdict) for c in out.claims] == [
+        ("a person", "supported"), ("opens a door", "contradicted")
+    ]  # fmt: skip
+    assert "opens a door (contradicted)" in out.note
+
+
+def test_a_line_that_fails_its_check_as_voiced_keeps_the_contradiction(tmp_path, video):
+    """The look-ahead was added after the line was verified; the check of the prefixed line
+    contradicts a claim: held, and the claim stays with its verdict."""
+    gap = _pause(10.2, 19.0)
+    cue = _cue(CHART_LINE, start=10.2, event_ids=["e009"])
+    tf = FakeTF(verify=[
+        _supported("a bar chart shows sales rising each year"),
+        _claims(("a bar chart", "supported"), ("sales rising each year", "contradicted")),
+    ])  # fmt: skip
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, FakeSpeech([2.7, 3.7]), cue=cue, gap=gap,
+               events={"e009": CHART}, ctx=ctx)  # fmt: skip
+    assert out.status == "held"
+    assert ("sales rising each year", "contradicted") in [(c.text, c.verdict) for c in out.claims]
+
+
+def test_the_first_sentence_gets_the_look_ahead_when_it_starts_early(tmp_path, video):
+    """A two-event line whose second sentence already looks ahead: when placement starts it
+    before its first visual (window 10-19 s, door from 17.5 s, line 3.6 s: it starts at
+    15.4 s), the first sentence gets "In a moment, " too; the second one's says nothing about
+    the first."""
+    door = VisualEvent(id="e001", t_start=17.5, t_end=22.0, kind="action", text="A door opens.",
+                       verbatim_text=None, salience=4, said_in_dialogue=False)  # fmt: skip
+    line = "A door opens. In a moment, a bar chart shows sales."
+    cue = _cue(line, start=10.0, event_ids=["e001", "e009"], ahead=True)
+    tf = FakeTF(verify=lambda call: _supported("a door opens", "a bar chart shows sales"))
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, FakeSpeech([3.6, 4.8]), cue=cue, gap=_pause(10.0, 19.0),
+               events={"e001": door, "e009": CHART}, ctx=ctx)  # fmt: skip
+    assert out.text == "In a moment, a door opens. In a moment, a bar chart shows sales."
+    assert out.status == "verified" and out.ahead is True

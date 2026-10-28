@@ -38,7 +38,7 @@ def _pl(eid, length, gid, ahead=False):
 
 
 def _objective(placements, priority):
-    """The brief's objective: sum of priority x weight, minus 1 per ahead placement."""
+    """The objective: sum of priority x weight, minus 1 per ahead placement."""
     return sum(priority[p.event_id] * WEIGHTS[p.variant] - p.ahead for p in placements)
 
 
@@ -97,7 +97,7 @@ def _random_instance(rng: random.Random):
 INSTANCES = [_random_instance(random.Random(1000 + k)) for k in range(30)]
 
 
-# -- the brief's cases ----------------------------------------------------------------
+# -- worked cases ----------------------------------------------------------------
 
 
 def test_compose_joins_one_gap_in_time_order_and_prefixes_ahead():
@@ -150,7 +150,7 @@ def test_long_too_big_for_the_gap_so_both_events_get_their_short():
 
 
 def test_a_brief_visual_is_not_voiced_after_a_long_sentence_ends_it():
-    """Reviewer's case: A (9-30 s, 20 words) sorts first in gap 10-20, so B (10.5-11 s) would
+    """A (9-30 s, 20 words) sorts first in gap 10-20, so B (10.5-11 s) would
     start about 8.5 s in, long after it ended; only one of them may use the gap."""
     events = [_ev("e001", 9.0, 30.0), _ev("e002", 10.5, 11.0, sal=4)]
     variants = [_var("e001", "long", 20), _var("e002", "short", 4)]
@@ -174,12 +174,13 @@ def test_a_brief_visual_that_starts_first_is_voiced_first():
 
 
 def test_a_visual_ending_within_a_word_of_the_gap_start_is_not_placed():
-    # floor((10.4 - 10.0) x 2.36) - 1 < 0: not even the first word would land in time
-    events = [_ev("e001", 9.0, 10.4)]
+    # floor((10.3 - 10.0) x 2.8) - 1 < 0: not even the first word would land in time
+    events = [_ev("e001", 9.0, 10.3)]
     variants = [_var("e001", "short", 2)]
     gaps = [_gap("g001", 10.0, 20.0, 30)]
     for run in (schedule, schedule_greedy):
-        assert run(events, variants, {"e001": 5}, gaps) == ([], [])
+        # priority 5 and unplaced: offered for the extended track instead
+        assert run(events, variants, {"e001": 5}, gaps) == ([], ["e001"])
     placements, _ = schedule(events, variants, {"e001": 5}, gaps, wps=6.0)
     assert placements == [_pl("e001", "short", "g001")]
 
@@ -216,12 +217,13 @@ def test_ahead_window_is_bounded_by_lead():
 
 
 def test_no_speech_video_does_not_over_describe():
-    """Review Focus 1: one gap over the whole 30 s video, one low-priority event."""
+    """One gap over the whole 30 s video, one low-priority event."""
     events = [_ev("e001", 3.0, 8.0, sal=2)]
     variants = [_var("e001", "short", 5), _var("e001", "medium", 10), _var("e001", "long", 18)]
     gaps = [_gap("g001", 0.2, 29.8, 88)]
     for run in (schedule, schedule_greedy):
-        placements, extended = run(events, variants, {"e001": 1}, gaps)
+        assert run(events, variants, {"e001": 1}, gaps) == ([], [])  # priority 1: never placed
+        placements, extended = run(events, variants, {"e001": 2}, gaps)
         assert placements == [_pl("e001", "long", "g001")]
         assert extended == []
         cues = compose_cues(placements, variants, events, gaps)
@@ -230,13 +232,26 @@ def test_no_speech_video_does_not_over_describe():
 
 
 def test_continuous_speech_leaves_only_extended_candidates():
-    """Review Focus 2: no gaps -> no placements, every salience >= 4 event is a candidate."""
+    """No gaps -> no placements, every salience >= 4 event is a candidate."""
     events = [_ev("e001", 30.0, 32.0, sal=5), _ev("e002", 4.0, 6.0, sal=4),
               _ev("e003", 10.0, 12.0, sal=3)]  # fmt: skip
     variants = [_var(e.id, "short", 4) for e in events]
     priority = {"e001": 5, "e002": 4, "e003": 3}
     for run in (schedule, schedule_greedy):
         assert run(events, variants, priority, []) == ([], ["e002", "e001"])
+
+
+def test_extended_candidates_follow_the_plan_priority_not_the_first_guess():
+    """Live csc_intro: the inventory rated 42 one-second shots salience 4; the plan, seeing the
+    whole video, rated most of them priority 1, yet each one stopped the video. Only what the
+    plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and stays
+    undescribed, which the pipeline reports)."""
+    events = [_ev("e001", 1.0, 2.0, sal=4), _ev("e002", 2.0, 3.0, sal=3),
+              _ev("e003", 3.0, 4.0, sal=5), _ev("e004", 4.0, 5.0, sal=4)]  # fmt: skip
+    variants = [_var(e, "short", 4) for e in ("e001", "e002", "e003")]
+    priority = {"e001": 1, "e002": 5, "e003": 4}  # e004: no item
+    for run in (schedule, schedule_greedy):
+        assert run(events, variants, priority, []) == ([], ["e002", "e003", "e004"])
 
 
 # -- solver vs greedy, randomised -------------------------------------------------------
@@ -252,8 +267,9 @@ def test_random_instances_keep_invariants_and_solver_beats_greedy(k):
     assert _objective(solved, priority) >= _objective(greedy, priority)
     for placements, ext in ((solved, solved_ext), (greedy, greedy_ext)):
         placed = {p.event_id for p in placements}
-        salient = sorted((e for e in events if e.salience >= 4), key=lambda e: (e.t_start, e.id))
-        assert ext == [e.id for e in salient if e.id not in placed]
+        ordered = sorted(events, key=lambda e: (e.t_start, e.id))
+        rated = [e for e in ordered if priority.get(e.id, e.salience) >= 4]
+        assert ext == [e.id for e in rated if e.id not in placed]
 
 
 def test_tie_break_never_costs_objective(monkeypatch):
@@ -459,6 +475,11 @@ def test_missing_priority_falls_back_to_salience():
         ("It rains.", None, "In a moment, it rains."),
         ("Ice covers the lake.", None, "In a moment, ice covers the lake."),
         ("A U.S. flag waves.", None, "In a moment, a U.S. flag waves."),
+        # curly or straight apostrophes match either spelling of a proper noun
+        ("O’Brien waves.", {"O’Brien"}, "In a moment, O’Brien waves."),
+        ("O’Brien waves.", {"O'Brien"}, "In a moment, O’Brien waves."),
+        ("O'Brien waves.", {"O’Brien"}, "In a moment, O'Brien waves."),
+        ("O’Brien’s dog barks.", {"O’Brien"}, "In a moment, O’Brien’s dog barks."),
     ],
 )
 def test_ahead_prefix_and_casing(text, proper, expected):
@@ -573,3 +594,40 @@ def test_placement_report_summarises_use_of_the_gaps():
     }
     empty = placement_report([], [], [], [])
     assert empty["utilisation"] == 0.0 and empty["placed"] == [] and empty["gaps"] == []
+
+
+# -- what may be placed, what may stop the video ------------------------------------
+
+
+def test_standard_placement_needs_priority_two():
+    """A priority-1 line never fills spare room."""
+    events = [_ev("e001", 1.0, 9.0, sal=4), _ev("e002", 1.0, 9.0, sal=4)]
+    variants = [_var("e001", "short", 3), _var("e002", "short", 3)]
+    gaps = [_gap("g001", 2.0, 8.0, 18)]
+    for run in (schedule, schedule_greedy):
+        placements, extended = run(events, variants, {"e001": 1, "e002": 2}, gaps)
+        assert placements == [_pl("e002", "short", "g001")]
+        assert extended == []
+
+
+def test_compose_and_report_take_extended_candidates_from_the_plan_priority():
+    """No salience-only leftovers: compose_cues' default extended list and the report's
+    unplaced_salient follow the plan priority like extended_candidates."""
+    events = [_ev("e001", 1.0, 3.0, sal=5), _ev("e002", 10.0, 12.0, sal=3),
+              _ev("e003", 20.0, 22.0, sal=4)]  # fmt: skip
+    variants = [_var("e001", "short", 2, "Rain falls."), _var("e002", "short", 2, "Lights dim.")]
+    priority = {"e001": 1, "e002": 4}  # e003: no item, so its salience counts
+    cues = compose_cues([], variants, events, [], priority=priority)
+    assert [c.id for c in cues] == ["x002"]  # e003 has no variant to voice
+    report = placement_report([], variants, events, [], priority=priority)
+    assert report["unplaced_salient"] == ["e002", "e003"]
+
+
+def test_events_the_dialogue_conveys_never_stop_the_video():
+    """R21: an event said in dialogue (salience under 5) is not planned, so it is no extended
+    candidate either (and never reported undescribed)."""
+    said = _ev("e001", 1.0, 3.0, sal=4).model_copy(update={"said_in_dialogue": True})
+    loud = _ev("e002", 5.0, 6.0, sal=5).model_copy(update={"said_in_dialogue": True})
+    for run in (schedule, schedule_greedy):
+        assert run([said, loud], [], {}, []) == ([], ["e002"])
+    assert placement_report([], [], [said, loud], [])["unplaced_salient"] == ["e002"]

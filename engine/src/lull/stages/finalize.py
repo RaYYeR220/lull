@@ -10,16 +10,20 @@ This is where a description is refused. Each cue goes through at most MAX_ROUNDS
    was already cut, or when the cut changes nothing; on the last round it is held as well.
    A held cue still loses its contradicted claims (never kept); not-visible ones stay for the
    reviewer to judge.
-3. voice. The line is spoken and its duration measured. It fits when it ends by the gap's
-   usable end; up to 10 % over, it is sped up with atempo; beyond that Lightning compresses it
-   towards floor(words x usable / duration x 0.95) words and the next round starts at step 1.
-   A line that fits is also timed sentence by sentence from the measured audio: a sentence
-   that would start at or after its visual ends sends the line back for compression too.
+3. voice. The line is spoken and its duration measured. It fits when it fits the gap's
+   usable window; up to 10 % over, it is sped up with atempo; beyond that Lightning compresses
+   it towards floor(words x usable / duration x 0.95) words and the next round starts at
+   step 1. A line that fits starts LEAD_IN_S before its first visual, or at the window's start
+   if that is later. When it could not then finish before the window ends it starts as late as
+   the window allows; if that is before its visual it is voiced again with "In a moment, "
+   (and fitted again), so a listener never hears a description early without being told. It
+   is also timed sentence by sentence from the measured audio: a sentence that would start at
+   or after its visual ends sends the line back for compression too.
 
 A look-ahead ("In a moment, ") is never lost silently: a repair or compression that drops one
 gets one repair to restore it, else the cue is held; a claim cut may drop one only with the
 sentence it introduced. Before round 1, a cast name the programme has not introduced yet gets
-its descriptor at its first mention (ruling I4). Extended cues (no gap) are verified and voiced
+its descriptor at its first mention. Extended cues (no gap) are verified and voiced
 but never fitted or timed.
 """
 
@@ -36,8 +40,9 @@ from pydantic import BaseModel, Field
 
 from lull.media import audio_duration, cut_clip, probe
 from lull.speech import SpeechClient
-from lull.stages.lint import Finding, autofix, lint, quoted_spans
+from lull.stages.lint import Finding, autofix, lint, quoted_spans, screen_spans
 from lull.stages.plan import count_words
+from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
     clip_window,
@@ -49,11 +54,12 @@ from lull.stages.verify import (
 from lull.stages.voice import MAX_TEMPO, atempo, voice
 from lull.tf import TokenFactory
 from lull.timeline import merge_spans
-from lull.types import Claim, Cue, Gap, RunOptions, Span, VisualEvent
+from lull.types import Check, Claim, Cue, Gap, RunOptions, Span, VisualEvent
 
 log = logging.getLogger(__name__)
 
 MAX_ROUNDS = 4
+LEAD_IN_S = 0.3  # a line starts this long before its first visual when its pause allows
 COMPRESS_MARGIN = 0.95
 GATED = ("verified", "edited", "approved")  # statuses the overlap gate checks
 OVERLAP_EPS = 1e-6
@@ -123,26 +129,38 @@ def _descriptor_at(descriptor: str, sentence_start: bool) -> str:
     return descriptor
 
 
+def _first_name(name: str, text: str, verbatim: list[str]) -> re.Match[str] | None:
+    """The first mention of `name` in `text` that names someone: not where the line reads the
+    screen (lint.screen_spans)."""
+    screen = screen_spans(text, verbatim)
+    return next((m for m in _name_re(name).finditer(text)
+                 if not any(a <= m.start() < b for a, b in screen)), None)  # fmt: skip
+
+
 def introduce_names(
-    text: str, cast: dict[str, str], introduced: set[str]
+    text: str, cast: dict[str, str], introduced: set[str], verbatim: list[str] = ()
 ) -> tuple[str, set[str], list[str]]:
     """Give each cast name not yet introduced its descriptor at its first mention (R15).
 
     "Proog climbs." becomes "A bald person in a dark coat, Proog, climbs."; the descriptor is
     capitalised at a sentence start and its leading article lower-cased elsewhere. A name the
     text already introduces (inside quoted on-screen text, or right after its descriptor) is left
-    as it is; a possessive first mention ("Proog's") is left to lint and repair. Returns the
-    text, the names this cue introduces, and the names that got a descriptor, in text order.
+    as it is, and so is a mention where the line reads the screen (capitals, or the on-screen
+    text in `verbatim`); a possessive first mention ("Proog's") is left to lint and repair.
+    Returns the text, the names this cue introduces, and the names that got a descriptor, in
+    text order.
     """
+    verbatim = list(verbatim)
     already = introduced_in(text, cast)
     found = sorted(
         (m.start(), n)
         for n in cast
-        if n and n not in introduced and n not in already and (m := _name_re(n).search(text))
-    )
+        if n and n not in introduced and n not in already
+        and (m := _first_name(n, text, verbatim))
+    )  # fmt: skip
     inserted: list[str] = []
     for _, name in found:
-        m = _name_re(name).search(text)
+        m = _first_name(name, text, verbatim)
         before, after = text[: m.start()], text[m.end() :]
         descriptor = _descriptor(cast, name)
         if not descriptor or _POSSESSIVE.match(after):
@@ -313,18 +331,75 @@ def _content(s: str) -> set[str]:
     return {t for t in _TOKEN.findall(s.lower()) if t not in _STOP}
 
 
+def dropped_sentences(before: str, after: str, claims: Iterable[Claim]) -> list[str]:
+    """Sentences of `before` that `after` lost (fewer than half their content words survive)
+    although the `claims` cut were not about them (they cover less than half of its words)."""
+    kept = _content(after)
+    cut = set().union(*(_content(c.text) for c in claims))
+    out = []
+    for s, e in split_sentences(before):
+        words = _content(before[s:e])
+        if words and len(words & kept) * 2 < len(words) and len(words & cut) * 2 < len(words):
+            out.append(before[s:e])
+    return out
+
+
 def _lost_ahead(before: str, after: str) -> bool:
     """True when a look-ahead sentence of `before` is still in `after` without its prefix: an
-    unprefixed sentence shares at least half its content words with it (Jaccard >= 0.5)."""
-    bodies = [b for b in map(_content, _ahead_sentences(before)) if b]
+    unprefixed sentence of `after` keeps at least half of that sentence's own content words
+    (those no other sentence of `before` has; all of them when it has none of its own), even
+    when the rewrite merged it into a longer sentence."""
+    spans = split_sentences(before)
+    masked_before = _masked(before)
+    words = [_content(before[s:e]) for s, e in spans]
+    bodies = []
+    for i, (s, e) in enumerate(spans):
+        if not _AHEAD_START.match(masked_before[s:e]):
+            continue
+        others = set().union(*(w for j, w in enumerate(words) if j != i))
+        own = (words[i] - others) or words[i]
+        if own:
+            bodies.append(own)
     masked = _masked(after)
     for s, e in split_sentences(after):
         if _AHEAD_START.match(masked[s:e]):
             continue
-        words = _content(after[s:e])
-        if words and any(len(words & b) / len(words | b) >= 0.5 for b in bodies):
+        kept = _content(after[s:e])
+        if kept and any(len(kept & b) * 2 >= len(b) for b in bodies):
             return True
     return False
+
+
+def described_events(parts: dict[str, str], text: str) -> list[str] | None:
+    """The events (keys of `parts`, in order) whose own words mostly survive in `text`: at
+    least half of the content words their composed sentence has and no other one has (all of
+    its words when it has none of its own). A one-event line describes its event while it
+    says anything. None without parts (nothing to judge: every event counts)."""
+    if not parts:
+        return None
+    if not text.strip():
+        return []
+    if len(parts) == 1:
+        return list(parts)
+    words = {eid: _content(t) for eid, t in parts.items()}
+    kept = _content(text)
+    out = []
+    for eid, mine in words.items():
+        others = set().union(*(w for k, w in words.items() if k != eid))
+        own = (mine - others) or mine
+        if not own or len(own & kept) * 2 >= len(own):
+            out.append(eid)
+    return out
+
+
+def refresh_described(cue: Cue) -> Cue:
+    """`cue` with `described` recomputed from its parts and its current text (described_events;
+    None when it lacks the parts of any of its events). Required after any change to a cue's
+    text, such as an edit in the Studio: coverage and F113 read `described`, and a stale value
+    would count an event the new text no longer mentions."""
+    parts = {i: cue.parts[i] for i in cue.event_ids if i in cue.parts}
+    described = described_events(parts, cue.text) if len(parts) == len(cue.event_ids) else None
+    return cue.model_copy(update={"described": described})
 
 
 # -- one cue -------------------------------------------------------------------------------------
@@ -372,15 +447,34 @@ class _Finalise:
     findings: list[Finding] = field(default_factory=list)
     removed: list[Claim] = field(default_factory=list)
     words_before: int | None = None  # word count before the first compression
+    checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
+    at: float | None = None  # where in its window the voiced line starts
+    prefixed: bool = False  # "In a moment, " added because the line starts before its visual
 
     @property
     def start(self) -> float:
-        return self.gap.usable_start if self.gap is not None else self.cue.start
+        if self.gap is None:
+            return self.cue.start
+        return self.at if self.at is not None else self.gap.usable_start
+
+    def place(self, dur: float) -> tuple[float, bool]:
+        """Where a line of `dur` seconds starts in its window, and whether that is before its
+        first visual: LEAD_IN_S before the visual (not before the window opens) when it can
+        still finish in the window, else as late as the window allows."""
+        us, ue = self.gap.usable_start, self.gap.usable_end
+        first = min(e.t_start for e in self.events)
+        want = max(us, math.ceil(round((first - LEAD_IN_S) * 1000, 6)) / 1000)
+        if want + dur <= ue + _FIT_EPS:
+            return want, False
+        start = max(us, math.floor(round((ue - dur) * 1000, 6)) / 1000)
+        return start, start < first - LEAD_IN_S - _FIT_EPS
 
     def run(self) -> Cue:
         ctx = self.ctx
-        self.text, _, self.inserted = introduce_names(self.cue.text, ctx.cast, ctx.introduced)
+        self.text, _, self.inserted = introduce_names(
+            self.cue.text, ctx.cast, ctx.introduced, ctx.verbatim
+        )
         self.names = set(ctx.named) | set(ctx.cast) | set(ctx.introduced) | set(ctx.proper_nouns)
         self.keep = _verbatim_in(self.text, ctx.verbatim)
         for rnd in range(1, MAX_ROUNDS + 1):
@@ -429,16 +523,39 @@ class _Finalise:
                 "tempo": tempo,
                 "findings": [f.model_dump(mode="json") for f in self.findings],
                 "note": self._note(reason, extra),
+                "checks": list(self.checks),
+                "described": self._described(),
             }
         )
+
+    def _described(self) -> list[str] | None:
+        return refresh_described(self.cue.model_copy(update={"text": self.text})).described
 
     def held(self, reason: str) -> Cue:
         """Held for a person; it keeps its placement, look-ahead included."""
         return self._result("held", reason, None, None, 1.0, self.cue.ahead, [])
 
+    def recheck(self) -> list[Claim] | None:
+        """When the text changed after its last check (a look-ahead added, a contradicted
+        claim cut), its claims are judged again, on the text as it now is: a cue never
+        carries a verdict given to another text. None when nothing changed."""
+        if not self.text or (self.checks and _same(self.checks[-1].text, self.text)):
+            return None
+        self.claims = self.check_frames()
+        return self.claims
+
     def done(self, audio: Path, dur: float, tempo: float) -> Cue:
-        ahead = self.cue.ahead and count_ahead(self.text) > 0
+        again = self.recheck()
+        if again is not None:
+            bad = [c for c in again if c.verdict != "supported"]
+            if not again or bad:
+                # held with every verdict on the text it keeps, contradictions included
+                why = _claims_note(bad) if bad else "no visual claim left to check"
+                return self.held("not verified as voiced: " + why)
+        ahead = (self.cue.ahead or self.prefixed) and count_ahead(self.text) > 0
         extra = ["look-ahead sentence removed"] if self.cue.ahead and not ahead else []
+        if self.prefixed and ahead:
+            extra.append("look-ahead added: the line starts before its visual")
         status = "verified" if self.gap is not None else self.cue.status
         return self._result(status, None, audio, dur, tempo, ahead, extra)
 
@@ -502,14 +619,18 @@ class _Finalise:
             self.clip = (cut_clip(self.video, dst, lo, hi, height=CLIP_HEIGHT), lo)
         clip, offset = self.clip
         names = names_in(self.text, self.names)
-        return verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset)
+        claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset)
+        self.checks.append(Check(text=self.text, claims=claims))
+        return claims
 
     def _removed_add(self, bad: list[Claim]) -> None:
         seen = {_key(c) for c in self.removed}
         self.removed.extend(c for c in bad if _key(c) not in seen)
 
     def cut(self, bad: list[Claim], last: bool) -> Cue | None:
-        """Cut the claims the frames do not support; the held cue, or None to go round."""
+        """Cut the claims the frames do not support; the held cue, or None to go round. A cut
+        that drops a sentence the claims were not about is asked for once more with a note;
+        doing it again holds the cue with the line as it was."""
         gone = {_key(c) for c in self.removed}
         again = [c for c in bad if _key(c) in gone]
         if again:
@@ -520,6 +641,17 @@ class _Finalise:
             return self.hold_unverified(reason, bad)
         before = self.text
         new = remove_claims(before, bad, self.tf, run_id=self.run_id)
+        lost = dropped_sentences(before, new, bad)
+        if lost and not _same(new, before):
+            note = (
+                f'Your previous answer "{new}" dropped "{lost[0]}", which none of the listed '
+                "claims is about. Remove only the listed claims and keep every other sentence."
+            )
+            new = remove_claims(before, bad, self.tf, run_id=self.run_id, note=note)
+            lost = dropped_sentences(before, new, bad)
+            if lost and not _same(new, before):
+                reason = f'the claim cut dropped "{lost[0]}" twice: ' + _claims_note(bad)
+                return self.hold_unverified(reason, bad, cut_tried=True)
         if _same(new, before):
             reason = "the rewrite removed nothing: " + _claims_note(bad)
             return self.hold_unverified(reason, bad, cut_tried=True)
@@ -531,13 +663,14 @@ class _Finalise:
         if count_ahead(new) < count_ahead(before) and _lost_ahead(before, new):
             return self.held('a claim cut dropped "In a moment, " from a sentence it kept')
         said = " ".join(c.text.lower() for c in bad)
-        self.keep = [k for k in self.keep if k.lower() not in said]  # cut quotes only
+        self.keep = [k for k in self.keep if not _occurs(said, k.lower())]  # cut quotes only
         return None
 
     def hold_unverified(self, reason: str, bad: list[Claim], *, cut_tried: bool = False) -> Cue:
-        """Held for review. Contradicted claims are cut from the text even so (never kept), and
-        the text is withheld when they cannot be cut. The claims left keep their verdicts for
-        the reviewer, and the findings are those of the text kept."""
+        """Held for review. Contradicted claims are cut from the text even so, and the text is
+        withheld when they cannot be cut. The cut text is checked once more: its claims, each
+        with its verdict (a contradiction found then included, and named in the note), are
+        the ones it is held with; the findings are those of the text kept."""
         wrong = [c for c in bad if c.verdict == "contradicted"]
         if wrong:
             cut = (
@@ -552,6 +685,14 @@ class _Finalise:
                 self.text = autofix(cut)
                 self._removed_add(wrong)
             self.claims = [c for c in self.claims if c.verdict != "contradicted"]
+            if not self.text:
+                self.claims = []  # nothing is said: no claim is the text's
+            elif self.recheck() is not None:
+                # the claims of the text it is held with, each with its verdict: a new
+                # contradiction stays visible to the reviewer and is named in the note
+                still = [c for c in self.claims if c.verdict == "contradicted"]
+                if still:
+                    reason += "; the text it is held with is contradicted: " + _claims_note(still)
             keep = [k for k in self.keep if _occurs(self.text, k)]
             self.findings = _lint(self.text, keep, self.ctx)
         return self.held(reason)
@@ -597,6 +738,12 @@ class _Finalise:
         """Compress towards `target` words; the held cue, or None to go round. A compression
         that cuts too much (see `overcut`) is asked for once more with a note; cutting too much
         again holds the cue with the line as it was before compression."""
+        if self.prefixed and self.text.startswith(AHEAD_PREFIX):
+            # the look-ahead was added only to place the line: compress the line itself, and
+            # let placement decide again whether the shorter line still needs it
+            body = self.text[len(AHEAD_PREFIX) :]
+            self.text, self.prefixed = body[:1].upper() + body[1:], False
+            target -= AHEAD_WORDS
         if target < 1:
             return self.held(reason)
         before = self.text
@@ -632,12 +779,18 @@ class _Finalise:
         fast_path = audio_dir / f"{self.cue.id}.t.wav"
         if self.gap is None:
             return self.done(audio, dur, 1.0)
-        usable = self.gap.usable_end - self.start
+        self.at = None
+        usable = self.gap.usable_end - self.gap.usable_start
         tempo = 1.0
         if usable + _FIT_EPS < dur <= usable * MAX_TEMPO + _FIT_EPS:
             factor = min(MAX_TEMPO, math.ceil(dur / usable * 1000 - 1e-6) / 1000)
             fast = atempo(audio, fast_path, factor)
             fast_dur = audio_duration(fast)
+            if fast_dur > usable + _FIT_EPS and factor < MAX_TEMPO:
+                # atempo pads its output to whole frames: raise the factor once by the miss
+                factor = min(MAX_TEMPO, math.ceil(factor * fast_dur / usable * 1000) / 1000 + 0.001)
+                fast = atempo(audio, fast_path, factor)
+                fast_dur = audio_duration(fast)
             if fast_dur <= usable + _FIT_EPS:
                 audio, dur, tempo = fast, fast_dur, factor
         if dur > usable + _FIT_EPS:
@@ -648,6 +801,15 @@ class _Finalise:
             return self.shorten(target, f"does not fit: {fit}")
         if tempo == 1.0:
             fast_path.unlink(missing_ok=True)
+        start, early = self.place(dur)
+        if early and not _AHEAD_START.match(self.text):  # the sentence that starts early
+            names = set(self.ctx.proper_nouns) | set(self.ctx.cast)
+            self.text = AHEAD_PREFIX + lower_first(self.text, names)
+            self.prefixed = True
+            log.info("finalize: %s starts before its visual; voiced again as a look-ahead",
+                     self.cue.id)  # fmt: skip
+            return self.speak(last)  # the longer line is fitted and placed again
+        self.at = start
         late = self.late(dur)
         if not late:
             return self.done(audio, dur, tempo)
@@ -677,9 +839,11 @@ def finalize_cue(
 ) -> Cue:
     """The cue verified and voiced, or held with the reason in `note`.
 
-    A standard cue (with its gap) comes back "verified" with start = gap.usable_start and
-    end = start + measured audio duration; an extended cue (gap None) keeps "extended" and its
-    start. Model calls carry stage "finalize" and roles verify, repair, remove and compress.
+    A standard cue (with its gap) comes back "verified" with start where placement puts it in
+    its window (LEAD_IN_S before its first visual, or earlier with "In a moment, " when it
+    could not finish otherwise) and end = start + measured audio duration; an extended cue
+    (gap None) keeps "extended" and its start. Model calls carry stage "finalize" and roles
+    verify, repair, remove and compress.
     """
     if (gap is None) != (cue.gap_id is None) or (gap is not None and gap.id != cue.gap_id):
         got = gap.id if gap else None

@@ -45,12 +45,6 @@ class Gap(BaseModel):
     protected: list[Span] = Field(default_factory=list)
 
 
-class Shot(BaseModel):
-    index: int
-    start: float
-    end: float
-
-
 EventKind = Literal[
     "setting",
     "person",
@@ -88,6 +82,14 @@ class Claim(BaseModel):
     at: float | None
 
 
+class Check(BaseModel):
+    """One verification round of a cue: the text the frames were checked against and the
+    verdict on each of its claims."""
+
+    text: str
+    claims: list[Claim]
+
+
 class Cue(BaseModel):
     id: str
     gap_id: str | None
@@ -103,6 +105,9 @@ class Cue(BaseModel):
     tempo: float = 1.0
     findings: list[dict] = Field(default_factory=list)  # lint findings, serialised
     note: str | None = None  # why the cue is held, or what finalisation changed
+    checks: list[Check] = Field(default_factory=list)  # every verification round, in order
+    parts: dict[str, str] = Field(default_factory=dict)  # event id -> the words composed for it
+    described: list[str] | None = None  # events the final text still describes (None: all)
 
 
 class RunOptions(BaseModel):

@@ -74,6 +74,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
+from lull import media
 from lull.api.live import Live, LiveError, budget_message, client_ip, new_run_id
 from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import DAY, HOUR, RateLimiter
@@ -110,7 +111,7 @@ from lull.stages.publish import publish
 from lull.stages.research import ResearchResult
 from lull.store import Store, file_sha256
 from lull.tf import TokenFactory
-from lull.timeline import split_gaps
+from lull.timeline import find_gaps, split_gaps
 from lull.types import Cue, Gap, RunOptions, VisualEvent
 from lull.voices import FALLBACK_WPS, voice_wps
 
@@ -164,8 +165,12 @@ class RunContext:
     events: list[VisualEvent]
     gaps: list[Gap]
     research: ResearchResult | None
+    planned: PlanResult
     cast: dict[str, str]
-    names: set[str]
+    named: set[str]  # names a listener must be introduced to: cast and glossary people
+    proper: set[str]  # spellings to keep: cast and the whole glossary
+    info: media.Probe | None  # the probed video (extended cues' freeze frames)
+    reviewer: dict[str, list[str]]  # the plan's unanswered and undescribed events, by id
 
     def gap(self, gap_id: str | None) -> Gap | None:
         return next((g for g in self.gaps if g.id == gap_id), None)
@@ -253,9 +258,20 @@ def load_context(run_dir: Path, samples_dir: Path) -> RunContext:
     planned = _stage(run_dir, "plan", PlanResult)
     research = _stage(run_dir, "research", ResearchResult, required=False)
     wps = _wps(opts.voice)
-    names = set(planned.cast)
-    if research is not None:
-        names |= {g.canonical for g in research.glossary if g.canonical.strip()}
+    glossary = research.glossary if research is not None else []
+    spelled = {g.canonical for g in glossary if g.canonical.strip()}
+    people = {g.canonical for g in glossary if g.kind == "person" and g.canonical.strip()}
+    try:
+        info: media.Probe | None = media.probe(video)
+    except media.MediaError:
+        info = None
+    # the gaps as lull.pipeline works them out: from the speech, at this voice's rate
+    gaps = find_gaps(heard.speech, heard.duration, protected=heard.protected, wps=wps)
+    for_reviewer = _dict(_dict(manifest.get("summary")).get("for_reviewer"))
+    reviewer = {
+        kind: [e["id"] for e in for_reviewer.get(kind) or [] if isinstance(_dict(e).get("id"), str)]
+        for kind in ("plan_unanswered", "undescribed")
+    }
     run_id = manifest.get("run_id")
     return RunContext(
         run_id=run_id if isinstance(run_id, str) and run_id else run_dir.name,
@@ -263,12 +279,16 @@ def load_context(run_dir: Path, samples_dir: Path) -> RunContext:
         video=video,
         opts=opts,
         wps=wps,
-        heard=heard,
+        heard=heard.model_copy(update={"gaps": gaps}),
         events=events,
-        gaps=split_gaps(heard.gaps, wps=wps),
+        gaps=split_gaps(gaps, wps=wps),
         research=research,
+        planned=planned,
         cast=dict(planned.cast),
-        names=names,
+        named=set(planned.cast) | people,
+        proper=set(planned.cast) | spelled,
+        info=info,
+        reviewer=reviewer,
     )
 
 
@@ -508,8 +528,8 @@ def sync_stage(run_dir: Path, cue: Cue) -> None:
     """The cue's finalize record holds the person's version, under the key it had."""
     store, name = Store(run_dir), f"finalize/{cue.id}"
     entry = _dict(_read_json(store.path(name)))
-    if isinstance(entry.get("key"), str):
-        store.save(name, entry["key"], cue.model_dump(mode="json"))
+    if isinstance(entry.get("key"), str):  # relative audio path, as the engine keeps it
+        store.save(name, entry["key"], cue_json(cue, run_dir))
 
 
 def save_change(
@@ -540,10 +560,13 @@ def edit_context(rc: RunContext, doc: CueDoc, cue: Cue) -> CueContext:
             wps=rc.wps,
             duration=rc.heard.duration,
             cast=rc.cast,
-            names=rc.names,
+            named=rc.named,
+            proper_nouns=rc.proper,
             words=rc.heard.words,
             events=rc.events,
+            speech=rc.heard.speech,
             finished=[c for c in doc.all() if c.id != cue.id],
+            info=rc.info,
         )
     except ValueError as e:
         raise NotEditable(str(e)) from None
@@ -552,10 +575,14 @@ def edit_context(rc: RunContext, doc: CueDoc, cue: Cue) -> CueContext:
 def check_text(text: str, ctx: CueContext) -> tuple[str, list[Finding]]:
     """The style pass finalize opens with, without its model repair: descriptors for cast
     names not yet introduced, autofix, then lint. Returns the text checked and its findings."""
-    named, _, _ = introduce_names(text, ctx.cast, ctx.introduced)
+    named, _, _ = introduce_names(text, ctx.cast, ctx.introduced, ctx.verbatim)
     checked = autofix(named)
     introduced = set(ctx.introduced) | introduced_in(checked, ctx.cast)
-    return checked, lint(checked, named=set(ctx.named) | set(ctx.cast), introduced=introduced)
+    keep = [v for v in ctx.verbatim if v and v in checked]  # on-screen text quoted (R19)
+    findings = lint(
+        checked, verbatim=keep, named=set(ctx.named) | set(ctx.cast), introduced=introduced
+    )
+    return checked, findings
 
 
 Clients = Callable[[Ledger], tuple[TokenFactory, SpeechClient]]
@@ -595,6 +622,7 @@ def finalize_edit(job: EditJob) -> Cue:
             "tempo": 1.0,
             "findings": [],
             "note": None,
+            "described": None,
         }
     )
     tf, speech = job.clients(job.ledger)
@@ -615,7 +643,8 @@ def republish(rc: RunContext, doc: CueDoc, ledger: Ledger) -> Path:
     assert_no_overlap(doc.cues, rc.heard.speech)
     result = publish(
         rc.run_dir, rc.video, doc.cues, doc.extended, rc.events, rc.gaps, rc.research, ledger,
-        rc.run_id, rc.opts, speech=rc.heard.speech,
+        rc.run_id, rc.opts, speech=rc.heard.speech, words=rc.heard.words,
+        duplicates=rc.planned.duplicates, priority=rc.planned.priority, reviewer=rc.reviewer,
     )  # fmt: skip
     return result.manifest
 

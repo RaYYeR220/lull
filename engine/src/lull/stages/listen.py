@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
 
 FLOOR_DB = -120.0
 EPS = 1e-6
-# Longest plausible word: 0.09 s per character + 0.25 s, kept within 0.3..1.5 s.
+# A word is implausible beyond max(2.0 s, 0.25 s per character); it is then cut to 0.09 s per
+# character + 0.25 s, kept within 0.3..1.5 s.
+IMPLAUSIBLE_S, IMPLAUSIBLE_S_PER_CHAR = 2.0, 0.25
 WORD_S_PER_CHAR, WORD_BASE_S, WORD_MIN_S, WORD_MAX_S = 0.09, 0.25, 0.3, 1.5
 
 
@@ -45,15 +47,18 @@ def clamp_words(words: list[Word]) -> tuple[list[Word], list[ClampedWord]]:
     """Words with implausible durations cut back, and the ones that were cut.
 
     The recogniser sometimes stretches a word over a long silence (Parakeet gave "way." 17.2 to
-    35.76 s on Elephants Dream), which would count that silence as speech. A word ends at most
-    clamp(0.09 x characters + 0.25, 0.3, 1.5) seconds after it starts.
+    35.76 s on Elephants Dream), which would count that silence as speech. A word longer than
+    max(2.0, 0.25 x characters) seconds is implausible and ends clamp(0.09 x characters + 0.25,
+    0.3, 1.5) seconds after it starts; every other word, a drawn-out last word of a sentence
+    included, keeps its end (the guard around speech stays whole).
     """
     out: list[Word] = []
     clamped: list[ClampedWord] = []
     for w in words:
-        longest = min(WORD_MAX_S, max(WORD_MIN_S, WORD_S_PER_CHAR * len(w.text) + WORD_BASE_S))
-        end = round(w.start + longest, 3)
-        if w.end > end + EPS:
+        chars = len(w.text)
+        if w.end - w.start > max(IMPLAUSIBLE_S, IMPLAUSIBLE_S_PER_CHAR * chars) + EPS:
+            longest = min(WORD_MAX_S, max(WORD_MIN_S, WORD_S_PER_CHAR * chars + WORD_BASE_S))
+            end = round(w.start + longest, 3)
             log.warning(
                 "listen: clamped %r %.3f-%.3f s to end at %.3f s", w.text, w.start, w.end, end
             )

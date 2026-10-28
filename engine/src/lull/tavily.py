@@ -62,7 +62,7 @@ class Tavily:
     def _call(self, path: str, body: dict, model: str, run_id: str, expected: float) -> dict:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         for i in range(len(_BACKOFF) + 1):
-            self.ledger.check(run_id, cost_of_tavily(expected))
+            self.ledger.check_searches(run_id)  # searches are counted, not priced
             t0 = time.monotonic()
             try:
                 r = self._http.post(path, json=body, headers=headers)

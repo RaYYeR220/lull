@@ -40,7 +40,7 @@ WORDS = [Word(text=t, start=i * 0.5, end=i * 0.5 + 0.4) for i, t in enumerate(_S
 
 
 def _tavily(tmp_path, handler, sleep=lambda s: None):
-    ledger = Ledger(tmp_path / "l.db", cap_run=0, cap_day=0, cap_total=0)
+    ledger = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
     return Tavily(
         "tvly-secret", ledger, transport=httpx.MockTransport(handler), sleep=sleep
     ), ledger
@@ -145,7 +145,9 @@ def test_none_path_skips(tmp_path):
         run_id="r",
     )
     assert res.skipped and res.source_context is None
-    assert res.glossary == [GlossaryEntry(term="Proog", canonical="Proog", note="", sources=[])]
+    assert res.glossary == [
+        GlossaryEntry(term="Proog", canonical="Proog", note="", sources=[], kind="person")
+    ]
 
 
 def test_retry_on_429(tmp_path):
@@ -278,16 +280,32 @@ def test_search_failure_degrades(tmp_path):
     tv, _ = _tavily(tmp_path, h)
     res = research(_ev(), WORDS, RunOptions(), FakeTF(["Bad", "Proog"]), tv, run_id="r")
     assert res.glossary[0] == GlossaryEntry(
-        term="Bad", canonical="Bad", note="lookup failed", sources=[]
+        term="Bad", canonical="Bad", note="lookup failed", sources=[], kind="person"
     )
     assert res.glossary[1].sources and len(res.errors) == 1
 
 
 def test_budget_exceeded_propagates(tmp_path):
-    ledger = Ledger(tmp_path / "b.db", cap_run=0.001, cap_day=0, cap_total=0)
-    tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler([])))
+    class Broke(FakeTF):
+        def json(self, *a, **kw):
+            raise BudgetExceeded("run")
+
+    tv, _ = _tavily(tmp_path, _handler([]))
     with pytest.raises(BudgetExceeded):
-        research(_ev(), WORDS, RunOptions(), FakeTF(["Proog"]), tv, run_id="r")
+        research(_ev(), WORDS, RunOptions(), Broke(["Proog"]), tv, run_id="r")
+
+
+def test_research_stops_at_the_search_cap_and_says_so(tmp_path):
+    """Searches are capped per run (LULL_TAVILY_RUN): research looks up what it may, keeps
+    the other terms as heard, and records that it was capped; that is not an error."""
+    seen: list = []
+    ledger = Ledger(tmp_path / "c.db", cap_run=None, cap_day=None, cap_total=None, tavily_run=2)
+    tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler(seen)))
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["Proog", "Emo", "Bad"]), tv, run_id="r")
+    assert [p for p, _, _ in seen] == ["/search", "/search"]
+    assert [g.note for g in res.glossary][2] == "lookup skipped: search cap"
+    assert res.glossary[0].sources and res.glossary[1].sources
+    assert res.notes == ["research capped: 2 searches"] and res.errors == []
 
 
 def test_descriptors_dropped_no_searches(tmp_path):
@@ -334,3 +352,60 @@ def test_filter_before_max_terms(tmp_path):
     tf = FakeTF(["junk one", "junk two", "junk three", "Proog", "Emo"])
     res = research(_ev(), WORDS, RunOptions(), tf, tv, run_id="r", max_terms=2)
     assert [e.term for e in res.glossary] == ["Proog", "Emo"] and len(seen) == 2
+
+
+class KindsTF:
+    """Lightning answering with a kind per term."""
+
+    def __init__(self, pairs: list[tuple[str, str]]):
+        self.pairs = pairs
+
+    def json(self, model, messages, schema, **kw):
+        return {"terms": [{"term": t, "kind": k, "why": "x"} for t, k in self.pairs]}
+
+
+_LECTURE = "We study the seafloor at the USGS with volcanologists".split()
+LECTURE = [Word(text=t, start=i * 0.5, end=i * 0.5 + 0.4) for i, t in enumerate(_LECTURE)]
+SLIDE = [_ev()[0].model_copy(update={"verbatim_text": "Photosynthesis in kelp forests"})]
+
+
+def test_technical_terms_are_looked_up_only_when_on_screen(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    tf = KindsTF([("seafloor", "technical"), ("volcanologists", "technical"),
+                  ("photosynthesis", "technical"), ("USGS", "organization")])  # fmt: skip
+    res = research(SLIDE, LECTURE, RunOptions(), tf, tv, run_id="r")
+    assert [(e.term, e.kind) for e in res.glossary] == [
+        ("photosynthesis", "technical"), ("USGS", "organization"),
+    ]  # fmt: skip
+    assert [body["query"] for _, body, _ in seen] == ["photosynthesis", "USGS"]
+
+
+def test_glossary_entries_carry_their_kind_also_without_tavily():
+    tf = KindsTF([("Proog", "person"), ("Elephants Dream", "work"), ("Proog", "place")])
+    res = research(_ev(), WORDS, RunOptions(), tf, None, run_id="r")
+    assert [(e.term, e.kind) for e in res.glossary] == [
+        ("Proog", "person"), ("Elephants Dream", "work"),
+    ]  # fmt: skip
+    assert GlossaryEntry(term="x", canonical="x", note="").kind == "other"  # older caches
+
+
+def test_at_most_five_terms_by_default(tmp_path):
+    seen: list = []
+    tv, _ = _tavily(tmp_path, _handler(seen))
+    names = ["Proog", "Emo", "A1", "B2", "C3", "D4", "Bad"]  # all said in WORDS
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(names), tv, run_id="r")
+    assert [e.term for e in res.glossary] == names[:5] and len(seen) == 5
+
+
+def test_a_source_page_the_search_cap_stopped_is_noted(tmp_path):
+    """A cap of 0 searches: the source page is not read, which is noted, and no lookup is
+    tried after it."""
+    seen: list = []
+    ledger = Ledger(tmp_path / "c.db", cap_run=None, cap_day=None, cap_total=None, tavily_run=0)
+    tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler(seen)))
+    opts = RunOptions(source_url="https://example.org/film")
+    res = research(_ev(), WORDS, opts, FakeTF(["Proog"]), tv, run_id="r")
+    assert seen == []
+    assert res.notes == ["source page not read: search cap", "research capped: 0 searches"]
+    assert [g.note for g in res.glossary] == ["lookup skipped: search cap"]
