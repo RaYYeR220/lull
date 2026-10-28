@@ -206,3 +206,13 @@ def test_on_screen_text_read_out_is_not_an_unintroduced_name():
     found = [f for f in lint(t, named={"Proog"}, verbatim=banner) if f.rule == "R15-name"]
     assert [f.span for f in found] == [(31, 36)]  # the second Proog, a name
     assert "R15-name" in rules("HAL watches the crew.", named={"HAL"})  # a lone capital name
+
+
+def test_words_read_off_the_screen_are_not_the_describers_own():
+    """On-screen text read out in capitals, or the text watch read, is not first person or
+    past tense: "I" in "AND I JUST WANT TO BE AWESOME IN SPACE" is the screen's."""
+    t = "Pink text appears over the buildings: ...AND I JUST WANT TO BE AWESOME IN SPACE."
+    assert "R7-person" not in rules(t)
+    assert "R7-person" not in rules("A note reads I was here.", verbatim=["I was here"])
+    assert "R7-tense" not in rules("A note reads I was here.", verbatim=["I was here"])
+    assert "R7-person" in rules("I see a door.")  # the describer's own "I" still counts

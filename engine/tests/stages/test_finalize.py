@@ -1593,3 +1593,11 @@ def test_a_failed_claim_that_bundles_several_facts_is_split_before_anything_is_c
     assert tf.roles() == ["verify", "verify", "remove", "verify"]
     assert "one checkable fact" in _user_text(tf.of("verify")[1])
     assert out.status == "verified" and out.text == kept
+
+
+def test_a_long_whole_sentence_claim_counts_as_several_facts():
+    from lull.stages.verify import bundles_facts
+
+    whole = "A young person in a blue jacket walks toward the mechanical figure on the bridge"
+    assert bundles_facts(Claim(text=whole, verdict="not_visible", at=None))
+    assert not bundles_facts(Claim(text="a person in a blue jacket", verdict="supported", at=1.0))

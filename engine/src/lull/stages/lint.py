@@ -139,9 +139,10 @@ def lint(
 ) -> list[Finding]:
     out: list[Finding] = []
     quoted = quoted_spans(text)
+    screen = screen_spans(text, verbatim)  # text read off the screen: not the describer's
 
     def add(rule, msg, span, severity="error", *, exempt=True):
-        if exempt and span and _inside(span[0], quoted):
+        if exempt and span and (_inside(span[0], quoted) or _inside(span[0], screen)):
             return
         out.append(Finding(rule=rule, message=msg, span=span, severity=severity))
 
@@ -167,7 +168,6 @@ def lint(
 
     quoted_text = " ".join(text[s:e] for s, e in quoted)
     known = {n.lower() for n in introduced}
-    screen = screen_spans(text, verbatim)
     for name in sorted(named):
         pat = rf"\b{re.escape(name)}\b"
         if name.lower() in known or re.search(pat, quoted_text):

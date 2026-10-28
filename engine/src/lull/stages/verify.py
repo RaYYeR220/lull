@@ -254,8 +254,10 @@ _JOINS = re.compile(r"\b(?:and|while|as|then|but)\b|[,;]", re.IGNORECASE)
 
 def bundles_facts(claim: Claim) -> bool:
     """Whether a claim holds several facts the verifier should have split: six words or more
-    joined by "and", "while", "as", "then", "but" or a comma."""
-    return len(claim.text.split()) >= 6 and _JOINS.search(claim.text) is not None
+    joined by "and", "while", "as", "then", "but" or a comma, or nine words or more (a whole
+    sentence of who, what they wear, what they do and where)."""
+    words = len(claim.text.split())
+    return words >= 9 or (words >= 6 and _JOINS.search(claim.text) is not None)
 
 
 def verify(
