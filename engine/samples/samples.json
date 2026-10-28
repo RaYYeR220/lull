@@ -1,16 +1,16 @@
 {
   "samples": [
     {
-      "id": "csc_intro",
-      "file": "csc_intro.mp4",
-      "title": "Climate Science Champions: introduction",
-      "credit": "U.S. Geological Survey",
-      "licence": "Public domain (U.S. Geological Survey video); music used with permission (Bensound / Epidemic Sound)",
-      "licence_url": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
-      "source_url": "https://www.usgs.gov/media/videos/climate-science-champions-introduction",
-      "excerpt": "the whole video, 0:00-0:44.9",
-      "changes": "re-encoded at 854x480 (H.264 CRF 29, AAC 96 kb/s)",
-      "duration": 44.885
+      "id": "bbb45",
+      "file": "bbb45.mp4",
+      "title": "Big Buck Bunny (excerpt)",
+      "credit": "Blender Foundation, peach.blender.org",
+      "licence": "CC BY 3.0",
+      "licence_url": "https://creativecommons.org/licenses/by/3.0/",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Big_Buck_Bunny_4K.webm",
+      "excerpt": "6:35.0-7:19.9: the flying squirrel glides over the meadow while the rabbit sets his trap",
+      "changes": "cut to 44.9 s and re-encoded at 854x480 (H.264 CRF 26, AAC 96 kb/s)",
+      "duration": 44.9
     },
     {
       "id": "ed45",

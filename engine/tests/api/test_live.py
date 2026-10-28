@@ -1508,7 +1508,7 @@ def test_the_shipped_samples_are_licensed_short_and_small():
 
     doc = json.loads((SAMPLES_DIR / "samples.json").read_text(encoding="utf-8"))
     ids = [e["id"] for e in doc["samples"]]
-    assert ids == ["csc_intro", "ed45", "tos45"]
+    assert ids == ["bbb45", "ed45", "tos45"]  # Blender open movies only: no third-party music
     for e in doc["samples"]:
         f = SAMPLES_DIR / e["file"]
         assert e["file"] == f"{e['id']}.mp4" and f.is_file()
