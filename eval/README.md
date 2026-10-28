@@ -124,7 +124,8 @@ report is rebuilt without new calls and no video is judged twice.
 
 **Rules applied by the scorer that the key does not spell out** (decided before the scored
 run, disclosed here): a verdict the judge leaves out counts against the system (fact not
-conveyed, claim unsupported, cue redundant and text-unsupported, decoy stated) and is listed
+conveyed, claim unsupported, cue redundant, decoy stated, a cue without a voiced-text answer
+one unsupported statement) and is listed
 under "judge problems"; extended cues count only when the run reports
 `extended_produced`; a08's line chart shows its highest value (100000) at three categories
 and the key names the first, so any of the three is accepted, in the exact match and in the
@@ -134,25 +135,39 @@ judge's instructions.
 
 Labelled "supplementary" in every report:
 
-- **Hallucination, voiced text**: a per-cue verdict on the cue's own text. Added because the
-  smoke showed that the run's claim split can include claims the voiced text never says (a
-  four-word title cue carried five claims about its slide's bullets), so the pre-registered
-  claim rate is computed partly on unvoiced claims. Also reported: the share of claims the cue
-  text does not say (word overlap, no model) and the hallucination rate over the claims it
-  does say.
+- **Hallucination, voiced text**: a separate judge call per cue that sees only the cue's
+  final voiced text, the visual and spoken facts of the slide or slides on screen while it
+  plays (for an extended cue, the slide at its freeze point) and the decoys; never the run's
+  claim split. The judge splits the text into the statements a listener is told and calls each
+  supported, unsupported or unverifiable by those facts. Metric: unsupported statements /
+  voiced statements; also reported: unverifiable statements and cues with an unsupported
+  statement. Because it judges against what is on screen at that moment, a correct
+  description of another slide counts as unsupported here: unlike the pre-registered metric,
+  this one includes timing. Added because the smoke showed that the run's claim split can
+  include claims the voiced text never says (a four-word title cue carried five claims about
+  its slide's bullets), so the pre-registered claim rate is computed partly on unvoiced
+  claims; a first version that asked for this verdict inside the claims call was dropped
+  (the claim list leaked into it, and the claims call is kept exactly as pre-registered). Also
+  reported: the share of claims the cue text does not say (word overlap, no model) and the
+  hallucination rate over the claims it does say.
 - **Decoys, absent part only**: a decoy counts only when a crediting cue says the part of the
   decoy that is absent from the video (its absent number, or at least half of its words that
   occur nowhere in the video), so a cue that correctly names a category a decoy also names is
   not counted. The pre-registered decoy rule stays primary.
 - **Second judge**: Qwen3 235B A22B Instruct 2507 (another model family on Nebius Token
-  Factory; no reasoning, temperature 0) makes the same two calls; reported: its recall and
-  hallucination, and its agreement with Ultra (raw agreement and Cohen's kappa) per visual
-  fact and per claim.
+  Factory; no reasoning, temperature 0) makes the same calls (coverage, claims, voiced text);
+  reported: its recall, hallucination and voiced-text hallucination, and its agreement with
+  Ultra (raw agreement and Cohen's kappa) per visual fact, per claim and per cue (any
+  unsupported voiced statement).
 - **Judge probe specificity**: the pre-registered probe (synthetic cues stating each visual
   fact and each decoy, on a01, a05, a09) gains near-miss negatives that must not be credited:
   a wrong highest value, a title with one word swapped, a gist that only names a chart or a
   list, and a bullet with its second half dropped; cross-credits (a fact credited to another
-  fact's cue, a decoy to a fact cue) are counted from the same verdicts.
+  fact's cue, a decoy to a fact cue) are counted from the same verdicts. The voiced-text call
+  gets its own probe on the same videos, five cues on the first chart slide: two true (the
+  highest value, a bullet) that must be all supported, and three near misses (a wrong number,
+  the value given to another category, an invented bullet) that must draw an unsupported
+  statement (the invented bullet may also be unverifiable). Both judges answer it.
 
 ### Smoke (a01 and a02 on the pre-fix engine; not results)
 
@@ -163,6 +178,11 @@ overlap 0.000 s; recall 3/41 standard, 9/41 with extended; 0/27 claims unsupport
 visual facts (kappa 0.81; Qwen credited 12, Ultra 9), 100 % on the 27 claims (kappa undefined:
 both judged every claim supported). Probe on a01: 24/24 facts and 4/4 decoys credited to their
 own cue, 15/15 near misses not credited, 6/6 near-miss claims unsupported, no cross-credits.
+Voiced text: 10/14 statements unsupported with Ultra (7/12 with Qwen), 0 unverifiable, 3/7
+cues with an unsupported statement for both judges (kappa 1.00 on the 7 cues); all of them
+are the three extended cues, whose freeze point lands on the previous slide, so they describe
+a slide that is not on screen (the four standard cues, slide titles, are all supported).
+Voiced-text probe on a01: sensitivity 2/2 and specificity 3/3 for both judges.
 
 What the smoke found in the engine (reported to its fix round): the listen stage widened the
 narration spans by 0.2-0.6 s and merged sentences across planned pauses of about 1.9 s, so
@@ -180,7 +200,7 @@ uv sync --directory eval
 uv run --directory eval python -m suite_a.specs --check   # the committed specs still validate
 uv run --directory eval pytest -q                         # unit tests, no network
 uv run --directory eval python -m suite_a.audit           # rewrites suite_a/AUDIT.md
-uv run --directory eval python -m suite_a.score --all --cap 1.50   # 12 runs + judges -> results/
+uv run --directory eval python -m suite_a.score --all --cap 2.00   # 12 runs + judges -> results/
 ```
 
 The rendered lectures are not committed (`eval/suite_a/out/` is ignored). They are in
