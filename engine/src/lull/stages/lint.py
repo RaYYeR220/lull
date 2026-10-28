@@ -104,8 +104,11 @@ def _inside(pos: int, spans: list[tuple[int, int]]) -> bool:
 
 
 # two or more tokens of capitals and digits in a row ("STEP 2: BAKE"): on-screen text read out
+# (a full stop joins tokens only when no space follows it, "U.S", so a run never crosses a
+# sentence end: "OK. I" is two sentences)
 _CAPS_RUN = re.compile(
-    r"\b[A-Z0-9][A-Z0-9'\u2019&\-]*(?:[ \t:,./+\-\u2013\u2014]+[A-Z0-9][A-Z0-9'\u2019&\-]*)+\b"
+    r"\b[A-Z0-9][A-Z0-9'’&\-]*"
+    r"(?:(?:[ \t,/+\-–—]|:[ \t]*|\.(?=[A-Z0-9]))+[A-Z0-9][A-Z0-9'’&\-]*)+\b"
 )
 
 
