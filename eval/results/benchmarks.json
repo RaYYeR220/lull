@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-28T20:42:38+00:00",
-  "git_commit": "db791ee4b072ebef072681f505e9e4edc894a46d",
+  "generated_at": "2026-10-28T20:57:03+00:00",
+  "git_commit": "ef2b6b387cd34cabfebe10fcae83b51137617c57",
   "suites": {
     "suite_a": {
       "suite": "A",
@@ -52815,11 +52815,19 @@
     },
     {
       "title": "Deviation, Suite B: Engine commits of the scored runs",
-      "detail": "Engine commits of the scored runs: Suite A, the negative control and the ablation ran on the engine of main 61e9d81 (merged into the evaluation branch as 7168ea5). The first recorded run of the full Elephants Dream (run id final-ed) failed in publish on a deterministic engine bug: a keyframe time after the file's last video frame. It is listed under the known failures and stays listed. The bug was fixed on main 0b83117 (keyframe and freeze times clamped to the video stream's last frame; nothing else changed), merged, and the full film was run once more under a fresh run id (final-ed2) with the same command and options (paused once when the user stopped the speech server, then resumed from its stage cache). Suite B is scored on that run and on the three USGS runs made on 61e9d81 (Suite B does not require one engine across its runs)."
+      "detail": "Engine commits of the scored runs: Suite A, the negative control and the ablation ran on the engine of main 61e9d81 (merged into the evaluation branch as 7168ea5). The first recorded run of the full Elephants Dream (run id final-ed) failed in publish on a deterministic engine bug: a keyframe time after the file's last video frame. It is listed under the known failures and stays listed. The bug was fixed on main 0b83117 (keyframe and freeze times clamped to the video stream's last frame; nothing else changed), merged, and the full film was run once more under a fresh run id (final-ed2) with the same command and options (paused once for planned machine maintenance, then resumed from its stage cache). Suite B is scored on that run and on the three USGS runs made on 61e9d81 (Suite B does not require one engine across its runs)."
     },
     {
       "title": "Deviation, Suite B: Batch splitting on cut-off answers",
       "detail": "Batch splitting on cut-off answers: added after the second Suite B attempt, in the scorer only (no change to prompts, rules or facts). When a judge's answer (either judge, any batch) is cut off by its token limit, even after the engine's retry with twice the limit, the batch is judged again in halves with the same prompt, schema, model and temperature, down to single facts; only a single fact whose answer is still cut off falls under the pre-registered rule (no verdict: not conveyed, listed). Every split is listed with the judge problems; saved answers and cut-offs are reused, not paid for twice."
+    },
+    {
+      "title": "Deviation, Suite B: Account credit outage",
+      "detail": "Account credit outage: at 12:34 UTC the provider refused every call (HTTP 402, account credits exhausted) while the recorded runs were being made; the account credits were topped up and the runs resumed from their stage caches at 13:36 UTC. Suite A's scored run had finished before; the controls ran after."
+    },
+    {
+      "title": "Deviation, Suite B: Three Suite B invocations",
+      "detail": "Three Suite B invocations: the first stopped on the per-run cap of $0.30 that the scorer takes from Suite A's client setup (it needs more for a full film's judging), the second on a judge answer cut off by its token limit, the third (with the batch splitting above and a higher per-run cap) completed. The first two wrote nothing; their saved judge answers were reused."
     },
     {
       "title": "Deviation, Controls: per-rule reporting, with a same-video headline called an upper bound",
@@ -52850,8 +52858,20 @@
       "detail": "Lull's descriptions come from remote models that do not reproduce an answer for a fixed seed (Nemotron 3.5 Lightning ignored the seed in our checks), so the same video gives different cues from one run to the next. Each suite scores one pre-registered run (Suite A: the first complete --all invocation on the final engine) and does not average over runs; the intervals are bootstrapped over videos or reference lines, not over repeated runs."
     },
     {
-      "title": "Sparse descriptions compared with human audio description",
-      "detail": "Lull says less than a human describer. In the Suite B smoke on Elephants Dream 60-150 s it voiced 55 words per minute (83 with the extended track) against 120 (Silvia Pfeiffer) and 95 (JJ Hunt), and the primary judge credited none of the describers' 46 facts in that clip to its cues. Lull holds or cuts a description it cannot verify against the frames and fits the standard track into the programme's own pauses, which leaves room for far fewer words than a describer who writes for every scene."
+      "title": "Lull conveys little of what the human describers chose to say",
+      "detail": "In the scored Suite B, the primary judge credited Lull's cues (standard and extended, inside the window) with 1 of JJ Hunt's 124 Elephants Dream facts (0.8 %), 2 of Silvia Pfeiffer's 152 (1.3 %) and 9 of the USGS describers' 198 (4.5 %); one human describer judged against the other gets 38.8 % and 42.7 %. Over the full film Lull voiced 37.9 words per minute on the standard track (73.6 with the extended track); Pfeiffer's track has 89.3 and Hunt's 69.4."
+    },
+    {
+      "title": "Extended freezes fall inside continuous narration",
+      "detail": "Suite A pre-registers 0 extended freeze points inside speech for its lectures. On Suite B's real videos the extended track paused the picture inside speech at 6 of 31 extended cues (Elephants Dream), 22 of 22 (woodshole), 14 of 14 (aquatic_connectivity) and 1 of 1 (csc_intro), against the reference transcript. In continuous narration the extended track pauses the picture between words, mid-sentence: the narration is paused, not talked over, but the sentence is interrupted."
+    },
+    {
+      "title": "Suite B woodshole: the standard track voiced nothing",
+      "detail": "On woodshole the standard track voiced 0 words: none of its cues was verified (5 held, 0 verified); everything Lull said there was on the extended track (22 cues)."
+    },
+    {
+      "title": "The two Suite B judges disagree",
+      "detail": "The second judge (Qwen3 235B) credits Lull far more often than the primary one (Nemotron 3 Ultra) on USGS: 17.7 % against 4.5 % of the facts (window, with extended), raw agreement 85.9 %, kappa 0.31. On Pfeiffer's facts the raw agreement is 96.1 % but kappa is -0.02 (both judges credit almost nothing, so the agreement is no better than chance). The primary judge's numbers are the pre-registered ones."
     },
     {
       "title": "Lecture pauses swallowed before the speech-span fix",
