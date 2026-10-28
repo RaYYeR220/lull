@@ -250,10 +250,74 @@ def judge_request(rules: dict, video: str, doc: dict, facts: list[dict], cues: l
     return prompt, schema, {v: k for k, v in kid.items()}
 
 
+CUT_OFF = "finish_reason=length"  # the engine's TFUnusable text for an answer cut off
+
+
+def _cut_off_path(judge: Judge, prompt: str, schema: dict) -> Path:
+    """Where a cut-off answer to this request is recorded, beside the judge's saved answers."""
+    digest = A.request_digest(judge.model, judge.thinking, prompt, schema)
+    return (A.JUDGE_CACHE if judge.cache is None else judge.cache) / f"cutoff-{digest}.json"
+
+
+def _ask_or_cut_off(judge: Judge, prompt: str, schema: dict, run_id: str,
+                    stage: str) -> dict | None:  # fmt: skip
+    """The judge's answer, or None when it was cut off by its token limit (the engine already
+    retried with twice the limit). A cut-off is recorded, so it is not paid for twice."""
+    from lull.tf import TFUnusable
+
+    path = _cut_off_path(judge, prompt, schema)
+    if path.exists():
+        judge.paid_by.add(json.loads(path.read_text(encoding="utf-8"))["run_id"])
+        return None
+    try:
+        return judge.ask(prompt, schema, run_id, stage, ESTIMATE)
+    except TFUnusable as e:
+        if CUT_OFF not in str(e):
+            raise
+        judge.paid_by.add(run_id)
+        A.write_json(path, {"run_id": run_id, "stage": stage, "model": judge.model,
+                            "error": str(e)})  # fmt: skip
+        return None
+
+
+def _judge_batch(judge: Judge, rules: dict, video: str, doc: dict, chunk: list[dict],
+                 cues: list[dict], run_id: str, stage: str, out: dict,
+                 problems: list[str]) -> None:  # fmt: skip
+    """Supplementary, added after the second Suite B attempt (no change to prompts, rules or
+    facts): a batch whose answer is cut off by its token limit is judged again in halves, down
+    to single facts; a single fact whose answer is still cut off has no verdict."""
+    prompt, schema, back = judge_request(rules, video, doc, chunk, cues)
+    answer = _ask_or_cut_off(judge, prompt, schema, run_id, stage)
+    if answer is None:
+        if len(chunk) == 1:
+            problems.append(f"{chunk[0]['id']}: answer from {judge.model} cut off by its token "
+                            "limit even alone; no verdict (not conveyed)")  # fmt: skip
+            out[chunk[0]["id"]] = {"cue_ids": [], "reason": None}
+            return
+        problems.append(f"{chunk[0]['id']} to {chunk[-1]['id']} ({len(chunk)} facts): answer "
+                        f"from {judge.model} cut off by its token limit; judged again in "
+                        "halves")  # fmt: skip
+        half = (len(chunk) + 1) // 2
+        for part in (chunk[:half], chunk[half:]):
+            _judge_batch(judge, rules, video, doc, part, cues, run_id, stage, out, problems)
+        return
+    rows, repeated = A.by_id(answer.get("facts") or [])
+    problems += [f"{x}: judged twice (first answer kept)" for x in repeated]
+    for f in chunk:
+        row = rows.get(f["id"])
+        if row is None:
+            problems.append(f"{f['id']}: no verdict from {judge.model} (not conveyed)")
+            out[f["id"]] = {"cue_ids": [], "reason": None}
+            continue
+        out[f["id"]] = {"cue_ids": [back[k] for k in row.get("cue_ids", []) if k in back],
+                        "reason": row.get("reason")}  # fmt: skip
+
+
 def judge_facts(judge: Judge, rules: dict, video: str, doc: dict, facts: list[dict],
                 cues: list[dict], run_id: str, stage: str) -> tuple[dict, list[str]]:  # fmt: skip
     """fact id -> {"cue_ids": real cue ids, "reason"}; facts in anchor order, at most
-    facts_per_call per call. A fact without a verdict counts as not conveyed (listed)."""
+    facts_per_call per call (a cut-off answer: the batch again in halves). A fact without a
+    verdict counts as not conveyed (listed)."""
     out, problems = {}, []
     if not facts:
         return out, problems
@@ -262,19 +326,8 @@ def judge_facts(judge: Judge, rules: dict, video: str, doc: dict, facts: list[di
     per = int(rules["judge"]["facts_per_call"])
     ordered = sorted(facts, key=lambda f: f["anchor_time"])
     for i in range(0, len(ordered), per):
-        chunk = ordered[i : i + per]
-        prompt, schema, back = judge_request(rules, video, doc, chunk, cues)
-        answer = judge.ask(prompt, schema, run_id, stage, ESTIMATE)
-        rows, repeated = A.by_id(answer.get("facts") or [])
-        problems += [f"{x}: judged twice (first answer kept)" for x in repeated]
-        for f in chunk:
-            row = rows.get(f["id"])
-            if row is None:
-                problems.append(f"{f['id']}: no verdict from {judge.model} (not conveyed)")
-                out[f["id"]] = {"cue_ids": [], "reason": None}
-                continue
-            out[f["id"]] = {"cue_ids": [back[k] for k in row.get("cue_ids", []) if k in back],
-                            "reason": row.get("reason")}  # fmt: skip
+        _judge_batch(judge, rules, video, doc, ordered[i : i + per], cues, run_id, stage, out,
+                     problems)  # fmt: skip
     return out, problems
 
 

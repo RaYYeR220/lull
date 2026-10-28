@@ -1,6 +1,6 @@
 # Run log
 
-Plan 4 Task 6, the scored runs on the final engine (main 61e9d81 merged into feat/eval as
+The scored runs on the final engine (main 61e9d81 merged into feat/eval as
 7168ea5). Kept by hand while the runs happened, 2026-10-28, times UTC. Spend is the change of
 the model ledger (~/.lull/ledger.db) over the step; the ledger stood at $2.0125 before the
 task. LULL_CAP_DAY=10. Nothing below was run twice to get a better number.
@@ -73,7 +73,7 @@ excerpt 1:00-2:30), `bbb120` ("Big Buck Bunny", 0:00-2:00), `tos180` ("Tears of 
 (development clip, used to tune the engine)", 3:30-6:30), each with its CC BY credit. The USGS
 runs are not exported (music licences).
 
-### The full-film re-run on main 0b83117 (controller ruling, a disclosed deviation)
+### The full-film re-run on main 0b83117 (a disclosed deviation)
 
 - main 0b83117 ("engine: keyframes stay inside the video stream"; keyframe and freeze times
   clamped to the video stream's last frame, nothing else) merged as 1a85db9; engine tests 788
@@ -100,7 +100,7 @@ runs are not exported (music licences).
   `final-ed2` in all $0.2937 (481 Token Factory calls) and 5 searches.
 - Exported as the site's `ed` into lull-runs/showcase-final/ed ("Elephants Dream", CC BY 2.5
   credit). Its showcase.json `costUsd` is the publishing attempt's spend ($0.0272); the full
-  run's $0.2937 is in `summary.spend.model_usd_all_runs`.
+  run's $0.2937 is in the manifest's `summary.spend.model_usd_all_runs` (the export's `summary.spend.modelUsdAllRunsOfRunId`): the cost the site shows for a showcase should come from that field. For ed90, bbb120 and tos180 both are the same (their first attempts spent nothing).
 - **20:14:12** Suite B, first invocation (`--cap 1.20`, the deviation notes committed before
   it): stopped after 604 s, nothing written. The ledger's per-run-id cap of $0.30, which
   Suite B takes from Suite A's client setup unless LULL_CAP_RUN is set, stopped the Elephants

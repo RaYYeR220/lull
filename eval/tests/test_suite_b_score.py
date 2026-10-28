@@ -313,3 +313,62 @@ def test_a_clip_never_writes_results(tmp_path, monkeypatch):
         B.main(["--run", f"elephants_dream={write_run(tmp_path / 'r')}", "--offset",
                 "elephants_dream=60"])  # fmt: skip
     assert seen["f"] == B.PARTIAL
+
+
+CUT = "truncated: finish_reason=length or empty content after retry with max_tokens=32000"
+
+
+def cut_off_when(pred):
+    """Credits every fact, but an answer about facts for which pred(ids) holds is cut off."""
+
+    def fn(prompt, schema):
+        from lull.tf import TFUnusable
+
+        ids = schema["properties"]["facts"]["items"]["properties"]["id"]["enum"]
+        if pred(ids):
+            raise TFUnusable(CUT)
+        cues = schema["properties"]["facts"]["items"]["properties"]["cue_ids"]["items"]["enum"]
+        return {"facts": [{"id": i, "reason": "r", "cue_ids": cues} for i in ids]}
+
+    return fn
+
+
+def test_a_cut_off_batch_is_judged_again_in_halves_down_to_single_facts(tmp_path):
+    tf = FakeTF(cut_off_when(lambda ids: len(ids) > 2 or "p-03.1" in ids))
+    judge = Judge(tf, Budget(FakeLedger(), cap=1.0), cache=tmp_path)
+    rules = {**RULES, "judge": {**RULES["judge"], "facts_per_call": 4}}
+    facts = [fact(f"p-0{i}.1", 60.0 + i) for i in range(1, 6)]
+    cues = [{"id": "c001", "track": "standard", "text": "x", "start": 61.0, "end": 62.0}]
+    out, problems = B.judge_facts(judge, rules, "elephants_dream", DOC, facts, cues, "r1", "s")
+    # [01-04] cut -> [01,02] ok, [03,04] cut -> [03] cut alone, [04] ok; then [05] ok
+    assert len(tf.calls) == 6
+    assert {k for k, v in out.items() if v["cue_ids"] == ["c001"]} == {
+        "p-01.1", "p-02.1", "p-04.1", "p-05.1"}  # fmt: skip
+    assert out["p-03.1"] == {"cue_ids": [], "reason": None}
+    model = "nvidia/Nemotron-3-Ultra-550b-a55b"
+    assert problems == [
+        f"p-01.1 to p-04.1 (4 facts): answer from {model} cut off by its token limit; "
+        "judged again in halves",
+        f"p-03.1 to p-04.1 (2 facts): answer from {model} cut off by its token limit; "
+        "judged again in halves",
+        f"p-03.1: answer from {model} cut off by its token limit even alone; no verdict "
+        "(not conveyed)",
+    ]
+    # the answers and the cut-offs are saved: judging again asks nothing
+    again = Judge(FakeTF(lambda p, s: pytest.fail("asked again")), Budget(FakeLedger(), 1.0),
+                  cache=tmp_path)  # fmt: skip
+    out2, problems2 = B.judge_facts(again, rules, "elephants_dream", DOC, facts, cues, "r2", "s")
+    assert out2 == out and problems2 == problems and again.paid_by == {"r1"}
+
+
+def test_only_a_cut_off_answer_is_split(tmp_path):
+    from lull.tf import TFUnusable
+
+    def unparseable(prompt, schema):
+        raise TFUnusable("truncated: unparseable output (x) after retry with max_tokens=32000")
+
+    judge = Judge(FakeTF(unparseable), Budget(FakeLedger(), cap=1.0), cache=tmp_path)
+    facts = [fact("p-01.1", 61.0), fact("p-02.1", 62.0)]
+    cues = [{"id": "c001", "track": "standard", "text": "x", "start": 61.0, "end": 62.0}]
+    with pytest.raises(TFUnusable, match="unparseable"):
+        B.judge_facts(judge, RULES, "elephants_dream", DOC, facts, cues, "r1", "s")

@@ -23,7 +23,7 @@ describer who writes for every scene.
 
 ## Lecture pauses swallowed before the speech-span fix
 
-Before the engine's fix round the listen stage widened narration spans by 0.2-0.6 s and merged
+Before the engine's corrections the listen stage widened narration spans by 0.2-0.6 s and merged
 sentences across planned pauses of about 1.9 s, so a Suite A lecture had only 4-5 speech-free
 windows and the standard track voiced little more than slide titles; extended cues froze the
 picture before their slide appeared. Found in the Suite A smoke (a01, a02, pre-fix engine) and

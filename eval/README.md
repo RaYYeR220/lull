@@ -199,7 +199,7 @@ Labelled "supplementary" in every report:
 
 ### Smoke (a01 and a02 on the pre-fix engine; not results)
 
-Run before the engine's fix round, two videos, reported only to show the pipeline end to end:
+Run before the engine's corrections, two videos, reported only to show the pipeline end to end:
 overlap 0.000 s; recall 3/41 standard, 9/41 with extended; 0/27 claims unsupported; 0/8 decoys;
 0/7 cues redundant; $0.0238 per minute (Tavily $0); 87.7 s of processing per minute (AMD Ryzen
 5 5600X, RTX 4060). Second-judge calibration on the same runs: 92.7 % agreement on the 41
@@ -212,7 +212,7 @@ are the three extended cues, whose freeze point lands on the previous slide, so 
 a slide that is not on screen (the four standard cues, slide titles, are all supported).
 Voiced-text probe on a01: sensitivity 2/2 and specificity 3/3 for both judges.
 
-What the smoke found in the engine (reported to its fix round): the listen stage widened the
+What the smoke found in the engine (reported for the engine's corrections): the listen stage widened the
 narration spans by 0.2-0.6 s and merged sentences across planned pauses of about 1.9 s, so
 the standard track had only 4-5 windows per lecture and voiced slide titles only; extended
 cues froze the picture before their slide appeared (the visual's start fell inside a widened
@@ -403,6 +403,7 @@ below it, the sha256 of every `refs/*.json` (`asr_corrections.json` included),
 ### Deviations: the scored runs
 
 - **Engine commits of the scored runs**: Suite A, the negative control and the ablation ran on the engine of main 61e9d81 (merged into the evaluation branch as 7168ea5). The first recorded run of the full Elephants Dream (run id final-ed) failed in publish on a deterministic engine bug: a keyframe time after the file's last video frame. It is listed under the known failures and stays listed. The bug was fixed on main 0b83117 (keyframe and freeze times clamped to the video stream's last frame; nothing else changed), merged, and the full film was run once more under a fresh run id (final-ed2) with the same command and options (paused once when the user stopped the speech server, then resumed from its stage cache). Suite B is scored on that run and on the three USGS runs made on 61e9d81 (Suite B does not require one engine across its runs).
+- **Batch splitting on cut-off answers**: added after the second Suite B attempt, in the scorer only (no change to prompts, rules or facts). When a judge's answer (either judge, any batch) is cut off by its token limit, even after the engine's retry with twice the limit, the batch is judged again in halves with the same prompt, schema, model and temperature, down to single facts; only a single fact whose answer is still cut off falls under the pre-registered rule (no verdict: not conveyed, listed). Every split is listed with the judge problems; saved answers and cut-offs are reused, not paid for twice.
 
 ### What is measured (`suite_b/score.py`, from `rules.json`)
 
