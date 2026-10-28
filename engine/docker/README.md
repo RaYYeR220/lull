@@ -213,8 +213,13 @@ Notes:
   address. Checked: requests carrying made-up `X-Forwarded-For` values still count against
   the sender's own limit.
 - **Start:** `LULL_HOME` stays on local disk, and `LULL_BUCKET` keeps the ledger across
-  restarts. A new instance answers in about 37 s (the speech server takes 19 s of it, with
-  `--cpu-boost`); `LULL_SPEECH_WAIT=200` leaves room under the 240 s startup probe.
+  restarts (checked: the spend survived a scale to zero). Measured with `--cpu-boost`:
+  - an instance a deploy starts answers in about 37 s, of which the speech server takes 19 s;
+  - a request that finds no instance waits about 130 s. The image streams in as it is read,
+    so the speech server takes 45 s and the Python imports 71 s.
+
+  The keep-warm job keeps an instance by day, and `LULL_SPEECH_WAIT=200` leaves room under
+  the 240 s startup probe.
 - **Lifecycle rule:** it deletes objects under `runs/` 8 days after they were written,
   whatever the app did. An upload's run is gone by then anyway, and a visitor's sample run
   that old goes with it. The showcase (`showcase/`) is not touched.
