@@ -412,9 +412,10 @@ def test_compress_keeps_on_screen_text_the_cue_reads(tmp_path, video, monkeypatc
 
 
 def test_never_fits_is_held_after_four_rounds(tmp_path, video):
+    """Each compression shortens the line, but never enough: held after the fourth round."""
     tf = FakeTF(
-        verify=lambda call: _supported("a person opens a door"),
-        compress=lambda call: {"text": _description(call)},  # no shorter
+        verify=lambda call: _supported(_description(call)),
+        compress=lambda call: {"text": " ".join(_description(call).split()[:-2]) + "."},
     )
     speech = FakeSpeech(lambda text: 8.0)
     out = _run(tmp_path, video, tf, speech)
@@ -422,6 +423,49 @@ def test_never_fits_is_held_after_four_rounds(tmp_path, video):
     assert len(speech.calls) == 4 and len(tf.of("compress")) == 3
     assert "does not fit" in out.note
     assert (out.audio_path, out.audio_dur, out.end) == (None, None, None)
+
+
+# -- a compression is never longer ------------------------------------------------------------
+
+
+def test_a_compression_not_shorter_keeps_a_one_sentence_line_and_holds_it(tmp_path, video):
+    """A rewrite with as many words or more is never taken (live: 13 -> 15 words, then four
+    rounds lost). A one-sentence line has nothing else to give: held, its text as it was."""
+    longer = "A person in a long bright red coat slowly opens the old wooden door."
+    tf = FakeTF(verify=lambda call: _supported("a person opens a door"),
+                compress=[{"text": longer}])  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([8.0]))
+    assert out.status == "held" and out.text == TEXT
+    assert "compression did not shorten the line" in out.note
+    assert tf.roles() == ["verify", "compress"]
+
+
+def test_a_compression_not_shorter_drops_the_lowest_priority_sentence(tmp_path, video):
+    """With two visuals, the sentence of the one the plan rates lower goes instead, and the
+    shorter line is checked and fitted again."""
+    tf = FakeTF(
+        verify=lambda call: _supported(*[s.rstrip(".") for s in _description(call).split(". ")]),
+        compress=[{"text": HASHTAG + " It glows."}],  # longer than before
+    )
+    ctx = CTX.model_copy(update={"verbatim": ["#CLIMATECHAMPIONS"],
+                                 "priority": {"e001": 4, "e002": 2}})  # fmt: skip
+    cue = _cue(HASHTAG, event_ids=["e001", "e002"], parts={
+        "e001": 'A hashtag reads: "#CLIMATECHAMPIONS".',
+        "e002": "The USGS logo and tagline appear on a black background.",
+    })  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([5.0, 2.0]), cue=cue,
+               events={"e001": EV, "e002": LOGO}, ctx=ctx)  # fmt: skip
+    assert out.status == "verified" and out.text == 'A hashtag reads: "#CLIMATECHAMPIONS".'
+    assert "dropped the sentence for e002" in out.note
+    assert out.described == ["e001"]
+
+
+def test_a_compression_that_fails_lint_is_not_taken(tmp_path, video):
+    tf = FakeTF(verify=lambda call: _supported("a person opens a door"),
+                compress=[{"text": "I see a person open a door."}])  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([8.0]))
+    assert out.status == "held" and out.text == TEXT
+    assert "compression did not shorten the line" in out.note
 
 
 # -- (d2) a compression that cuts too much is tried once more, then held ---------------------
@@ -810,8 +854,10 @@ def test_sentence_that_stays_late_is_held(tmp_path, video):
     cue = _cue("A person opens a door. A cat runs past.", event_ids=["e001", "e002"])
     speech = FakeSpeech(lambda text: 3.6)
     out = _run(tmp_path, video, tf, speech, cue=cue, events={"e001": EV, "e002": CAT})
-    assert out.status == "held" and len(speech.calls) == 4
+    # a compression that changes nothing is not taken, and no sentence has an event to own it
+    assert out.status == "held" and len(speech.calls) == 1
     assert "sentence 2 would start at 4.00 s, after its visual ends at 3.00 s" in out.note
+    assert "compression did not shorten the line" in out.note
 
 
 def test_fit_is_measured_from_the_placed_start(tmp_path, video):

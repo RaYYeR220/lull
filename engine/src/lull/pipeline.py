@@ -195,6 +195,7 @@ def cue_context(
     finished: list[Cue],
     info: media.Probe | None = None,
     verify: bool = True,
+    priority: dict[str, int] | None = None,
 ) -> CueContext:
     """What finalising `cue` needs to know about the rest of the programme. `named` are the
     names lint checks for introduction (cast and glossary people); `proper_nouns` every
@@ -212,6 +213,7 @@ def cue_context(
         proper_nouns=set(proper_nouns),
         video_duration=duration,
         verify=verify,
+        priority={i: p for i, p in (priority or {}).items() if i in cue.event_ids},
     )
 
 
@@ -534,6 +536,7 @@ class _Run:
     def finalize(
         self, cues: list[Cue], gaps: list[Gap], events: list[VisualEvent], heard: ListenResult,
         cast: dict[str, str], named: set[str], proper: set[str],
+        priority: dict[str, int] | None = None,
     ) -> tuple[list[Cue], list[Cue]]:  # fmt: skip
         by_gap = {g.id: g for g in gaps}
         by_event = {e.id: e for e in events}
@@ -556,6 +559,7 @@ class _Run:
                     finished=finished,
                     info=self.info,
                     verify=self.verify,
+                    priority=priority,
                 )
                 gap = by_gap.get(cue.gap_id) if cue.gap_id is not None else None
                 own = {i: by_event[i] for i in cue.event_ids if i in by_event}
@@ -774,7 +778,9 @@ def _stages(r: _Run, started: float | None = None) -> PublishResult:
     proper = set(planned.cast) | spelled  # spellings to keep
     named = set(planned.cast) | people  # names a listener must be introduced to (R15)
     cues = r.schedule(events, planned, gaps, proper)
-    standard, extended = r.finalize(cues, gaps, events, heard, planned.cast, named, proper)
+    standard, extended = r.finalize(
+        cues, gaps, events, heard, planned.cast, named, proper, planned.priority
+    )
     with r.step("publish") as info:
         assert_no_overlap(standard, heard.speech)
         result = publish(

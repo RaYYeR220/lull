@@ -91,6 +91,7 @@ class CueContext(BaseModel):
     # False only for the evaluation's ablation (LULL_NO_VERIFY): no claim is checked and the
     # fitted line is voiced with status "unverified"
     verify: bool = True
+    priority: dict[str, int] = Field(default_factory=dict)  # the plan's, per event id
 
 
 class OverlapError(Exception):
@@ -450,6 +451,7 @@ class _Finalise:
     findings: list[Finding] = field(default_factory=list)
     removed: list[Claim] = field(default_factory=list)
     words_before: int | None = None  # word count before the first compression
+    dropped: list[str] = field(default_factory=list)  # events whose sentence went to fit
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
     at: float | None = None  # where in its window the voiced line starts
@@ -511,6 +513,8 @@ class _Finalise:
             parts.append(f"{n} claim{'' if n == 1 else 's'} removed: {gone}")
         if self.words_before is not None:
             parts.append(f"compressed {self.words_before}→{count_words(self.text)} words")
+        for eid in self.dropped:
+            parts.append(f"dropped the sentence for {eid} to fit")
         return "; ".join(parts + extra) or None
 
     def _result(
@@ -775,14 +779,63 @@ class _Finalise:
             problem = self.overcut(before, new, target)
             if problem:
                 return self.held(f"compression {problem}, twice")
-        if self.words_before is None:
-            self.words_before = count_words(before)
-        self.claims = []
         if not new:
             self.text = ""
             return self.held("nothing left after compression")
-        self.text, lost = self.keep_ahead(before, autofix(new))
-        return self.held(lost) if lost else None
+        candidate, lost = self.keep_ahead(before, autofix(new))
+        if lost:
+            self.text = candidate
+            return self.held(lost)
+        if not self.shorter(before, candidate, keep):
+            # never longer: keep the line, and give up the sentence that matters least
+            candidate = self.drop_lowest(before)
+            if candidate is None:
+                return self.held(
+                    f"{reason}; compression did not shorten the line ({count_words(before)} "
+                    f"words, answered with {count_words(autofix(new))})"
+                )
+        if self.words_before is None:
+            self.words_before = count_words(before)
+        self.claims = []
+        self.text = candidate
+        return None
+
+    def shorter(self, before: str, candidate: str, keep: list[str]) -> bool:
+        """A compression is taken only when it has fewer words than the line it replaces and
+        passes lint: a rewrite that is as long or longer, or breaks a style rule, is not one."""
+        if count_words(candidate) >= count_words(before):
+            return False
+        return not any(f.severity == "error" for f in _lint(candidate, keep, self.ctx))
+
+    def drop_lowest(self, text: str) -> str | None:
+        """`text` without the sentence of the event the plan rates lowest (its salience when
+        the plan gave none; the later sentence on a tie), or None when one sentence is all
+        there is. A sentence belongs to the event whose composed words it shares most."""
+        spans = split_sentences(text)
+        if len(spans) < 2:
+            return None
+        by_id = {e.id: e for e in self.events}
+
+        def owner(sentence: str) -> str | None:
+            mine = _content(sentence)
+            scored = [(len(mine & _content(t)), eid) for eid, t in self.cue.parts.items()
+                      if eid in by_id]  # fmt: skip
+            best = max(scored, default=(0, None))
+            return best[1] if best[0] else None
+
+        def rank(i: int) -> tuple[int, int]:
+            eid = owner(text[spans[i][0] : spans[i][1]])
+            if eid is None:
+                return (10**6, -i)  # a sentence no event owns is never the one dropped
+            return (int(self.ctx.priority.get(eid, by_id[eid].salience)), -i)
+
+        k = min(range(len(spans)), key=rank)
+        eid = owner(text[spans[k][0] : spans[k][1]])
+        if eid is None:
+            return None
+        kept = " ".join(text[a:b].strip() for i, (a, b) in enumerate(spans) if i != k)
+        self.dropped.append(eid)
+        return kept
 
     def speak(self, last: bool) -> Cue | None:
         """Voice, fit and time the line; the finished cue, or None to go round."""
