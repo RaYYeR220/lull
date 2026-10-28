@@ -1111,7 +1111,8 @@ def test_a_backup_left_by_a_crash_is_put_back_before_the_next_publish(tmp_path):
     (run / "report.html").write_text("new report", encoding="utf-8")  # already moved in
     pub._recover(run)
     assert (run / "manifest.json").read_text(encoding="utf-8") == "old manifest"
-    assert (run / "report.html").read_text(encoding="utf-8") == "new report"
+    # no manifest was in place: the old outputs all come back (Task 17)
+    assert (run / "report.html").read_text(encoding="utf-8") == "old report"
     assert not (run / ".publish-old-x1").exists()
 
 
@@ -1127,3 +1128,124 @@ def test_coverage_and_f113_count_only_the_events_a_line_still_describes():
     ]
     legacy = cue.model_copy(update={"described": None})  # a cue finalised before: all events
     assert coverage([legacy], [], events, extended_produced=False)["described"] == 2
+
+
+# -- Task 17: recovery and the lock -------------------------------------------------------------
+
+
+def _files(root: Path) -> dict[str, str]:
+    return {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+            for p in root.rglob("*") if p.is_file()}  # fmt: skip
+
+
+def test_a_crash_while_moving_in_restores_every_backed_up_output(tmp_path):
+    """No manifest in place: the commit stopped in its second phase, so every backed-up item
+    goes back over whatever the new publish had already moved in."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    backup = run / ".publish-old-x1"
+    (backup / "keyframes").mkdir(parents=True)
+    for name, text in [
+        ("manifest.json", "old manifest"),
+        ("report.html", "old report"),
+        ("cues.json", "old cues"),
+        ("keyframes/c001.jpg", "old frame"),
+    ]:
+        (backup / name).write_text(text, encoding="utf-8")  # fmt: skip
+    (run / "keyframes").mkdir()
+    (run / "keyframes" / "c009.jpg").write_text("new frame", encoding="utf-8")
+    (run / "report.html").write_text("new report", encoding="utf-8")
+    pub._recover(run)
+    assert _files(run) == {
+        "manifest.json": "old manifest", "report.html": "old report", "cues.json": "old cues",
+        "keyframes/c001.jpg": "old frame",
+    }  # fmt: skip
+
+
+def test_a_backup_left_after_a_finished_commit_is_just_removed(tmp_path):
+    """The new manifest is in place and the backup holds the old one: the commit finished
+    and only removing the backup failed."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    backup = run / ".publish-old-x2"
+    backup.mkdir(parents=True)
+    (backup / "manifest.json").write_text("old manifest", encoding="utf-8")
+    (backup / "report.html").write_text("old report", encoding="utf-8")
+    (run / "manifest.json").write_text("new manifest", encoding="utf-8")
+    (run / "report.html").write_text("new report", encoding="utf-8")
+    pub._recover(run)
+    assert _files(run) == {"manifest.json": "new manifest", "report.html": "new report"}
+
+
+def test_a_lock_that_cannot_be_written_is_not_left_behind(tmp_path, monkeypatch):
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    run.mkdir()
+
+    def broken(*a, **kw):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pub.os, "fdopen", broken)
+    with pytest.raises(OSError, match="disk full"):
+        with pub._lock(run):
+            pass
+    assert not (run / ".publish.lock").exists()
+
+
+def test_a_held_lock_is_kept_fresh_by_a_heartbeat(tmp_path, monkeypatch):
+    import os
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_HEARTBEAT_S", 0.05)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    with pub._lock(run):
+        pid, host, _ = lock.read_text(encoding="utf-8").split()
+        assert int(pid) == os.getpid() and host
+        old = time.time() - 1000
+        os.utime(lock, (old, old))
+        deadline = time.monotonic() + 3
+        while lock.stat().st_mtime < old + 500 and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert lock.stat().st_mtime > old + 500  # touched again while held
+    assert not lock.exists()
+
+
+def test_a_lock_is_broken_only_when_quiet_and_its_holder_is_gone_or_very_old(tmp_path):
+    """Stale (no heartbeat for LOCK_QUIET_S) is not enough: the holder must be a process that
+    no longer runs on this host, or the lock must be older than LOCK_STALE_S (10 min)."""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    from lull.stages import publish as pub
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    here = socket.gethostname()
+    lock = tmp_path / ".publish.lock"
+
+    def breakable(content: str, age: float) -> bool:
+        lock.write_text(content, encoding="utf-8")
+        t = time.time() - age
+        os.utime(lock, (t, t))
+        return pub._breakable(lock)
+
+    alive = f"{os.getpid()} {here} 0\n"
+    dead = f"{gone.pid} {here} 0\n"
+    elsewhere = f"{os.getpid()} another-host 0\n"
+    assert not breakable(alive, 180)  # quiet, but its publisher still runs here
+    assert breakable(alive, 11 * 60)  # quiet for longer than any publish
+    assert breakable(dead, 180)  # its publisher is gone
+    assert not breakable(dead, 30)  # recently touched: not stale
+    assert not breakable(elsewhere, 180)  # cannot check a process on another host
+    assert breakable(elsewhere, 11 * 60)
+    assert not breakable("garbage", 180) and breakable("garbage", 11 * 60)

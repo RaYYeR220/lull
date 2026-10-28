@@ -23,8 +23,11 @@ is written into a staging folder (`.publish-*`) inside the run directory; only o
 manifest is written too do the old outputs move into a backup folder (`.publish-old-*`) and
 the new ones move in, and the backup is deleted only after the last move. A failure at any
 point, moves included, puts the previous outputs back as they were. One publish runs per run
-directory at a time (`.publish.lock`, created exclusively; a lock older than 10 minutes is
-taken to be left by a crash and broken). Every status in the report is computed here;
+directory at a time: it holds `.publish.lock` (created exclusively, holding its pid and host)
+and touches it every LOCK_HEARTBEAT_S while it works. Another publish waits for it, and breaks
+it only when it has gone quiet (no heartbeat for LOCK_QUIET_S) and either its publisher no
+longer runs on this host or it is older than LOCK_STALE_S (a publisher that hung, or one on
+another host). Every status in the report is computed here;
 "met" is printed only when every published line was reviewed by a person, and reads "met
 (automated checks)" until then.
 """
@@ -37,7 +40,9 @@ import logging
 import os
 import re
 import shutil
+import socket
 import tempfile
+import threading
 import time
 from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
@@ -85,7 +90,9 @@ _LOCAL_PATH = re.compile(  # C:\dir\file, \\host\share\file, /dir/file -> file
 STAGING = ".publish-"
 BACKUP = ".publish-old-"  # the previous outputs while the new ones move in
 LOCK = ".publish.lock"
-LOCK_STALE_S = 600.0  # a lock this old was left by a crash
+LOCK_HEARTBEAT_S = 60.0  # a publish touches its lock this often
+LOCK_QUIET_S = 150.0  # no touch for this long: the lock is stale ...
+LOCK_STALE_S = 600.0  # ... and breakable when its publisher is gone, or it is this old
 LOCK_POLL_S = 0.2
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
 OUTPUTS = frozenset(
@@ -424,31 +431,107 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
+def _alive(pid: int) -> bool:
+    """Whether process `pid` runs on this host (never signals it)."""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # access denied: it exists
+        try:
+            code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _breakable(path: Path) -> bool:
+    """A lock may be broken when it is quiet (not touched for LOCK_QUIET_S) and either the
+    process it names is gone from this host or it is older than LOCK_STALE_S."""
+    try:
+        age = time.time() - path.stat().st_mtime
+        owner = path.read_text(encoding="utf-8").split()
+    except (OSError, ValueError):
+        return False  # released in between, or unreadable for now
+    if age <= LOCK_QUIET_S:
+        return False
+    if age > LOCK_STALE_S:
+        return True
+    try:
+        pid, host = int(owner[0]), owner[1]
+    except (IndexError, ValueError):
+        return False  # nobody to check: only the age can tell
+    return host == socket.gethostname() and not _alive(pid)
+
+
+def _take(path: Path) -> bool:
+    """Create the lock file with this process's pid and host; False when it exists. A lock
+    that cannot be written is not left behind."""
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return False
+    try:
+        f = os.fdopen(fd, "w", encoding="utf-8")
+    except BaseException:
+        os.close(fd)
+        path.unlink(missing_ok=True)
+        raise
+    try:
+        with f:
+            f.write(f"{os.getpid()} {socket.gethostname()} {time.time():.0f}\n")
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return True
+
+
 @contextmanager
 def _lock(run_dir: Path) -> Iterator[None]:
-    """Hold run_dir/.publish.lock while publishing: wait while another publish holds it, and
-    break it when it is older than LOCK_STALE_S (its publisher crashed)."""
+    """Hold run_dir/.publish.lock while publishing (see the module doc): wait while another
+    publish holds it, break it only when _breakable says so, and touch it every
+    LOCK_HEARTBEAT_S from a daemon thread while it is held."""
     path = run_dir / LOCK
-    while True:
-        try:
-            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            try:
-                age = time.time() - path.stat().st_mtime
-            except FileNotFoundError:
-                continue  # released in between
-            if age > LOCK_STALE_S:
-                log.warning("publish: breaking a stale lock (%.0f s old) in %s", age, run_dir)
-                path.unlink(missing_ok=True)
-                continue
-            time.sleep(LOCK_POLL_S)
+    while not _take(path):
+        if path.exists() and _breakable(path):
+            log.warning("publish: breaking a stale lock (%s) in %s",
+                        path.read_text(encoding="utf-8", errors="replace").strip(),
+                        run_dir)  # fmt: skip
+            path.unlink(missing_ok=True)
             continue
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(f"{os.getpid()} {time.time():.0f}\n")
-        break
+        time.sleep(LOCK_POLL_S)
+    stop = threading.Event()
+
+    def heartbeat() -> None:
+        while not stop.wait(LOCK_HEARTBEAT_S):
+            try:
+                os.utime(path, None)
+            except OSError as e:
+                log.warning("publish: could not touch the lock: %s", e)
+
+    beat = threading.Thread(target=heartbeat, name="publish-lock", daemon=True)
+    beat.start()
     try:
         yield
     finally:
+        stop.set()
+        beat.join(timeout=5)
         path.unlink(missing_ok=True)
 
 
@@ -456,15 +539,35 @@ def _move(src: Path, dst: Path) -> None:
     os.replace(src, dst)
 
 
+def _replace_with(item: Path, dst: Path) -> None:
+    if dst.is_dir():
+        shutil.rmtree(dst)
+    elif dst.exists():
+        dst.unlink()
+    _move(item, dst)
+
+
 def _recover(run_dir: Path) -> None:
-    """Put back what a publish that crashed while moving had moved aside: each backed-up
-    output whose place is empty returns; the backup folder goes once it is empty."""
+    """Undo what a publish that crashed while moving left behind (`.publish-old-*`):
+    - no manifest in place: it stopped before its manifest moved in, so every backed-up output
+      goes back, over whatever new one had moved in already;
+    - the manifest in place and one in the backup: the commit finished and only removing the
+      backup failed, so the backup just goes;
+    - otherwise (it stopped while moving the old outputs aside): each backed-up output whose
+      place is empty goes back.
+    The backup folder is removed afterwards."""
     for backup in sorted(p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith(BACKUP)):
-        for item in sorted(backup.iterdir()):
-            if not (run_dir / item.name).exists():
-                _move(item, run_dir / item.name)
-        log.warning("publish: an interrupted publish left %s; its outputs were put back where "
-                    "missing", backup.name)  # fmt: skip
+        finished = (run_dir / MANIFEST).exists() and (backup / MANIFEST).exists()
+        midway = not (run_dir / MANIFEST).exists()
+        if not finished:
+            for item in sorted(backup.iterdir()):
+                dst = run_dir / item.name
+                if midway:
+                    _replace_with(item, dst)
+                elif not dst.exists():
+                    _move(item, dst)
+        log.warning("publish: an interrupted publish left %s (%s)", backup.name,
+                    "removed" if finished else "its outputs were put back")  # fmt: skip
         shutil.rmtree(backup, ignore_errors=True)
 
 
