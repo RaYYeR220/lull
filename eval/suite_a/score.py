@@ -477,7 +477,7 @@ alone, whatever its listed claims say); false when everything it says is establi
 
 Return JSON with `claims` (one entry per listed claim: `key`, `reason` in one short sentence, \
 `verdict`) and `cues` (one entry per listed cue: `id`, `restates_narration`, \
-`text_unsupported`)."""
+`text_unsupported`, and a `reason` in one short sentence for both)."""
 
 
 def _fmt_t(t: float) -> str:
@@ -584,8 +584,9 @@ def claims_request(entry: dict, cues: list[dict]) -> tuple[str, dict]:
             "id": {"type": "string", "enum": ids},
             "restates_narration": {"type": "boolean"},
             "text_unsupported": {"type": "boolean"},
+            "reason": {"type": "string", "maxLength": 300},
         },
-        "required": ["id", "restates_narration", "text_unsupported"],
+        "required": ["id", "restates_narration", "text_unsupported", "reason"],
         "additionalProperties": False,
     }
     schema = {
@@ -878,6 +879,7 @@ def video_metrics(entry: dict, run: dict, cues_json: dict | None, verdicts: dict
         "facts": per_fact,
         "claims": judged_claims,
         "cues": [{k: c.get(k) for k in ("id", "track", "status", "start", "text")} for c in cues],
+        "cue_verdicts": {c["id"]: per_cue.get(c["id"]) for c in cues},
     }
     return m
 

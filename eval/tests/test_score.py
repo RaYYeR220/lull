@@ -513,7 +513,7 @@ def test_requests_list_every_item_and_force_complete_answers():
     assert schema["properties"]["claims"]["items"]["properties"]["key"]["enum"] == [
         "c001#1", "c002#1", "c002#2", "x001#1"]  # fmt: skip
     cue_item = schema["properties"]["cues"]["items"]
-    assert set(cue_item["required"]) == {"id", "restates_narration", "text_unsupported"}
+    assert set(cue_item["required"]) == {"id", "restates_narration", "text_unsupported", "reason"}
     assert 'supported", "at"' not in prompt  # the engine's own verdicts never reach the judge
 
 
