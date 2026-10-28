@@ -104,6 +104,24 @@ class FakeTF:
         return [c for c in self.calls if c["role"] == role]
 
 
+@pytest.fixture(autouse=True)
+def _lenient_split(request, monkeypatch):
+    """The FakeTF below answers a split with the claims a test's verify answer lists, each
+    spanning the whole line, which rarely covers every word of it; outside the tests marked
+    strict_split the split check only asks for unique ids and spans in the line."""
+    if request.node.get_closest_marker("strict_split"):
+        return
+    from lull.stages import verify as ver
+
+    def lenient(text, claims, names=()):
+        problems = [f"the span {c.span!r} of claim {c.id} is not in the description"
+                    for c in claims if c.span not in text]  # fmt: skip
+        return problems + (["two claims share an id"]
+                           if len({c.id for c in claims}) < len(claims) else [])  # fmt: skip
+
+    monkeypatch.setattr(ver, "check_split", lenient)
+
+
 def _user_text(call) -> str:
     content = next(m for m in call["messages"] if m["role"] == "user")["content"]
     if isinstance(content, str):
@@ -1568,6 +1586,7 @@ def test_a_sound_split_is_judged_claim_by_claim(tmp_path):
     assert "Emo" in _user_text(judged).split("<names>", 1)[1].split("</names>", 1)[0]
 
 
+@pytest.mark.strict_split
 def test_a_split_whose_span_is_not_in_the_line_or_misses_a_word_is_asked_again():
     from lull.stages.verify import check_split, split_claims
 
@@ -1583,7 +1602,7 @@ def test_a_split_whose_span_is_not_in_the_line_or_misses_a_word_is_asked_again()
     assert [c.span for c in claims] == ["A person in a red coat", "opens a door"]
     retry = _user_text(tf.calls[1])
     assert "'a person' of claim k1 is not in the description" in retry
-    assert "no claim covers: coat, person, red" in retry
+    assert "no claim covers: coat, in, person, red" in retry
     assert check_split(line, claims) == []
     # names are context and framing words need no claim
     assert check_split("In a moment, Proog waves.", [
@@ -1596,6 +1615,7 @@ def _sc(cid, text, span):
     return SplitClaim(id=cid, text=text, span=span)
 
 
+@pytest.mark.strict_split
 def test_a_split_that_fails_twice_falls_back_to_one_claim_per_sentence(caplog):
     from lull.stages.verify import split_claims
 
@@ -1786,3 +1806,57 @@ def test_the_verify_estimate_covers_the_longest_clip():
     from lull.stages import verify as ver
 
     assert ver.VERIFY_ESTIMATE >= 0.003 * ver.CLIP_MAX_S / ver.CLIP_CAP_S
+
+
+# -- the split check reads the claims, not just their spans ---------------------------------------
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "line, claims, names, problem",
+    [
+        (
+            "A person in a red coat opens a door.",
+            [("a person opens a door", "A person in a red coat opens a door.")],
+            (),
+            "no claim covers: coat, in, red",
+        ),
+        (
+            'A sign reads: "EXIT 12".',
+            [('a sign reads "EXIT"', 'A sign reads: "EXIT 12"')],
+            (),
+            "no claim covers: 12",
+        ),
+        (
+            "A cat sits under the table without a collar.",
+            [("a cat sits", "A cat sits"), ("the table", "the table"), ("a collar", "a collar")],
+            (),
+            "no claim covers: under, without",
+        ),
+        (
+            "Red Leader waves from a red car.",
+            [("Red Leader waves from a", "Red Leader waves from a"), ("a car", "car")],
+            ("Red Leader",),
+            "no claim covers: red",
+        ),
+        (
+            "A person opens a door.",
+            [("a person in a red coat opens a door", "A person opens a door")],
+            (),
+            "says coat, in, red, which the description does not",
+        ),
+    ],
+    ids=[
+        "dropped-fact",
+        "dropped-number",
+        "position-and-negation",
+        "name-and-colour",
+        "added-fact",
+    ],
+)
+def test_the_split_check_reads_each_claims_own_words(line, claims, names, problem):
+    from lull.stages.verify import check_split
+
+    got = check_split(line, [_sc(f"k{i}", t, sp) for i, (t, sp) in enumerate(claims, start=1)],
+                      names)  # fmt: skip
+    assert any(problem in p for p in got), got

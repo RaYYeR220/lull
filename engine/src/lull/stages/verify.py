@@ -98,15 +98,15 @@ VERIFY_SCHEMA: dict = _list_of("verdicts", {
     "evidence": {"type": "string"},
     "at": {"anyOf": [{"type": "number"}, {"type": "null"}]},
 })  # fmt: skip
-# words a claim span need not cover: function words, connectives and words that only frame
-# the time of a line ("In a moment, ", "then")
-_UNCOVERED_OK = frozenset(
-    """a an the and or but nor so yet of to in on at by for from with without into onto over
-    under up down off out about around through across along between behind beside near as is
-    are was were be been being am it its they them their theirs he him his she her hers this
-    that these those there here then now while when where who whom whose which what also
-    still just again too very both all each every some any moment meanwhile later soon""".split()
+# words no claim needs to cover: articles, copulas, pronouns, conjunctions and words that
+# only frame time; negation, position and quantity words are facts and must be covered
+_EXEMPT = frozenset(
+    """a an the is are was were be been being am it its they them their theirs he him his she
+    her hers this that these those there here who whom whose which what and or but nor so yet
+    as while when then now meanwhile later soon""".split()
 )
+_TIME_FRAMING = re.compile(r"\bin a moment\b", re.IGNORECASE)
+_COUNT_WORDS = {**_NUMBER_WORDS, "one": "1"}  # a count in words is the same as in digits
 TEXT_SCHEMA: dict = {
     "type": "object",
     "properties": {"text": {"type": "string"}},
@@ -249,25 +249,55 @@ def _tokens(s: str) -> list[str]:
     return _WORD.findall(_POSSESSIVE.sub("", s.lower()))
 
 
-def _must_cover(text: str, names: Iterable[str]) -> set[str]:
-    """The content words of `text` some claim must cover: not function words, connectives or
-    words that frame time, and not the names the programme established (context)."""
-    named = {t for n in names for t in _tokens(n)}
-    return {t for t in _tokens(text) if t not in _UNCOVERED_OK and t not in named}
+def _key(token: str) -> str:
+    """A word as the split check compares it: a number as digits ("twelve" is "12"), any
+    other word by its stem ("waves", "waving" and "waved" alike)."""
+    if token.isdigit():
+        return token
+    return _COUNT_WORDS.get(token) or _stem(token)
+
+
+def _masked(s: str, names: Iterable[str]) -> str:
+    """`s` with the time framing ("In a moment") and every occurrence of a name blanked out:
+    those words are context, not claims. A name's words elsewhere (the colour "red" beside
+    the name "Red Leader") still count."""
+    s = _TIME_FRAMING.sub(" ", s)
+    for name in sorted({n for n in names if n}, key=len, reverse=True):
+        s = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", " ", s)
+    return s
+
+
+def _content(s: str, names: Iterable[str] = ()) -> set[str]:
+    return {_key(t) for t in _tokens(_masked(s, names)) if t not in _EXEMPT}
 
 
 def check_split(text: str, claims: list[SplitClaim], names: Iterable[str] = ()) -> list[str]:
-    """What is wrong with a split of `text`: an id used twice, a span that is not an exact
-    substring of the text, or a content word no span covers. Empty when it is sound."""
+    """What is wrong with a split of `text`, empty when it is sound:
+    - an id used twice, or a span that is not an exact substring of the text;
+    - a word of the text no claim covers: a word is covered by a claim only when it is in the
+      claim's span and in the claim's own text (stems and numbers alike), so a claim cannot
+      drop a fact its span holds. Only articles, copulas, pronouns, conjunctions, the time
+      framing "In a moment" and the programme's names (where they occur) need no claim;
+      negation, position and quantity words do;
+    - a claim text that says a word the description does not (it would be judged for a fact
+      the line never states)."""
+    names = [n for n in names if n]
     problems = []
     ids = [c.id for c in claims]
     if len(set(ids)) < len(ids):
         problems.append("two claims share an id")
+    line = {_key(t) for t in _tokens(text)}
+    covered: set[str] = set()
     for c in claims:
         if c.span not in text:
             problems.append(f"the span {c.span!r} of claim {c.id} is not in the description")
-    covered = {t for c in claims if c.span in text for t in _tokens(c.span)}
-    missing = sorted(_must_cover(text, names) - covered)
+            continue
+        said = {_key(t) for t in _tokens(c.text)}
+        covered |= _content(c.span, names) & said
+        added = sorted({t for t in _tokens(c.text) if t not in _EXEMPT and _key(t) not in line})
+        if added:
+            problems.append(f"claim {c.id} says {', '.join(added)}, which the description does not")
+    missing = sorted(_content(text, names) - covered)
     if missing:
         problems.append("no claim covers: " + ", ".join(missing))
     return problems
