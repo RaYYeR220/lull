@@ -721,24 +721,27 @@ class Studio:
         self.max_edits, self.max_publishes = MAX_EDITS, MAX_PUBLISHES
         self.editing = self.publishing = 0  # across all runs, now
         self.fork_ttl, self.fork_sweep_every = FORK_TTL_S, FORK_SWEEP_S
+        self.upload_ttl = settings.lull_upload_retention_days * DAY  # uploads and their runs
         self._locks: dict[str, asyncio.Lock] = {}
         live.executor.after_run.append(self.after_run)
 
     def sweep(self) -> int:
         return sweep_edits([self.settings.runs_dir, self.settings.showcase_dir])
 
-    def expire_forks(self, now: float | None = None) -> list[str]:
-        """Remove the forks made more than fork_ttl ago, but not one the live executor is
+    def expire_runs(self, now: float | None = None) -> list[str]:
+        """Remove the uploads made more than upload_ttl ago and the forks made more than
+        fork_ttl ago (what their request.json says they are; a run that says nothing, a
+        sample's run and a recorded run are never removed), but not one the live executor is
         describing or the Studio is changing right now. Runs on the event loop, so no change
         can start in between. Returns the run ids removed."""
         now = time.time() if now is None else now
         root = self.settings.runs_dir
+        ttl = {"upload": self.upload_ttl, "fork": self.fork_ttl}
         gone: list[str] = []
         for d in sorted(root.iterdir()) if root.is_dir() else []:
             req = _dict(_read_json(d / REQUEST)) if d.is_dir() else {}
-            if _dict(req.get("source")).get("kind") != "fork":
-                continue
-            if now - _made_at(d, req) < self.fork_ttl:
+            keep_for = ttl.get(_dict(req.get("source")).get("kind"))
+            if keep_for is None or now - _made_at(d, req) < keep_for:
                 continue
             lock = self._locks.get(d.name)
             if self.live.executor.get(d.name) is not None or (lock is not None and lock.locked()):
@@ -748,16 +751,16 @@ class Studio:
             gone.append(d.name)
         if gone:
             self.store.invalidate()
-            log.info("studio: %d forks expired", len(gone))
+            log.info("studio: %d uploads and forks expired", len(gone))
         return gone
 
-    async def expire_forks_forever(self) -> None:
+    async def expire_runs_forever(self) -> None:
         while True:
             await asyncio.sleep(self.fork_sweep_every)
             try:
-                self.expire_forks()
+                self.expire_runs()
             except Exception:
-                log.exception("studio: expiring forks failed")
+                log.exception("studio: expiring runs failed")
 
     def lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())

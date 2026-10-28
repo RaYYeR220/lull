@@ -215,7 +215,10 @@ class RunStore:
                 return self._list[1]
         show = self._summaries("showcase", _dirs(self.settings.showcase_dir))
         show.sort(key=lambda r: r["id"])
-        ready = [d for d in _dirs(self.settings.runs_dir) if not (d / PENDING).exists()]
+        ready = [
+            d for d in _dirs(self.settings.runs_dir)
+            if not (d / PENDING).exists() and self.public(d)
+        ]  # fmt: skip
         newest = sorted(ready, key=_mtime, reverse=True)[:MAX_LIVE]
         live = self._summaries("live", newest)
         live.sort(key=lambda r: r["created"], reverse=True)
@@ -223,6 +226,15 @@ class RunStore:
         with self._lock:
             self._list = (now + LIST_TTL, result)
         return result
+
+    def public(self, d: Path) -> bool:
+        """Whether the live run in `d` is listed: a sample's run, or a fork of one. Uploads,
+        forks of uploads and runs that say nothing are opened by their unguessable id only."""
+        request = _dict(self.read_json(d / facts.REQUEST))
+        source = facts.run_source("live", {}, request, self.settings.samples_dir)
+        return source["kind"] == "sample" or (
+            source["kind"] == "fork" and source.get("origin") == "sample"
+        )
 
     def dirty(self, d: Path) -> bool:
         """True when the Studio changed a cue since the run was last published."""

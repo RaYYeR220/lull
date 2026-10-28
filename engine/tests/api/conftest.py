@@ -28,9 +28,15 @@ def _make_run(
     manifest=True,
     cost=0.03,
     failed=False,
+    source="sample",
 ) -> Path:
+    """A run folder; a live one says it is a run of the sample `clip` (listed publicly), or
+    with source="upload" an upload (only its link shows it), or with None says nothing."""
     d = root / run_id
     d.mkdir(parents=True)
+    if source is not None:
+        kind = {"kind": source, "id": "clip"} if source == "sample" else {"kind": source}
+        (d / "request.json").write_text(json.dumps({"source": kind}))
     outputs = {}
     for rel, data in FILES.items():
         p = d / rel

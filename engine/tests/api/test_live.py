@@ -723,7 +723,7 @@ def test_concurrent_uploads_are_bounded_503(lc, live, data):
         t.join(10)
     assert types(parse_sse(out["r"].text))[-1] == "done"
     assert live.uploading == 0
-    assert [i["id"] for i in lc.get("/v1/runs").json()] == [run_dirs(data)[0].name]
+    assert lc.get("/v1/runs").json() == []  # an upload: only its link shows it
 
 
 def test_refused_uploads_count_in_their_own_window(lc, live):
@@ -1450,3 +1450,26 @@ def test_a_live_run_records_its_voice_rate(lc, live, data):
     req = json.loads((data / "runs" / run_id / "request.json").read_text("utf-8"))
     assert req["wps"] == 3.05  # Sofia's built-in rate: what the engine will use
     assert lc.get(f"/v1/runs/{run_id}").json()["wps"] == 3.05
+
+
+# -- uploads stay private to their link ------------------------------------------------------------
+
+
+def test_the_public_list_shows_sample_and_showcase_runs_only(lc, live, data, make_run):
+    (data / "samples").mkdir(parents=True)
+    (data / "samples" / "street.mp4").write_bytes(b"DUR=8;")
+    upload = parse_sse(post(lc).text)[0]["run_id"]
+    sample = parse_sse(post(lc, None, sample="street").text)[0]["run_id"]
+    make_run(data / "showcase", "show1")
+    fork_of_upload = lc.post(f"/v1/runs/{upload}/fork").json()["run_id"]
+    fork_of_sample = lc.post(f"/v1/runs/{sample}/fork").json()["run_id"]
+    make_run(data / "runs", "legacy", source=None)  # says nothing about itself: private
+    listed = {i["id"] for i in lc.get("/v1/runs").json()}
+    assert listed == {"show1", sample, fork_of_sample}
+    for rid in (upload, fork_of_upload, "legacy"):  # still open by their unguessable id
+        assert lc.get(f"/v1/runs/{rid}").json()["status"] == "done"
+
+
+def test_health_states_how_long_uploads_are_kept(lc):
+    j = lc.get("/v1/health").json()
+    assert j["retention_days"] == 7 and j["fork_retention_hours"] == 24

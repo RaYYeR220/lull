@@ -19,6 +19,10 @@ class ApiSettings(BaseSettings):
     lull_proxy_hops: int = Field(default=0, ge=0, validation_alias="LULL_PROXY_HOPS")
     # local only: lets the Studio change showcase runs (they are read-only when deployed)
     lull_showcase_editable: bool = Field(default=False, validation_alias="LULL_SHOWCASE_EDITABLE")
+    # how long an upload and its run are kept (forks: a day); the site's notice states it
+    lull_upload_retention_days: float = Field(
+        default=7.0, gt=0, validation_alias="LULL_UPLOAD_RETENTION_DAYS"
+    )
 
     @property
     def origins(self) -> list[str]:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import shutil
 import threading
 import time
@@ -517,8 +518,7 @@ def test_publish_writes_a_new_manifest(sc, rd):
     assert c1["status"] == "edited" and c1["audio_url"]
     assert cue_of(rd, "c001")["audio_path"].startswith("work/edits/")
     assert sc.get(f"/v1/runs/{RID}").json()["dirty"] is False
-    listed = {i["id"]: i for i in sc.get("/v1/runs").json()}
-    assert listed[RID]["cues"]["edited"] == 1
+    assert sc.get(f"/v1/runs/{RID}").json()["manifest"]["summary"]["cues"]["edited"] == 1
 
 
 def test_publish_refuses_an_overlap_with_speech_and_writes_nothing(sc, rd):
@@ -1183,7 +1183,7 @@ def test_forks_older_than_a_day_are_removed(make_app, template, data, fast_media
         new = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         _age(data / "runs" / old, 25)
         _age(data / "runs" / new, 23)
-        assert app.state.studio.expire_forks() == [old]
+        assert app.state.studio.expire_runs() == [old]
         assert not (data / "runs" / old).exists()
         assert (data / "runs" / new).is_dir() and plain.is_dir()
         assert c.get(f"/v1/runs/{old}").status_code == 404
@@ -1202,7 +1202,7 @@ def test_a_fork_being_changed_is_not_removed(make_app, template, data, fast_medi
 
     async def held():
         async with studio.lock(fid):
-            return studio.expire_forks()
+            return studio.expire_runs()
 
     assert asyncio.run(held()) == []
     assert (data / "runs" / fid).is_dir()
@@ -1394,3 +1394,39 @@ def test_a_fork_says_where_it_came_from_and_keeps_the_loudness(sc, rd, data, app
     (rd / "loudness.json").write_text(json.dumps({"values": [-1.0, -2.0]}))
     again = sc.post(f"/v1/runs/{RID}/fork").json()["run_id"]
     assert sc.get(f"/v1/runs/{again}").json()["loudness"] == [-1.0, -2.0]  # copied, not redone
+
+
+# -- retention: uploads 7 days, forks 24 h, samples and recorded runs kept -------------------------
+
+
+def _live_run(root: Path, run_id: str, source: dict | None, hours_old: float) -> Path:
+    from datetime import UTC, datetime, timedelta
+
+    d = root / run_id
+    d.mkdir(parents=True)
+    (d / "manifest.json").write_text(json.dumps({"run_id": run_id}))
+    if source is not None:
+        created = (datetime.now(UTC) - timedelta(hours=hours_old)).isoformat(timespec="seconds")
+        (d / "request.json").write_text(json.dumps({"source": source, "created": created}))
+    else:
+        old = time.time() - hours_old * 3600
+        os.utime(d, (old, old))
+    return d
+
+
+def test_uploads_expire_after_7_days_samples_and_showcase_never(make_app, data):
+    runs = data / "runs"
+    gone = [
+        _live_run(runs, "up-8d", {"kind": "upload", "name": "a.mp4"}, 8 * 24),
+        _live_run(runs, "fork-25h", {"kind": "fork", "id": "x", "origin": "sample"}, 25),
+    ]
+    kept = [
+        _live_run(runs, "up-6d", {"kind": "upload", "name": "a.mp4"}, 6 * 24),
+        _live_run(runs, "sample-30d", {"kind": "sample", "id": "street"}, 30 * 24),
+        _live_run(runs, "legacy-30d", None, 30 * 24),  # says nothing: never swept
+        _live_run(data / "showcase", "show-old", {"kind": "upload"}, 90 * 24),
+    ]
+    app = make_app()
+    assert app.state.studio.upload_ttl == 7 * 24 * 3600
+    assert sorted(app.state.studio.expire_runs()) == ["fork-25h", "up-8d"]
+    assert not any(d.exists() for d in gone) and all(d.is_dir() for d in kept)
