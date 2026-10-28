@@ -103,13 +103,13 @@ def test_loudness_profile(tone_slides: Path, tmp_path: Path):
 def commands(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Every command lull.media launches, still run for real."""
     seen: list[list[str]] = []
-    real = media.subprocess.run
+    real = media._exec
 
     def spy(cmd, *args, **kwargs):
         seen.append([str(c) for c in cmd])
         return real(cmd, *args, **kwargs)
 
-    monkeypatch.setattr(media.subprocess, "run", spy)
+    monkeypatch.setattr(media, "_exec", spy)
     return seen
 
 
@@ -338,15 +338,39 @@ def test_every_tool_runs_with_a_limit_that_grows_with_the_media(tone_slides, tmp
                                                                 monkeypatch):  # fmt: skip
     """ffmpeg gets max(30 s, 8 x the media it handles); a probe gets 30 s."""
     limits: list = []
-    real = media.subprocess.run
+    real = media._exec
 
     def spy(cmd, *a, **kw):
         limits.append((Path(cmd[0]).stem.lower(), kw.get("timeout")))
         return real(cmd, *a, **kw)
 
-    monkeypatch.setattr(media.subprocess, "run", spy)
+    monkeypatch.setattr(media, "_exec", spy)
     media.probe(tone_slides)
     media.cut_clip(tone_slides, tmp_path / "c.mp4", 1.0, 2.0, height=180)
     media.extract_wav(tone_slides, tmp_path / "a.wav", seconds=100.0)
     assert limits == [("ffprobe", 30.0), ("ffmpeg", 30.0), ("ffmpeg", 800.0)]
     assert media.ffmpeg_timeout(60.0) == 480.0 and media.ffmpeg_timeout(None) == 30.0
+
+
+def test_a_tool_that_times_out_takes_the_processes_it_started_with_it(tmp_path):
+    """ffmpeg can start helpers; on expiry the whole process tree is killed (a new session
+    killed as a group on POSIX, taskkill /T /F on Windows), not only the direct child."""
+    import sys
+
+    from lull.stages.publish import _alive
+
+    pids = tmp_path / "pids"
+    grandchild = "import time; time.sleep(60)"
+    code = (
+        "import os, subprocess, sys, time; "
+        f"g = subprocess.Popen([sys.executable, '-c', {grandchild!r}]); "
+        f"open(r'{pids}', 'w').write(f'{{os.getpid()}} {{g.pid}}'); time.sleep(60)"
+    )
+    import time
+
+    t0 = time.monotonic()
+    with pytest.raises(media.MediaTimeout):
+        media._run([sys.executable, "-c", code], timeout=3.0)
+    assert time.monotonic() - t0 < 20  # not held up until the helper's own end (60 s)
+    child, grand = (int(p) for p in pids.read_text().split())
+    assert not _alive(child) and not _alive(grand)

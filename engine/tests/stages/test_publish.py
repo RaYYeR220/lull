@@ -802,14 +802,14 @@ def published(tmp_path_factory):
     ]
     run = root / "run"
     commands: list[list[str]] = []
-    real = subprocess.run
+    real = media._exec
 
     def spy(cmd, *args, **kwargs):
         commands.append([str(c) for c in cmd])
         return real(cmd, *args, **kwargs)
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(media.subprocess, "run", spy)
+        mp.setattr(media, "_exec", spy)
         res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1",
                       RunOptions(), speech=SPEECH)  # fmt: skip
     return {"video": video, "run": run, "res": res, "root": root, "commands": commands}

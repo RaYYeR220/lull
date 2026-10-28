@@ -366,13 +366,13 @@ def test_a_reused_folder_keeps_no_old_cue_audio_or_keyframes(run_dir, tmp_path):
 def test_every_showcase_input_is_locked_to_local_files(run_dir, tmp_path, monkeypatch):
     """The export's probe and ffmpeg calls read local files only, like the pipeline's."""
     seen: list[list[str]] = []
-    real = media.subprocess.run
+    real = media._exec
 
     def spy(cmd, *args, **kwargs):
         seen.append([str(c) for c in cmd])
         return real(cmd, *args, **kwargs)
 
-    monkeypatch.setattr(media.subprocess, "run", spy)
+    monkeypatch.setattr(media, "_exec", spy)
     export_showcase(run_dir, tmp_path / "site")
     assert len(seen) >= 5  # probe, video, sound, 3 cue files
     for cmd in seen:

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import shutil
+import signal
 import subprocess
 import wave
 from dataclasses import dataclass
@@ -71,22 +73,55 @@ def ffmpeg_timeout(seconds: float | None) -> float:
     return max(FFMPEG_MIN_TIMEOUT_S, FFMPEG_TIMEOUT_PER_S * max(0.0, seconds or 0.0))
 
 
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill `proc` and every process it started: its process group on POSIX (it runs in a
+    session of its own), taskkill /T /F on Windows (it runs in a process group of its own)."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                           capture_output=True, timeout=PROBE_TIMEOUT_S)  # fmt: skip
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if proc.poll() is None:
+        proc.kill()
+
+
+def _exec(cmd: list[str], *, cwd: Path | None, timeout: float) -> subprocess.CompletedProcess:
+    """Run `cmd` in a process group of its own; past `timeout` the whole group is killed
+    (helpers it started included) and waited for, then TimeoutExpired is raised."""
+    group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt"
+             else {"start_new_session": True})  # fmt: skip
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
+                            **group)  # fmt: skip
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except BaseException:
+        _kill_tree(proc)
+        proc.communicate()
+        raise
+    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+
+
 def _run(
     cmd: list[str], *, cwd: Path | None = None, timeout: float = PROBE_TIMEOUT_S
 ) -> subprocess.CompletedProcess[bytes]:
-    """Run a media tool; past `timeout` seconds it is killed (and waited for, so nothing is
-    left running) and MediaTimeout (a TimeoutError) is raised."""
+    """Run a media tool; past `timeout` seconds it and every process it started are killed
+    (and waited for, so nothing is left running) and MediaTimeout (a TimeoutError) is
+    raised."""
     try:
-        return subprocess.run(cmd, check=True, capture_output=True, cwd=cwd, timeout=timeout)
+        done = _exec(cmd, cwd=cwd, timeout=timeout)
     except subprocess.TimeoutExpired as e:
         raise MediaTimeout(
             f"{Path(cmd[0]).stem} ran past its {timeout:g} s limit and was stopped"
         ) from e
-    except subprocess.CalledProcessError as e:
-        tail = e.stderr.decode("utf-8", "replace").strip()[-800:]
-        raise MediaError(f"{Path(cmd[0]).stem} failed (exit {e.returncode}): {tail}") from e
     except OSError as e:
         raise MediaError(f"could not run {cmd[0]}: {e}") from e
+    if done.returncode:
+        tail = done.stderr.decode("utf-8", "replace").strip()[-800:]
+        raise MediaError(f"{Path(cmd[0]).stem} failed (exit {done.returncode}): {tail}")
+    return done
 
 
 def input_args(path: Path | str) -> list[str]:
