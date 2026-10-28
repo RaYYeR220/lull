@@ -33,6 +33,8 @@ const HEADINGS: Record<NoticeKind, string> = {
   uploads_busy: "Other uploads are being checked.",
   storage: "The video couldn’t be stored just now.",
   client_header: "The live service didn’t recognise this page.",
+  origin: "Calls from that page aren’t allowed.",
+  host: "The live service doesn’t answer to that address.",
   one_upload_at_a_time: "Your last upload is still arriving.",
   timeout: "The upload took too long to arrive.",
   invalid: "The live service didn’t accept the request.",

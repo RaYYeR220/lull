@@ -55,7 +55,7 @@ describe("the endpoint reference", () => {
   });
 });
 
-/** Every code the API raises, with its statuses: a snapshot of its source (scripts/api-codes.mjs). */
+/** Every code the API raises (REST and the MCP endpoint's door), with its statuses: a snapshot of its source (scripts/api-codes.mjs). */
 const SNAP = JSON.parse(readFileSync(SNAPSHOT, "utf8")) as { codes: Record<string, number[]> };
 const API_SRC = apiSrc();
 
@@ -74,6 +74,13 @@ describe("the reference against the API's source", () => {
 
   it.skipIf(!existsSync(API_SRC))("the snapshot still matches the API's source (where it is checked out; LULL_API_SRC names it)", () => {
     expect(readCodes(API_SRC), "re-run node scripts/api-codes.mjs").toEqual(SNAP.codes);
+  });
+
+  it("the MCP endpoint documents its door: origin, host, size", () => {
+    const codes = API_REFERENCE.mcp.refusals.map((r) => `${r.status} ${r.code}`);
+    expect(codes).toEqual(expect.arrayContaining(["403 origin", "421 host", "413 too_large"]));
+    expect(API_REFERENCE.mcp.group).toBe("Agents (MCP)");
+    expect(API_REFERENCE.mcp.summary).toMatch(/never a URL, a path or an upload/);
   });
 
   it("the live start documents what the API says about long clips and its own storage", () => {
@@ -96,5 +103,18 @@ describe("routePath", () => {
 describe("the player reference", () => {
   it("documents every attribute the element observes, and only those", () => {
     expect(Object.keys(ATTRIBUTE_DOCS).sort()).toEqual([...PLAYER_ATTRIBUTES].sort());
+  });
+});
+
+describe("the stream examples", () => {
+  it("are well-formed: each event block is an id, an event and its data, in order", () => {
+    for (const [name, doc] of Object.entries(API_REFERENCE)) {
+      if (doc.success.type !== "text/event-stream") continue;
+      const blocks = doc.success.shape.split("\n\n");
+      for (const b of blocks) {
+        const lines = b.split("\n");
+        expect(lines.map((l) => l.split(":")[0]), `${name}: ${b.slice(0, 40)}`).toEqual(["id", "event", "data"]);
+      }
+    }
   });
 });

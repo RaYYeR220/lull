@@ -10,6 +10,7 @@ import { API_BASE } from "@/lib/api";
 import { API_REFERENCE, REFERENCE_ORDER, REFUSAL_SHAPE, type EndpointDoc } from "@/lib/api-reference";
 import { cx } from "@/lib/cx";
 import { MCP_AVAILABLE } from "@/lib/features";
+import { MCP_HOSTED_CONFIG, MCP_LOCAL_CONFIG, MCP_TOOLS, MCP_URL } from "@/lib/mcp";
 import { MODELS } from "@/lib/models";
 import { ATTRIBUTE_DOCS } from "@/lib/player-reference";
 import { MAIN_ID, REPO_URL } from "@/lib/site";
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   description: "Call Lull from a terminal or embed its player: the REST API with curl, the command line, the player's attributes, and every endpoint with its answers.",
 };
 
-const GROUPS: EndpointDoc["group"][] = ["Live runs", "Reading runs", "Studio"];
+const GROUPS: EndpointDoc["group"][] = ["Live runs", "Reading runs", "Studio", "Agents (MCP)"];
 
 const REST_STEPS: { title: string; what: string; code: string; label: string; answer?: string }[] = [
   {
@@ -403,10 +404,63 @@ export default function DevelopersPage() {
           </section>
 
           {MCP_AVAILABLE ? (
-            <section id="mcp" aria-labelledby="mcp-title" className={styles.section}>
+            <section id="mcp" aria-labelledby="mcp-title" className={cx(styles.section, styles.mcp)}>
               <h2 id="mcp-title" className={styles.h2}>
                 MCP
               </h2>
+              <p className={styles.sectionLede}>
+                Agents can describe video too. The hosted server describes the samples; the local one, which you run with your own keys, also
+                takes your own files and lists the lines waiting for review.
+              </p>
+              <table className={cx(styles.table, styles.models)} aria-label="MCP tools">
+                <thead>
+                  <tr>
+                    <th scope="col">Tool</th>
+                    <th scope="col">What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MCP_TOOLS.map((t) => (
+                    <tr key={t.name} data-tool={t.name}>
+                      <th scope="row">
+                        <span className={styles.mono}>
+                          {t.name}({t.args})
+                        </span>
+                        <span className={styles.sub}>{t.hosted ? "hosted and local" : "local only"}</span>
+                      </th>
+                      <td>{t.does}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <h3 className={styles.h3}>Hosted</h3>
+              <p className={styles.stepWhat}>
+                <span className={styles.mono}>{MCP_URL}</span>, streamable HTTP. In Claude Desktop, add it under Settings, Connectors, as a custom
+                connector; clients configured in JSON take:
+              </p>
+              <CopyCode code={MCP_HOSTED_CONFIG} label="Hosted MCP config" lang="json" />
+              <ul className={styles.plainList}>
+                <li>
+                  It takes sample ids only. A URL, a file path or an upload is refused, so the server never fetches what it is handed (no server-side
+                  request forgery).
+                </li>
+                <li>A browser page from another site is refused (403 origin), and so is a host name it doesn’t serve (421 host).</li>
+                <li>
+                  describe_video blocks while the run goes, about 3 minutes for a 45 s sample, and sends progress at every stage. Reset your
+                  client’s timeout on progress, or allow at least 5 minutes. Leaving stops the run.
+                </li>
+                <li>Runs pass the same gates and spend caps as the REST API: one at a time, per-visitor limits, the day’s budget.</li>
+              </ul>
+
+              <h3 className={styles.h3}>Local</h3>
+              <p className={styles.stepWhat}>
+                <span className={styles.mono}>lull mcp</span> serves the same tools over stdio from the engine, with your Token Factory key and your
+                own caps. describe_video also takes a <span className={styles.mono}>path</span> to an mp4, mov, webm or mkv file, and{" "}
+                <span className={styles.mono}>review_queue</span> lists your runs with lines held for a person. Claude Desktop’s{" "}
+                <span className={styles.mono}>claude_desktop_config.json</span>:
+              </p>
+              <CopyCode code={MCP_LOCAL_CONFIG} label="Local MCP config" lang="json" />
             </section>
           ) : null}
         </div>

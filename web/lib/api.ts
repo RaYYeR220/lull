@@ -284,6 +284,8 @@ export type RefusalCode =
   | "uploads_busy"
   | "storage"
   | "client_header"
+  | "origin"
+  | "host"
   | "one_upload_at_a_time"
   | "timeout"
   | "invalid"
@@ -319,6 +321,10 @@ export const API_REFUSALS: ReadonlySet<string> = new Set([
   "uploads_busy",
   "storage",
   "client_header",
+  "origin",
+  "host",
+  // the MCP endpoint says it itself when it isn't up yet (and a bare 503 reads the same)
+  "unavailable",
   "one_upload_at_a_time",
   "timeout",
   "invalid",
@@ -352,6 +358,8 @@ const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
   uploads_busy: "Other videos are being uploaded right now. Try again in a few seconds.",
   storage: "The video could not be stored just now. Try again in a minute.",
   client_header: "The live service didn’t recognise this page. Reload it and try again.",
+  origin: "Calls from that web page are not allowed here.",
+  host: "This server does not answer to that host name.",
   one_upload_at_a_time: "Your previous upload is still being received. Wait for it to finish, then try again.",
   timeout: "The upload did not arrive in time. Try a smaller file or a faster connection.",
   invalid: "The request was not accepted.",

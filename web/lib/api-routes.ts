@@ -19,6 +19,7 @@ export const ROUTES = {
   holdCue: { method: "POST", path: "/v1/runs/{id}/cues/{cue_id}/hold" },
   publish: { method: "POST", path: "/v1/runs/{id}/publish" },
   fork: { method: "POST", path: "/v1/runs/{id}/fork" },
+  mcp: { method: "POST", path: "/mcp" },
 } as const;
 
 export type RouteName = keyof typeof ROUTES;

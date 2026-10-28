@@ -26,6 +26,9 @@
     "format": [
       422
     ],
+    "host": [
+      421
+    ],
     "invalid": [
       400,
       422
@@ -50,6 +53,9 @@
     ],
     "one_upload_at_a_time": [
       429
+    ],
+    "origin": [
+      403
     ],
     "overlap": [
       409
@@ -80,6 +86,9 @@
     ],
     "too_long": [
       422
+    ],
+    "unavailable": [
+      503
     ],
     "unreadable": [
       422

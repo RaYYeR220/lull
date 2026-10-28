@@ -19,7 +19,7 @@ export type Refusal = {
 };
 
 export type EndpointDoc = {
-  group: "Live runs" | "Reading runs" | "Studio";
+  group: "Live runs" | "Reading runs" | "Studio" | "Agents (MCP)";
   summary: string;
   /** "edit-token": Authorization: Bearer <the run's edit token>. */
   auth: "none" | "edit-token" | "edit-token to resume" | "edit-token to see an unfinished run";
@@ -196,15 +196,13 @@ id: 9
 event: call
 data: {"type":"call","stage":"watch","seq":9,"role":"watch","model":"nvidia/Nemotron-3.5-Super-VL","tokens_in":18420,"tokens_out":812,"cost_usd":0.0063,"latency_s":5.42}
 
-id: 21
-event: cue
-data: {"type":"cue","stage":"finalize","seq":21,"id":"c001","status":"verified","text":"…","start":8.32,"audio_dur":3.1,"note":null}
-
-id: 30
-event: done
 id: 14
 event: call
 data: {"type":"call","stage":"research","seq":14,"role":"research","model":"tavily-search","provider":"tavily","latency_s":2.6}
+
+id: 21
+event: cue
+data: {"type":"cue","stage":"finalize","seq":21,"id":"c001","status":"verified","text":"…","start":8.32,"audio_dur":3.1,"note":null}
 
 id: 30
 event: done
@@ -431,6 +429,33 @@ In a dim corridor of cables, …`,
       { status: 500, code: "fork_failed", when: "The copy couldn't be made." },
     ],
     example: `curl -s -X POST "$LULL_API/v1/runs/ed90/fork" -H "X-Lull-Client: web"`,
+  },
+  mcp: {
+    group: "Agents (MCP)",
+    summary:
+      "The hosted MCP server: streamable HTTP, stateless. Tools list_samples, describe_video(sample_id, mode), get_tracks(run_id) and get_report(run_id). It takes sample ids only, never a URL, a path or an upload, so it never fetches what it is handed.",
+    auth: "none",
+    body: {
+      type: "application/json",
+      fields: [{ name: "(JSON-RPC)", type: "object", required: true, what: "An MCP request: initialize, tools/list, tools/call. Accept application/json and text/event-stream." }],
+    },
+    success: {
+      status: 200,
+      type: "application/json or text/event-stream",
+      what:
+        "describe_video blocks while the run goes (about 3 minutes for a 45 s sample) and sends a progress notification at every stage: reset your timeout on progress, or allow at least 5 minutes. Leaving stops the run. A refusal comes back as a tool error that starts with the API's code (busy:, rate_limited:, budget:, sample:, unsupported:).",
+      shape: `{ "jsonrpc": "2.0", "id": 1, "result": { "tools": [
+  { "name": "list_samples", … }, { "name": "describe_video", "inputSchema": { "properties": { "sample_id": …, "mode": { "enum": ["standard", "extended"] } } }, … },
+  { "name": "get_tracks", … }, { "name": "get_report", … } ] } }`,
+    },
+    refusals: [
+      { status: 403, code: "origin", when: "A browser page whose Origin isn't one of the site's: another web page can't drive it from a visitor's browser." },
+      { status: 421, code: "host", when: "A Host name the server doesn't answer to (DNS rebinding)." },
+      { status: 413, code: "too_large", when: "A request over 64 KB." },
+      { status: 503, code: "unavailable", when: "The MCP server isn't running yet." },
+    ],
+    example: `curl -s -X POST "$LULL_API/mcp" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`,
   },
 };
 

@@ -3,8 +3,8 @@
  * so the site never describes something a visitor can't use.
  */
 
-/** The MCP server (describe_video, get_tracks, review_queue): not built yet. */
-export const MCP_AVAILABLE = false;
+/** The MCP server: hosted at <API>/mcp (list_samples, describe_video, get_tracks, get_report) and local (`lull mcp`, adds files and review_queue). */
+export const MCP_AVAILABLE = true;
 
 /** A course library Lull watches, drafting new lectures as they arrive: not built yet. */
 export const LIBRARY_AVAILABLE = false;

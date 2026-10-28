@@ -131,7 +131,7 @@ test.describe("the developer page", () => {
   test("lists every endpoint with its answer, its refusals and a curl call", async ({ page }) => {
     await page.goto("/developers");
     const endpoints = page.locator("[data-endpoint]");
-    await expect(endpoints).toHaveCount(14);
+    await expect(endpoints).toHaveCount(15);
     await expect(page.getByRole("heading", { level: 3 })).toContainText(["Live runs", "Reading runs", "Studio"]);
     const start = page.locator('[data-endpoint="startRun"]');
     await expect(start.getByRole("heading", { level: 4 })).toHaveText("POST/v1/runs");
@@ -144,18 +144,32 @@ test.describe("the developer page", () => {
     for (const name of ["health", "run", "publish", "fork"]) await expect(page.locator(`[data-endpoint="${name}"] pre`).last()).toContainText("$LULL_API/v1/");
   });
 
-  test("names the models and what each does; says nothing of MCP while it isn't built", async ({ page }) => {
+  test("names the models and what each does; documents the MCP servers", async ({ page }) => {
     await page.goto("/developers");
     const models = page.getByRole("region", { name: "Models" });
     for (const m of ["Parakeet TDT 0.6B v3", "Nemotron 3.5 Super VL", "Nemotron 3 Ultra", "Nemotron 3.5 Lightning", "Magpie TTS Multilingual 357M"])
       await expect(models.getByRole("rowheader", { name: new RegExp(m) }).first()).toBeVisible();
     await expect(models).toContainText("nvidia/Nemotron-3-Ultra-550b-a55b");
-    await expect(page.locator("#mcp")).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "On this page" }).getByRole("link")).toHaveText(["Quick start", "Endpoints", "Models"]);
-    await expect(page.getByText(/describe_video|review_queue|get_tracks/)).toHaveCount(0);
-    // the landing makes no MCP claim either
+    await expect(page.getByRole("navigation", { name: "On this page" }).getByRole("link")).toHaveText(["Quick start", "Endpoints", "Models", "MCP"]);
+    const mcp = page.getByRole("region", { name: "MCP" });
+    const tools = mcp.getByRole("table", { name: "MCP tools" });
+    await expect(tools.locator("tbody tr")).toHaveCount(5);
+    await expect(tools.locator('[data-tool="describe_video"]')).toContainText("describe_video(sample_id, mode)");
+    await expect(tools.locator('[data-tool="review_queue"]')).toContainText("local only");
+    // hosted: the endpoint and its config; what it refuses and why; how long a call takes
+    await expect(mcp).toContainText(`${API}/mcp`);
+    await expect(mcp.locator("pre").first()).toContainText(`"url": "${API}/mcp"`);
+    await expect(mcp).toContainText("never fetches what it is handed");
+    await expect(mcp).toContainText("403 origin");
+    await expect(mcp).toContainText("allow at least 5 minutes");
+    // local: the stdio server with its own keys
+    await expect(mcp.locator("pre").nth(1)).toContainText('"args": ["run", "--directory", "/path/to/lull/engine", "lull", "mcp"]');
+    // the reference documents /mcp's own refusals
+    const ref = page.locator('[data-endpoint="mcp"]');
+    for (const code of ["origin", "host", "too_large"]) await expect(ref).toContainText(code);
+    // and the landing says the same
     await page.goto("/");
-    await expect(page.getByText(/describe_video|review_queue|get_tracks/)).toHaveCount(0);
+    await expect(page.locator("#developers").getByRole("list", { name: "MCP tools" })).toContainText("get_report");
     await expect(page.locator("#developers").getByRole("link", { name: "Read the developer docs" })).toHaveAttribute("href", "/developers");
   });
 

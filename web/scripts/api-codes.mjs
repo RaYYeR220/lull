@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Every refusal code the API raises, with its statuses, read from the API's source: each
- * `LiveError(<status>, "<code>", …)` in engine/src/lull/api/*.py.
+ * `LiveError(<status>, "<code>", …)` in engine/src/lull/api/*.py, and the MCP endpoint's own
+ * `_refuse(send, <status>, "<code>", …)` (origin, host, body size).
  *
  *   node scripts/api-codes.mjs [apiSrcDir]    writes test/fixtures/api-codes.json
  *
@@ -25,7 +26,8 @@ export function apiSrc(arg = process.env.LULL_API_SRC) {
 export function readCodes(dir) {
   const raised = {};
   for (const f of readdirSync(dir).filter((x) => x.endsWith(".py")).sort()) {
-    for (const m of readFileSync(path.join(dir, f), "utf8").matchAll(/LiveError\(\s*(\d{3}),\s*"([a-z_]+)"/g)) {
+    // LiveError(<status>, "<code>", …) everywhere; _refuse(send, <status>, "<code>", …) at /mcp's door
+    for (const m of readFileSync(path.join(dir, f), "utf8").matchAll(/(?:LiveError\(|_refuse\(\s*send,)\s*(\d{3}),\s*"([a-z_]+)"/g)) {
       const st = Number(m[1]);
       raised[m[2]] = [...new Set([...(raised[m[2]] ?? []), st])].sort((a, b) => a - b);
     }

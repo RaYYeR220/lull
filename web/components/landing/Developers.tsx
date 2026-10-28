@@ -3,6 +3,7 @@ import { SiteOrigin } from "@/components/ui/SiteOrigin";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { cx } from "@/lib/cx";
 import { MCP_AVAILABLE } from "@/lib/features";
+import { MCP_HOSTED_CONFIG, MCP_TOOLS } from "@/lib/mcp";
 import { DevTabs, type DevTab } from "./DevTabs";
 import styles from "./Developers.module.css";
 
@@ -78,7 +79,27 @@ const TABS: DevTab[] = [
   },
 ];
 
-/** 8. For developers: the same pipeline from a terminal, an API or a page (and an agent, once MCP ships). */
+/** An agent's way in: the hosted MCP server's tools and the config that adds it. */
+const MCP_TAB: DevTab = {
+  id: "mcp",
+  label: "MCP",
+  panel: (
+    <>
+      <pre tabIndex={0}>
+        <span className={styles.note}>{"# an agent, over MCP (streamable HTTP)"}</span>
+        {"\n"}
+        {MCP_HOSTED_CONFIG}
+        {"\n\n"}
+        <span className={styles.note}>{`# tools: ${MCP_TOOLS.filter((t) => t.hosted)
+          .map((t) => t.name)
+          .join(", ")}`}</span>
+      </pre>
+      <p className={styles.after}>The hosted server describes the samples; run it locally to describe your own files.</p>
+    </>
+  ),
+};
+
+/** 8. For developers: the same pipeline from a terminal, an API, a page or an agent. */
 export function Developers() {
   return (
     <section id="developers" aria-labelledby="developers-title" className={cx(styles.sec, "ruled")}>
@@ -93,15 +114,15 @@ export function Developers() {
             <ul className={styles.tools} aria-label="MCP tools">
               <li>
                 <span className="t-mono">describe_video</span>
-                <span>start a run</span>
+                <span>describe a sample, with progress</span>
               </li>
               <li>
                 <span className="t-mono">get_tracks</span>
-                <span>fetch the outputs</span>
+                <span>its lines and files</span>
               </li>
               <li>
-                <span className="t-mono">review_queue</span>
-                <span>lines waiting for a person</span>
+                <span className="t-mono">get_report</span>
+                <span>WCAG status and held lines</span>
               </li>
             </ul>
           ) : (
@@ -127,7 +148,7 @@ export function Developers() {
           </p>
         </div>
         <div className={styles.term}>
-          <DevTabs label="Ways to call Lull" tabs={TABS} />
+          <DevTabs label="Ways to call Lull" tabs={MCP_AVAILABLE ? [...TABS, MCP_TAB] : TABS} />
         </div>
       </div>
     </section>
