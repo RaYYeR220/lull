@@ -1,11 +1,23 @@
 "use client";
 
-import { useEffect, useRef, type CSSProperties, type DetailedHTMLProps, type HTMLAttributes } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties, type DetailedHTMLProps, type HTMLAttributes, type Ref } from "react";
 import { cx } from "@/lib/cx";
-import type { CueEventDetail, ModeEventDetail, PlayerMode } from "@/player/src/lull-player";
+import type { CueEventDetail, ModeEventDetail, PlayerMode, PlayerState } from "@/player/src/lull-player";
 import styles from "./Player.module.css";
 
-export type { CueEventDetail, ModeEventDetail, PlayerMode };
+export type { CueEventDetail, ModeEventDetail, PlayerMode, PlayerState };
+
+/**
+ * The element's own API, for pages that drive it. Until its code has loaded the element is a
+ * plain HTMLElement, so `state` and the methods may be missing: check before calling.
+ */
+export type PlayerElement = HTMLElement & {
+  readonly state?: PlayerState;
+  readonly currentTime?: number;
+  seek?(seconds: number): void;
+  play?(): void;
+  pause?(): void;
+};
 
 export type PlayerProps = {
   /** The video. */
@@ -32,6 +44,8 @@ export type PlayerProps = {
   style?: CSSProperties;
   onModeChange?: (detail: ModeEventDetail) => void;
   onCue?: (detail: CueEventDetail) => void;
+  /** The <lull-player> element. */
+  ref?: Ref<PlayerElement>;
 };
 
 type LullPlayerAttributes = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & {
@@ -77,8 +91,18 @@ export function Player({
   style,
   onModeChange,
   onCue,
+  ref: outer,
 }: PlayerProps) {
   const ref = useRef<HTMLElement>(null);
+  // the element goes to the wrapper's own ref and to the caller's
+  const setRef = useCallback(
+    (el: HTMLElement | null) => {
+      ref.current = el;
+      if (typeof outer === "function") outer(el);
+      else if (outer) outer.current = el;
+    },
+    [outer],
+  );
   const handlers = useRef({ onModeChange, onCue });
   useEffect(() => {
     handlers.current = { onModeChange, onCue };
@@ -103,7 +127,7 @@ export function Player({
 
   return (
     <lull-player
-      ref={ref}
+      ref={setRef}
       className={cx(styles.player, className)}
       style={style}
       src={src}

@@ -223,6 +223,20 @@ export const slug = (title: string) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
+const CC = /\bCC (BY(?:-(?:SA|ND|NC|NC-SA|NC-ND))?|0) (\d\.\d)\b/;
+
+/**
+ * A credit line split around its Creative Commons licence, so the licence can link to its
+ * deed: "… Institute, CC BY 2.5" → before "… Institute, ", licence {label "CC BY 2.5", url}.
+ */
+export function creditParts(credit: string): { before: string; licence: { label: string; url: string } | null; after: string } {
+  const m = CC.exec(credit);
+  if (!m) return { before: credit, licence: null, after: "" };
+  const kind = m[1]!.toLowerCase();
+  const url = kind === "0" ? `https://creativecommons.org/publicdomain/zero/${m[2]}/` : `https://creativecommons.org/licenses/${kind}/${m[2]}/`;
+  return { before: credit.slice(0, m.index), licence: { label: m[0], url }, after: credit.slice(m.index + m[0].length) };
+}
+
 /** The run's model spend, as a figure and in words. */
 export function spend(usd: number): { figure: string; words: string } {
   const cents = Math.round(usd * 100);

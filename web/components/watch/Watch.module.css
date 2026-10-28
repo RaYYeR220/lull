@@ -1,0 +1,98 @@
+/* A recorded run: the picture with the run's actions and files beside it, then the script and the checks. */
+.run{display:grid;grid-template-columns:minmax(0,8fr) minmax(0,4fr);grid-template-rows:auto 1fr auto auto;column-gap:var(--s-7);row-gap:var(--s-6);align-items:start}
+/* wide: the picture first, the run's name and actions beside it; the DOM keeps the narrow order */
+.head{grid-column:2;grid-row:1}
+.screen{grid-column:1;grid-row:1 / span 2;position:relative}
+/* the lamp over the screen */
+.screen::before{content:"";position:absolute;z-index:-1;left:8%;right:8%;top:-90px;height:260px;pointer-events:none;
+  background:radial-gradient(50% 50% at 50% 50%,rgb(var(--lamp-rgb) / .09),transparent 72%)}
+.edit{grid-column:2;grid-row:2}
+.scriptArea{grid-column:1;grid-row:3 / span 2;margin-top:var(--s-4)}
+.checks{grid-column:2;grid-row:3;margin-top:var(--s-4)}
+.files{grid-column:2;grid-row:4}
+
+.blockHead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 20px;margin-bottom:var(--s-4)}
+.h2{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:var(--fs-title-s);line-height:1.1;letter-spacing:var(--tr-title-s);color:var(--cream-0)}
+.note{font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-2);max-width:38em}
+
+/* change a line: the one raised panel on the page */
+.editBlock{position:relative;padding:22px 22px 24px;border:1px solid var(--hair-strong);background:var(--night-2)}
+.editBlock::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;background:linear-gradient(90deg,transparent,rgb(var(--lamp-rgb) / .6),transparent)}
+.editNote{margin-top:10px;font-size:14.5px;line-height:1.55;color:var(--cream-1)}
+.fork{margin-top:var(--s-5)}
+.doors{flex-direction:column}
+.forkDoor,.studioDoor{width:100%;padding:0 20px}
+/* stacked: the dark door hangs under the lit one */
+.doors .studioDoor{border-left:1px solid var(--hair-door);border-top:0}
+.forkDoor:disabled,.forkDoor:disabled:hover,.forkDoor:disabled:active{transform:none;cursor:not-allowed;color:var(--cream-2);background:var(--night-3);box-shadow:0 0 0 1px var(--hair-strong)}
+.forkDoor:disabled::after{height:3px;background:var(--night-4)}
+.reason{margin-top:12px;font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-1)}
+.textBtn{display:inline;padding:0;border:0;background:none;font:inherit;font-weight:600;color:var(--cream-0);cursor:pointer;
+  text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.textBtn:hover{text-decoration-color:var(--lamp-1)}
+.status{margin-top:12px;font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-1)}
+.status:empty{margin:0}
+.refused{margin-top:12px;padding-left:10px;border-left:2px solid var(--held);font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-0)}
+
+/* files */
+.block{min-width:0}
+.fileList{list-style:none;border-top:1px solid var(--hair)}
+.file{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:3px 12px;padding:12px 0;border-bottom:1px solid var(--hair-faint)}
+.fileName{font-family:var(--f-mono);font-size:13.5px;color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-decoration-thickness:1px;text-underline-offset:3px;
+  transition:text-decoration-color var(--t-hover);overflow-wrap:anywhere}
+.fileName:hover{text-decoration-color:var(--lamp-1)}
+.fileMeta{font-size:12px;color:var(--cream-2);text-align:right;white-space:nowrap}
+.fileWhat{grid-column:1 / -1;font-size:13px;line-height:1.45;color:var(--cream-2)}
+
+/* the script: each line with its frame, its time and what was said */
+.script{min-width:0}
+.lines{list-style:none;border-top:1px solid var(--hair)}
+.line{border-bottom:1px solid var(--hair-faint)}
+.lineBtn{display:grid;grid-template-columns:112px 84px minmax(0,1fr) 128px;grid-template-areas:"frame when said verdict";column-gap:20px;align-items:center;
+  width:100%;padding:12px 12px 12px 10px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;
+  transition:background-color var(--t-hover)}
+.lineBtn:hover{background:rgb(var(--cream-rgb) / .03)}
+.lineBtn:focus-visible{outline-offset:-2px}
+.current .lineBtn{border-left-color:var(--lamp-1);background:linear-gradient(90deg,rgb(var(--lamp-rgb) / .10),rgb(var(--lamp-rgb) / .02) 70%,transparent)}
+.frame{grid-area:frame;display:block;width:112px;height:auto;aspect-ratio:16 / 9;object-fit:cover;background:var(--night-0);border:1px solid var(--hair)}
+.current .frame{border-color:rgb(var(--lamp-rgb) / .6)}
+.when{grid-area:when;display:flex;flex-direction:column;gap:5px}
+.tc{font-size:12px;color:var(--cream-1)}
+.current .tc{color:var(--lamp-0)}
+.label{font-size:12.5px;font-weight:600;line-height:1.2;color:var(--cream-2);white-space:nowrap}
+/* italic Newsreader: the voice */
+.said{grid-area:said;margin:0;font-family:var(--f-display);font-optical-sizing:auto;font-style:italic;font-weight:350;font-size:19px;line-height:1.32;letter-spacing:var(--tr-cue);
+  color:var(--cream-0);text-wrap:pretty}
+.current .lineBtn .said{color:var(--lamp-0)}
+.verdict{grid-area:verdict;display:flex;flex-direction:column;align-items:flex-end;gap:6px;text-align:right}
+.fit{font-size:12px;line-height:1.3;color:var(--cream-2)}
+
+/* what was checked */
+.checkList{border-top:1px solid var(--hair)}
+.check{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;column-gap:16px;row-gap:4px;padding:14px 0 15px;border-bottom:1px solid var(--hair-faint)}
+.check dt{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--cream-1)}
+.check[data-tone="good"] dt::before,.check[data-tone="warn"] dt::before{content:"";flex:none;width:5px;height:5px;background:var(--verified)}
+.check[data-tone="warn"] dt::before{background:var(--held)}
+.checkValue{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:26px;line-height:1;letter-spacing:-.02em;color:var(--cream-0);text-align:right;white-space:nowrap}
+.checkDetail{grid-column:1 / -1;font-size:13px;line-height:1.5;color:var(--cream-2)}
+
+@media (max-width:1100px){
+  .run{grid-template-columns:minmax(0,1fr);grid-template-rows:none}
+  .head,.screen,.edit,.scriptArea,.checks,.files{grid-column:1;grid-row:auto}
+  .scriptArea,.checks{margin-top:0}
+  .doors{flex-direction:row;flex-wrap:wrap}
+  .forkDoor,.studioDoor{width:auto;flex:1 1 220px}
+  .doors .studioDoor{border-left:0;border-top:1px solid var(--hair-door)}
+}
+@media (max-width:760px){
+  .editBlock{padding:18px 16px 20px}
+  .doors{flex-direction:column}
+  .forkDoor,.studioDoor{flex:none;width:100%}
+  .doors .studioDoor{border-left:1px solid var(--hair-door);border-top:0}
+  .lineBtn{grid-template-columns:88px minmax(0,1fr) auto;grid-template-areas:"frame when verdict" "said said said";column-gap:12px;row-gap:10px;align-items:start;padding:12px 8px 14px}
+  .frame{width:88px}
+  .lineBtn .said{font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){
+  .lineBtn,.textBtn,.fileName{transition:none}
+}

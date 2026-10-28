@@ -5,6 +5,7 @@ import {
   budgetEstimate,
   capReached,
   followRun,
+  forkRun,
   health,
   parseEvent,
   parseRetryAfter,
@@ -282,5 +283,40 @@ describe("followRun", () => {
     vi.stubGlobal("EventSource", undefined);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
     await expect(followRun("live-3", () => {})).resolves.toEqual({ end: "closed", runId: null, lastSeq: -1 });
+  });
+});
+
+describe("forkRun", () => {
+  it("posts to the run's fork route and returns the copy's id and token", async () => {
+    const fetchMock = vi.fn(async () => json(201, { run_id: "live-20261028-0912-ab12cd", edit_token: "tok-abc" }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await forkRun("ed90")).toEqual({ runId: "live-20261028-0912-ab12cd", editToken: "tok-abc" });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${API_BASE}/v1/runs/ed90/fork`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("refuses with the API's own words", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(429, { error: "rate_limited", message: "Too many changes in a minute. Try again in 40 s." }, { "retry-after": "40" })),
+    );
+    const err = (await forkRun("ed90").catch((e: unknown) => e)) as ApiError;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe("rate_limited");
+    expect(err.message).toBe("Too many changes in a minute. Try again in 40 s.");
+    expect(err.retryAfter).toBe(40);
+
+    vi.stubGlobal("fetch", vi.fn(async () => json(409, { error: "not_ready", message: "This run has not been published yet, so there is nothing to edit." })));
+    const busy = (await forkRun("ed90").catch((e: unknown) => e)) as ApiError;
+    expect(busy.status).toBe(409);
+    expect(busy.message).toMatch(/not been published/);
+  });
+
+  it("says when nothing answers, and when the answer lacks the copy", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("fetch failed"))));
+    expect(((await forkRun("ed90").catch((e: unknown) => e)) as ApiError).code).toBe("unreachable");
+    vi.stubGlobal("fetch", vi.fn(async () => json(201, { run_id: "x" })));
+    expect(((await forkRun("ed90").catch((e: unknown) => e)) as ApiError).code).toBe("server");
   });
 });

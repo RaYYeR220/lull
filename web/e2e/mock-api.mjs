@@ -14,6 +14,8 @@
 //     402 409 413 422-format 422-too_long 422-unreadable 429 503
 //     408 429-one_upload                                         the API's JSON refusals
 //   GET /v1/runs/<id>/events: replays the whole run (the drop and reload cases)
+//   POST /v1/runs/<id>/fork: 201 {run_id, edit_token} for ed90 (FORK_ID); 404 for any other id;
+//     fork429: the API's rate-limit refusal
 //
 // Run: node e2e/mock-api.mjs [port]   (MOCK_API_PORT also works; default 3218)
 
@@ -21,6 +23,8 @@ import { createServer } from "node:http";
 
 const PORT = Number(process.argv[2] ?? process.env.MOCK_API_PORT ?? 3218);
 const RUN_ID = "live-20261027-214500-a1b2c3";
+const FORK_ID = "live-20261028-091500-f0c4e2";
+const FORK_TOKEN = "tok-fork-e2e-9876543210";
 const STEP_MS = Number(process.env.MOCK_STEP_MS ?? 25);
 
 const PRICES = {
@@ -209,6 +213,15 @@ const server = createServer(async (req, res) => {
     if (scenario === "fail") return stream(req, res, { failAt: FAIL_AT });
     if (scenario === "drop") return stream(req, res, { dropAfter: DROP_AFTER });
     return stream(req, res);
+  }
+
+  const fork = route.match(/^\/v1\/runs\/([\w.-]+)\/fork$/);
+  if (req.method === "POST" && fork) {
+    await drain(req);
+    if (scenario === "fork429")
+      return json(res, 429, { error: "rate_limited", message: "Too many changes in a minute. Try again in 40 s." }, { "Retry-After": "40" });
+    if (fork[1] !== "ed90") return json(res, 404, { error: "not_found", message: "There is no run with that id." });
+    return json(res, 201, { run_id: FORK_ID, edit_token: FORK_TOKEN });
   }
 
   const follow = route.match(/^\/v1\/runs\/([\w.-]+)\/events$/);

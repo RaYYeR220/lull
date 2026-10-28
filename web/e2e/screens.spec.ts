@@ -195,3 +195,55 @@ test.describe("try screens @screens", () => {
     });
   }
 });
+
+/**
+ * The recorded run's page and the library, against the scripted API (so the copy door is
+ * live): at rest, then playing from the second line (chosen in the script) and paused there,
+ * plus full pages. e2e/__screens__/watch-<state>-<size>(-full).png, library-<size>.png.
+ */
+test.describe("watch screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 90_000 });
+
+  for (const size of SIZES) {
+    test(`watch at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await routeApi(page, "ok");
+      await page.goto("/watch/ed90", { waitUntil: "networkidle" });
+      await waitReady(page);
+      await page.evaluate(() => document.fonts.ready);
+      await expect(page.getByRole("button", { name: "Make an editable copy" })).toBeEnabled();
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: path.join(OUT, `watch-rest-${size.name}.png`) });
+      // scroll through once so the script's frames load
+      const height = await page.evaluate(() => document.documentElement.scrollHeight);
+      for (let y = 0; y < height; y += size.viewport.height / 2) {
+        await page.evaluate((top) => window.scrollTo(0, top), y);
+        await page.waitForTimeout(100);
+      }
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(300);
+      await fullPage(page, `watch-rest-${size.name}-full.png`);
+
+      await page.locator('[data-line="c002"] button').click();
+      const p = page.locator("lull-player");
+      await p.getByRole("button", { name: "Play" }).click();
+      await page.waitForTimeout(1500);
+      await p.getByRole("button", { name: "Pause" }).click();
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(OUT, `watch-playing-${size.name}.png`) });
+      await page.locator('[data-line="c002"]').scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `watch-script-${size.name}.png`) });
+    });
+
+    test(`library at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await page.goto("/watch", { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(400);
+      await fullPage(page, `library-${size.name}.png`);
+    });
+  }
+});

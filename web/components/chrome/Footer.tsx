@@ -29,7 +29,7 @@ export function Footer() {
         </ul>
         <p className={styles.fine}>
           <span>
-            Demo clip: <cite>Elephants Dream</cite> (2006), Blender Foundation, CC BY 2.5.
+            Demo clip: <cite>Elephants Dream</cite> (2006), Blender Foundation / Netherlands Media Art Institute, CC BY 2.5.
           </span>
           <span>Nothing on this page plays sound until you press it.</span>
         </p>

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseIndex, parseShowcase, requiredFiles } from "../lib/showcase-schema.mjs";
 import {
   closeUp,
+  creditParts,
   linesInsidePauses,
   numberedCues,
   spend,
@@ -112,6 +113,16 @@ describe("what the pages derive from the run", () => {
     expect(cu?.guardBefore).toBe(true);
     expect(cu?.guardAfter).toBe(false);
     expect(cu?.after).toEqual([]);
+  });
+
+  it("links the credit's licence to its deed", () => {
+    expect(creditParts(show.credit)).toEqual({
+      before: "Elephants Dream (2006), Blender Foundation / Netherlands Media Art Institute, ",
+      licence: { label: "CC BY 2.5", url: "https://creativecommons.org/licenses/by/2.5/" },
+      after: "",
+    });
+    expect(creditParts("Big Buck Bunny (2008), Blender Foundation, CC BY-SA 3.0 (excerpt)").licence?.url).toBe("https://creativecommons.org/licenses/by-sa/3.0/");
+    expect(creditParts("USGS, public domain")).toEqual({ before: "USGS, public domain", licence: null, after: "" });
   });
 
   it("says the run's spend as a figure and in words", () => {

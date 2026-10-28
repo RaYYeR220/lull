@@ -582,6 +582,26 @@ export function followRun(id: string, onEvent: (ev: RunEvent) => void, signal?: 
   });
 }
 
+// -- forks -------------------------------------------------------------------------------------
+
+export type Fork = { runId: string; editToken: string };
+
+/**
+ * POST /v1/runs/{id}/fork: a published run (a recorded one too) copied into a new live run
+ * that the caller owns, with its edit token. No model is called; forks are rate limited.
+ * Throws ApiError with the API's own message (404 no such run, 409 still being described or
+ * not published yet, 429 too many forks, 500 the copy failed).
+ */
+export async function forkRun(runId: string, signal?: AbortSignal): Promise<Fork> {
+  const res = await request(`${API_BASE}/v1/runs/${encodeURIComponent(runId)}/fork`, { method: "POST", signal, cache: "no-store" });
+  if (!res.ok) throw await toApiError(res);
+  const raw: unknown = await res.json().catch(() => null);
+  const id = isObj(raw) ? str(raw.run_id) : null;
+  const token = isObj(raw) ? str(raw.edit_token) : null;
+  if (!id || !token) throw new ApiError({ status: res.status, code: "server", message: "The copy was made, but the answer didn’t say where it is." });
+  return { runId: id, editToken: token };
+}
+
 // -- the owner's edit token --------------------------------------------------------------------
 
 const TOKEN_PREFIX = "lull-edit-token:";
