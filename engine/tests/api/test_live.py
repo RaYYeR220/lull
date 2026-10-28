@@ -1568,8 +1568,9 @@ def _ff(*args: str) -> None:
 
 @pytest.fixture(scope="module")
 def bombs(tmp_path_factory) -> dict[str, Path]:
-    """Small files that ask for too much: a big frame, a high rate, a second (bigger) picture,
-    a subtitle track; and an allowed file with two sound tracks."""
+    """Small files that ask for too much (a big frame, a high rate), and allowed ones with
+    streams the run never reads: a second (bigger) picture, a subtitle track, two sound
+    tracks, and a phone's MOV with a data (timecode) track."""
     d = tmp_path_factory.mktemp("bombs")
     enc = ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"]
     _ff("-f", "lavfi", "-i", "testsrc2=s=2560x1440:r=10:d=1", *enc, str(d / "big.mp4"))
@@ -1586,14 +1587,14 @@ def bombs(tmp_path_factory) -> dict[str, Path]:
         "-f", "lavfi", "-i", "sine=frequency=880:duration=2",
         "-map", "0:v", "-map", "1:a", "-map", "2:a", *enc, "-c:a", "aac",
         str(d / "two_sounds.mp4"))  # fmt: skip
-    return {p.stem: p for p in d.glob("*.mp4")}
+    _ff("-f", "lavfi", "-i", "testsrc2=s=320x240:r=30:d=1",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+        "-map", "0:v", "-map", "1:a", *enc, "-c:a", "aac", "-timecode", "00:00:00:00",
+        str(d / "phone.mov"))  # fmt: skip
+    return {p.stem: p for p in d.iterdir() if p.suffix in (".mp4", ".mov")}
 
 
-@pytest.mark.parametrize(
-    "name,says",
-    [("big", "2560x1440"), ("fast", "frames a second"), ("two", "2 pictures"),
-     ("subs", "subtitle")],
-)  # fmt: skip
+@pytest.mark.parametrize("name,says", [("big", "2560x1440"), ("fast", "frames a second")])
 def test_media_over_the_limits_is_refused_before_any_work(lc, live, bombs, name, says):
     from lull.api import clip
 
@@ -1606,6 +1607,22 @@ def test_media_over_the_limits_is_refused_before_any_work(lc, live, bombs, name,
     assert r.json()["error"] == "unsupported" and says in r.json()["message"]
     assert trims == [] and live.runner.jobs == []
     assert post(lc).status_code == 429  # it counted as a refused upload
+
+
+@pytest.mark.parametrize("name", ["phone", "subs", "two"])
+def test_streams_the_run_never_reads_are_ignored(lc, live, bombs, name):
+    """A phone's data (timecode) track, a subtitle track, a second picture: the run's copy
+    maps the first video and the first audio stream only, so they are left out, not refused."""
+    from lull.api import clip
+
+    live.probe, live.transcode = clip.probe, clip.transcode
+    src = bombs[name]
+    assert clip.probe(src).others or len(clip.probe(src).videos) == 2  # they are there
+    r = post(lc, src.read_bytes(), name=src.name)
+    assert types(parse_sse(r.text))[-1] == "done", r.text
+    (job,) = live.runner.jobs
+    info = clip.probe(job.video)
+    assert info.others == () and len(info.videos) == 1 and info.width == 320
 
 
 def test_the_runs_copy_is_one_bounded_picture_and_its_first_sound(lc, live, bombs):
@@ -1737,10 +1754,13 @@ def test_the_limits_in_plain_words():
 
     assert over_limits(m()) is None
     assert over_limits(m(videos=((1080, 1920, 60000 / 1001),))) is None  # a phone, upright
-    assert "3 sound tracks" in over_limits(m(audios=((2, 48000),) * 3))
+    # only the first video and the first audio stream count: the copy keeps no other
+    assert over_limits(m(audios=((2, 48000),) * 3)) is None
+    assert over_limits(m(audios=((2, 48000), (16, 0)))) is None
+    assert over_limits(m(videos=((640, 360, 25.0), (7680, 4320, 0.0)))) is None
+    assert over_limits(m(others=("data", "subtitle", "attachment"))) is None
     assert "16 channels" in over_limits(m(audios=((16, 48000),)))
     assert "150 Mb/s" in over_limits(m(bit_rate=150e6))
-    assert "data track" in over_limits(m(others=("data",)))
     assert "4096x2160" in over_limits(m(videos=((4096, 2160, 25.0),)))
     # unknown or zero is refused, never waved through
     assert "frame rate" in over_limits(m(videos=((1920, 1080, 0.0),)))
@@ -2139,3 +2159,63 @@ def test_framework_errors_have_the_error_shape(lc, method, path, status, error):
     assert r.status_code == status
     body = r.json()
     assert set(body) == {"error", "message"} and body["error"] == error and body["message"]
+
+
+def _fake_ffprobe(monkeypatch, *, r_rate: str, avg_rate: str, packets: int, duration=10.0):
+    """clip.probe's ffprobe answers: the streams (a MediaRecorder WebM's nominal 1000/1, say)
+    and, when asked to count, the video packets."""
+    import subprocess
+
+    from lull.api import clip
+
+    calls: list = []
+
+    def run(cmd, timeout):
+        calls.append((cmd, timeout))
+        if "-count_packets" in cmd:
+            out = {"streams": [{"nb_read_packets": str(packets)}]}
+        else:
+            out = {
+                "format": {"duration": str(duration), "format_name": "matroska,webm",
+                           "bit_rate": "1000000"},
+                "streams": [
+                    {"codec_type": "video", "codec_name": "vp8", "width": 640, "height": 480,
+                     "r_frame_rate": r_rate, "avg_frame_rate": avg_rate},
+                    {"codec_type": "audio", "codec_name": "opus", "channels": 2,
+                     "sample_rate": "48000"},
+                ],
+            }  # fmt: skip
+        return subprocess.CompletedProcess(cmd, 0, json.dumps(out).encode(), b"")
+
+    monkeypatch.setattr(clip, "_run", run)
+    return calls
+
+
+def test_an_implausible_stated_frame_rate_is_measured(monkeypatch):
+    """A browser recording states 1000 frames a second: the rate that counts is the packets
+    the video stream has over its length, counted under the probe's time limit."""
+    from lull.api import clip
+
+    calls = _fake_ffprobe(monkeypatch, r_rate="1000/1", avg_rate="0/0", packets=300)
+    info = clip.probe(Path("rec.webm"))
+    assert info.fps == pytest.approx(30.0) and info.videos[0][2] == pytest.approx(30.0)
+    assert clip.over_limits(info) is None
+    counted = [c for c in calls if "-count_packets" in c[0]]
+    assert len(counted) == 1 and counted[0][1] == clip.PROBE_TIMEOUT
+    assert "v:0" in counted[0][0]
+
+
+def test_a_measured_rate_over_the_limit_is_refused(monkeypatch):
+    from lull.api import clip
+
+    _fake_ffprobe(monkeypatch, r_rate="1000/1", avg_rate="0/0", packets=1200)
+    info = clip.probe(Path("rec.webm"))
+    assert "120 frames a second" in clip.over_limits(info)
+
+
+def test_a_plausible_stated_rate_is_not_counted(monkeypatch):
+    from lull.api import clip
+
+    calls = _fake_ffprobe(monkeypatch, r_rate="30/1", avg_rate="30/1", packets=10**6)
+    assert clip.probe(Path("rec.webm")).fps == 30.0
+    assert not any("-count_packets" in c[0] for c in calls)

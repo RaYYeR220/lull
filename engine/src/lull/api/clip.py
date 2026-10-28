@@ -3,10 +3,16 @@ the MP4/MOV and Matroska/WebM demuxers only, assert_safe_container) and what the
 not do for it: a time limit on each ffprobe/ffmpeg call, limits on what the file says it is,
 and the run's own copy of it, made to be bounded whatever the file says.
 
-Limits (over_limits), checked before any work: at most 1920x1080 (2.1 megapixels, either way
-up), 60 frames a second (the higher of the nominal and average rates), one video stream, two
-audio streams of up to 8 channels at 192 kHz, no subtitle, data or attachment streams, and a
-bit rate of at most 100 Mb/s. Anything unknown or zero is refused too.
+Limits (over_limits), checked before any work on the two streams the run's copy keeps, the
+first video and the first audio stream: at most 1920x1080 (2.1 megapixels, either way up), 60
+frames a second, sound of up to 8 channels at 192 kHz, and a file bit rate of at most 100 Mb/s.
+Anything unknown or zero on those is refused, and so is a file without a video stream. Other
+streams (a phone's data or timecode track, subtitles, attachments, a second picture or sound)
+are never read: the copy leaves them out.
+
+The frame rate is the higher of the nominal and average rates; a nominal rate over 240 (a
+browser recording's 1000/1) is not believed, and the rate is measured instead: the video
+stream's packets over its length (ffprobe -count_packets, under the same time limit).
 
 The run's copy (transcode): one normalising transcode, and every engine stage works on it only.
 The first video stream, scaled to fit 1280x720 (720x1280 upright; never upscaled), at its
@@ -33,7 +39,7 @@ TRANSCODE_TIMEOUT = 180.0
 MAX_LONG_SIDE, MAX_SHORT_SIDE, MAX_PIXELS = 1920, 1080, 2_100_000
 MAX_FPS = 60.0
 FPS_SLACK = 0.5  # a nominal 60 that a phone reports as 60.02
-MAX_VIDEO_STREAMS, MAX_AUDIO_STREAMS = 1, 2
+PLAUSIBLE_FPS = 240.0  # a stated rate above this is measured, not believed
 MAX_CHANNELS, MAX_SAMPLE_RATE = 8, 192_000
 MAX_BIT_RATE = 100_000_000  # bits a second, the whole file
 OUT_LONG_SIDE, OUT_SHORT_SIDE = 1280, 720  # the run's copy
@@ -110,24 +116,9 @@ def over_limits(info: Probe) -> str | None:
     limits. Unknown or zero is refused (fail closed). A plain Probe (no stream list: the test
     doubles) is checked on its first video stream alone."""
     full = isinstance(info, Media)
-    videos = info.videos if full else ((info.width, info.height, info.fps),)
-    audios = info.audios if full else ()
-    for kind in getattr(info, "others", ()):
-        return (
-            f"This file carries a {kind} track besides its picture and sound. Live "
-            f"descriptions take a plain video: export it again without the {kind} track."
-        )
-    if len(videos) > MAX_VIDEO_STREAMS:
-        return (
-            f"This file holds {len(videos)} pictures (video streams). Live descriptions take a "
-            "video with one."
-        )
-    count = max(len(audios), info.audio_streams)
-    if count > MAX_AUDIO_STREAMS:
-        return (
-            f"This file holds {count} sound tracks. Live descriptions take up to "
-            f"{MAX_AUDIO_STREAMS}."
-        )
+    # the streams the run's copy keeps: the first video stream, the first audio stream
+    videos = info.videos[:1] if full else ((info.width, info.height, info.fps),)
+    audios = info.audios[:1] if full else ()
     for w, h, fps in videos:
         if w <= 0 or h <= 0:
             return "This video does not state its picture size. Export it again as an mp4."
@@ -188,6 +179,10 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
             raise MediaError(f"cannot determine duration of {path}")
         kinds = [str(s.get("codec_type") or "unknown") for s in streams]
         fps, rate = _rate(video)
+        if fps > PLAUSIBLE_FPS:  # not believed: measured
+            fps = _measured_rate(path, float(duration), timeout)
+            rate = f"{fps:.6g}" if fps > 0 else ""
+        first = next(i for i, s in enumerate(streams) if s.get("codec_type") == "video")
         return Media(
             duration=float(duration),
             width=int(video["width"]),
@@ -200,8 +195,8 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
             audio_streams=kinds.count("audio"),
             fps_rational=str(video.get("r_frame_rate") or ""),
             videos=tuple(
-                (_int(s.get("width")), _int(s.get("height")), _rate(s)[0])
-                for s in streams
+                (_int(s.get("width")), _int(s.get("height")), fps if i == first else _rate(s)[0])
+                for i, s in enumerate(streams)
                 if s.get("codec_type") == "video"
             ),
             audios=tuple(
@@ -215,6 +210,21 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
         )
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise MediaError(f"ffprobe output for {path} does not read: {e}") from None
+
+
+def _measured_rate(path: Path, duration: float, timeout: float) -> float:
+    """The first video stream's packets a second over `duration` (0.0 when not known)."""
+    out = _run(
+        [_bin("ffprobe"), "-v", "error", "-protocol_whitelist", SAFE_PROTOCOLS,
+         "-format_whitelist", SAFE_FORMATS, "-select_streams", "v:0", "-count_packets",
+         "-show_entries", "stream=nb_read_packets", "-print_format", "json", str(path)],
+        timeout,
+    )  # fmt: skip
+    try:
+        packets = int(json.loads(out.stdout)["streams"][0]["nb_read_packets"])
+    except (ValueError, KeyError, IndexError, TypeError):
+        return 0.0
+    return packets / duration if duration > 0 else 0.0
 
 
 def _out_rate(info: Probe) -> str:
