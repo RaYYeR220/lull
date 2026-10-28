@@ -361,3 +361,17 @@ def test_a_decimal_point_does_not_end_a_deviation_title():
     text = "## Controls\n\n### Deviations: x\n\n- the 0.5 s event-overlap rule;\n- U.S. maps.\n"
     assert [d["title"] for d in R.readme_deviations(text)] == [
         "the 0.5 s event-overlap rule", "U.S. maps"]  # fmt: skip
+
+
+def test_the_run_log_is_appended_to_results_md(tmp_path):
+    d = results_dir(tmp_path)
+    log = "# Run log\n\nKept by hand.\n\n| step | outcome |\n|---|---|\n| 1 | done |\n"
+    md = R.main_text(d, git=FakeGit(), readme=README, manual=MANUAL, suite_a_runs=tmp_path,
+                     now="2026-10-28T07:00:00+00:00", run_log=log)  # fmt: skip
+    tail = md[md.index("## Run log") :]
+    assert "Kept by hand." in tail and "| 1 | done |" in tail and "\n# Run log" not in tail
+    assert "## Run log\n\nKept by hand." in tail
+    assert md.index("## Known failures") < md.index("## Run log")
+    plain = R.main_text(d, git=FakeGit(), readme=README, manual=MANUAL, suite_a_runs=tmp_path,
+                        now="2026-10-28T07:00:00+00:00", run_log="")  # fmt: skip
+    assert "## Run log" not in plain

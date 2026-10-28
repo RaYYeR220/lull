@@ -39,6 +39,7 @@ EVAL_ROOT = Path(__file__).resolve().parent
 RESULTS = EVAL_ROOT / "results"
 README = EVAL_ROOT / "README.md"
 MANUAL = EVAL_ROOT / "known_failures.md"
+RUN_LOG = EVAL_ROOT / "run_log.md"  # kept by hand while the scored runs happen
 OUT_MD = EVAL_ROOT / "RESULTS.md"
 SOURCES = {"suite_a": "suite_a.json", "suite_b": "suite_b.json",
            "controls_negative": "controls_negative.json", "ablation": "ablation.json"}  # fmt: skip
@@ -528,7 +529,8 @@ def controls_md(inc: dict) -> list[str]:
     return lines
 
 
-def results_markdown(inc: dict, skipped: dict, failures: list[dict], meta: dict) -> str:
+def results_markdown(inc: dict, skipped: dict, failures: list[dict], meta: dict,
+                     run_log: str = "") -> str:  # fmt: skip
     fixture = any("_fixture" in v for v in inc.values())
     lines = ["# Lull: evaluation results", ""]
     if fixture:
@@ -558,6 +560,10 @@ def results_markdown(inc: dict, skipped: dict, failures: list[dict], meta: dict)
     lines += ["", "## Known failures", ""]
     lines += [f"- **{f['title']}**: {f['detail']}" for f in failures
               if not f["title"].startswith("Deviation")] or ["(none)"]  # fmt: skip
+    body = "\n".join(x for x in run_log.splitlines() if not x.startswith("# ")).strip("\n")
+    body = body.splitlines()
+    if "\n".join(body).strip():
+        lines += ["", "## Run log", "", *body]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -580,8 +586,9 @@ def _now(now: str | None) -> str:
 
 def main_text(results: Path = RESULTS, *, git=git_run, readme: str | None = None,
               manual: str | None = None, suite_a_runs: Path = A.RUNS,
-              now: str | None = None) -> str:  # fmt: skip
-    """RESULTS.md for the complete results (their pins checked first)."""
+              now: str | None = None, run_log: str | None = None) -> str:  # fmt: skip
+    """RESULTS.md for the complete results (their pins checked first), with run_log.md
+    (kept by hand during the scored runs) at the end."""
     inc, skipped = load_results(results)
     if inc:
         verify_pins(inc, git)
@@ -589,7 +596,9 @@ def main_text(results: Path = RESULTS, *, git=git_run, readme: str | None = None
     failures = known_failures(inc, readme_text, manual_text, suite_a_runs)
     meta = {"now": _now(now), "git_commit": git("rev-parse", "HEAD")[1].strip(),
             "dirty": bool(A.dirty(git))}  # fmt: skip
-    return results_markdown(inc, skipped, failures, meta)
+    if run_log is None:
+        run_log = RUN_LOG.read_text(encoding="utf-8") if RUN_LOG.exists() else ""
+    return results_markdown(inc, skipped, failures, meta, run_log)
 
 
 def write_web(results: Path, out: Path, *, git=git_run, readme: str | None = None,
