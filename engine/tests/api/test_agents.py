@@ -381,3 +381,88 @@ def test_lull_mcp_speaks_mcp_over_stdio(tmp_path):
             return {t.name for t in (await c.list_tools()).tools}
 
     assert asyncio.run(go()) == LOCAL_TOOLS
+
+
+# -- a sample start passes the same gates as POST /v1/runs ----------------------------------------
+
+
+def _start(live, key):
+    from lull.api.live import start_sample
+    from lull.types import RunOptions
+
+    return start_sample(live, key, "street", RunOptions())
+
+
+async def _to_the_end(started) -> None:
+    while (await started.queue.get()) is not None:
+        pass
+
+
+def test_concurrent_sample_starts_take_the_prepare_slots(app, live):
+    from lull.api.live import LiveError
+
+    entered, gate = threading.Event(), threading.Event()
+
+    def slow(src, dst, seconds, info):
+        entered.set()
+        assert gate.wait(10)
+        return fake_transcode(src, dst, seconds)
+
+    live.transcode = slow
+
+    async def go():
+        a = asyncio.create_task(_start(live, "visitor-a"))
+        while not entered.is_set():
+            await asyncio.sleep(0.01)
+        try:
+            await _start(live, "visitor-a")  # the same visitor, its first still preparing
+        except LiveError as e:
+            same = e
+        b = asyncio.create_task(_start(live, "visitor-b"))
+        await asyncio.sleep(0.2)
+        assert live.uploading == 2
+        gate.set()
+        results = await asyncio.gather(a, b, return_exceptions=True)
+        for r in results:
+            if not isinstance(r, BaseException):
+                await _to_the_end(r)
+        return same, results
+
+    same, results = asyncio.run(go())
+    assert same.error == "one_upload_at_a_time"
+    started = [r for r in results if not isinstance(r, BaseException)]
+    refused = [r for r in results if isinstance(r, LiveError)]
+    assert len(started) == 1 and len(refused) == 1 and refused[0].error == "busy"
+    assert live.uploading == 0 and not live.upload_keys
+    assert len(live.runner.jobs) == 1
+
+
+def test_sample_starts_are_bounded_by_the_slots_and_refusals(app, live):
+    from lull.api.live import LiveError
+
+    entered, gate = threading.Event(), threading.Event()
+
+    def slow(src, dst, seconds, info):
+        entered.set()
+        assert gate.wait(10)
+        return fake_transcode(src, dst, seconds)
+
+    live.transcode, live.max_uploads = slow, 1
+
+    async def go():
+        a = asyncio.create_task(_start(live, "visitor-a"))
+        while not entered.is_set():
+            await asyncio.sleep(0.01)
+        try:
+            await _start(live, "visitor-b")
+        except LiveError as e:
+            full = e
+        gate.set()
+        await _to_the_end(await a)
+        return full
+
+    assert asyncio.run(go()).error == "uploads_busy"
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+    live.refusals.hit(live.limiter.client_key("in-process"))
+    r = call(app.state.agents, "describe_video", {"sample_id": "street"})
+    assert r.is_error and "rate_limited" in text(r)

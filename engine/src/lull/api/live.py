@@ -37,6 +37,7 @@ it reports after that is dropped.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import math
@@ -46,7 +47,7 @@ import secrets
 import shutil
 import threading
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1084,30 +1085,57 @@ def no_sample() -> LiveError:
     return LiveError(422, "sample", "There is no sample with that id.")
 
 
+@contextlib.contextmanager
+def _prepare_slot(live: Live, key: str) -> Iterator[None]:
+    """One of the MAX_UPLOADS slots for receiving and preparing a video, one per visitor (429
+    one_upload_at_a_time, 503 uploads_busy), held until the run starts or is refused. A
+    refusal inside it counts against the visitor (REFUSALS_PER_HOUR) unless it was the spend
+    caps, a busy executor or our storage."""
+    if key in live.upload_keys:
+        raise one_upload()
+    if live.uploading >= live.max_uploads:
+        raise uploads_busy()
+    live.uploading += 1
+    live.upload_keys.add(key)
+    try:
+        yield
+    except BaseException as e:
+        if not (isinstance(e, LiveError) and e.status in NOT_COUNTED):
+            live.refusals.hit(key)
+        raise
+    finally:
+        live.uploading -= 1
+        live.upload_keys.discard(key)
+
+
 async def start_sample(live: Live, key: str, sample_id: str, opts: RunOptions) -> Started:
-    """Start a run of one of the samples for visitor `key`, with the checks POST /v1/runs makes
-    (busy 409, rate 429, spend 402, the sample 422): what the MCP server's describe_video
-    calls. Nothing but a sample id names the video."""
+    """Start a run of one of the samples for visitor `key`, through the gates POST /v1/runs
+    has (busy 409, the visitor's starts and refusals 429, spend 402, a prepare slot 429/503,
+    the sample 422): what the MCP server's describe_video calls. Nothing but a sample id names
+    the video."""
     if live.executor.busy:
         raise busy()
     live.check_rate(key)
+    live.check_refusals(key)
     live.check_open_budget()
-    path = _sample(live.settings, sample_id)
-    if path is None:
-        raise no_sample()
     run_id = new_run_id()
     run_dir = live.settings.runs_dir / run_id
     try:
-        video = _new_run_dir(run_dir) / path.name
-        await _store(_link_or_copy, path, video)
-        source = {"kind": "sample", "id": sample_id, "name": path.name}
-        job, token = await _prepare(live, run_id, run_dir, opts, video, source, key)
-        if live.executor.busy:
-            raise busy()
-        live.check_rate(key)
-        (run_dir / PENDING).unlink()
-        first = {"run_id": run_id, "duration": job.duration, "options": _opts(job)}
-        backlog, run, q = await live.start(job, first)
+        with _prepare_slot(live, key):
+            path = _sample(live.settings, sample_id)
+            if path is None:
+                raise no_sample()
+            video = _new_run_dir(run_dir) / path.name
+            await _store(_link_or_copy, path, video)
+            source = {"kind": "sample", "id": sample_id, "name": path.name}
+            job, token = await _prepare(live, run_id, run_dir, opts, video, source, key)
+            # checked again with the claim, in one step: preparing took a while
+            if live.executor.busy:
+                raise busy()
+            live.check_rate(key)
+            (run_dir / PENDING).unlink()
+            first = {"run_id": run_id, "duration": job.duration, "options": _opts(job)}
+            backlog, run, q = await live.start(job, first)
     except BaseException:
         shutil.rmtree(run_dir, ignore_errors=True)
         raise
@@ -1279,39 +1307,24 @@ async def create_run(request: Request) -> StreamingResponse:
     live.check_refusals(key)
     live.check_open_budget()  # before the body: a spent cap refuses at once
     _check_headers(request, live.max_bytes)
-    # the slots, only for a request whose headers hold up
-    if key in live.upload_keys:
-        raise one_upload()
-    if live.uploading >= live.max_uploads:
-        raise uploads_busy()
 
     run_id = new_run_id()
     run_dir = live.settings.runs_dir / run_id
-    live.uploading += 1
-    live.upload_keys.add(key)
     try:
-        try:
+        # a slot, only for a request whose headers hold up; an upload refused (or cut off, or
+        # crashed) inside it counts against the visitor
+        with _prepare_slot(live, key):
             job, token = await _accept(live, request, run_id, run_dir, key)
-        except BaseException as e:
-            # an upload slot used without starting a run counts against the visitor, however
-            # it ended (refused, cut off, crashed), unless it was the spend caps, a busy
-            # executor or our storage
-            if not (isinstance(e, LiveError) and e.status in NOT_COUNTED):
-                live.refusals.hit(key)
-            raise
-        # checked again with the claim, in one step: the upload took a while
-        if live.executor.busy:
-            raise busy()
-        live.check_rate(key)
-        (run_dir / PENDING).unlink()
-        first = {"run_id": run_id, "duration": job.duration, "options": _opts(job)}
-        backlog, run, q = await live.start(job, first)
+            # checked again with the claim, in one step: the upload took a while
+            if live.executor.busy:
+                raise busy()
+            live.check_rate(key)
+            (run_dir / PENDING).unlink()
+            first = {"run_id": run_id, "duration": job.duration, "options": _opts(job)}
+            backlog, run, q = await live.start(job, first)
     except BaseException:
         shutil.rmtree(run_dir, ignore_errors=True)
         raise
-    finally:
-        live.uploading -= 1
-        live.upload_keys.discard(key)
     live.limiter.hit(key)
     # the token goes to whoever started the run, in this stream only: never stored or replayed
     return _sse(backlog, run, q, live.heartbeat, secret={"edit_token": token})
