@@ -9,19 +9,25 @@ run gets its own copy, one bounded transcode cut at that limit and probed again
 (lull.api.clip.transcode: at most 720p, 30 frames a second, H.264/AAC), so what counts is the
 copy, not what the container claims. Then it answers with
 text/event-stream: a `run` event, every engine event as it happens (stage_start / stage_end /
-call / cue / warning), a final `done` or `error`, and a `: ping` comment whenever the stream
-has been quiet for 15 s.
+call / cue / warning), a final `done`, `error` or `stopped`, and a `: ping` comment whenever
+the stream has been quiet for 15 s.
 
 The engine runs in a worker thread. Its callback only hands each event to the event loop
 (call_soon_threadsafe). On the loop the event gets its sequence number, is appended to
 runs/<id>/events.jsonl and goes to every listener. GET /v1/runs/{id}/events replays that file
-and follows the run if it is still going in this process. It resumes a live run nobody
-finished (no manifest, no error.json: the process stopped) for its owner (the edit token);
-the engine's stage cache makes that cheap. Replaying a finished run is open to anyone.
+and follows the run if it is still going in this process. Replaying a published run is open to
+anyone; a failed one is replayed to its owner only (the edit token). A stopped run (no
+manifest, no error.json) is restarted for its owner inside that request: the engine's stage
+cache skips the stages already done, and the run's spend cap counts every attempt.
+
+A run nobody is listening to any more (the page that followed it was closed) is stopped: a
+`stopped` event, the executor freed at once, no error.json, so it reads `stopped`. Its thread
+goes on to the end of the stage it is in (its results are cached) and starts no other; a
+restart of the same run waits for it first.
 
 A run still going after WALL_CLOCK_S is given up: error event, error.json, the executor
-freed; its thread cannot be killed, but its next model call is refused and anything it reports
-after that is dropped.
+freed; its thread cannot be killed, but its next model call or search is refused and anything
+it reports after that is dropped.
 """
 
 from __future__ import annotations
@@ -190,6 +196,17 @@ class RunTimeout(Exception):
     """The run went on past the wall clock and was given up."""
 
 
+class RunStopped(BaseException):  # noqa: N818 - a signal, like CancelledError
+    """Raised in the engine thread at the next stage start of a run nobody listens to. A
+    BaseException, so the engine's own `except Exception` does not catch it."""
+
+
+STOPPED_MESSAGE = (
+    "The description stopped when the page following it closed. Open it again to carry on: "
+    "the steps already done are kept."
+)
+
+
 class StopLedger:
     """A run's ledger that refuses every further spend once `stop` is set: how the watchdog
     ends a run whose thread it cannot kill (every model and search call checks first)."""
@@ -202,6 +219,11 @@ class StopLedger:
             raise RunTimeout("the run was stopped by its wall clock")
         self.inner.check(run_id, estimate)
 
+    def check_searches(self, run_id: str) -> None:
+        if self._stop.is_set():
+            raise RunTimeout("the run was stopped by its wall clock")
+        self.inner.check_searches(run_id)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self.inner, name)
 
@@ -209,7 +231,9 @@ class StopLedger:
 @dataclass(frozen=True)
 class Job:
     """One engine run: `runner(job, on_event)` does it in a worker thread. `stop` is set when
-    the watchdog gives the run up; a runner should end at its next chance."""
+    the watchdog gives the run up (no more spend; a runner should end at its next chance);
+    `cancel` when nobody listens any more (it ends at its next stage start: on_event raises
+    RunStopped)."""
 
     run_id: str
     run_dir: Path
@@ -219,6 +243,7 @@ class Job:
     ledger: Ledger
     resumed: bool = False
     stop: threading.Event = field(default_factory=threading.Event, compare=False)
+    cancel: threading.Event = field(default_factory=threading.Event, compare=False)
 
 
 Runner = Callable[[Job, Callable[[Event], None]], object]
@@ -302,6 +327,7 @@ class LiveRun:
         if raw and not raw.endswith(b"\n"):  # end the line a stopped process cut short
             self._log.write(b"\n")
         self.closed = False
+        self.unwatched = asyncio.Event()  # set when the last listener leaves
         self.done: dict | None = None  # the engine's `done`, held until after_run has run
         self.stage: str | None = None  # the last stage started
         self.error_stage: str | None = None  # the stage the engine said it failed in
@@ -374,6 +400,12 @@ class LiveRun:
 
     def unsubscribe(self, q: asyncio.Queue[dict | None]) -> None:
         self._listeners.discard(q)
+        if not self._listeners and not self.closed:
+            self.unwatched.set()
+
+    @property
+    def watched(self) -> bool:
+        return bool(self._listeners)
 
     def close(self) -> None:
         self.closed = True
@@ -387,12 +419,15 @@ class LiveRun:
 
 class Executor:
     """One live run at a time per process. The lock is never waited on: a second run is
-    refused (409), not queued. A run still going after `wall_clock` seconds is given up.
-    `changed(run_dir)` is told when a run starts and ends (the run list cache)."""
+    refused (409), not queued. A run nobody listens to is stopped and one still going after
+    `wall_clock` seconds is given up; either frees the executor at once, its thread lingering
+    (`lingers`) until it ends. `changed(run_dir)` is told when a run starts and ends (the run
+    list cache)."""
 
     def __init__(self, changed: Callable[[Path], None] | None = None) -> None:
         self.lock = asyncio.Lock()
         self.active: dict[str, LiveRun] = {}
+        self.lingering: dict[str, asyncio.Future] = {}  # threads of runs already let go
         self.wall_clock = WALL_CLOCK_S
         self.changed = changed
         self.after_run: list[AfterRun] = []  # in the worker thread, after a run that succeeded
@@ -408,6 +443,20 @@ class Executor:
 
     def get(self, run_id: str) -> LiveRun | None:
         return self.active.get(run_id)
+
+    def lingers(self, run_id: str) -> bool:
+        """Whether a thread of this run is still going after the run was let go."""
+        return run_id in self.lingering
+
+    def _linger(self, run_id: str, work: asyncio.Future) -> None:
+        self.lingering[run_id] = work
+
+        def done(f: asyncio.Future) -> None:
+            if self.lingering.get(run_id) is f:
+                del self.lingering[run_id]
+            _late(run_id)(f)
+
+        work.add_done_callback(done)
 
     async def start(
         self, job: Job, runner: Runner, scrub: Callable[[str], str], first: dict
@@ -430,26 +479,60 @@ class Executor:
         task.add_done_callback(self._tasks.discard)
         return run
 
+    async def _until(self, run: LiveRun, fut: asyncio.Future, deadline: float) -> str:
+        """Wait for `fut` until `deadline` (loop time): "done", "unwatched" (nobody listens any
+        more: checked again, a listener may have come back) or "late"."""
+        loop = asyncio.get_running_loop()
+        while True:
+            left = deadline - loop.time()
+            if fut.done():
+                return "done"
+            if left <= 0:
+                return "late"
+            unwatched = asyncio.ensure_future(run.unwatched.wait())
+            try:
+                await asyncio.wait({fut, unwatched}, timeout=left, return_when="FIRST_COMPLETED")
+            finally:
+                unwatched.cancel()
+            if fut.done():
+                return "done"
+            if run.unwatched.is_set():
+                if not run.watched:
+                    return "unwatched"
+                run.unwatched.clear()
+
     async def _drive(self, run: LiveRun, job: Job, runner: Runner) -> None:
         loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.wall_clock
 
         def on_event(ev: Event) -> None:  # the worker thread: hand over, never block
+            if ev.type == "stage_start" and job.cancel.is_set():
+                raise RunStopped(ev.stage)  # past the engine's `except Exception`: it ends here
             try:
                 loop.call_soon_threadsafe(run.on_engine_event, ev)
             except RuntimeError:  # the loop is closed: shutting down
                 pass
 
-        work = loop.run_in_executor(None, self._work, runner, job, on_event)
+        work: asyncio.Future | None = None
         try:
             # the wall clock is the wait running out, never an exception the run raised (an
             # engine TimeoutError is the engine's error)
-            await asyncio.wait({work}, timeout=self.wall_clock)
-            if not work.done():
+            before = self.lingering.get(job.run_id)
+            waited = "done" if before is None else await self._until(run, before, deadline)
+            if waited == "done":
+                work = loop.run_in_executor(None, self._work, runner, job, on_event)
+                waited = await self._until(run, work, deadline)
+            if waited == "unwatched":
+                job.cancel.set()  # it ends at its next stage start; nothing it reports goes out
+                log.info("live run %s stopped: nobody is listening", job.run_id)
+                run.publish("stopped", run.stage, {"message": STOPPED_MESSAGE})
+                return
+            if waited == "late":
                 job.stop.set()  # its next model call is refused; what it reports is dropped
-                work.add_done_callback(_late(job.run_id))
                 log.warning("live run %s given up after %g s", job.run_id, self.wall_clock)
                 limit = _wait_words(math.ceil(self.wall_clock))
                 raise RunTimeout(f"This description took longer than {limit} and was stopped.")
+            assert work is not None
             extra = work.result()
         except RunTimeout as e:
             run.fail(e)
@@ -462,6 +545,8 @@ class Executor:
         else:
             run.publish("done", None, {**(run.done or {"run_id": run.run_id}), **extra})
         finally:  # free before the listeners hear the end, so they may start the next run
+            if work is not None and not work.done():
+                self._linger(job.run_id, work)
             self.lock.release()
             self.active.pop(run.run_id, None)
             run.close()
@@ -469,7 +554,8 @@ class Executor:
 
     def _work(self, runner: Runner, job: Job, on_event: Callable[[Event], None]) -> dict:
         """The run, then the after_run hooks (one failing is logged, never fails the run). A run
-        the wall clock stopped skips them: nobody waits for it any more."""
+        the wall clock gave up skips them (it failed); a stopped one that still finished its
+        last stage, publishing, runs them: it is done."""
         runner(job, on_event)
         extra: dict = {}
         if job.stop.is_set():
@@ -487,7 +573,7 @@ def _late(run_id: str) -> Callable[[asyncio.Future], None]:
 
     def done(f: asyncio.Future) -> None:
         e = None if f.cancelled() else f.exception()
-        log.info("live run %s: its thread ended after the wall clock (%r)", run_id, e)
+        log.info("live run %s: its thread ended after the run was let go (%r)", run_id, e)
 
     return done
 
@@ -908,6 +994,25 @@ async def _frames(
             run.unsubscribe(q)
 
 
+class EventStream(StreamingResponse):
+    """An SSE response that lets go of its run's queue however it ends: the client gone, the
+    run over, or the body never started (a client that left before it did)."""
+
+    def __init__(self, frames: AsyncIterator[str], on_close: Callable[[], None]) -> None:
+        super().__init__(
+            frames,
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+        )
+        self._on_close = on_close
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._on_close()
+
+
 def _sse(
     backlog: list[dict],
     run: LiveRun | None = None,
@@ -915,11 +1020,11 @@ def _sse(
     heartbeat: float = HEARTBEAT_S,
     secret: dict | None = None,
 ) -> StreamingResponse:
-    return StreamingResponse(
-        _frames(backlog, run, q, heartbeat, secret),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
-    )
+    def close() -> None:
+        if run is not None and q is not None:
+            run.unsubscribe(q)
+
+    return EventStream(_frames(backlog, run, q, heartbeat, secret), close)
 
 
 def _after(request: Request, after: int | None) -> int | None:
@@ -1047,8 +1152,11 @@ async def run_events(run_id: str, request: Request, after: int | None = None) ->
         backlog, q = active.subscribe()
         return _sse(_since(backlog, after), active, q, live.heartbeat)
 
-    finished = (run_dir / MANIFEST).exists() or (run_dir / ERROR).exists()
-    if kind == "showcase" or finished:
+    status = "done" if kind == "showcase" else facts.run_status(run_dir, False)
+    if status != "done" and not holds_token(run_dir, request):
+        # an unfinished run is its owner's: its progress (cue texts and notes) and resuming
+        raise LiveError(403, "forbidden", "Only the person who started this run can open it.")
+    if status in ("done", "failed"):
         events = read_events(run_dir)
         if not events:
             raise LiveError(404, "not_found", "No progress was recorded for this run.")
@@ -1057,9 +1165,7 @@ async def run_events(run_id: str, request: Request, after: int | None = None) ->
             return Response(status_code=204)
         return _sse(rest)
 
-    # resuming spends: only the run's owner may (a finished run's replay stays open to all)
-    if not holds_token(run_dir, request):
-        raise LiveError(403, "forbidden", "Only the person who started this run can resume it.")
+    # stopped: restarted here for its owner, from the stage cache
     job = _resume_job(live, run_id, run_dir)
     if live.executor.busy:
         raise busy()

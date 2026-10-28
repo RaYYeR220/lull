@@ -136,12 +136,17 @@ def run_source(kind: str, manifest: dict, request: dict, samples_dir: Path) -> d
 
 
 def run_status(run_dir: Path, active: bool) -> str:
+    """running (described in this process now), failed (error.json: it wins over a manifest
+    that a run given up by its wall clock wrote after it was stopped; or a manifest that does
+    not read), done, or stopped (neither: its owner can resume it)."""
     if active:
         return "running"
+    if (run_dir / ERROR).exists():
+        return "failed"
     if isinstance(read_json(run_dir / MANIFEST), dict):
         return "done"
-    if (run_dir / ERROR).exists() or (run_dir / MANIFEST).exists():
-        return "failed"  # an error, or a manifest that does not read
+    if (run_dir / MANIFEST).exists():
+        return "failed"
     return "stopped"
 
 

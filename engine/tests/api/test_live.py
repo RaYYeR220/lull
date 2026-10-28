@@ -483,6 +483,7 @@ def test_runner_exception_error_event_and_error_json(lc, live, data, tmp_path):
     )
     r = post(lc)
     events = parse_sse(r.text)
+    token = parse_sse(r.text, keep_token=True)[0]["edit_token"]
     assert types(events) == ["run", "stage_start", "error"]
     err = events[-1]
     assert err["stage"] == "watch" and err["kind"] == "MediaError"
@@ -494,8 +495,9 @@ def test_runner_exception_error_event_and_error_json(lc, live, data, tmp_path):
         "message": err["message"],
         "stage": "watch",
     }
-    # finished (error.json): a reconnect replays, it does not resume
-    again = lc.get(f"/v1/runs/{d.name}/events")
+    # failed (error.json): its owner's reconnect replays, it does not resume; nobody else's
+    assert lc.get(f"/v1/runs/{d.name}/events").status_code == 403
+    again = lc.get(f"/v1/runs/{d.name}/events", headers={"Authorization": f"Bearer {token}"})
     assert parse_sse(again.text) == events
     assert len(live.runner.jobs) == 1
 
@@ -809,7 +811,9 @@ def test_watchdog_stops_a_run_that_takes_too_long(lc, live, data):
     live.executor.wall_clock = 0.3
     slow = Script(gate=gate, gate_at=1)  # stage_start, then hangs
     live.runner = slow
-    events = parse_sse(post(lc).text)
+    r = post(lc)
+    events = parse_sse(r.text)
+    owner = {"Authorization": f"Bearer {parse_sse(r.text, keep_token=True)[0]['edit_token']}"}
     assert types(events) == ["run", "stage_start", "error"]
     err = events[-1]
     assert err["kind"] == "RunTimeout" and err["stage"] == "listen"
@@ -825,7 +829,7 @@ def test_watchdog_stops_a_run_that_takes_too_long(lc, live, data):
     gate.set()
     assert slow.finished.wait(10)
     time.sleep(0.1)  # what the stuck thread said after it was stopped goes nowhere
-    assert parse_sse(lc.get(f"/v1/runs/{d.name}/events").text) == events
+    assert parse_sse(lc.get(f"/v1/runs/{d.name}/events", headers=owner).text) == events
 
 
 def test_the_stopped_runs_ledger_refuses_further_spend(tmp_path):
@@ -1735,3 +1739,182 @@ def test_the_frame_rate_is_the_higher_of_the_two_stated():
     assert _rate({"r_frame_rate": "0/0", "avg_frame_rate": "30000/1001"}) == (
         pytest.approx(29.97, abs=0.01), "30000/1001")  # fmt: skip
     assert _rate({}) == (0.0, "")
+
+
+# -- a run nobody watches stops at its next stage, and its owner restarts it ---------------------
+
+
+class Watcher:
+    """POST /v1/runs over raw ASGI on the test client's own event loop, so the client can go
+    away mid-stream: `seen(text)` waits until the stream has carried `text`, `leave()`
+    disconnects, `wait()` waits until the app has answered."""
+
+    def __init__(self, lc, content=b"fake video", headers=()) -> None:
+        import asyncio
+
+        boundary = "lullboundary"
+        body = (
+            (
+                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="a.mp4"\r\n'
+                "Content-Type: video/mp4\r\n\r\n"
+            ).encode()
+            + content
+            + f"\r\n--{boundary}--\r\n".encode()
+        )
+        self.text, self.gone = "", threading.Event()
+        self._grew = threading.Condition()
+        state = {"sent": False}
+
+        async def receive():
+            if not state["sent"]:
+                state["sent"] = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            while not self.gone.is_set():
+                await asyncio.sleep(0.01)
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            if message["type"] == "http.response.body":
+                with self._grew:
+                    self.text += message.get("body", b"").decode()
+                    self._grew.notify_all()
+
+        scope = {
+            "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "http_version": "1.1", "method": "POST", "scheme": "http", "path": "/v1/runs",
+            "raw_path": b"/v1/runs", "root_path": "", "query_string": b"",
+            "headers": [(b"host", b"t"),
+                        (b"content-type", f"multipart/form-data; boundary={boundary}".encode()),
+                        (b"content-length", str(len(body)).encode()), *headers],
+            "client": ("testclient", 50000), "server": ("t", 80), "state": {},
+        }  # fmt: skip
+        self.done = lc.portal.start_task_soon(lc.app, scope, receive, send)
+
+    def seen(self, text: str, timeout: float = 20.0) -> str:
+        with self._grew:
+            assert self._grew.wait_for(lambda: text in self.text, timeout), self.text
+            return self.text
+
+    def leave(self) -> None:
+        self.gone.set()
+
+    def wait(self) -> None:
+        self.done.result(20)
+
+
+def staged(job):
+    return [
+        Event("stage_start", "listen", {}, 1.0),
+        Event("stage_end", "listen", {"seconds": 0.1, "cached": False}, 2.0),
+        Event("stage_start", "watch", {}, 3.0),
+        Event("stage_end", "watch", {"seconds": 0.1, "cached": False}, 4.0),
+    ]
+
+
+def test_a_run_nobody_watches_stops_at_its_next_stage(lc, live, data):
+    gate = threading.Event()
+    live.runner = Script(staged, gate=gate, gate_at=1)  # in listen, waiting
+    w = Watcher(lc)
+    run_id = parse_sse(w.seen("event: stage_start"))[0]["run_id"]
+    w.leave()
+    w.wait()
+    # stopped at once: the executor is free and the run reads stopped (not failed)
+    deadline = time.time() + 5
+    while live.executor.busy and time.time() < deadline:
+        time.sleep(0.01)
+    assert not live.executor.busy
+    d = data / "runs" / run_id
+    assert lc.get(f"/v1/runs/{run_id}").json()["status"] == "stopped"
+    assert not (d / "error.json").exists()
+    stored = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()]
+    assert types(stored) == ["run", "stage_start", "stopped"]
+    assert stored[-1]["stage"] == "listen" and stored[-1]["message"]
+    # the thread finishes its stage and goes no further: the next stage never starts
+    gate.set()
+    assert live.runner.finished.wait(10)
+    (job,) = live.runner.jobs
+    assert job.cancel.is_set() and not job.stop.is_set()
+    time.sleep(0.1)
+    after = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()]
+    assert after == stored and not (d / "manifest.json").exists()
+    # someone else may start a run meanwhile
+    live.runner = Script()
+    assert types(parse_sse(post(lc).text))[-1] == "done"
+
+
+def test_a_stopped_run_is_replayed_to_its_owner_only(lc, live, data):
+    d = make_unfinished(data)
+    (d / "error.json").write_text(json.dumps({"type": "MediaError", "message": "bad"}))
+    r = lc.get(f"/v1/runs/{d.name}/events")
+    assert r.status_code == 403 and r.json()["error"] == "forbidden"
+    assert parse_sse(lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH).text)
+    assert live.runner.jobs == []  # failed: replayed, never resumed
+
+
+def test_an_error_json_wins_over_a_manifest_written_after_the_stop(lc, live, data):
+    d = make_unfinished(data)
+    (d / "error.json").write_text(json.dumps({"type": "RunTimeout", "message": "too long"}))
+    (d / "manifest.json").write_text(json.dumps({"run_id": d.name}))
+    assert lc.get(f"/v1/runs/{d.name}").json()["status"] == "failed"
+    assert lc.get(f"/v1/runs/{d.name}/original").status_code == 404
+
+
+def test_the_stopped_runs_ledger_refuses_searches_too(tmp_path):
+    from lull.api.live import RunTimeout, StopLedger
+
+    stop = threading.Event()
+    inner = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
+    ledger = StopLedger(inner, stop)
+    ledger.check_searches("r")
+    stop.set()
+    with pytest.raises(RunTimeout):
+        ledger.check_searches("r")
+
+
+def test_the_owner_restarts_a_stopped_run_from_its_stage_cache(
+    lc, live, data, tmp_path, tone_slides, fast_media, monkeypatch
+):
+    """The real pipeline (the engine's test doubles for the services): the visitor leaves in
+    research, the run stops before plan, and the owner's GET restarts it in that request; the
+    stages finished before reuse their cache and the run's cap counts both attempts."""
+    from lull.api import clip
+    from lull.api import live as live_mod
+    from pipeline_fakes import FakeSpeech, FakeTF
+
+    monkeypatch.setattr(live_mod.TokenFactory, "from_settings", staticmethod(FakeTF))
+    monkeypatch.setattr(live_mod.Tavily, "from_settings", staticmethod(lambda ledger: None))
+    monkeypatch.setattr(live_mod.NemoSpeechHTTP, "from_settings", staticmethod(FakeSpeech))
+    live.probe, live.transcode = clip.probe, clip.transcode
+    live.ledger = Ledger(tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
+    reached, gate = threading.Event(), threading.Event()
+
+    def runner(job, on_event):
+        def hook(ev):
+            on_event(ev)
+            if ev.type == "stage_start" and ev.stage == "research" and not job.resumed:
+                reached.set()
+                assert gate.wait(20)
+
+        live_mod._run_pipeline(job, hook)
+
+    live.runner = runner
+    w = Watcher(lc, tone_slides.read_bytes())
+    assert reached.wait(60)
+    first = parse_sse(w.seen('"stage": "research"'), keep_token=True)
+    run_id, token = first[0]["run_id"], first[0]["edit_token"]
+    w.leave()
+    w.wait()
+    gate.set()
+    spent_before = live.ledger.spent(run_id=run_id)
+    assert lc.get(f"/v1/runs/{run_id}").json()["status"] == "stopped"
+
+    r = lc.get(f"/v1/runs/{run_id}/events", headers={"Authorization": f"Bearer {token}"})
+    events = parse_sse(r.text)  # what was recorded (up to `stopped`), then the restart
+    i = next(i for i, e in enumerate(events) if e["type"] == "run" and e.get("resumed"))
+    assert types(events[:i])[-1] == "stopped" and "stage_end" not in types(events[i - 2 : i])
+    events = events[i:]
+    assert events[-1]["type"] == "done", events[-1]
+    ends = {e["stage"]: e["cached"] for e in events if e["type"] == "stage_end"}
+    assert ends["listen"] is True and ends["watch"] is True and ends["plan"] is False
+    assert lc.get(f"/v1/runs/{run_id}").json()["status"] == "done"
+    assert live.ledger.spent(run_id=run_id) >= spent_before > 0

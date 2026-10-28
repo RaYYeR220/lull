@@ -629,6 +629,17 @@ def test_the_run_being_described_is_busy_others_are_not(sc, rd, app, template, d
         live.executor.active.pop(RID)
 
 
+def test_a_stopped_run_whose_thread_still_runs_is_busy(sc, rd, app):
+    live = app.state.live
+    live.executor.lingering[RID] = object()  # let go, its last stage still going
+    try:
+        for r in _all_writes(sc):
+            assert r.status_code == 409 and r.json()["error"] == "busy"
+    finally:
+        live.executor.lingering.pop(RID)
+    assert sc.post(f"/v1/runs/{RID}/cues/c001/approve").status_code == 200
+
+
 # -- edits of one run go one at a time -------------------------------------------------------------
 
 

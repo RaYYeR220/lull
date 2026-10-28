@@ -796,7 +796,10 @@ class Studio:
         return {"studio_edits": changed}
 
     def not_described(self, run_id: str) -> None:
-        if self.live.executor.get(run_id) is not None:
+        """409 while the live executor describes the run, or a stopped run's thread is still
+        finishing its last stage."""
+        executor = self.live.executor
+        if executor.get(run_id) is not None or executor.lingers(run_id):
             raise LiveError(409, "busy", DESCRIBING, headers={"Retry-After": "60"})
 
     def check_rate(self, request: Request, limiter: RateLimiter | None = None) -> None:
