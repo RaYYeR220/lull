@@ -278,14 +278,32 @@ def test_ledger_budget_reads_spend(tmp_path):
     ledger.record(CallRecord(run_id="a", cost_usd=0.25, ts=time.time(), **rec))
     ledger.record(CallRecord(run_id="b", cost_usd=0.5, ts=midnight_utc() - 60, **rec))
     b = ledger_budget(path, cap_day=3.0, cap_total=35.0)
-    assert b == {"spent_today": 0.25, "cap_day": 3.0, "spent_total": 0.75, "cap_total": 35.0}
+    assert b == {
+        "spent_today": 0.25,
+        "cap_day": 3.0,
+        "spent_total": 0.75,
+        "cap_total": 35.0,
+        "models_today": 0.25,
+        "models_total": 0.75,
+        "tavily_credits_today": 0.0,
+        "tavily_credits_total": 0.0,
+    }
 
 
 def test_ledger_budget_survives_a_damaged_ledger(tmp_path):
     path = tmp_path / "ledger.db"
     path.write_bytes(b"this is not sqlite" * 100)
     b = ledger_budget(path, cap_day=3.0, cap_total=35.0)
-    assert b == {"spent_today": None, "cap_day": 3.0, "spent_total": None, "cap_total": 35.0}
+    assert b == {
+        "spent_today": None,
+        "cap_day": 3.0,
+        "spent_total": None,
+        "cap_total": 35.0,
+        "models_today": None,
+        "models_total": None,
+        "tavily_credits_today": None,
+        "tavily_credits_total": None,
+    }
     con = sqlite3.connect(tmp_path / "other.db")
     con.execute("CREATE TABLE unrelated (x)")
     con.commit()
@@ -451,3 +469,55 @@ def test_scrubber_round_2_forms(text):
 )
 def test_scrubber_leaves_a_root_that_only_starts_a_word(url):
     assert _win_scrubber()(url) == url
+
+
+# -- fix round 2: model spend and Tavily credits apart ---------------------------------------------
+
+GROUPS = [
+    {"role": "watch", "model": "nvidia/Nemotron-3.5-Super-VL", "calls": 1, "cost_usd": 0.004},
+    {"role": "plan", "model": "nvidia/Nemotron-3-Ultra-550b-a55b", "calls": 1, "cost_usd": 0.0087},
+    {"role": "research", "model": "tavily-search", "calls": 4, "cost_usd": 0.032},
+    {"role": "research", "model": "tavily-extract", "calls": 1, "cost_usd": 0.008},
+]
+
+
+def test_spend_splits_models_from_tavily_credits():
+    from lull.api.spend import split
+
+    assert split(GROUPS) == {"models_usd": 0.0127, "tavily_credits": 5.0}
+    assert split(None) is None and split("nope") is None
+    assert split([]) == {"models_usd": 0.0, "tavily_credits": 0.0}
+
+
+def test_runs_show_model_spend_and_tavily_credits_apart(client, data, make_run):
+    d = make_run(data / "runs", "r1")
+    manifest = json.loads((d / "manifest.json").read_text())
+    manifest["summary"]["calls_by_role_model"] = GROUPS
+    (d / "manifest.json").write_text(json.dumps(manifest))
+    make_run(data / "runs", "r2")  # an older manifest without the calls: no split to show
+    items = {i["id"]: i for i in client.get("/v1/runs").json()}
+    assert items["r1"]["spend"] == {"models_usd": 0.0127, "tavily_credits": 5.0}
+    assert items["r2"]["spend"] is None
+    detail = client.get("/v1/runs/r1").json()
+    assert detail["manifest"]["summary"]["spend"] == {"models_usd": 0.0127, "tavily_credits": 5.0}
+
+
+def test_health_shows_model_spend_and_tavily_credits_apart(client, tmp_path, monkeypatch):
+    import lull.speech
+    from lull.ledger import CallRecord, Ledger
+
+    monkeypatch.setattr(lull.speech.NemoSpeechHTTP, "health", lambda self: True)
+    ledger = Ledger(tmp_path / "home" / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
+    for provider, model, cost in (
+        ("tokenfactory", "nvidia/Nemotron-3-Ultra-550b-a55b", 0.01),
+        ("tavily", "tavily-search", 0.016),
+    ):
+        ledger.record(
+            CallRecord(run_id="r", stage="s", role="x", provider=provider, model=model,
+                       tokens_in=1, tokens_cached=0, tokens_out=1, latency_s=0.1,
+                       cost_usd=cost, ts=time.time())
+        )  # fmt: skip
+    b = client.get("/v1/health").json()["budget"]
+    assert b["spent_today"] == pytest.approx(0.026)
+    assert b["models_today"] == pytest.approx(0.01) and b["models_total"] == pytest.approx(0.01)
+    assert b["tavily_credits_today"] == 2.0 and b["tavily_credits_total"] == 2.0

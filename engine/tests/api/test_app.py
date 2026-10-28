@@ -18,7 +18,16 @@ def test_health_shape(client, monkeypatch):
     assert r.status_code == 200
     j = r.json()
     assert j["ok"] is True and j["speech"] is True
-    assert set(j["budget"]) == {"spent_today", "cap_day", "spent_total", "cap_total"}
+    assert set(j["budget"]) == {
+        "spent_today",
+        "cap_day",
+        "spent_total",
+        "cap_total",
+        "models_today",
+        "models_total",
+        "tavily_credits_today",
+        "tavily_credits_total",
+    }
 
 
 def test_health_speech_error_is_false(client, monkeypatch):

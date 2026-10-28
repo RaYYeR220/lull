@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from lull.config import get_settings
+from lull.ledger import TAVILY_CREDIT_USD
 
 log = logging.getLogger(__name__)
 
@@ -28,25 +29,39 @@ def midnight_utc(now: datetime | None = None) -> float:
     return now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
+SPEND_KEYS = ("spent", "models", "tavily_credits")
+
+
 def ledger_budget(path: Path, *, cap_day: float, cap_total: float) -> dict:
-    """Spend today and in total from the ledger at `path`, read-only."""
-    out: dict = {"spent_today": 0.0, "cap_day": cap_day, "spent_total": 0.0, "cap_total": cap_total}
+    """Spend today and in total from the ledger at `path`, read-only: all of it (what the caps
+    count), the model calls' share and the Tavily credits apart."""
+    out: dict = {"cap_day": cap_day, "cap_total": cap_total}
+    for key in SPEND_KEYS:
+        out[f"{key}_today"] = out[f"{key}_total"] = 0.0
     path = Path(path)
     if not path.is_file():
         return out
     try:
         con = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
         try:
-            sql = "SELECT COALESCE(SUM(cost_usd), 0) FROM calls"
-            today = con.execute(sql + " WHERE ts >= ?", (midnight_utc(),)).fetchone()[0]
-            total = con.execute(sql).fetchone()[0]
+            sql = (
+                "SELECT provider = 'tavily', COALESCE(SUM(cost_usd), 0) FROM calls{} "
+                "GROUP BY provider = 'tavily'"
+            )
+            today = con.execute(sql.format(" WHERE ts >= ?"), (midnight_utc(),)).fetchall()
+            total = con.execute(sql.format("")).fetchall()
         finally:
             con.close()
     except sqlite3.Error:
         log.warning("health: the ledger could not be read", exc_info=True)
-        out["spent_today"] = out["spent_total"] = None
+        for key in SPEND_KEYS:
+            out[f"{key}_today"] = out[f"{key}_total"] = None
         return out
-    out["spent_today"], out["spent_total"] = float(today), float(total)
+    for when, rows in (("today", today), ("total", total)):
+        by = {bool(tavily): float(cost) for tavily, cost in rows}
+        out[f"spent_{when}"] = by.get(False, 0.0) + by.get(True, 0.0)
+        out[f"models_{when}"] = by.get(False, 0.0)
+        out[f"tavily_credits_{when}"] = round(by.get(True, 0.0) / TAVILY_CREDIT_USD, 2)
     return out
 
 

@@ -1209,3 +1209,79 @@ def test_fork_expiry_runs_at_startup_and_then_on_a_timer(make_app, template, dat
                 break
             time.sleep(0.05)
         assert not (data / "runs" / second).exists()  # by the timer, while serving
+
+
+# -- fix round 2: coverage recomputed on any text change; forking a live run -----------------------
+
+
+def test_a_text_change_refreshes_coverage_with_the_engine_helper(sc, rd, template, monkeypatch):
+    from lull.stages import finalize as fin
+
+    seen: list[str] = []
+
+    def refresh(cue):
+        seen.append(cue.text)
+        return cue
+
+    monkeypatch.setattr(fin, "refresh_described", refresh, raising=False)
+    assert patch(sc, "c001", NEW_RED).status_code == 200
+    assert seen == [NEW_RED]
+    doc = _engine_cues(template)
+    doc["cues"][0]["event_ids"] = ["e003"]  # moved: the human text comes back, held
+    (rd / "cues.json").write_text(json.dumps(doc))
+    assert sc.post(f"/v1/runs/{RID}/cues/x002/approve").status_code == 200
+    assert seen == [NEW_RED, NEW_RED]  # put back = a text change too
+    assert sc.post(f"/v1/runs/{RID}/cues/c002/approve").status_code == 200
+    assert len(seen) == 2  # no text change: nothing to recompute
+
+
+def test_without_the_engine_helper_stale_coverage_is_dropped():
+    from lull.api.studio import refreshed
+
+    class Covered(Cue):
+        described: dict | None = None
+
+    base = dict(
+        id="c001", gap_id="g001", start=1.0, end=2.0, text="A red screen.", event_ids=["e001"],
+        status="verified", ahead=False, claims=[], audio_path=None, audio_dur=None,
+    )  # fmt: skip
+    assert refreshed(Covered(**base, described={"e001": 1.0})).described is None
+    plain = Cue(**base)
+    assert refreshed(plain) == plain  # no coverage field yet: nothing to drop
+
+
+def test_fork_a_live_run_with_overrides_and_a_held_previous(sc, rd, fakes, data):
+    def not_visible(call):
+        text = description(call["messages"])
+        return {"claims": [{"text": text, "verdict": "not_visible", "at": 0.5}]}
+
+    assert patch(sc, "c001", NEW_RED).status_code == 200
+    take = rd / cue_of(rd, "c001")["audio_path"]
+    fakes.answers = {
+        "verify": not_visible,
+        "remove": lambda call: {"text": description(call["messages"])},
+    }
+    assert patch(sc, "c001", "A red curtain falls across the stage.").json()["status"] == "held"
+    fakes.answers = {}
+    assert sc.post(f"/v1/runs/{RID}/cues/c002/approve").status_code == 200
+    before = snapshot(rd)
+
+    r = sc.post(f"/v1/runs/{RID}/fork")
+    assert r.status_code == 201
+    new, token = r.json()["run_id"], r.json()["edit_token"]
+    d = data / "runs" / new
+    ov = overrides(d)
+    assert ov["c001"]["status"] == "held" and ov["c001"]["previous"]["text"] == NEW_RED
+    prev = d / ov["c001"]["previous"]["audio_path"]
+    assert prev.is_file() and prev.resolve() != take.resolve()  # its own copy
+    assert ov["c002"]["status"] == "approved"
+    assert cue_of(d, "c001")["status"] == "held" and cue_of(d, "c002")["status"] == "approved"
+    assert json.loads((d / "studio.json").read_text(encoding="utf-8"))["dirty"] is True
+
+    auth = {"Authorization": f"Bearer {token}"}
+    r = sc.patch(f"/v1/runs/{new}/cues/c001", json={"text": "The plain red screen stays still."},
+                 headers=auth)  # fmt: skip
+    assert r.status_code == 200 and r.json()["status"] == "edited"
+    assert not prev.exists()  # the fork's previous take is superseded ...
+    assert take.is_file() and snapshot(rd) == before  # ... and the source is untouched
+    assert sc.post(f"/v1/runs/{new}/publish", headers=auth).status_code == 200

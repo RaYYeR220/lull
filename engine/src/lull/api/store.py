@@ -24,6 +24,7 @@ from typing import Any
 
 from lull.api.clean import Scrubber, default_roots
 from lull.api.settings import ApiSettings
+from lull.api.spend import split as split_spend
 
 log = logging.getLogger(__name__)
 
@@ -191,12 +192,13 @@ class RunStore:
 
     def summary(self, kind: str, d: Path) -> dict[str, Any]:
         manifest = self.manifest(d)
-        title, duration, cost, cues, created = d.name, None, None, None, None
+        title, duration, cost, cues, created, spend = d.name, None, None, None, None, None
         if manifest is not None:
             status = "published"
             video, summ = _dict(manifest.get("video")), _dict(manifest.get("summary"))
             title = _str(video.get("name")) or d.name
             duration, cost = _num(video.get("duration")), _num(summ.get("cost_usd"))
+            spend = split_spend(summ.get("calls_by_role_model"))
             cues = summ.get("cues") if isinstance(summ.get("cues"), dict) else None
             created = _str(manifest.get("created"))
         elif (d / MANIFEST).exists() or (d / ERROR).exists():
@@ -211,6 +213,7 @@ class RunStore:
             "created": created or _mtime_iso(d),
             "status": status,
             "cost_usd": cost,
+            "spend": spend,  # model spend and Tavily credits apart
             "cues": cues,
         }
 
@@ -274,7 +277,10 @@ class RunStore:
                 k: options[k] for k in OPTION_KEYS if k in options and _str(options[k]) is not None
             },
             "outputs": outputs,
-            "summary": {k: summ[k] for k in SUMMARY_KEYS if k in summ},
+            "summary": {
+                **{k: summ[k] for k in SUMMARY_KEYS if k in summ},
+                "spend": split_spend(summ.get("calls_by_role_model")),
+            },
             "versions": {k: versions[k] for k in VERSION_KEYS if k in versions},
         }
         return self.scrub.tree(out)

@@ -55,6 +55,7 @@ from lull.api.clean import Scrubber, default_roots
 from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import HOUR, RateLimiter
 from lull.api.settings import ApiSettings
+from lull.api.spend import split as split_spend
 from lull.api.store import PENDING, RunStore
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, Ledger
@@ -332,6 +333,10 @@ class LiveRun:
             data = {k: self.scrub(v) if isinstance(v, str) else v for k, v in data.items()}
         elif ev.type == "done":  # published by the executor once after_run has run
             data = {k: v for k, v in data.items() if k not in ("output", "manifest")}
+            summary = data.get("summary")
+            if isinstance(summary, dict):  # model spend and Tavily credits apart
+                spend = split_spend(summary.get("calls_by_role_model"))
+                data["summary"] = {**summary, "spend": spend}
             self.done = {**data, "run_id": self.run_id}
             return
         self.publish(ev.type, ev.stage, data, ev.ts)

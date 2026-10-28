@@ -93,6 +93,7 @@ from lull.api.store import (
 from lull.ledger import BudgetExceeded, Ledger
 from lull.pipeline import cue_context
 from lull.speech import NemoSpeechHTTP, SpeechClient
+from lull.stages import finalize as finalize_mod
 from lull.stages import mix as mixer
 from lull.stages.finalize import (
     CueContext,
@@ -381,6 +382,19 @@ MOVED: dict[str, Any] = {  # the person's text on a cue that is not where it was
 }  # fmt: skip
 
 
+def refreshed(cue: Cue) -> Cue:
+    """`cue` with its coverage data worked out again after its text changed, so coverage and
+    F113 never count words that are gone: the engine's finalize.refresh_described when it has
+    one, else the stored coverage dropped (when the cue carries any)."""
+    refresh = getattr(finalize_mod, "refresh_described", None)
+    if refresh is not None:
+        out = refresh(cue)
+        return out if isinstance(out, Cue) else cue
+    if "described" in type(cue).model_fields:
+        return cue.model_copy(update={"described": None})
+    return cue
+
+
 def text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
@@ -460,6 +474,8 @@ def apply_overlay(run_dir: Path, doc: CueDoc, overrides: dict[str, dict]) -> lis
         except ValidationError:
             log.warning("studio: the override of %s does not load", cue.id)
             continue
+        if new.text != cue.text:  # the person's words over the engine's: coverage changes
+            new = refreshed(new)
         if new != cue:
             doc.replace(new)
             changed.append(cue.id)
@@ -946,6 +962,7 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
             studio.editing -= 1
         if done.status != "held":
             done = done.model_copy(update={"status": "edited"})
+        done = refreshed(done)  # new words: the coverage data is worked out again
         previous = _dict(_dict(overrides_of(run_dir).get(cue.id)).get("previous"))
         await studio.save(run_dir, doc, cue, done, authored=True)
         await anyio.to_thread.run_sync(_tidy, run_dir, work, cue, done, previous.get("audio_path"))
