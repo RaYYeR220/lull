@@ -4,7 +4,10 @@
 # Build from engine/: docker build --platform linux/amd64 -t lull-api:dev .
 # Every download is checked against a SHA-256 pinned here; see docker/README.md.
 
-ARG PYTHON_IMAGE=python:3.11-slim-bookworm
+# python:3.11-slim-bookworm and uv 0.11.23, pinned by digest (multi-arch index; amd64 is used)
+ARG PYTHON_IMAGE=python:3.11-slim-bookworm@sha256:90d117a7f1ef6535dc75831e1a9184725757fede0d4d424d7977fb5429d50610
+
+FROM --platform=linux/amd64 ghcr.io/astral-sh/uv:0.11.23@sha256:d0a0a753ab981624b49c97abc98821c1c09f4ca69d1ef5cee69c501be3d88479 AS uv
 
 # -- downloads ---------------------------------------------------------------------------------
 FROM --platform=linux/amd64 ${PYTHON_IMAGE} AS fetch
@@ -83,7 +86,7 @@ RUN curl -fsSL -o litestream.tar.gz \
 
 # -- the Python environment (uv, from the lockfile) --------------------------------------------
 FROM --platform=linux/amd64 ${PYTHON_IMAGE} AS build
-COPY --from=ghcr.io/astral-sh/uv:0.11.23 /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON=/usr/local/bin/python3.11 \
@@ -119,7 +122,7 @@ ENV PATH=/app/.venv/bin:/opt/nemo-speech/bin:$PATH \
     LULL_DATA=/data \
     LULL_HOME=/data/home \
     LULL_SPEECH_URL=http://127.0.0.1:8089 \
-    LULL_PROXY_HOPS=1 \
+    LULL_PROXY_HOPS=0 \
     PORT=8080
 
 RUN python -m compileall -q /app/src \
@@ -127,10 +130,13 @@ RUN python -m compileall -q /app/src \
     && chown -R lull:lull /data \
     && ffmpeg -hide_banner -version | head -n 1 \
     && nemo-speech --version \
-    && litestream version \
-    && python -c "import lull.api.app"
+    && litestream version
 
 USER lull
 WORKDIR /app
+# the app imports and builds as the user it runs as, with its data paths out of the way
+RUN check="$(mktemp -d)" \
+    && LULL_DATA="$check" LULL_HOME="$check/home" python -c "import lull.api.app" \
+    && rm -rf "$check"
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/lull-entrypoint"]

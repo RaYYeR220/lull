@@ -3,15 +3,39 @@
 # into the image) and the Lull API (uvicorn, one worker) on $PORT. The ledger is restored from
 # and replicated to Cloud Storage by Litestream when LULL_BUCKET is set.
 #
-# This script stays as PID 1: SIGTERM/SIGINT stop the API first (it drains for a few seconds),
-# then the speech server; when either process ends on its own, the other is stopped and the
-# container exits, so the platform restarts it.
+# This script stays as PID 1. On SIGTERM/SIGINT it stops the API, then the speech server, each
+# with a bound and SIGKILL after it, so the whole stop fits in Cloud Run's 10 s grace period:
+#   API      <= 7.5 s  (uvicorn drains 5 s, then Litestream's final sync gets at most 2 s)
+#   speech   <= 1.5 s
+# When either process ends on its own, the other is stopped and the container exits, so the
+# platform restarts it.
 set -euo pipefail
 
 SPEECH_URL="http://127.0.0.1:8089"
 SPEECH_WAIT="${LULL_SPEECH_WAIT:-120}"
+APP_STOP_DS=75     # tenths of a second the API gets to stop
+SPEECH_STOP_DS=15  # tenths of a second the speech server gets to stop
 
 log() { printf 'entrypoint: %s\n' "$*" >&2; }
+
+# CPUs this container may use: the cgroup quota (cpu.max, or v1 cfs) when it is below nproc
+cpus() {
+  local n quota period
+  n="$(nproc)"
+  if read -r quota period < /sys/fs/cgroup/cpu.max 2>/dev/null; then
+    :
+  elif read -r quota < /sys/fs/cgroup/cpu/cpu.cfs_quota_us 2>/dev/null \
+      && read -r period < /sys/fs/cgroup/cpu/cpu.cfs_period_us 2>/dev/null; then
+    :
+  fi
+  if [[ "${quota:-}" =~ ^[0-9]+$ && "${period:-}" =~ ^[1-9][0-9]*$ ]]; then
+    quota=$(( (quota + period - 1) / period ))
+    if (( quota >= 1 && quota < n )); then
+      n=$quota
+    fi
+  fi
+  echo "$n"
+}
 
 export LULL_DATA="${LULL_DATA:-/data}"
 export LULL_HOME="${LULL_HOME:-$LULL_DATA/home}"
@@ -32,21 +56,52 @@ export LULL_LEDGER_REPLICA="${LULL_LEDGER_REPLICA:-}"
 speech_pid=""
 app_pid=""
 
+# end PID: SIGTERM, wait at most LIMIT tenths of a second, then SIGKILL
+end() {
+  local pid=$1 limit=$2 name=$3 i
+  if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  kill -TERM "$pid" 2>/dev/null || true
+  for (( i = 0; i < limit; i++ )); do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  if kill -0 "$pid" 2>/dev/null; then
+    log "the $name did not stop in $(( limit / 10 )).$(( limit % 10 ))s; killing it"
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+
 stop() {
   trap - TERM INT
-  if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
-    kill -TERM "$app_pid" 2>/dev/null || true
-    wait "$app_pid" 2>/dev/null || true
-  fi
-  if [[ -n "$speech_pid" ]] && kill -0 "$speech_pid" 2>/dev/null; then
-    kill -TERM "$speech_pid" 2>/dev/null || true
-    wait "$speech_pid" 2>/dev/null || true
-  fi
+  end "$app_pid" "$APP_STOP_DS" API
+  end "$speech_pid" "$SPEECH_STOP_DS" "speech server"
 }
 trap 'log "stopping"; stop; exit 143' TERM
 trap 'log "stopping"; stop; exit 130' INT
 
+# HTTP status of GET URL from the speech server, with its key when AUTH is "key"; 0 if unreachable
+status() {
+  timeout 5 python -I -c '
+import os, sys, urllib.error, urllib.request
+req = urllib.request.Request(sys.argv[1])
+if sys.argv[2] == "key":
+    req.add_header("Authorization", "Bearer " + os.environ["LULL_SPEECH_KEY"])
+try:
+    with urllib.request.urlopen(req, timeout=4) as r:
+        print(r.status)
+except urllib.error.HTTPError as e:
+    print(e.code)
+except Exception:
+    print(0)
+' "$1" "$2" || echo 0
+}
+
 # -- the ledger --------------------------------------------------------------------------------
+# A failed restore (no access to the bucket, a broken replica) is fatal: starting with an empty
+# ledger would reset the spend caps.
 if [[ -n "$LULL_LEDGER_REPLICA" ]]; then
   log "restoring the ledger from its replica, if there is one and no local copy"
   litestream restore -if-db-not-exists -if-replica-exists \
@@ -61,7 +116,7 @@ fi
 # command line (where ps shows it). Magpie gets one thread per CPU (its default, 4, would
 # oversubscribe a 2-vCPU instance).
 MODELS="${NEMO_SPEECH_MODEL_DIR:-/opt/nemo-models}/serve"
-SPEECH_THREADS="${LULL_SPEECH_THREADS:-$(nproc)}"
+SPEECH_THREADS="${LULL_SPEECH_THREADS:-$(cpus)}"
 log "starting the speech server (CPU, ${SPEECH_THREADS} TTS threads)"
 NEMO_SPEECH_HTTP_API_KEY="$LULL_SPEECH_KEY" nemo-speech serve \
   --host 127.0.0.1 --port 8089 --device cpu --no-ui \
@@ -71,7 +126,7 @@ NEMO_SPEECH_HTTP_API_KEY="$LULL_SPEECH_KEY" nemo-speech serve \
 speech_pid=$!
 
 started=$SECONDS
-until nemo-speech --quiet health --url "$SPEECH_URL/health" >/dev/null 2>&1; do
+until timeout 5 nemo-speech --quiet health --url "$SPEECH_URL/health" >/dev/null 2>&1; do
   if ! kill -0 "$speech_pid" 2>/dev/null; then
     rc=0
     wait "$speech_pid" || rc=$?
@@ -85,12 +140,23 @@ until nemo-speech --quiet health --url "$SPEECH_URL/health" >/dev/null 2>&1; do
   fi
   sleep 0.5
 done
-log "the speech server is ready after $(( SECONDS - started ))s"
+
+# the key must be enforced, and must be the one the API holds
+anon="$(status "$SPEECH_URL/v1/models" none)"
+keyed="$(status "$SPEECH_URL/v1/models" key)"
+if [[ "$anon" != 401 || "$keyed" != 200 ]]; then
+  log "the speech server does not enforce its key (no key: HTTP $anon, key: HTTP $keyed)"
+  stop
+  exit 1
+fi
+log "the speech server is ready after $(( SECONDS - started ))s (no key: HTTP 401, key: HTTP 200)"
 
 # -- the API -----------------------------------------------------------------------------------
-# one worker: the live executor, the upload caps and the rate limits live in this process
+# One worker: the live executor, the upload caps and the rate limits live in this process.
+# No proxy-header handling in uvicorn: the app takes the visitor's address from the socket, or
+# from X-Forwarded-For counted from the right when LULL_PROXY_HOPS says how many proxies to trust.
 app=(uvicorn lull.api.app:app --host 0.0.0.0 --port "${PORT:-8080}" --workers 1
-  --proxy-headers '--forwarded-allow-ips=*' --timeout-graceful-shutdown 8)
+  --no-proxy-headers --timeout-graceful-shutdown 5)
 if [[ -n "$LULL_LEDGER_REPLICA" ]]; then
   log "starting the API under litestream (replicating the ledger)"
   litestream replicate -config /etc/litestream.yml -exec "${app[*]}" &

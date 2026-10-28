@@ -1,6 +1,12 @@
 # The spend ledger (SQLite, WAL) replicated to Cloud Storage. Used only when LULL_BUCKET (or
 # LULL_LEDGER_REPLICA) is set; entrypoint.sh fills LULL_LEDGER_REPLICA, by default
 # gs://$LULL_BUCKET/ledger. Credentials come from the runtime service account (ADC).
+
+# On SIGTERM the final sync gets at most 2 s (retried every 250 ms), so the whole stop fits in
+# Cloud Run's 10 s grace period; see the shutdown budget in docker/README.md.
+shutdown-sync-timeout: 2s
+shutdown-sync-interval: 250ms
+
 dbs:
   - path: ${LULL_HOME}/ledger.db
     replica:
