@@ -81,6 +81,60 @@ actions, settings). `--source-url` points research at a page about the video, an
 already finished. Any change to the engine's code, prompts or templates counts as a new
 engine and runs every stage again.
 
+## Agents (MCP)
+
+Lull is also an MCP server, so an AI agent (Claude Desktop, any MCP client) can ask it to
+describe a video and fetch the result. There are two servers.
+
+| Tool | What it does |
+|---|---|
+| `list_samples` | the sample clips: id, title, duration, credit, licence |
+| `describe_video` | describe a sample (`sample_id`) or, locally, a file (`path`), in `standard` or `extended` mode. It sends progress per stage (seconds, model calls and spend so far), then returns the run id, status, cue counts, coverage, the WCAG 1.2.3/1.2.5/1.2.7 rows, model spend and searches |
+| `get_tracks` | a finished run's cues as text with timecodes and status, plus the URLs (hosted) or paths (local) of `descriptions.vtt`, `extended.vtt`, `described-audio.m4a` and `described.mp4` |
+| `get_report` | a finished run's conformance report as its manifest says it: the WCAG rows with what blocks each, held lines with their reasons, coverage, spend |
+| `review_queue` | local only: runs with lines held for a person, newest first |
+
+**Local, over stdio** (`uv run lull mcp`). It runs on your machine with your keys and your
+spend caps. `describe_video` also takes a path to a video file (mp4, mov, webm or mkv; it must
+exist and be a regular file). Runs go under `LULL_HOME/runs`, and a run already made is reused
+from its cache. The speech server must be running (see above). To use it from Claude Desktop,
+put this in `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "lull": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/lull/engine", "lull", "mcp"],
+      "env": {
+        "NEBIUS_API_KEY": "your Token Factory key",
+        "TAVILY_API_KEY": "your Tavily key"
+      }
+    }
+  }
+}
+```
+
+**Hosted, over streamable HTTP** (`https://<the API>/mcp`). The hosted server describes the
+licensed samples only. It never fetches a URL, reads a path or takes an upload: a fetch from
+the cloud host could reach its metadata server and internal addresses. A tool call carrying
+an argument the tool does not declare (`url`, `path`, `file`...) is refused, not ignored. The
+hosted server has the website's limits: one description at a time (`busy`), each visitor's
+start limits (`rate_limited`), and the demo's spend caps (`budget`). Refusals come back as tool
+errors that start with those codes.
+
+A hosted `describe_video` also returns an `edit_token`, which owns the run: send it as
+`Authorization: Bearer <token>` to edit the run in the Studio, and give it only to the person
+who should. Nothing logs it. In a client that takes a URL (Claude Desktop: Settings,
+Connectors, add a custom connector), give the address; in one that reads JSON:
+
+```json
+{ "mcpServers": { "lull": { "type": "http", "url": "https://<the API>/mcp" } } }
+```
+
+A description takes a few minutes. Leaving the call (closing the client) stops the run; its
+finished stages stay cached.
+
 ## Outputs
 
 `describe` writes into the run folder:

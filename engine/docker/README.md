@@ -126,6 +126,7 @@ its owner can restart it from the stage cache.
 | `LULL_TAVILY_DAY` | `60` | web searches per day (counted, never priced); a live run may make 3 |
 | `LULL_SAMPLES` | `/opt/lull/samples` | the sample clips and `samples.json` baked into the image (read-only) |
 | `LULL_UPLOAD_RETENTION_DAYS` | `7` | an upload's run is removed this many days after it was made (a fork: 24 h, and never after the upload it came from), by housekeeping at start, hourly, and from `/v1/health` when an hour has passed; `/v1/health` states it |
+| `LULL_PUBLIC_URL` | none | the API's public address (e.g. `https://lull-api-xyz.a.run.app`), for the links MCP `get_tracks` hands out; unset, they are built from the request |
 | `LULL_SHOWCASE_EDITABLE` | `0` | local only: lets the Studio change showcase runs |
 | `LULL_NO_VERIFY` | unset | the engine's evaluation-only switch (no frame verification): a true value stops the container at start, and the API refuses to start with it; it is never passed on |
 
@@ -157,6 +158,7 @@ cat > env.yaml <<YAML
 LULL_PROXY_HOPS: "1"
 LULL_BUCKET: "$LULL_BUCKET"
 LULL_WEB_ORIGINS: "$WEB_ORIGINS"
+LULL_PUBLIC_URL: "$SERVICE_URL"
 YAML
 
 # the first deploy takes the traffic (there is no revision yet to keep it)
@@ -211,6 +213,10 @@ It checks health; starts a sample run (bbb45) and leaves it once its first stage
 run must read `stopped`); restarts it as its owner (`done`, a stage from the cache, model spend
 within $0.05 over both attempts); sends a 2560x1440 upload (422 unsupported); then, over the
 real mount, forks the run, approves or holds one cue and publishes it. It prints no token.
+
+`--mcp` checks the MCP server at `/mcp` instead (the agents' way in, see the engine README):
+`initialize` and `tools/list`, then one `describe_video` of the sample to `done` within the
+spend bound, and its tracks and report.
 
 ## Sizes
 

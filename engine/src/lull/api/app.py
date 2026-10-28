@@ -17,7 +17,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Route
 
+from lull.api.agents import McpEndpoint, hosted_server
 from lull.api.health import Health
 from lull.api.live import SEARCHES_PER_RUN, Live, LiveError, live_error_handler
 from lull.api.live import router as live_router
@@ -119,7 +121,8 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         # housekeeping now and hourly, in the background: the port opens at once
         timer = asyncio.create_task(app.state.studio.housekeeping_forever(), name="housekeeping")
         try:
-            yield
+            async with app.state.mcp.running():  # /mcp: agents (lull.api.agents)
+                yield
         finally:
             timer.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -131,6 +134,9 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     app.state.health = Health(searches_cap_run=SEARCHES_PER_RUN)
     app.state.live = Live(settings, store)
     app.state.studio = Studio(settings, store, app.state.live)
+    app.state.agents = hosted_server(app.state.live, store, settings)
+    app.state.mcp = McpEndpoint(app.state.agents)
+    app.router.routes.append(Route("/mcp", endpoint=app.state.mcp))
     app.add_exception_handler(LiveError, live_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_error_handler)

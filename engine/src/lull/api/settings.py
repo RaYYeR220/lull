@@ -25,6 +25,9 @@ class ApiSettings(BaseSettings):
         default=7.0, gt=0, validation_alias="LULL_UPLOAD_RETENTION_DAYS"
     )
 
+    # the API's public address for links it hands out (MCP get_tracks); else the request's
+    lull_public_url: str = Field(default="", validation_alias="LULL_PUBLIC_URL")
+
     @property
     def origins(self) -> list[str]:
         return [o.strip() for o in self.lull_web_origins.split(",") if o.strip()]

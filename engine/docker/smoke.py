@@ -12,12 +12,17 @@
 5. Over the real data volume: fork the run, approve (or hold) one cue, publish. Publishing
    renames folders, which a Cloud Storage mount takes only with hierarchical namespace.
 
+With --mcp it checks the MCP server at /mcp instead: initialize and tools/list, one
+describe_video of the sample to done (progress per stage, model spend within --max-spend), then
+get_tracks and get_report of that run.
+
 Needs ffmpeg on PATH. Exits non-zero on the first failure. Prints no edit token.
 """
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import subprocess
 import sys
@@ -152,12 +157,51 @@ def publish_over_the_mount(c: httpx.Client, run_id: str) -> None:
     ok(f"publish over the data volume: fork {fork}, {what}, published")
 
 
+async def mcp_check(url: str, sample: str, max_spend: float) -> None:
+    from mcp import Client
+
+    async with Client(f"{url}/mcp", mode="legacy", read_timeout_seconds=900) as c:
+        names = sorted(t.name for t in (await c.list_tools()).tools)
+        if names != ["describe_video", "get_report", "get_tracks", "list_samples"]:
+            fail(f"mcp tools/list: {names}")
+        ok(f"mcp initialize + tools/list: {names}")
+        stages: list[str] = []
+
+        async def progress(p: float, total: float | None, message: str | None) -> None:
+            stages.append(message or "")
+
+        r = await c.call_tool("describe_video", {"sample_id": sample}, progress_callback=progress)
+        out = r.structured_content or {}
+        if r.is_error or out.get("status") != "done":
+            fail(f"mcp describe_video: {out or r.content}")
+        spend = (out.get("spend") or {}).get("model_usd") or 0.0
+        if spend > max_spend:
+            fail(f"mcp describe_video spent ${spend:.4f}, over ${max_spend}")
+        ok(f"mcp describe_video({sample}): done, {len(stages)} progress notes, "
+           f"model spend ${spend:.4f}, cues {out.get('cues')}")  # fmt: skip
+        run_id = out["run_id"]
+        tracks = (await c.call_tool("get_tracks", {"run_id": run_id})).structured_content or {}
+        report = (await c.call_tool("get_report", {"run_id": run_id})).structured_content or {}
+        if not tracks.get("cues") or not report.get("wcag"):
+            fail("mcp get_tracks / get_report came back empty")
+        rows = {w["criterion"]: w["status"] for w in report["wcag"]}
+        ok(f"mcp get_tracks: {len(tracks['cues'])} cues, files {sorted(tracks['files'])}")
+        ok(f"mcp get_report: {rows}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("url")
     ap.add_argument("--sample", default="bbb45")
     ap.add_argument("--max-spend", type=float, default=0.05)
+    ap.add_argument("--mcp", action="store_true", help="check the MCP server at /mcp instead")
     args = ap.parse_args()
+    if args.mcp:
+        with httpx.Client(base_url=args.url.rstrip("/"), timeout=TIMEOUT) as c:
+            health(c)
+        asyncio.run(mcp_check(args.url.rstrip("/"), args.sample, args.max_spend))
+        print("mcp smoke passed")
+        return
     with httpx.Client(base_url=args.url.rstrip("/"), timeout=TIMEOUT) as c:
         health(c)
         run_id, token = leave_mid_run(c, args.sample)

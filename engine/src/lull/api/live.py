@@ -997,6 +997,21 @@ async def _accept(
         opts, video, source = await _receive(live, form, run_dir)
     finally:
         await form.close()
+    return await _prepare(live, run_id, run_dir, opts, video, source, client)
+
+
+async def _prepare(
+    live: Live,
+    run_id: str,
+    run_dir: Path,
+    opts: RunOptions,
+    video: Path,
+    source: dict[str, Any],
+    client: str,
+) -> tuple[Job, str]:
+    """The stored video (run_dir/input) probed and replaced by the run's copy, the spend caps
+    checked and request.json written with the sha256 of the edit token returned with the job.
+    Raises LiveError; the caller then removes run_dir."""
     limit = live.max_sample_seconds if source["kind"] == "sample" else live.max_seconds
     video, info = await _cut(live, run_id, video, limit)
     live.check_budget(run_id, info.duration)
@@ -1051,6 +1066,53 @@ async def _receive(
         await _store(_link_or_copy, path, video)
         source = {"kind": "sample", "id": sample, "name": path.name}
     return opts, video, source
+
+
+@dataclass
+class Started:
+    """A run started for a caller that follows it: its job, edit token, events so far and
+    queue (unsubscribe when done following)."""
+
+    job: Job
+    token: str
+    run: LiveRun
+    backlog: list[dict]
+    queue: asyncio.Queue
+
+
+def no_sample() -> LiveError:
+    return LiveError(422, "sample", "There is no sample with that id.")
+
+
+async def start_sample(live: Live, key: str, sample_id: str, opts: RunOptions) -> Started:
+    """Start a run of one of the samples for visitor `key`, with the checks POST /v1/runs makes
+    (busy 409, rate 429, spend 402, the sample 422): what the MCP server's describe_video
+    calls. Nothing but a sample id names the video."""
+    if live.executor.busy:
+        raise busy()
+    live.check_rate(key)
+    live.check_open_budget()
+    path = _sample(live.settings, sample_id)
+    if path is None:
+        raise no_sample()
+    run_id = new_run_id()
+    run_dir = live.settings.runs_dir / run_id
+    try:
+        video = _new_run_dir(run_dir) / path.name
+        await _store(_link_or_copy, path, video)
+        source = {"kind": "sample", "id": sample_id, "name": path.name}
+        job, token = await _prepare(live, run_id, run_dir, opts, video, source, key)
+        if live.executor.busy:
+            raise busy()
+        live.check_rate(key)
+        (run_dir / PENDING).unlink()
+        first = {"run_id": run_id, "duration": job.duration, "options": _opts(job)}
+        backlog, run, q = await live.start(job, first)
+    except BaseException:
+        shutil.rmtree(run_dir, ignore_errors=True)
+        raise
+    live.limiter.hit(key)
+    return Started(job, token, run, backlog, q)
 
 
 def _resume_job(live: Live, run_id: str, run_dir: Path) -> Job:
@@ -1171,9 +1233,12 @@ SAMPLE_FIELDS = (
 
 @router.get("/v1/samples")
 def list_samples(request: Request) -> list[dict[str, Any]]:
+    return sample_entries(_live(request).settings.samples_dir)
+
+
+def sample_entries(root: Path) -> list[dict[str, Any]]:
     """The samples a visitor may describe: samples.json's entries (title, credit, licence,
     source, duration...) whose <id>.mp4 is there; without samples.json, the ids alone."""
-    root = _live(request).settings.samples_dir
     if not root.is_dir():
         return []
     doc = _read_json(root / "samples.json")
