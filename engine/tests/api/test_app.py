@@ -49,15 +49,15 @@ def test_cors_allowed_and_denied(client):
 
 def test_list_runs_order(client, data, make_run):
     make_run(data / "showcase", "show1", title="Showcase")
-    make_run(data / "runs", "old", created="2026-10-01T00:00:00+00:00")
-    make_run(data / "runs", "new", created="2026-10-02T00:00:00+00:00")
-    make_run(data / "runs", "bad", failed=True)
-    make_run(data / "runs", "pending", manifest=False)
+    make_run(data / "showcase", "show0", created="2026-10-01T00:00:00+00:00")
+    make_run(data / "showcase", "bad", failed=True)
+    make_run(data / "showcase", "pending", manifest=False)
+    make_run(data / "runs", "new", created="2026-10-02T00:00:00+00:00")  # a sample's live run
     items = client.get("/v1/runs").json()
     pub = [i["id"] for i in items if i["status"] == "done"]
-    assert pub == ["show1", "new", "old"]
-    assert items[0]["kind"] == "showcase" and items[1]["kind"] == "live"
-    first = items[0]
+    assert pub == ["show0", "show1"]
+    assert {i["kind"] for i in items} == {"showcase"}
+    first = next(i for i in items if i["id"] == "show1")
     assert first["title"] == "Showcase" and first["duration"] == 90.0
     assert first["status"] == "done" and first["cost_usd"] == 0.03
     assert first["cues"]["verified"] == 5
@@ -66,10 +66,15 @@ def test_list_runs_order(client, data, make_run):
     assert by_id["pending"]["status"] == "stopped"  # not being described here
 
 
-def test_list_runs_caps_live_at_20(client, data, make_run):
-    for i in range(25):
+def test_the_list_is_the_recorded_runs_only(client, data, make_run):
+    """The official sample runs (the showcase) and nothing else: visitors' runs of the samples,
+    forks and uploads are opened by their id only."""
+    make_run(data / "showcase", "ed45")
+    for i in range(5):
         make_run(data / "runs", f"r{i:02d}", created=f"2026-10-01T00:{i:02d}:00+00:00")
-    assert len(client.get("/v1/runs").json()) == 20
+    make_run(data / "runs", "up", source="upload")
+    assert [i["id"] for i in client.get("/v1/runs").json()] == ["ed45"]
+    assert client.get("/v1/runs/r00").json()["status"] == "done"
 
 
 def test_get_run_merged(client, data, make_run):

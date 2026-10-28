@@ -5,7 +5,11 @@ the wrong type read as missing, and a run whose summary still raises is left out
 What a manifest returns is a whitelist of its fields with local paths stripped from every
 string. JSON files are parsed once per change (keyed by mtime and size; the Studio, the one
 writer in this process, also forgets a file it rewrites), and the run list is kept for
-LIST_TTL seconds, built from the MAX_LIVE most recently modified live folders only.
+LIST_TTL seconds.
+
+The run list is the official recorded runs only (the showcase: runs of the licensed samples,
+put there at deploy). Nothing a visitor made is listed, whatever it is (a run of a sample, an
+upload, a fork): its id is what opens it.
 """
 
 from __future__ import annotations
@@ -34,7 +38,6 @@ log = logging.getLogger(__name__)
 RUN_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,80}\Z")
 CUE_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
 KEYFRAME_RE = re.compile(r"[\w.-]+\.jpg\Z")
-MAX_LIVE = 20
 LIST_TTL = 5.0
 JSON_CACHE = 256
 MANIFEST, CUES, STUDIO, ERROR = "manifest.json", "cues.json", "studio.json", "error.json"
@@ -214,28 +217,11 @@ class RunStore:
         with self._lock:
             if self._list is not None and now < self._list[0]:
                 return self._list[1]
-        show = self._summaries("showcase", _dirs(self.settings.showcase_dir))
-        show.sort(key=lambda r: r["id"])
-        ready = [
-            d for d in _dirs(self.settings.runs_dir)
-            if not (d / PENDING).exists() and self.public(d)
-        ]  # fmt: skip
-        newest = sorted(ready, key=_mtime, reverse=True)[:MAX_LIVE]
-        live = self._summaries("live", newest)
-        live.sort(key=lambda r: r["created"], reverse=True)
-        result = show + live
+        result = self._summaries("showcase", _dirs(self.settings.showcase_dir))
+        result.sort(key=lambda r: r["id"])
         with self._lock:
             self._list = (now + LIST_TTL, result)
         return result
-
-    def public(self, d: Path) -> bool:
-        """Whether the live run in `d` is listed: a sample's run, or a fork of one. Uploads,
-        forks of uploads and runs that say nothing are opened by their unguessable id only."""
-        request = _dict(self.read_json(d / facts.REQUEST))
-        source = facts.run_source("live", {}, request, self.settings.samples_dir)
-        return source["kind"] == "sample" or (
-            source["kind"] == "fork" and source.get("origin") == "sample"
-        )
 
     def dirty(self, d: Path) -> bool:
         """True when the Studio changed a cue since the run was last published."""

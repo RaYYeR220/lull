@@ -31,23 +31,20 @@ class Clock:
 def test_run_list_is_cached_for_five_seconds(client, data, make_run):
     clock = Clock()
     client.app.state.store.clock = clock
-    make_run(data / "runs", "first")
+    show = data / "showcase"
+    make_run(show, "first")
     assert [r["id"] for r in client.get("/v1/runs").json()] == ["first"]
-    make_run(data / "runs", "second", created="2026-10-28T10:00:00+00:00")
+    make_run(show, "second", created="2026-10-28T10:00:00+00:00")
     clock.t += 4.9
     assert [r["id"] for r in client.get("/v1/runs").json()] == ["first"]
     clock.t += 0.2
-    assert [r["id"] for r in client.get("/v1/runs").json()] == ["second", "first"]
+    assert [r["id"] for r in client.get("/v1/runs").json()] == ["first", "second"]
 
 
-def test_run_list_parses_only_the_20_newest_folders(client, data, make_run, monkeypatch):
-    now = time.time()
+def test_run_list_never_reads_the_live_runs(client, data, make_run, monkeypatch):
     for i in range(25):
-        # r00..r04 claim the newest `created` but their folders are the oldest
-        created = f"2026-10-{30 if i < 5 else 1:02d}T00:{i:02d}:00+00:00"
-        d = make_run(data / "runs", f"r{i:02d}", created=created)
-        mtime = now - 10_000 if i < 5 else now - 100 + i
-        os.utime(d, (mtime, mtime))
+        make_run(data / "runs", f"r{i:02d}")
+    make_run(data / "showcase", "show")
     seen = []
     real = store_mod.RunStore.summary
 
@@ -56,18 +53,18 @@ def test_run_list_parses_only_the_20_newest_folders(client, data, make_run, monk
         return real(self, kind, d)
 
     monkeypatch.setattr(store_mod.RunStore, "summary", counted)
-    ids = [r["id"] for r in client.get("/v1/runs").json()]
-    assert sorted(seen) == [f"r{i:02d}" for i in range(5, 25)]
-    assert ids == [f"r{i:02d}" for i in range(24, 4, -1)]
+    assert [r["id"] for r in client.get("/v1/runs").json()] == ["show"]
+    assert seen == ["show"]
 
 
 def test_a_damaged_manifest_never_breaks_the_list(client, data, make_run):
-    make_run(data / "runs", "good")
-    junk = make_run(data / "runs", "junk", manifest=False)
+    show = data / "showcase"
+    make_run(show, "good")
+    junk = make_run(show, "junk", manifest=False)
     (junk / "manifest.json").write_text("{not json")
-    listed = make_run(data / "runs", "listed", manifest=False)
+    listed = make_run(show, "listed", manifest=False)
     (listed / "manifest.json").write_text("[1, 2]")
-    weird = make_run(data / "runs", "weird", manifest=False)
+    weird = make_run(show, "weird", manifest=False)
     (weird / "manifest.json").write_text(
         json.dumps({"video": "clip.mp4", "summary": [1], "created": 5, "outputs": "x"})
     )
@@ -90,8 +87,8 @@ def test_a_damaged_manifest_never_breaks_the_list(client, data, make_run):
 
 
 def test_a_summary_that_raises_skips_only_that_run(client, data, make_run, monkeypatch):
-    make_run(data / "runs", "good")
-    make_run(data / "runs", "boom")
+    make_run(data / "showcase", "good")
+    make_run(data / "showcase", "boom")
     real = store_mod.RunStore.summary
 
     def flaky(self, kind, d):
@@ -512,7 +509,7 @@ def test_public_summary_has_model_spend_and_searches_only():
 
 
 def test_runs_show_model_spend_and_searches(client, data, make_run):
-    d = make_run(data / "runs", "r1")
+    d = make_run(data / "showcase", "r1")
     manifest = json.loads((d / "manifest.json").read_text())
     manifest["summary"].update(ENGINE_SUMMARY)
     (d / "manifest.json").write_text(json.dumps(manifest))
