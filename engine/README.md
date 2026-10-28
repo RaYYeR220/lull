@@ -117,15 +117,23 @@ cannot decide, the line is held for a person rather than voiced.
   the red coat" when the red coat is someone else's) or a lost "not". It works only as well
   as the model reads the sentence. The judge always gives the same answer for the same
   frames, so asking again cannot turn a refusal into a pass, but a wrong reading stays wrong.
-- **A sentence ends at a full stop followed by a space.** "Mr. Smith waves." counts as two
-  sentences, so that line is judged in pieces and is usually held. A number such as "004.77"
-  stays whole.
+- **Facts carried only by how a sentence is built rest on one judgement.** Order and links
+  such as "then", "as", "while" and "nor", what happens first, or which name goes with
+  which action are not small claims of their own: only the whole-sentence judgement checks
+  them. A sentence that is a single claim is not asked a second time as a sentence, so for
+  it one misreading by the judge is enough to pass.
+- **A sentence ends at a full stop followed by a space.** An abbreviation or a full stop
+  inside quoted text ("Mr. Smith waves.") splits the sentence for the whole-sentence check,
+  so that line is judged in pieces and is usually held. This is safe but costs held lines.
+  A number such as "004.77" stays whole.
 - **Some safe cuts are refused.** When a claim fails, the engine removes its words itself. It
   refuses a cut that would change what the remaining words say: it never removes "not",
   "no" or "without" on their own, a word that describes the next one ("toy gun" to "gun",
   "nearly falls" to "falls", "a red door" to "a door"), a preposition before words that stay,
   or part of a number or hyphenated word. These rules look at words and their order, not at
   grammar, so a cut that would have been fine is sometimes refused, and the line is held.
+  For example, a failed "does not fire" is not cut while its subject stays in the line, even
+  where cutting it would be harmless.
 - **The grammar fix after a cut may only leave out whole sentences.** It cannot add, move or
   change a word. When it leaves a sentence out, the cue's note says so ("sentence dropped:
   ..."). A dropped sentence may have described an event that then goes undescribed.
@@ -133,11 +141,20 @@ cannot decide, the line is held for a person rather than voiced.
   only where its own words do. The check does not work out who "she" is; the whole-sentence
   judgement is what sees that.
 - **No verdict means no voice.** When the judge gives no verdict for a claim or a sentence,
-  or its answer is cut off, the line is held as it is. This costs lines, not accuracy.
+  or its answer is cut off, the line is held as it is. This costs lines, not accuracy. One
+  case shows slightly wrong details: when "In a moment," was added to a line and the check
+  of that new text is cut off, the held line shows the text with "In a moment," but lists the
+  claims checked on the text without it. The line is held either way.
+- **Fallback claims are labelled atomic.** When the split fails and each sentence becomes
+  one claim, those claims are labelled "atomic" although the judge reads them as whole
+  sentences. This affects only the counts in reports, not which lines are voiced.
 - **Only the clip around the line is seen.** Each line is judged against the frames around
   its events. Something that is visible elsewhere in the video counts as not visible.
 - **Words that only place the line in time are not checked.** "In a moment", "now" and
   "then" are left out of the claims.
+- **The checks are only as good as the vision model.** Every verdict comes from a vision
+  model reading the frames. If it misreads a frame the same way every time (a colour, a
+  number, who is who), the line passes, and no rule in the engine can tell.
 
 ## Models and voices
 
