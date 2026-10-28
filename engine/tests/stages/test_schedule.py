@@ -174,8 +174,8 @@ def test_a_brief_visual_that_starts_first_is_voiced_first():
 
 
 def test_a_visual_ending_within_a_word_of_the_gap_start_is_not_placed():
-    # floor((10.4 - 10.0) x 2.36) - 1 < 0: not even the first word would land in time
-    events = [_ev("e001", 9.0, 10.4)]
+    # floor((10.3 - 10.0) x 2.8) - 1 < 0: not even the first word would land in time
+    events = [_ev("e001", 9.0, 10.3)]
     variants = [_var("e001", "short", 2)]
     gaps = [_gap("g001", 10.0, 20.0, 30)]
     for run in (schedule, schedule_greedy):

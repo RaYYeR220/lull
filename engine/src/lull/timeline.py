@@ -6,6 +6,10 @@ import math
 
 from lull.types import Gap, Span, Turn, Word
 
+# words per second of a voice not calibrated yet: the default of every function that takes a
+# rate (the pipeline always passes the calibrated one)
+UNCALIBRATED_WPS = 2.8
+
 EPS = 1e-9
 
 
@@ -88,7 +92,7 @@ def find_gaps(
     guard: float = 0.20,
     min_usable: float = 1.2,
     protected: list[Span] | None = None,
-    wps: float = 3.0,
+    wps: float = UNCALIBRATED_WPS,
 ) -> list[Gap]:
     """Usable silences. Guard is trimmed from every side (speech, protected, video edge).
 

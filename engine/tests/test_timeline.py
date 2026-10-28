@@ -179,3 +179,19 @@ def test_speech_edges_come_from_words_and_turns_only_add_wordless_speech():
     ]  # fmt: skip
     [g] = [g for g in find_gaps(speech_spans(words, turns), 7.0) if g.start == 2.0]
     assert g.usable_end - g.usable_start == pytest.approx(1.9 - 2 * 0.2)  # the pause survives
+
+
+def test_one_default_voice_rate_everywhere():
+    """A direct caller that passes no rate gets the same one from every function: the rate of
+    a voice that is not calibrated yet."""
+    import inspect
+
+    from lull import timeline, types, voices
+    from lull.stages import schedule
+
+    rate = timeline.UNCALIBRATED_WPS
+    assert schedule.WPS == voices.FALLBACK_WPS == rate
+    assert inspect.signature(find_gaps).parameters["wps"].default == rate
+    for f in (schedule.schedule, schedule.schedule_greedy):
+        assert inspect.signature(f).parameters["wps"].default == rate
+    assert not hasattr(types, "Shot")  # nothing used it

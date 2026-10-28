@@ -33,6 +33,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from lull.stages.plan import said_already
+from lull.timeline import UNCALIBRATED_WPS
 from lull.types import Cue, Gap, Variant, VisualEvent
 
 try:
@@ -51,7 +52,7 @@ AHEAD_WORDS = 3  # words in AHEAD_PREFIX
 LEAD = 6.0  # seconds a look-ahead may come before its visual starts
 SALIENT = 4  # unplaced events at or above this priority become extended candidates
 MIN_PRIORITY = 2  # a standard placement needs at least this priority (ruling, Task 16)
-WPS = 2.36  # voice rate used to time each sentence inside its gap
+WPS = UNCALIBRATED_WPS  # voice rate used to time each sentence inside its gap
 TIME_LIMIT_S = 5.0
 NUM_WORKERS = 1  # parallel workers race to different co-optimal answers: not reproducible
 TIE_BREAK = True  # prefer the closest gap among equal-value answers

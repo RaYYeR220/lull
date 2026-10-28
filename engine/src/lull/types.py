@@ -45,12 +45,6 @@ class Gap(BaseModel):
     protected: list[Span] = Field(default_factory=list)
 
 
-class Shot(BaseModel):
-    index: int
-    start: float
-    end: float
-
-
 EventKind = Literal[
     "setting",
     "person",

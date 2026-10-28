@@ -23,6 +23,7 @@ from lull.media import MediaError
 from lull.speech import SpeechClient
 from lull.stages.plan import count_words
 from lull.stages.voice import voice
+from lull.timeline import UNCALIBRATED_WPS
 
 REFERENCE = (
     "A person in a grey coat walks along a harbour at dawn. They stop beside a red fishing "
@@ -30,7 +31,7 @@ REFERENCE = (
     "unloads wooden crates onto the pier."
 )
 DEFAULT_WPS = {"Sofia": 3.05}  # calibrated on the local Magpie server, 2026-10-27
-FALLBACK_WPS = 2.8  # any other voice until it is calibrated
+FALLBACK_WPS = UNCALIBRATED_WPS  # any other voice until it is calibrated
 MIN_WPS, MAX_WPS = 1.0, 6.0  # a plausible speaking rate; anything else is a broken measurement
 
 log = logging.getLogger(__name__)
