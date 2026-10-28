@@ -32,7 +32,7 @@ tos180.mp4 = Tears of Steel 3:30-6:30, cut with ffmpeg; ED and the USGS videos u
   log said the last four were not started and bbb120 was stopped; the driver's own log,
   lull-runs/final/logs/recorded.log, shows all six ran to the 402.)
 
-## The one infrastructure interruption: the provider balance (HTTP 402)
+### The one infrastructure interruption: the provider balance (HTTP 402)
 
 - **12:34** Token Factory answered every call with 402 `credit_balance_exhausted`. Interrupted:
   `ed` in finalize after cue c041 (4:56 of 10:58); `ed90`, `bbb120`, `tos180`, `woodshole`,
