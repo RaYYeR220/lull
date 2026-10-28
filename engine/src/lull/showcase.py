@@ -15,18 +15,25 @@ OUT_DIR gets
 
 showcase.json: {id, title, credit, duration, loudness (dBFS of the original audio per 100 ms,
 floor -120, 1 decimal), speech [[start, end]...], gaps [{id, start, end, capacity}] (the
-usable windows the scheduler filled), cues [{id, start, end, text, status, ahead}] (the
-published standard and extended cues; an extended cue starts at its freeze point; end = start +
-its audio), words [{t, s, e}], audio {original, described}, cueAudioBase, verifyExample {cueId,
-cue, claims [{text, verdict}]}, costUsd}.
+usable windows the scheduler filled), cues [{id, start, end, text, status, ahead, extended}]
+(the published standard and extended cues; an extended cue starts at its freeze point; end =
+start + its audio), words [{t, s, e}], audio {original, described}, cueAudioBase,
+verifyExample {cueId, cue, claims [{text, verdict}]}, costUsd, summary}.
+
+summary is what the report says about the run: counts (cues by status), coverage
+{importantEvents, described, ratio, describedWithExtended, ratioWithExtended, undescribed},
+repetitive [{id, text}] (salient events the plan judged repetitive), f113 [{gapId, start,
+end, eventIds}], overlapSeconds, wcag [{criterion, level, name, status, blockers}], models,
+spend {modelUsdThisRun, webSearchesThisRun, webSearchListUsdThisRun (notional, not charged),
+modelUsdAllRunsOfRunId}. A run published before these were recorded gives empty values.
 
 The verify example is the first published cue whose verification history shows a claim the
 frames did not support (it was cut before the cue was voiced): its draft as first checked and
 every verdict on it. Without one it is the first verified cue with its claims.
 
-costUsd is the run's summary cost: what the ledger holds for its run id, every run under that
-run id (describe with a fresh --run-id to show one run's cost). A reused OUT_DIR loses the cue
-audio and keyframes of an earlier export.
+costUsd is the model spend of the attempt that published (summary.spend has every run under
+the run id beside it). A reused OUT_DIR loses the cue audio and keyframes of an earlier
+export.
 """
 
 from __future__ import annotations
@@ -80,6 +87,54 @@ def _json(path: Path) -> dict:
 
 def _r(x: float) -> float:
     return round(float(x), 3)
+
+
+def run_summary(manifest: dict) -> dict:
+    """The showcase's `summary` (see the module doc) from the manifest publish wrote."""
+    s = manifest.get("summary") or {}
+    cov = s.get("coverage") or {}
+    spend = s.get("spend") or {}
+    return {
+        "counts": dict(s.get("cues") or {}),
+        "coverage": {
+            "importantEvents": cov.get("important_events", cov.get("salient_events")),
+            "described": cov.get("described"),
+            "ratio": cov.get("ratio"),
+            "describedWithExtended": cov.get("described_with_extended"),
+            "ratioWithExtended": cov.get("ratio_with_extended"),
+            "undescribed": list(cov.get("undescribed") or []),
+        },
+        "repetitive": [
+            {"id": r.get("id"), "text": r.get("text")} for r in s.get("repetitive") or []
+        ],  # fmt: skip
+        "f113": [
+            {
+                "gapId": f.get("gap_id"),
+                "start": f.get("start"),
+                "end": f.get("end"),
+                "eventIds": list(f.get("event_ids") or []),
+            }
+            for f in s.get("f113") or []
+        ],  # fmt: skip
+        "overlapSeconds": s.get("overlap_seconds"),
+        "wcag": [
+            {
+                "criterion": w.get("criterion"),
+                "level": w.get("level"),
+                "name": w.get("name"),
+                "status": w.get("status"),
+                "blockers": list(w.get("reasons") or []),
+            }
+            for w in s.get("wcag") or []
+        ],  # fmt: skip
+        "models": list((manifest.get("versions") or {}).get("models") or []),
+        "spend": {
+            "modelUsdThisRun": spend.get("model_usd_this_run", s.get("cost_usd")),
+            "webSearchesThisRun": spend.get("tavily_searches_this_run"),
+            "webSearchListUsdThisRun": spend.get("tavily_notional_usd_this_run"),
+            "modelUsdAllRunsOfRunId": spend.get("model_usd_all_runs"),
+        },
+    }
 
 
 def _cues(entries: list[dict], voiced) -> list[tuple[Cue, dict]]:
@@ -226,6 +281,7 @@ def export_showcase(
                 "text": c.text,
                 "status": c.status,
                 "ahead": c.ahead,
+                "extended": c.gap_id is None,  # the picture holds while it plays
             }
             for start, c in rows
         ],  # fmt: skip
@@ -237,6 +293,7 @@ def export_showcase(
         "cueAudioBase": f"{AUDIO_DIR}/",
         "verifyExample": verify_example(run_dir, [c for _, c in rows]),
         "costUsd": round(float((manifest.get("summary") or {}).get("cost_usd") or 0.0), 6),
+        "summary": run_summary(manifest),
     }
     path = out_dir / SHOWCASE
     path.write_bytes((json.dumps(data, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))

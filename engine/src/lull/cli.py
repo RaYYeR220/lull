@@ -380,8 +380,9 @@ def export_showcase_cmd(
     original sound, the described audio, the description tracks, each cue's audio and the
     keyframes.
 
-    costUsd is the ledger total of every run under that run id; describe with a fresh
-    --run-id to show the cost of one run."""
+    costUsd is the model spend of the attempt that published the run; showcase.json's
+    summary.spend gives it beside the model spend of every run under the run id and the web
+    searches."""
     try:
         path = export_showcase(run_dir, out_dir, id=id, title=title, credit=credit)
     except (ShowcaseError, MediaError) as e:

@@ -50,6 +50,24 @@ def _claim(text, verdict="supported", at=1.0):
     return {"text": text, "verdict": verdict, "at": at}
 
 
+SUMMARY = {
+    "cues": {"verified": 2, "edited": 0, "approved": 0, "held": 1, "extended": 1},
+    "coverage": {"important_events": 4, "salient_events": 4, "described": 2, "ratio": 0.5,
+                 "described_with_extended": 3, "ratio_with_extended": 0.75,
+                 "undescribed": ["e009"], "repetitive": 1, "watch_salient": 5},
+    "repetitive": [{"id": "e007", "text": "The same logo again."}],
+    "overlap_seconds": 0.0,
+    "f113": [{"gap_id": "g002", "start": 2.2, "end": 4.4, "seconds": 2.2,
+              "event_ids": ["e009"], "events": [{"id": "e009", "kind": "slide", "text": "x"}]}],
+    "cost_usd": 0.0123,
+    "spend": {"model_usd_this_run": 0.0123, "tavily_searches_this_run": 2,
+              "tavily_notional_usd_this_run": 0.016, "model_usd_all_runs": 0.05},
+    "wcag": [{"criterion": "1.2.5", "level": "AA", "name": "Audio Description (Prerecorded)",
+              "status": "needs review", "via": "described.mp4",
+              "reasons": ["1 description held for review"]}],
+}  # fmt: skip
+
+
 @pytest.fixture(scope="module")
 def run_dir(tmp_path_factory) -> Path:
     """A finished run, as publish leaves it: 4 s 1280x720 with a 440 Hz programme 0-2 s then
@@ -107,7 +125,7 @@ def run_dir(tmp_path_factory) -> Path:
     }  # fmt: skip
     (root / "cues.json").write_text(json.dumps(cues), encoding="utf-8")
     manifest = {"run_id": "talk-1234abcd", "video": {"name": "talk.mp4", "duration": DURATION},
-                "summary": {"cost_usd": 0.0123}}  # fmt: skip
+                "summary": SUMMARY, "versions": {"models": ["vl-model", "text-model"]}}  # fmt: skip
     (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     stages = root / "stages"
     (stages / "finalize").mkdir(parents=True)
@@ -140,7 +158,7 @@ def test_showcase_json_has_exactly_the_site_schema(exported):
     _, data = exported
     assert list(data) == [
         "id", "title", "credit", "duration", "loudness", "speech", "gaps", "cues", "words",
-        "audio", "cueAudioBase", "verifyExample", "costUsd",
+        "audio", "cueAudioBase", "verifyExample", "costUsd", "summary",
     ]  # fmt: skip
     assert (data["id"], data["title"], data["credit"]) == (
         "talk-1234abcd", "talk", "Blender Foundation (CC BY)"
@@ -167,6 +185,7 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "text": "A red door opens.",
             "status": "verified",
             "ahead": False,
+            "extended": False,
         },
         {
             "id": "x003",
@@ -175,6 +194,7 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "text": "Words appear: Lull.",
             "status": "extended",
             "ahead": False,
+            "extended": True,
         },
         {
             "id": "c004",
@@ -183,8 +203,30 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "text": "In a moment, a sign appears.",
             "status": "verified",
             "ahead": True,
+            "extended": False,
         },
     ]  # fmt: skip  (held c002 is not published; x003 sits at its freeze point)
+
+
+def test_the_run_summary_comes_with_the_showcase(exported):
+    """What the report says about the run, for the page: coverage of the important events
+    (with the extended version too), what the plan judged repetitive, F113 pauses, overlap,
+    the counts, the WCAG statuses with what blocks them, the models and the spend."""
+    _, data = exported
+    assert data["summary"] == {
+        "counts": {"verified": 2, "edited": 0, "approved": 0, "held": 1, "extended": 1},
+        "coverage": {"importantEvents": 4, "described": 2, "ratio": 0.5,
+                     "describedWithExtended": 3, "ratioWithExtended": 0.75,
+                     "undescribed": ["e009"]},
+        "repetitive": [{"id": "e007", "text": "The same logo again."}],
+        "f113": [{"gapId": "g002", "start": 2.2, "end": 4.4, "eventIds": ["e009"]}],
+        "overlapSeconds": 0.0,
+        "wcag": [{"criterion": "1.2.5", "level": "AA", "name": "Audio Description (Prerecorded)",
+                  "status": "needs review", "blockers": ["1 description held for review"]}],
+        "models": ["vl-model", "text-model"],
+        "spend": {"modelUsdThisRun": 0.0123, "webSearchesThisRun": 2,
+                  "webSearchListUsdThisRun": 0.016, "modelUsdAllRunsOfRunId": 0.05},
+    }  # fmt: skip
 
 
 def test_the_verify_example_keeps_the_first_draft_and_its_verdicts(exported):
@@ -322,11 +364,11 @@ def test_every_showcase_input_is_locked_to_local_files(run_dir, tmp_path, monkey
         assert_locked(cmd)
 
 
-def test_the_command_says_the_cost_is_per_run_id():
-    """M4: costUsd is what the ledger holds for the run id, every run under it."""
+def test_the_command_says_what_the_cost_is():
+    """costUsd is the model spend of the run that published; summary.spend holds the rest."""
     r = CliRunner().invoke(cli.app, ["export-showcase", "--help"], terminal_width=200)
     text = " ".join(r.output.split())
-    assert r.exit_code == 0 and "costUsd" in text and "every run under that run id" in text
+    assert r.exit_code == 0 and "costUsd" in text and "model spend of the attempt" in text
 
 
 # -- Task 17 ------------------------------------------------------------------------------------
