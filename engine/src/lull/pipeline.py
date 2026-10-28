@@ -140,28 +140,40 @@ def introduced_before(
     voiced before it, see heard_before). On-screen text alone introduces nobody (strict I4):
     only a description that reads it does."""
     names = {n for n in names if n}
-    texts = [" ".join(w.text for w in words if w.end < cutoff)]
+    texts = [" ".join(w.text for w in words if w.end <= cutoff + 1e-9)]  # heard by then
     texts += [c.text for c in heard]
     return set().union(*(names_in(t, names) for t in texts))
 
 
-def cutoff_for(cue: Cue, speech: list[Span]) -> float:
+def cutoff_for(
+    cue: Cue, speech: list[Span], words: list[Word] = (), info: media.Probe | None = None,
+    standard: Iterable[Cue] = (),
+) -> float:  # fmt: skip
     """When a listener reaches `cue`: a standard cue's start; for an extended cue the moment the
     picture freezes for it, which waits for speech under its visual (mix.speech_free)."""
-    return cue.start if cue.gap_id is not None else mixer.speech_free(cue.start, speech)
+    if cue.gap_id is not None:
+        return cue.start
+    if info is not None:  # the very frame the extended version holds on
+        return mixer.freeze_time(cue.start, info, standard=list(standard), speech=speech,
+                                 words=words)  # fmt: skip
+    return mixer.hold_point(cue.start, words=words, speech=speech)
 
 
-def heard_before(cue: Cue, finished: Iterable[Cue], speech: list[Span]) -> list[Cue]:
+def heard_before(
+    cue: Cue, finished: Iterable[Cue], speech: list[Span], words: list[Word] = (),
+    info: media.Probe | None = None,
+) -> list[Cue]:  # fmt: skip
     """The finished cues a listener has heard when `cue` is voiced: voiced standard cues that
     start before its cutoff, and for an extended cue also the voiced extended cues reached
     before it (the extended version has both). Extended cues that share a freeze point are
     voiced in start order, so the earlier one counts as heard."""
     finished = list(finished)
-    cutoff = cutoff_for(cue, speech)
+    std = mixer.voiced(finished)
+    cutoff = cutoff_for(cue, speech, words, info, std)
     heard = [c for c in mixer.voiced(finished) if c.start < cutoff]
     if cue.gap_id is None:
         for c in mixer.voiced_extended(finished):
-            at = cutoff_for(c, speech)
+            at = cutoff_for(c, speech, words, info, std)
             if at < cutoff or (at == cutoff and (c.start, c.id) < (cue.start, cue.id)):
                 heard.append(c)
     return heard
@@ -179,14 +191,15 @@ def cue_context(
     events: list[VisualEvent],
     speech: list[Span],
     finished: list[Cue],
+    info: media.Probe | None = None,
 ) -> CueContext:
     """What finalising `cue` needs to know about the rest of the programme. `named` are the
     names lint checks for introduction (cast and glossary people); `proper_nouns` every
     spelling to keep (cast and the whole glossary)."""
     by_id = {e.id: e for e in events}
     own = sorted((by_id[i] for i in cue.event_ids if i in by_id), key=lambda e: (e.t_start, e.id))
-    cutoff = cutoff_for(cue, speech)
-    heard = heard_before(cue, finished, speech)
+    cutoff = cutoff_for(cue, speech, words, info, mixer.voiced(finished))
+    heard = heard_before(cue, finished, speech, words, info)
     return CueContext(
         wps=wps,
         cast=dict(cast),
@@ -241,6 +254,7 @@ class _Run:
     ledger: Ledger
     emit: _Emitter
     stage: str | None = None
+    info: media.Probe | None = None  # the probed video: frame rate and length for freezes
 
     @property
     def store(self) -> Store:
@@ -522,6 +536,7 @@ class _Run:
                     events=events,
                     speech=heard.speech,
                     finished=finished,
+                    info=self.info,
                 )
                 gap = by_gap.get(cue.gap_id) if cue.gap_id is not None else None
                 own = {i: by_event[i] for i in cue.event_ids if i in by_event}
@@ -674,7 +689,19 @@ def run(
             if client is not None and getattr(client, "ledger", ledger) is not ledger:
                 log.warning("pipeline: %s records to another ledger", type(client).__name__)
         state = _Run(
-            video, run_dir, opts, run_id, sha, wps, info.duration, tf, speech, tavily, ledger, emit
+            video,
+            run_dir,
+            opts,
+            run_id,
+            sha,
+            wps,
+            info.duration,
+            tf,
+            speech,
+            tavily,
+            ledger,
+            emit,
+            info=info,
         )
 
         def on_call(rec: CallRecord) -> None:
@@ -738,6 +765,7 @@ def _stages(r: _Run, started: float | None = None) -> PublishResult:
             r.run_id,
             r.opts,
             speech=heard.speech,
+            words=heard.words,
             duplicates=planned.duplicates,
             priority=planned.priority,
             since=started,

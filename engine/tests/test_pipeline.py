@@ -400,7 +400,7 @@ def test_one_voice_rate_names_and_speech_flow_through_the_stages(
     # Ada is said at 0.99-1.6 s; c001 voices Proog
     assert ctx["c001"].introduced == {"Ada"}
     assert ctx["c002"].introduced == {"Ada", "Proog"}
-    assert ctx["x002"].introduced == set()  # at 0.3 s nothing was said or described yet
+    assert ctx["x002"].introduced == {"Ada"}  # it freezes once her sentence ends (1.6 s)
     pub = seen["publish"][0]
     assert pub["speech"] == [Span(start=0.3, end=1.6), Span(start=11.2, end=11.95)]
     assert [c.id for c in pub["cues"]] == ["c001", "c002"]
@@ -622,24 +622,25 @@ def test_on_screen_text_introduces_a_name_only_once_a_description_read_it():
     assert cue_context(target, **{**common, "finished": [read]}).introduced == names
 
 
-def test_an_extended_cue_counts_only_what_was_said_before_its_freeze_point():
-    words = [Word(text="Hello", start=4.0, end=4.5), Word(text="Emo.", start=5.0, end=5.4)]
-    common = _common(named={"Emo"}, proper_nouns={"Emo"}, words=words, events=[_ev("e1", 6, 7)])
+def test_an_extended_cue_counts_what_was_said_before_its_freeze_point():
+    """The extended version stops at the end of the sentence running when its visual
+    appears (never before the visual): a name said in that sentence has been heard, one said
+    after it has not."""
+    words = [Word(text="Look,", start=5.5, end=5.9), Word(text="Emo", start=6.1, end=6.4),
+             Word(text="waves.", start=6.45, end=6.9), Word(text="Then", start=9.0, end=9.3),
+             Word(text="Proog.", start=9.4, end=9.8)]  # fmt: skip
+    names = {"Emo", "Proog"}
+    common = _common(named=names, proper_nouns=names, words=words, events=[_ev("e1", 6, 7)])
     ext = _cue("x001", 6.0, "Text.", status="extended", gap=None)
-    # the picture freezes where the speech around 6.0 s began (4.0 s): "Emo" is said after it
-    talk = [Span(start=4.0, end=8.0)]
-    assert cue_context(ext, **{**common, "speech": talk}).introduced == set()
-    assert cue_context(ext, **common).introduced == {"Emo"}  # no speech: it freezes at 6.0 s
-    # speech that opens the programme is heard first: the freeze waits for its end
-    early = ext.model_copy(update={"start": 5.2})
-    opening = [Span(start=0.0, end=5.5)]
-    assert cue_context(early, **{**common, "speech": opening}).introduced == {"Emo"}
+    assert cue_context(ext, **common).introduced == {"Emo"}  # it freezes at 6.9 s
+    nobody = {**common, "words": []}  # nothing said: it freezes 0.3 s after its visual
+    assert cue_context(ext, **nobody).introduced == set()
     std = _cue("c002", 9.0, "Text.")
-    assert cue_context(std, **{**common, "speech": talk}).introduced == {"Emo"}
+    assert cue_context(std, **common).introduced == {"Emo"}
 
 
 def test_extended_cues_that_share_a_freeze_point_are_heard_in_start_order():
-    """Two visuals inside one speech span both freeze where the speech began: the earlier
+    """Two visuals inside one speech span both freeze where that speech ends: the earlier
     extended cue is voiced first in that pause, so the later one has heard it."""
     common = _common(named={"Proog"}, proper_nouns={"Proog"}, speech=[Span(start=4.0, end=8.0)],
                      events=[_ev("e1", 5.0, 6.0), _ev("e2", 6.0, 7.0)])  # fmt: skip
@@ -653,7 +654,7 @@ def test_extended_cues_that_share_a_freeze_point_are_heard_in_start_order():
     # a standard cue playing before the freeze point is heard; one after it is not
     before = _cue("c001", 2.0, "Proog stands.")
     assert cue_context(second, **{**common, "finished": [before]}).introduced == {"Proog"}
-    after = _cue("c009", 4.5, "Proog stands.")
+    after = _cue("c009", 8.5, "Proog stands.")  # the freeze is at 8.0 s
     assert cue_context(second, **{**common, "finished": [after]}).introduced == set()
 
 

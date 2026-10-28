@@ -1,6 +1,7 @@
 import hashlib
 import json
 import math
+import re
 import shutil
 import subprocess
 import wave
@@ -22,6 +23,7 @@ from lull.stages.publish import (
     coverage,
     f113_flags,
     publish,
+    timecode,
     to_extended_vtt,
     to_vtt,
     tts_disclosure,
@@ -193,33 +195,35 @@ def _freezes(ext, **kw):
 def test_extended_freezes_wait_for_a_standard_cue_and_merge_close_cues():
     std = [_cue("c001", 3.5, 1.0)]  # speaks 3.5-4.5
     ext = [
-        _cue("x001", 0.02, 1.0, gap=None, status="extended"),  # at the very start -> frame 0
+        _cue("x001", 0.02, 1.0, gap=None, status="extended"),  # silence: 0.3 s on (frame 8)
         _cue("x002", 4.0, 2.0, gap=None, status="extended"),  # inside c001 -> after it (4.52)
-        _cue("x003", 4.55, 1.0, gap=None, status="extended"),  # within 0.1 s of x002's freeze
+        _cue("x003", 4.25, 1.0, gap=None, status="extended"),  # 4.55: within 0.1 s of x002's
         _cue("x004", 30.0, 1.0, gap=None, status="extended"),  # past the end -> clamped
     ]
     assert _freezes(ext, standard=std) == [
-        (0, 25, ["x001"]), (113, 75, ["x002", "x003"]), (247, 25, ["x004"])
+        (8, 25, ["x001"]), (113, 75, ["x002", "x003"]), (247, 25, ["x004"])
     ]  # fmt: skip
 
 
 def test_extended_freezes_snap_to_speech_free_frames_and_whole_frame_pauses():
     speech = [Span(start=0.0, end=0.83), Span(start=2.013, end=3.0), Span(start=6.0, end=6.5)]
     ext = [
-        _cue("x001", 0.5, 0.53, gap=None, status="extended"),  # speech from 0 -> its end
-        _cue("x002", 2.5, 0.71, gap=None, status="extended"),  # mid-word -> before 2.013
-        _cue("x003", 5.0, 1.0, gap=None, status="extended"),  # already speech-free
-        _cue("x004", 6.5, 0.2, gap=None, status="extended"),  # at a span's end: speech-free
+        _cue("x001", 0.5, 0.53, gap=None, status="extended"),  # in speech -> its end
+        _cue("x002", 2.5, 0.71, gap=None, status="extended"),  # in speech -> its end (3.0)
+        _cue("x003", 5.0, 1.0, gap=None, status="extended"),  # speech-free: 0.3 s on
+        _cue("x004", 6.5, 0.2, gap=None, status="extended"),  # at a span's end: 0.3 s on
     ]
     got = _freezes(ext, speech=speech)
-    # x001: 0.83 -> frame 21 (0.84: moved later, so rounded up, out of the speech)
-    # x002: 2.013 -> frame 50 (2.00, down); x004: 6.5 -> 6.48 is speech, so frame 163 (6.52)
+    # without words each speech span is one sentence: a freeze waits for its end, never
+    # holding before its visual. x001: 0.83 -> frame 21 (0.84, rounded up); x002: 3.0 ->
+    # frame 75; x003: 5.3 -> frame 133; x004: 6.8 -> frame 170.
     # pauses: 0.53 s -> 14 frames, 0.71 s -> 18 frames (rounded up to whole frames)
-    assert got == [(21, 14, ["x001"]), (50, 18, ["x002"]), (125, 25, ["x003"]),
-                   (163, 5, ["x004"])]  # fmt: skip
-    for frame, _, _ in got:
+    assert got == [(21, 14, ["x001"]), (75, 18, ["x002"]), (133, 25, ["x003"]),
+                   (170, 5, ["x004"])]  # fmt: skip
+    for (frame, _, _), c in zip(got, ext, strict=True):
         t = frame / 25
         assert not any(sp.start < t < sp.end for sp in speech), f"freeze at {t} is mid-speech"
+        assert t >= c.start, f"freeze at {t} comes before its visual at {c.start}"
 
 
 def test_cue_gain_levels_cues_to_the_programme_within_bounds():
@@ -640,7 +644,7 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     assert [c["id"] for c in data["extended"]] == ["x001"]
     assert data["cues"][0]["audio_path"] == "work/audio/c001.wav"  # relative to the run
     ext_vtt = (run / "extended.vtt").read_text(encoding="utf-8")
-    assert "x001\n00:00:30.000 --> 00:00:31.000\n" in ext_vtt  # written regardless
+    assert "x001\n00:00:30.320 --> 00:00:31.320\n" in ext_vtt  # written regardless (0.3 s on)
 
 
 def test_cues_json_carries_the_timeline_the_studio_and_the_site_draw(tmp_path, fake_media):
@@ -661,7 +665,7 @@ def test_cues_json_carries_the_timeline_the_studio_and_the_site_draw(tmp_path, f
     assert data["gaps"] == [g.model_dump(mode="json") for g in gaps]
     assert data["speech"] == [{"start": 0.0, "end": 1.8}, {"start": 10.0, "end": 12.5}]
     assert [(c["id"], c.get("freeze_at")) for c in data["extended"]] == [
-        ("x002", 10.0), ("x003", None)  # x002 waits for the speech under its visual
+        ("x002", 12.52), ("x003", None)  # x002 waits for the speech under its visual to end
     ]  # fmt: skip
     assert "freeze_at" not in data["cues"][0]
 
@@ -751,8 +755,9 @@ def published(tmp_path_factory):
     """One real publish on a 6 s, 25 fps fixture.
 
     c001 (verified, 1 s) at 2.0 s; c002 held; x001 (0.53 s) for a visual at 1.0 s and x002
-    (0.71 s) for one at 4.0 s, both mid-speech: they freeze at 0.60 s and 3.60 s, for 14 and
-    18 frames (0.56 s, 0.72 s). Extended timeline: x001 at 0.60, c001 at 2.56, x002 at 4.16,
+    (0.71 s) for one at 4.0 s, both mid-speech: each freezes 0.3 s after its visual, where its
+    speech has ended (1.32 s and 4.32 s, on frames), for 14 and 18 frames (0.56 s, 0.72 s).
+    Extended timeline: x001 at 1.32, c001 at 2.56, x002 at 4.88,
     7.28 s in all.
     """
     root = tmp_path_factory.mktemp("publish")
@@ -908,13 +913,13 @@ def test_extended_mp4_stays_in_sync_across_two_pauses(published):
     lo, hi, loud, _ = _analyse(res.files["extended.mp4"], published["root"])
     assert loud["input_i"] == pytest.approx(-24.0, abs=0.5)
     voice = loudness_profile(hi, hop=0.005)
-    for target in (0.60, 2.56, 4.16):  # x001, c001 (moved by x001's pause), x002
+    for target in (1.32, 2.56, 4.88):  # x001, c001 (moved by x001's pause), x002
         onset = _onset(voice, target - 0.3)
         print(f"extended: cue wanted at {target:.2f} s, starts at {onset:.3f} s")
         assert onset == pytest.approx(target, abs=FRAME), f"cue at {onset}, wanted {target}"
     programme = loudness_profile(lo)
-    playing = _mean_db(programme, [(1.25, 2.3), (5.0, 7.1)])
-    for pause in ((0.65, 1.1), (4.2, 4.8)):  # the programme is silent while the picture holds
+    playing = _mean_db(programme, [(0.1, 1.25), (5.7, 7.1)])
+    for pause in ((1.37, 1.83), (4.93, 5.55)):  # the programme is silent while the picture holds
         assert playing - _mean_db(programme, [pause]) >= 30.0
 
 
@@ -936,8 +941,8 @@ def test_published_files_match_manifest(published):
     vtt = (run / "descriptions.vtt").read_text(encoding="utf-8")
     assert "c001\n00:00:02.000 --> 00:00:03.000\n" in vtt
     ext_vtt = (run / "extended.vtt").read_text(encoding="utf-8")
-    assert "NOTE extended pause=0.530\n\nx001\n00:00:00.600 --> 00:00:01.130\n" in ext_vtt
-    assert "NOTE extended pause=0.710\n\nx002\n00:00:03.600 --> 00:00:04.310\n" in ext_vtt
+    assert "NOTE extended pause=0.530\n\nx001\n00:00:01.320 --> 00:00:01.850\n" in ext_vtt
+    assert "NOTE extended pause=0.710\n\nx002\n00:00:04.320 --> 00:00:05.030\n" in ext_vtt
     assert [p.name for p in run.iterdir() if p.name.startswith(".")] == []  # no temp dirs left
 
 
@@ -1618,3 +1623,77 @@ def test_the_report_states_this_attempts_spend_and_all_runs_apart(tmp_path, fake
     html = " ".join((tmp_path / "run" / "report.html").read_text(encoding="utf-8").split())
     assert "Model spend, this run" in html and "all runs under run id r1" in html
     assert "1 web search" in html
+
+
+# -- where the picture freezes for an extended description ------------------------------------
+
+
+def _say(*sentences: tuple[float, str], step: float = 0.45, gap: float = 0.05) -> list:
+    """Words of each sentence, from its start, `step` s per word with `gap` s between."""
+    from lull.types import Word
+
+    out = []
+    for t, text in sentences:
+        for w in text.split():
+            out.append(Word(text=w, start=round(t, 3), end=round(t + step - gap, 3)))
+            t += step
+    return out
+
+
+def test_a_freeze_never_comes_before_its_visual_and_waits_for_the_sentence():
+    """A slide changes at 2.5 s, in the middle of a sentence: the picture holds at the end of
+    that sentence (4.2 s), on the new slide, not where the speech began (on the old one)."""
+    words = _say((0.0, "This is slide one."), (2.0, "Now the chart shows growth."))
+    ext = [_cue("x001", 2.5, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    assert frame / 25 == pytest.approx(4.2, abs=0.04)  # "growth." ends at 4.2 s
+    assert frame / 25 >= 2.5 + 0.3
+
+
+def test_a_freeze_in_silence_waits_a_moment_after_its_visual():
+    words = _say((0.0, "Hello there."))  # ends at 0.85 s
+    ext = [_cue("x001", 3.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    assert frame / 25 == pytest.approx(3.3, abs=0.04)
+
+
+def test_a_freeze_takes_a_gap_between_words_when_no_sentence_ends_soon():
+    """No sentence boundary within FREEZE_WAIT_S: the first gap of 0.15 s or more between
+    words after the visual will do."""
+    from lull.types import Word
+
+    words = [Word(text=f"w{i}", start=round(i * 0.4, 3), end=round(i * 0.4 + 0.35, 3))
+             for i in range(30)]  # 0-12 s, 0.05 s gaps, no punctuation  # fmt: skip
+    words[12] = words[12].model_copy(update={"end": 4.98})  # 4.98 to 5.2: a 0.22 s gap
+    words[13] = words[13].model_copy(update={"start": 5.2})
+    ext = [_cue("x001", 1.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    assert frame / 25 == pytest.approx(5.0, abs=0.04)
+
+
+def test_script_both_tracks_and_cues_json_place_every_cue_at_the_same_time(published):
+    """One timeline: a voiced extended cue sits at its freeze point in script.md, in
+    extended.vtt and in cues.json (freeze_at); a standard cue at its start in all three."""
+    run = published["run"]
+    script = (run / "script.md").read_text(encoding="utf-8")
+    in_script = dict(
+        (m.group(3), (m.group(1), m.group(2)))
+        for m in re.finditer(r"^- (\S+) to (\S+) · (\w+) · ", script, re.M)
+    )
+    in_vtt: dict[str, tuple[str, str]] = {}
+    for name in ("descriptions.vtt", "extended.vtt"):
+        text = (run / name).read_text(encoding="utf-8")
+        for m in re.finditer(r"^(\w+)\n(\S+) --> (\S+)$", text, re.M):
+            in_vtt[m.group(1)] = (m.group(2), m.group(3))
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    in_json = {
+        c["id"]: c.get("freeze_at", c["start"])
+        for c in data["cues"] + data["extended"]
+        if c["audio_dur"] is not None and c["status"] != "held"
+    }
+    assert set(in_script) == set(in_vtt) == set(in_json) == {"c001", "x001", "x002"}
+    for cid, (a, b) in in_vtt.items():
+        assert in_script[cid] == (a, b), cid
+        assert timecode(in_json[cid]) == a, cid
+    assert in_vtt["x002"][0] == "00:00:04.320"  # the freeze point, not the visual (4.0 s)
+

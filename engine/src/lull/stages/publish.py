@@ -67,7 +67,7 @@ from lull.stages.plan import said_already
 from lull.stages.research import ResearchResult
 from lull.stages.schedule import SALIENT
 from lull.timeline import complement, merge_spans
-from lull.types import Cue, Gap, RunOptions, Span, VisualEvent
+from lull.types import Cue, Gap, RunOptions, Span, VisualEvent, Word
 
 log = logging.getLogger(__name__)
 
@@ -434,11 +434,13 @@ def tts_disclosure(cues: Sequence[Cue]) -> str:
 # -- script --------------------------------------------------------------------------------------
 
 
-def _script_entry(c: Cue) -> list[str]:
+def _script_entry(c: Cue, visual: float | None = None) -> list[str]:
     when = timecode(c.start)
     if c.audio_dur is not None and c.status != "held":
         when += f" to {timecode(c.start + c.audio_dur)}"
     lines = [f"- {when} · {c.id} · {c.status}", f"  - Text: {_one_line(c.text)}"]
+    if visual is not None and abs(visual - c.start) > 1e-6:
+        lines.append(f"  - The picture holds here for a visual from {timecode(visual)}")
     if c.claims:
         claims = "; ".join(
             f"{_one_line(k.text)} — {k.verdict.replace('_', ' ')}"
@@ -457,13 +459,17 @@ def _script_entry(c: Cue) -> list[str]:
     return lines
 
 
-def _entries(cues: Sequence[Cue], empty: str) -> list[str]:
+def _entries(cues: Sequence[Cue], empty: str, visual: dict[str, float] | None = None) -> list[str]:
     ordered = sorted(cues, key=lambda c: (c.start, c.id))
-    return [line for c in ordered for line in _script_entry(c)] or [empty]
+    seen = visual or {}
+    return [line for c in ordered for line in _script_entry(c, seen.get(c.id))] or [empty]
 
 
 def script_md(video_name: str, cues: Sequence[Cue], extended: Sequence[Cue], opts: RunOptions,
-              disclosure: str) -> str:  # fmt: skip
+              disclosure: str, visual: dict[str, float] | None = None) -> str:  # fmt: skip
+    """The description script. Extended cues come at the time the tracks give them (publish
+    passes them moved to their freeze points), with `visual` the time each one's visual
+    starts."""
     out = [
         f"# Audio description script: {video_name}",
         "",
@@ -477,7 +483,7 @@ def script_md(video_name: str, cues: Sequence[Cue], extended: Sequence[Cue], opt
         "",
         "## Extended descriptions (the video pauses for these)",
         "",
-        *_entries(extended, "No extended description."),
+        *_entries(extended, "No extended description.", visual),
     ]
     return "\n".join(out) + "\n"
 
@@ -842,6 +848,7 @@ def publish(
     duplicates: dict[str, str] | None = None,
     priority: dict[str, int] | None = None,
     since: float | None = None,
+    words: list[Word] | None = None,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
@@ -850,7 +857,8 @@ def publish(
     near-duplicates of another (dropped -> kept), counted as described with their twin;
     `priority` the plan's priorities, which decide what is important (see `important`);
     `since` when this attempt started (epoch seconds): its calls are the ones reported as this
-    run's, next to the model spend of every attempt under the run id."""
+    run's, next to the model spend of every attempt under the run id; `words` the transcript,
+    whose sentence ends decide where the extended version stops (mix.hold_point)."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -876,7 +884,7 @@ def publish(
         try:
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
-                run_id, opts, speech, duplicates, overlap, priority, since,
+                run_id, opts, speech, duplicates, overlap, priority, since, words or [],
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -893,6 +901,7 @@ def _stage(
     research: ResearchResult | None, ledger: Ledger, run_id: str, opts: RunOptions,
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
     priority: dict[str, int] | None = None, since: float | None = None,
+    words: list[Word] | None = None,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
@@ -906,7 +915,7 @@ def _stage(
     ext_error = None
     try:
         ext_video = mixer.extended_video(
-            video, extended, run_dir, standard=cues, speech=speech, info=info,
+            video, extended, run_dir, standard=cues, speech=speech, words=words or [], info=info,
             language=opts.language, levels=levels,
         )  # fmt: skip
     except MediaError as e:
@@ -917,9 +926,13 @@ def _stage(
         out[mixer.EXTENDED_VIDEO] = ext_video
     out.update(_keyframes(video, everything, events, run_dir, info.duration))
 
-    fps, freezes = mixer.freeze_points(spoken_ext, info, standard=spoken, speech=speech)
+    fps, freezes = mixer.freeze_points(
+        spoken_ext, info, standard=spoken, speech=speech, words=words or []
+    )
     freeze_at = {c.id: float(f.frame / fps) for f in freezes for c in f.cues}
-    extended_vtt = [
+    # one timeline for every output: a voiced extended cue sits at its freeze point in the
+    # extended track, script.md and cues.json (freeze_at) alike
+    placed = [
         c.model_copy(update={"start": freeze_at[c.id]}) if c.id in freeze_at else c
         for c in extended
     ]
@@ -984,9 +997,7 @@ def _stage(
 
     language = opts.language
     out[STANDARD_VTT] = _write(run_dir / STANDARD_VTT, to_vtt(cues, language=language))
-    out[EXTENDED_VTT] = _write(
-        run_dir / EXTENDED_VTT, to_extended_vtt(extended_vtt, language=language)
-    )
+    out[EXTENDED_VTT] = _write(run_dir / EXTENDED_VTT, to_extended_vtt(placed, language=language))
     cue_data = {
         "run_id": run_id,
         "language": language,
@@ -998,7 +1009,10 @@ def _stage(
     out[CUES_JSON] = _write(
         run_dir / CUES_JSON, json.dumps(cue_data, indent=2, ensure_ascii=False) + "\n"
     )
-    out[SCRIPT] = _write(run_dir / SCRIPT, script_md(video.name, cues, extended, opts, disclosure))
+    visual = {c.id: c.start for c in extended if c.id in freeze_at}
+    out[SCRIPT] = _write(
+        run_dir / SCRIPT, script_md(video.name, cues, placed, opts, disclosure, visual)
+    )
     created = datetime.now(UTC).isoformat(timespec="seconds")
     context = {
         "video": video.name, "duration": _duration(info.duration), "run_id": run_id,
