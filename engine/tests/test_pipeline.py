@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 import lull
-from lull import pipeline
+from lull import media, pipeline
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, CallRecord, Ledger
 from lull.media import MediaError
@@ -1032,3 +1032,18 @@ def test_each_verification_records_a_split_call_in_the_ledger(tone_slides, tmp_p
     rows = {(r["role"], r["model"]): r["calls"] for r in ledger.summary("t1")["by_role_model"]}
     assert rows[("split", "nvidia/Nemotron-3_5-Lightning")] == 3
     assert rows[("verify", "nvidia/Nemotron-3.5-Super-VL")] == 3
+
+
+def test_a_stage_that_times_out_is_reported_as_a_failed_stage(tone_slides, tmp_path, fast_media,
+                                                              monkeypatch):  # fmt: skip
+    def hang(*a, **kw):
+        raise media.MediaTimeout("ffmpeg ran past its 30 s limit and was stopped")
+
+    monkeypatch.setattr(pipeline, "watch", hang)
+    ledger = _ledger(tmp_path)
+    events: list[Event] = []
+    with pytest.raises(TimeoutError):
+        run(tone_slides, tmp_path / "run", RunOptions(), tf=FakeTF(ledger), speech=FakeSpeech(),
+            tavily=None, ledger=ledger, on_event=events.append, run_id="tt", wps=3.0)  # fmt: skip
+    last = events[-1]
+    assert (last.type, last.stage, last.data["kind"]) == ("error", "watch", "MediaTimeout")

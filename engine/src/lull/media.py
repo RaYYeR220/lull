@@ -57,9 +57,31 @@ def _bin(name: str) -> str:
     return path
 
 
-def _run(cmd: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
+PROBE_TIMEOUT_S = 30.0  # an ffprobe, a version check, a single frame
+FFMPEG_MIN_TIMEOUT_S = 30.0  # ffmpeg gets at least this long ...
+FFMPEG_TIMEOUT_PER_S = 8.0  # ... or this many seconds per second of media it handles
+
+
+class MediaTimeout(MediaError, TimeoutError):
+    """A media tool ran past its time limit and was stopped."""
+
+
+def ffmpeg_timeout(seconds: float | None) -> float:
+    """The time limit for an ffmpeg run over `seconds` of media: max(30 s, 8 x seconds)."""
+    return max(FFMPEG_MIN_TIMEOUT_S, FFMPEG_TIMEOUT_PER_S * max(0.0, seconds or 0.0))
+
+
+def _run(
+    cmd: list[str], *, cwd: Path | None = None, timeout: float = PROBE_TIMEOUT_S
+) -> subprocess.CompletedProcess[bytes]:
+    """Run a media tool; past `timeout` seconds it is killed (and waited for, so nothing is
+    left running) and MediaTimeout (a TimeoutError) is raised."""
     try:
-        return subprocess.run(cmd, check=True, capture_output=True, cwd=cwd)
+        return subprocess.run(cmd, check=True, capture_output=True, cwd=cwd, timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        raise MediaTimeout(
+            f"{Path(cmd[0]).stem} ran past its {timeout:g} s limit and was stopped"
+        ) from e
     except subprocess.CalledProcessError as e:
         tail = e.stderr.decode("utf-8", "replace").strip()[-800:]
         raise MediaError(f"{Path(cmd[0]).stem} failed (exit {e.returncode}): {tail}") from e
@@ -98,8 +120,10 @@ def _unsupported(format_name: str) -> MediaError:
     )
 
 
-def _ffmpeg(*args: str) -> subprocess.CompletedProcess[bytes]:
-    return _run([_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", *args])
+def _ffmpeg(*args: str, seconds: float | None = None) -> subprocess.CompletedProcess[bytes]:
+    """ffmpeg over `seconds` of media, within ffmpeg_timeout(seconds)."""
+    return _run([_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", *args],
+                timeout=ffmpeg_timeout(seconds))  # fmt: skip
 
 
 def _fps(rate: str) -> float:
@@ -178,28 +202,49 @@ def audio_duration(path: Path) -> float:
         raise MediaError(f"cannot determine duration of {path}") from e
 
 
-def extract_wav(src: Path, dst: Path, rate: int = 16000) -> Path:
+def media_seconds(path: Path) -> float | None:
+    """How long `path` plays (video or audio), for a time limit; None when ffprobe cannot
+    tell (the run then gets the shortest limit and fails on its own if the file is bad)."""
+    try:
+        out = _run(
+            [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS,
+             "-format_whitelist", SAFE_FORMATS + ",wav", "-v", "error",
+             "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)]
+        )  # fmt: skip
+        return float(out.stdout.decode().strip())
+    except (MediaError, ValueError):
+        return None
+
+
+def extract_wav(src: Path, dst: Path, rate: int = 16000, *, seconds: float | None = None) -> Path:
     """The first audio stream as mono 16-bit PCM on the container's clock: an audio stream
     that starts after the video is padded from 0, exactly as the mix plays it, so transcript
     times, pauses and the mix agree."""
+    if seconds is None:
+        seconds = media_seconds(src)
     _ffmpeg(
         *input_args(src), "-map", "0:a:0", "-af", "aresample=async=1:first_pts=0",
         "-vn", "-ac", "1", "-ar", str(rate), "-c:a", "pcm_s16le", str(dst),
+        seconds=seconds,
     )  # fmt: skip
     return dst
 
 
-def make_proxy(src: Path, dst: Path, *, max_bytes: int = 10 * 2**20, height: int = 720) -> Path:
+def make_proxy(
+    src: Path, dst: Path, *, max_bytes: int = 10 * 2**20, height: int = 720,
+    seconds: float | None = None,
+) -> Path:  # fmt: skip
     """`src` re-encoded at most `height` lines high, smaller each attempt until under
     `max_bytes`; an attempt that never gets there leaves no file behind."""
     attempts = list(dict.fromkeys((min(h, height), crf) for h, crf in
                                   [(height, 28), (height, 34), (480, 34), (360, 38)]))  # fmt: skip
     last = 0
+    seconds = media_seconds(src) if seconds is None else seconds
     for h, crf in attempts:
         _ffmpeg(
             *input_args(src), "-an", "-vf", f"scale=-2:{h}",
             "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
-            "-crf", str(crf), "-movflags", "+faststart", str(dst),
+            "-crf", str(crf), "-movflags", "+faststart", str(dst), seconds=seconds,
         )  # fmt: skip
         last = dst.stat().st_size
         if last < max_bytes:
@@ -216,6 +261,7 @@ def cut_clip(src: Path, dst: Path, start: float, end: float, *, height: int = 48
         "-vf", f"scale=-2:{height}", "-c:v", "libx264", "-preset", "veryfast",
         "-pix_fmt", "yuv420p", "-crf", "28", "-c:a", "aac", "-b:a", "96k",
         "-movflags", "+faststart", str(dst),
+        seconds=end - start,
     )  # fmt: skip
     return dst
 
@@ -224,7 +270,8 @@ def atempo(src: Path, dst: Path, factor: float) -> Path:
     """Audio `src` played `factor` times faster, pitch kept (ffmpeg atempo, 0.5..100)."""
     if not 0.5 <= factor <= 100.0:
         raise MediaError(f"atempo factor {factor} outside 0.5..100")
-    _ffmpeg(*wav_input_args(src), "-filter:a", f"atempo={factor:.3f}", str(dst))
+    _ffmpeg(*wav_input_args(src), "-filter:a", f"atempo={factor:.3f}", str(dst),
+            seconds=audio_duration(src))  # fmt: skip
     return dst
 
 
@@ -249,7 +296,7 @@ def frames_at(src: Path, shots: list[tuple[float, Path]], *, batch: int = 16) ->
         for j, (_, dst) in enumerate(chunk):
             dst.unlink(missing_ok=True)
             args += ["-map", f"{j}:v:0", "-frames:v", "1", "-q:v", "2", str(dst)]
-        _ffmpeg(*args)
+        _ffmpeg(*args, seconds=float(len(chunk)))  # a seek and a frame each
         missing = [f"{t:.3f}" for t, dst in chunk if not dst.exists()]
         if missing:
             raise MediaError(f"no frame at t={', '.join(missing)} in {src}")
@@ -263,7 +310,8 @@ _PTS = re.compile(r"pts_time:(\d+(?:\.\d+)?)")
 def scene_cuts(src: Path, threshold: float = 0.3) -> list[float]:
     proc = _run(
         [_bin("ffmpeg"), "-hide_banner", "-nostats", *input_args(src), "-an",
-         "-vf", f"select='gt(scene,{threshold})',showinfo", "-f", "null", "-"]
+         "-vf", f"select='gt(scene,{threshold})',showinfo", "-f", "null", "-"],
+        timeout=ffmpeg_timeout(media_seconds(src)),  # a whole decode of the video
     )  # fmt: skip
     return sorted(float(m) for m in _PTS.findall(proc.stderr.decode("utf-8", "replace")))
 

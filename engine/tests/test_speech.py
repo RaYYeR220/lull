@@ -132,3 +132,21 @@ def test_assign_speakers_tie_and_nearest():
     )
     assert [w.speaker for w in near] == [6, None]
     assert assign_speakers([Word(text="x", start=0, end=1)], [])[0].speaker is None
+
+
+def test_the_speech_server_has_bounded_waits_and_a_late_answer_is_a_timeout(tmp_path):
+    from lull.speech import SpeechTimeout
+
+    def slow(request):
+        raise httpx.ReadTimeout("the server did not answer", request=request)
+
+    client = NemoSpeechHTTP("http://speech.test", transport=httpx.MockTransport(slow))
+    t = client._http.timeout
+    assert t.connect <= 10 and t.read <= 300 and t.write <= 300 and t.pool <= 10
+    wav = tmp_path / "a.wav"
+    wav.write_bytes(b"RIFF")
+    out = tmp_path / "o.wav"
+    for call in (lambda: client.transcribe(wav), lambda: client.synthesize("A.", "Sofia", out)):
+        with pytest.raises(SpeechTimeout) as err:
+            call()
+        assert isinstance(err.value, TimeoutError) and isinstance(err.value, SpeechError)

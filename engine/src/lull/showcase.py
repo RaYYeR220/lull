@@ -216,8 +216,9 @@ def _loudness(wav: Path | None, duration: float) -> list[float]:
     return out + [FLOOR_DB] * (n - len(out))
 
 
-def _ffmpeg(*args: str) -> None:
-    media._run([media._bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", *args])
+def _ffmpeg(*args: str, seconds: float | None = None) -> None:
+    media._run([media._bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", *args],
+               timeout=media.ffmpeg_timeout(seconds))  # fmt: skip
 
 
 def _video(src: Path, info: media.Probe, dst: Path) -> bool:
@@ -229,6 +230,7 @@ def _video(src: Path, info: media.Probe, dst: Path) -> bool:
         *media.input_args(src), "-map", "0:v:0", *sound,
         "-vf", f"scale=-2:'{height}'", "-c:v", "libx264", "-preset", "veryfast",
         "-crf", str(VIDEO_CRF), "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst),
+        seconds=info.duration,
     )  # fmt: skip
     return original is not None
 
@@ -276,7 +278,8 @@ def export_showcase(
     video = out_dir / VIDEO
     has_sound = _video(described, info, video)
     with tempfile.TemporaryDirectory(prefix="lull-showcase-") as tmp:
-        wav = media.extract_wav(video, Path(tmp) / "original.wav") if has_sound else None
+        wav = (media.extract_wav(video, Path(tmp) / "original.wav", seconds=duration)
+               if has_sound else None)  # fmt: skip
         loudness = _loudness(wav, duration)
     for name in COPIED:
         shutil.copyfile(run_dir / name, out_dir / name)
@@ -288,7 +291,7 @@ def export_showcase(
         if not src.exists():
             raise ShowcaseError(f"the audio of cue {c.id} is missing ({Path(c.audio_path).name})")
         _ffmpeg(*media.wav_input_args(src), "-vn", "-ac", "1", "-c:a", "aac", "-b:a", CUE_AUDIO,
-                str(out_dir / AUDIO_DIR / f"{c.id}.m4a"))  # fmt: skip
+                str(out_dir / AUDIO_DIR / f"{c.id}.m4a"), seconds=c.audio_dur)  # fmt: skip
 
     data = {
         "id": id or run_dir.name,
