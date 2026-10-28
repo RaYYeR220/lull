@@ -45,9 +45,6 @@ from lull.stages.plan import count_words
 from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
-    FRESH_NOTE,
-    SPLIT_NOTE,
-    bundles_facts,
     clip_window,
     remove_claims,
     rewrite,
@@ -457,8 +454,8 @@ class _Finalise:
     words_before: int | None = None  # word count before the first compression
     dropped: list[str] = field(default_factory=list)  # events whose sentence went to fit
     repairs: int = 0  # claim cuts made
-    rechecked: bool = False  # the unchanged line was checked afresh once
-    split_asked: bool = False  # the verifier was asked once to split a claim of several facts
+    rechecked: bool = False  # the unchanged line was judged afresh once
+    splits: dict = field(default_factory=dict)  # claim splits by text (verify.split_claims)
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
     at: float | None = None  # where in its window the voiced line starts
@@ -500,12 +497,6 @@ class _Finalise:
                     return out
                 continue
             self.claims = self.check_frames()
-            if not self.split_asked and any(
-                bundles_facts(c) for c in self.claims if c.verdict != "supported"
-            ):
-                # one failed claim holds several facts: one verdict would cut them all
-                self.split_asked = True
-                self.claims = self.check_frames(note=SPLIT_NOTE)
             if not self.claims:
                 return self.held("the verifier found no visual claim to check")
             bad = [c for c in self.claims if c.verdict != "supported"]
@@ -639,7 +630,9 @@ class _Finalise:
 
     # -- verify --------------------------------------------------------------------------
 
-    def check_frames(self, note: str | None = None) -> list[Claim]:
+    def check_frames(self) -> list[Claim]:
+        """The claims of the line as it is now, split (once per text) and judged against the
+        clip of its events, kept in `checks`."""
         if self.clip is None:
             duration = self.ctx.video_duration
             if duration is None:
@@ -651,7 +644,7 @@ class _Finalise:
         clip, offset = self.clip
         names = names_in(self.text, self.names)
         claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset,
-                        note=note)  # fmt: skip
+                        cache=self.splits)  # fmt: skip
         self.checks.append(Check(text=self.text, claims=claims))
         return claims
 
@@ -708,15 +701,14 @@ class _Finalise:
         return None
 
     def fresh_check(self, bad: list[Claim], last: bool) -> Cue | None | bool:
-        """The repair removed nothing: the failed claim may be one the verifier attributed to
-        the line without the line saying it. The unchanged line is checked once more, with a
-        fresh claim extraction; when the same failed claim comes back (or this was done
-        already) False, and the caller holds the cue. Otherwise the new verdicts decide: all
-        supported, the line goes on to be voiced; a new failure is cut as any other."""
+        """The repair removed nothing. The unchanged line's claims are judged once more
+        against the frames; when the same failed claim comes back (or this was done already)
+        False, and the caller holds the cue. Otherwise the new verdicts decide: all supported,
+        the line goes on to be voiced; a new failure is cut as any other."""
         if self.rechecked:
             return False
         self.rechecked = True
-        self.claims = self.check_frames(note=FRESH_NOTE)
+        self.claims = self.check_frames()
         failed = [c for c in self.claims if c.verdict != "supported"]
         if {_key(c) for c in failed} & {_key(c) for c in bad}:
             return False

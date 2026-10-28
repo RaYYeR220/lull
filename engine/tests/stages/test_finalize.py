@@ -22,10 +22,8 @@ from lull.stages.finalize import (
 )
 from lull.stages.verify import (
     TEXT_SCHEMA,
-    UNSPECIFIED,
     VERIFY_SCHEMA,
     clip_window,
-    parse_claims,
     remove_claims,
     verify,
 )
@@ -60,20 +58,47 @@ class FakeSpeech:
 
 
 class FakeTF:
-    """Answers by role: a list of canned answers, or a function of the call."""
+    """Answers by role: a list of canned answers, or a function of the call.
+
+    A "verify" answer may be written as the claims a check finds, {"claims": [{text, verdict,
+    at}]}: unless the test gives "split" answers of its own, the split call is answered with
+    those claims (each spanning the whole line) and the judge call with their verdicts, by
+    position. `roles()` leaves such split calls out; `roles(splits=True)` keeps them."""
 
     def __init__(self, **answers):
         self.answers = answers
         self.calls: list[dict] = []
+        self._found: dict | None = None  # the claims a split call took from a verify answer
+
+    def _answer(self, role, call):
+        a = self.answers[role]
+        return a(call) if callable(a) else a.pop(0)
 
     def json(self, model, messages, schema, **kw) -> dict:
         call = {"model": model, "messages": messages, "schema": schema, **kw}
         self.calls.append(call)
-        a = self.answers[kw["role"]]
-        return a(call) if callable(a) else a.pop(0)
+        role = kw["role"]
+        if role == "split" and "split" not in self.answers:
+            self._found = self._answer("verify", call)
+            line = _description(call)
+            return {"claims": [{"id": f"k{i}", "text": c.get("text") or "a claim", "span": line}
+                               for i, c in enumerate(self._found.get("claims", []), start=1)]
+                    or [{"id": "k1", "text": line, "span": line}]}  # fmt: skip
+        if role == "verify" and "split" not in self.answers:
+            found, self._found = self._found, None
+            if found is None:  # the same line judged again: its split was kept
+                found = self._answer("verify", call)
+            if "claims" in found:
+                return {"verdicts": [
+                    {"id": f"k{i}", "verdict": c.get("verdict"), "evidence": "",
+                     "at": c.get("at")}
+                    for i, c in enumerate(found["claims"], start=1)
+                ]}  # fmt: skip
+            return found
+        return self._answer(role, call)
 
-    def roles(self) -> list[str]:
-        return [c["role"] for c in self.calls]
+    def roles(self, *, splits: bool = False) -> list[str]:
+        return [c["role"] for c in self.calls if splits or c["role"] != "split"]
 
     def of(self, role: str) -> list[dict]:
         return [c for c in self.calls if c["role"] == role]
@@ -173,7 +198,7 @@ def test_all_supported_and_short_audio_is_verified(tmp_path, tone_slides):
     assert Path(out.audio_path) == tmp_path / "work" / "audio" / "c001.wav"
     assert speech.calls[0]["voice"] == "Aria" and speech.calls[0]["text"] == TEXT
     assert tf.roles() == ["verify"]
-    call = tf.calls[0]
+    call = tf.of("verify")[0]
     assert call["model"] == VL and call["schema"] == VERIFY_SCHEMA
     assert (call["stage"], call["thinking"], call["temperature"]) == ("finalize", False, 0.2)
     assert (call["max_tokens"], call["estimate"]) == (1500, 0.003)
@@ -189,7 +214,9 @@ def test_all_supported_and_short_audio_is_verified(tmp_path, tone_slides):
 def test_claim_times_are_absolute(tmp_path, video):
     tf = FakeTF(verify=[_claims(("a person opens a door", "supported"), at=1.5)])
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert out.claims == [Claim(text="a person opens a door", verdict="supported", at=2.5)]
+    assert [(c.text, c.verdict, c.at) for c in out.claims] == [
+        ("a person opens a door", "supported", 2.5)
+    ]  # fmt: skip
 
 
 # -- (b) an unsupported claim is cut, then the rest is re-verified -----------------------
@@ -303,23 +330,6 @@ def test_removal_that_changes_nothing_is_held(tmp_path, video):
     assert tf.roles() == ["verify", "remove", "verify"]
     assert out.status == "held" and out.text == TEXT
     assert "removed nothing" in out.note
-
-
-def test_a_failed_extra_the_line_never_says_gets_one_fresh_check(tmp_path, video):
-    """The verifier once attributes a failing claim the line does not make; the repair can
-    remove nothing, so the unchanged line is checked once more with a fresh extraction, and
-    passes."""
-    tf = FakeTF(
-        verify=[
-            _claims(("a person opens a door", "supported"), ("a dog sleeps", "not_visible")),
-            _supported("a person opens a door"),
-        ],  # fmt: skip
-        remove=lambda call: {"text": _description(call)},
-    )
-    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert tf.roles() == ["verify", "remove", "verify"]
-    assert out.status == "verified" and out.text == TEXT
-    assert "only the claims this description makes" in _user_text(tf.of("verify")[1])
 
 
 def test_contradiction_that_cannot_be_cut_withholds_the_text(tmp_path, video):
@@ -628,11 +638,18 @@ def test_verify_always_fails_is_held_after_two_repairs(tmp_path, video):
     assert {c["stage"] for c in tf.calls} == {"finalize"}
 
 
-def test_no_claims_from_the_verifier_is_held(tmp_path, video):
-    tf = FakeTF(verify=[{"claims": []}])
+def test_a_judge_that_gives_no_verdict_leaves_the_line_unverified(tmp_path, video):
+    """The vision model answered with no verdict at all: every claim of the line counts as
+    not visible, and the line is never voiced as verified."""
+    tf = FakeTF(
+        split=[_split(("a person opens a door", "A person in a red coat opens a door"))],
+        verify=[{"verdicts": []}] * 2,
+        remove=lambda call: {"text": _description(call)},
+    )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held" and speech.calls == []
+    assert [(c.text, c.verdict) for c in out.claims] == [("a person opens a door", "not_visible")]
 
 
 # -- lint ---------------------------------------------------------------------------------
@@ -985,54 +1002,6 @@ def test_the_verify_clip_covers_the_moment_a_line_describes():
 # -- model calls on their own -------------------------------------------------------------------
 
 
-def test_verify_parses_and_offsets(tmp_path):
-    clip = tmp_path / "c.mp4"
-    clip.write_bytes(b"\0" * 16)
-    tf = FakeTF(
-        verify=[
-            {
-                "claims": [
-                    {"text": "a door", "verdict": "supported", "at": 1.0},
-                    {"text": "a cat", "verdict": "not_visible", "at": None},
-                    {"text": "  ", "verdict": "supported", "at": 0.0},
-                ]
-            }
-        ]
-    )
-    out = verify("A door. A cat.", clip, tf, run_id="r1", names={"Emo"}, offset=10.0)
-    assert out == [
-        Claim(text="a door", verdict="supported", at=11.0),
-        Claim(text="a cat", verdict="not_visible", at=None),
-    ]
-    assert "Emo" in _user_text(tf.calls[0]).split("<names>", 1)[1]
-
-
-def test_verify_rejects_an_answer_without_claims(tmp_path):
-    clip = tmp_path / "c.mp4"
-    clip.write_bytes(b"\0" * 16)
-    with pytest.raises(ValueError):
-        verify("A door.", clip, FakeTF(verify=[{"items": []}]), run_id="r1")
-
-
-def test_verify_keeps_failed_claims_without_text(tmp_path):
-    clip = tmp_path / "c.mp4"
-    clip.write_bytes(b"\0" * 16)
-    answer = {
-        "claims": [
-            {"text": "", "verdict": "not_visible", "at": None},
-            {"text": " ", "verdict": "contradicted", "at": 2.0},
-            {"text": "", "verdict": "supported", "at": 1.0},
-            {"text": "a door", "verdict": "supported", "at": 1.0},
-        ]
-    }
-    out = verify("A door.", clip, FakeTF(verify=[answer]), run_id="r1")
-    assert [(c.text, c.verdict) for c in out] == [
-        (UNSPECIFIED, "not_visible"), (UNSPECIFIED, "contradicted"), ("a door", "supported"),
-    ]  # fmt: skip
-    text = VERIFY_SCHEMA["properties"]["claims"]["items"]["properties"]["text"]
-    assert text == {"type": "string", "minLength": 1}
-
-
 def test_remove_claims_lists_the_bad_claims():
     tf = FakeTF(remove=[{"text": "A door opens."}])
     bad = [Claim(text="a red door", verdict="contradicted", at=1.0)]
@@ -1236,22 +1205,6 @@ def test_the_verify_clip_is_at_least_4_s():
     assert clip_window([_e(0.0, 20.0)], 30.0) == (0.0, 12.0)  # the cap still holds
 
 
-def test_repeated_claims_are_judged_once():
-    """Identical claims (case and spacing aside) count once; a repeat with a worse verdict
-    makes the kept one worse, never better."""
-    same = [{"text": "Winged figures fly past.", "verdict": "supported", "at": 1.0}] * 24
-    assert len(parse_claims({"claims": same})) == 1
-    mixed = {"claims": [
-        {"text": "A cat sits", "verdict": "supported", "at": 1.0},
-        {"text": "a  CAT sits", "verdict": "not_visible", "at": None},
-        {"text": "A dog barks", "verdict": "supported", "at": 2.0},
-    ]}  # fmt: skip
-    got = parse_claims(mixed)
-    assert [(c.text, c.verdict) for c in got] == [
-        ("A cat sits", "not_visible"), ("A dog barks", "supported")
-    ]  # fmt: skip
-
-
 # -- edits and placement in the pause -------------------------------------------------------------
 
 
@@ -1322,27 +1275,23 @@ def test_a_cue_that_cannot_wait_starts_as_late_as_it_can_with_a_look_ahead(tmp_p
 
 
 def test_a_compressed_cue_publishes_only_the_claims_its_final_text_makes(tmp_path, video):
-    """A line compressed after it was verified is verified again, and the claims it carries
-    are the final text's, each judged on that text. What the verifier lists beyond the line
-    (other things the frames show) is not a claim of the line and is never published."""
+    """A line compressed after it was verified is split and judged again, and the claims it
+    carries are those of the final text, each judged on that text."""
     long_text = "A person in a long red coat opens the wooden door of the shed."  # 14 words
     final = "A person in a red coat opens a door."
     tf = FakeTF(
-        verify=[
-            _supported("a person", "a long red coat", "opens the wooden door of the shed"),
-            _supported(
-                "a person",
-                "wears a red coat",
-                "opens a door",
-                "the shed has a green roof",
-                "a dog sleeps on the porch",
-            ),
-        ],  # fmt: skip
+        split=[_split(("a person in a long red coat", "A person in a long red coat"),
+                      ("the person opens the wooden door of the shed",
+                       "opens the wooden door of the shed")),
+               _split(("a person in a red coat", "A person in a red coat"),
+                      ("the person opens a door", "opens a door"))],
+        verify=[_verdicts(("k1", "supported"), ("k2", "supported")),
+                _verdicts(("k1", "supported"), ("k2", "supported"))],
         compress=[{"text": final}],
-    )
+    )  # fmt: skip
     out = _run(tmp_path, video, tf, FakeSpeech([5.6, 3.0]), cue=_cue(long_text))
     assert out.status == "verified" and out.text == final
-    assert [c.text for c in out.claims] == ["a person", "wears a red coat", "opens a door"]
+    assert [c.text for c in out.claims] == ["a person in a red coat", "the person opens a door"]
     last = out.checks[-1]
     assert last.text == out.text
     assert all(c in last.claims for c in out.claims)  # each verdict judged on the final text
@@ -1525,34 +1474,23 @@ def test_with_verification_off_a_line_is_voiced_unverified(tmp_path, video):
 # -- atomic claims and a targeted repair ------------------------------------------------------
 
 
-def test_the_verifier_is_asked_for_one_checkable_fact_per_claim():
-    from lull.stages.verify import load_prompt
-
-    text = " ".join(load_prompt("verify").split())
-    assert "one checkable fact per claim" in text
-    for case in ('"and"', "lists", '"X does Y while Z"'):
-        assert case in text, case
-
-
 def test_a_repair_rewrites_only_the_clause_that_carries_a_failed_claim(tmp_path, video):
     """A two-clause line with one false clause keeps the true one."""
     from lull.stages.verify import load_prompt
 
     line = "A person walks along the bridge while lasers scan the crowd."
     tf = FakeTF(
-        verify=[
-            _claims(
-                ("a person walks along the bridge", "supported"),
-                ("lasers scan the crowd", "not_visible"),
-            ),
-            _supported("a person walks along the bridge"),
-        ],  # fmt: skip
+        split=[_split(("a person walks along the bridge", "A person walks along the bridge"),
+                      ("lasers scan the crowd", "while lasers scan the crowd")),
+               _split(("a person walks along the bridge", "A person walks along the bridge"))],
+        verify=[_verdicts(("k1", "supported"), ("k2", "not_visible")),
+                _verdicts(("k1", "supported"))],
         remove=[{"text": "A person walks along the bridge."}],
-    )
+    )  # fmt: skip
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
     assert out.status == "verified" and out.text == "A person walks along the bridge."
     listed = _user_text(tf.of("remove")[0]).split("<remove>", 1)[1]
-    assert "lasers scan the crowd" in listed and "walks along the bridge" not in listed
+    assert '"while lasers scan the crowd"' in listed and "walks along the bridge" not in listed
     assert "only the clause" in " ".join(load_prompt("remove").split())
 
 
@@ -1572,37 +1510,6 @@ def test_a_compression_that_breaks_a_style_rule_gets_one_repair(tmp_path, video)
     assert out.status == "verified" and out.text == fixed
 
 
-def test_a_failed_claim_that_bundles_several_facts_is_split_before_anything_is_cut(tmp_path, video):
-    """The verifier answered a whole sentence as one claim; before cutting, it is asked once
-    to split it, and only the clause that fails goes."""
-    line = "A person in a blue jacket walks onto the bridge and looks around."
-    kept = "A person in a blue jacket walks onto the bridge."
-    tf = FakeTF(
-        verify=[
-            _claims((line.rstrip("."), "not_visible")),
-            _claims(
-                ("a person in a blue jacket", "supported"),
-                ("the person walks onto the bridge", "supported"),
-                ("the person looks around", "not_visible"),
-            ),
-            _supported("a person in a blue jacket", "the person walks onto the bridge"),
-        ],  # fmt: skip
-        remove=[{"text": kept}],
-    )
-    out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=_cue(line))
-    assert tf.roles() == ["verify", "verify", "remove", "verify"]
-    assert "one checkable fact" in _user_text(tf.of("verify")[1])
-    assert out.status == "verified" and out.text == kept
-
-
-def test_a_long_whole_sentence_claim_counts_as_several_facts():
-    from lull.stages.verify import bundles_facts
-
-    whole = "A young person in a blue jacket walks toward the mechanical figure on the bridge"
-    assert bundles_facts(Claim(text=whole, verdict="not_visible", at=None))
-    assert not bundles_facts(Claim(text="a person in a blue jacket", verdict="supported", at=1.0))
-
-
 def test_a_cut_that_leaves_only_the_look_ahead_leaves_nothing(tmp_path, video):
     """Live: a cut left "In a moment, ." and the cue was held for having no claim to check.
     A line with nothing but its look-ahead prefix says nothing: held as nothing left."""
@@ -1615,3 +1522,149 @@ def test_a_cut_that_leaves_only_the_look_ahead_leaves_nothing(tmp_path, video):
     assert out.status == "held" and out.text == ""
     assert "nothing left once the unverified claims were removed" in out.note
     assert tf.roles() == ["verify", "remove"]
+
+
+# -- claims split by the engine, judged by the vision model -----------------------------------
+
+
+def _split(*claims):
+    """A split answer: (text, span) pairs, ids k1, k2, ..."""
+    return {"claims": [{"id": f"k{i}", "text": t, "span": sp}
+                       for i, (t, sp) in enumerate(claims, start=1)]}  # fmt: skip
+
+
+def _verdicts(*items):
+    """A judge answer: (id, verdict) pairs, or (id, verdict, at)."""
+    return {"verdicts": [{"id": it[0], "verdict": it[1], "evidence": "seen",
+                          "at": it[2] if len(it) > 2 else 1.0} for it in items]}  # fmt: skip
+
+
+def test_a_sound_split_is_judged_claim_by_claim(tmp_path):
+    """Lightning splits the line (role "split", thinking off, temperature 0, the split
+    schema); the vision model judges exactly those claims by id. A claim it gives no verdict
+    is not visible; an id it invents is ignored; times move to video time."""
+    from lull.stages.verify import SPLIT_SCHEMA
+
+    clip = tmp_path / "c.mp4"
+    clip.write_bytes(b"\0" * 16)
+    line = "A person in a red coat opens a door."
+    tf = FakeTF(
+        split=[
+            _split(
+                ("a person in a red coat", "A person in a red coat"),
+                ("the person opens a door", "opens a door"),
+            )
+        ],
+        verify=[_verdicts(("k1", "supported", 1.5), ("k9", "supported"))],
+    )
+    out = verify(line, clip, tf, run_id="r1", names={"Emo"}, offset=10.0)
+    assert [(c.text, c.verdict, c.at, c.span) for c in out] == [
+        ("a person in a red coat", "supported", 11.5, "A person in a red coat"),
+        ("the person opens a door", "not_visible", None, "opens a door"),
+    ]  # fmt: skip
+    split, judged = tf.calls
+    assert (split["role"], split["model"], split["thinking"], split["temperature"]) == (
+        "split", LIGHTNING, False, 0.0)  # fmt: skip
+    assert split["schema"] == SPLIT_SCHEMA and judged["schema"] == VERIFY_SCHEMA
+    listed = _user_text(judged).split("<claims>", 1)[1]
+    assert "k1: a person in a red coat" in listed and "k2: the person opens a door" in listed
+    assert "Emo" in _user_text(judged).split("<names>", 1)[1].split("</names>", 1)[0]
+
+
+def test_a_split_whose_span_is_not_in_the_line_or_misses_a_word_is_asked_again():
+    from lull.stages.verify import check_split, split_claims
+
+    line = "A person in a red coat opens a door."
+    bad = [
+        {"id": "k1", "text": "a person", "span": "a person"},  # wrong case: not in the line
+        {"id": "k2", "text": "opens a door", "span": "opens a door"},
+    ]
+    good = _split(("a person in a red coat", "A person in a red coat"),
+                  ("the person opens a door", "opens a door"))  # fmt: skip
+    tf = FakeTF(split=[{"claims": bad}, good])
+    claims = split_claims(line, tf, run_id="r1")
+    assert [c.span for c in claims] == ["A person in a red coat", "opens a door"]
+    retry = _user_text(tf.calls[1])
+    assert "'a person' of claim k1 is not in the description" in retry
+    assert "no claim covers: coat, person, red" in retry
+    assert check_split(line, claims) == []
+    # names are context and framing words need no claim
+    assert check_split("In a moment, Proog waves.", [
+        _sc("k1", "Proog waves", "waves")], names={"Proog"}) == []  # fmt: skip
+
+
+def _sc(cid, text, span):
+    from lull.stages.verify import SplitClaim
+
+    return SplitClaim(id=cid, text=text, span=span)
+
+
+def test_a_split_that_fails_twice_falls_back_to_one_claim_per_sentence(caplog):
+    from lull.stages.verify import split_claims
+
+    tf = FakeTF(split=[{"claims": []}, _split(("a door", "a door"))])
+    with caplog.at_level("WARNING", logger="lull.stages.verify"):
+        claims = split_claims("In a moment, a door opens. A cat runs past.", tf, run_id="r1")
+    assert [(c.text, c.span) for c in claims] == [
+        ("a door opens", "a door opens."), ("A cat runs past", "A cat runs past."),
+    ]  # fmt: skip
+    assert "one claim per sentence" in caplog.text
+
+
+def test_a_split_is_kept_per_text_so_a_line_checked_again_is_not_split_again():
+    from lull.stages.verify import split_claims
+
+    cache: dict = {}
+    tf = FakeTF(split=[_split(("a door opens", "A door opens"))])
+    first = split_claims("A door opens.", tf, run_id="r1", cache=cache)
+    again = split_claims("A door opens.", tf, run_id="r1", cache=cache)
+    assert first == again and len(tf.calls) == 1
+
+
+def test_the_judge_needs_a_verdicts_list_and_keeps_the_worse_of_two(tmp_path):
+    from lull.stages.verify import judge
+
+    clip = tmp_path / "c.mp4"
+    clip.write_bytes(b"\0" * 16)
+    claims = [_sc("k1", "a cat sits", "A cat sits")]
+    with pytest.raises(ValueError):
+        judge("A cat sits.", claims, clip, FakeTF(split=[], verify=[{"claims": []}]),
+              run_id="r1")  # fmt: skip
+    tf = FakeTF(split=[], verify=[_verdicts(("k1", "supported"), ("k1", "contradicted"))])
+    [c] = judge("A cat sits.", claims, clip, tf, run_id="r1")
+    assert c.verdict == "contradicted"
+
+
+def test_one_contradicted_claim_of_two_cuts_only_its_words_and_the_new_line_is_split_again(
+    tmp_path, video
+):
+    """The repair is given the exact words of the failed claim; the shorter line is split
+    afresh and judged, and its claims are the ones published."""
+    line = "A person in a red coat opens a door."
+    tf = FakeTF(
+        split=[_split(("the person wears a red coat", "in a red coat"),
+                      ("a person opens a door", "A person"),
+                      ("the person opens a door", "opens a door")),
+               _split(("a person opens a door", "A person opens a door"))],
+        verify=[_verdicts(("k1", "contradicted"), ("k2", "supported"), ("k3", "supported")),
+                _verdicts(("k1", "supported"))],
+        remove=[{"text": "A person opens a door."}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    assert tf.roles(splits=True) == ["split", "verify", "remove", "split", "verify"]
+    listed = _user_text(tf.of("remove")[0]).split("<remove>", 1)[1]
+    assert 'the person wears a red coat (contradicted) -- the words: "in a red coat"' in listed
+    assert "opens a door" not in listed
+    assert out.status == "verified" and out.text == "A person opens a door."
+    assert [(c.text, c.verdict) for c in out.claims] == [("a person opens a door", "supported")]
+
+
+def test_the_split_prompt_asks_for_one_checkable_fact_and_exact_spans():
+    from lull.stages.verify import load_prompt
+
+    text = " ".join(load_prompt("split").split())
+    assert "One checkable fact per claim" in text
+    for case in ('"and"', "lists", '"X does Y while Z"', "character for character"):
+        assert case in text, case
+    judge_prompt = " ".join(load_prompt("verify").split())
+    assert "add no claim" in judge_prompt

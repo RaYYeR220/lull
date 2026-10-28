@@ -38,6 +38,7 @@ from pipeline_fakes import (
     FakeSpeech,
     FakeTF,
     description,
+    split_all,
     verify_all,
 )
 
@@ -137,7 +138,8 @@ def test_full_run_publishes_every_output(runs):
     vtt = (run_dir / "descriptions.vtt").read_text(encoding="utf-8")
     assert f"c001\n00:00:01.800 --> 00:00:03.800\n{CUE_TEXT['c001']}\n" in vtt
     assert "<html" in (run_dir / "report.html").read_text(encoding="utf-8").lower()
-    assert tf.roles() == ["watch", "research", "plan", "verify", "verify", "verify"]
+    # each cue's line is split into claims (Lightning), then the claims are judged (Super VL)
+    assert tf.roles() == ["watch", "research", "plan"] + ["split", "verify"] * 3
     assert speech.calls == ["transcribe", "diarize"] + ["synthesize"] * 3
     stages = run_dir / "stages"
     names = sorted(p.relative_to(stages).as_posix() for p in stages.rglob("*.json"))
@@ -231,7 +233,7 @@ def test_second_run_hits_the_cache_for_every_stage(runs):
         ("x002", "extended", True),
     ]
     assert events[-1].data["summary"]["cues"] == first_events[-1].data["summary"]["cues"]
-    assert len(runs["ledger"].calls("t1")) == 6  # only the first run's calls
+    assert len(runs["ledger"].calls("t1")) == 9  # only the first run's calls
 
 
 # -- spend: the pre-run check and a provider 402 mid-run ------------------------------------------
@@ -299,9 +301,12 @@ def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> Token
         if fmt["name"] == "finalize":
             props = fmt["schema"]["properties"]
             msgs = body["messages"]
-            answer = (
-                verify_all({"messages": msgs}) if "claims" in props else {"text": description(msgs)}
-            )
+            if "verdicts" in props:
+                answer = verify_all({"messages": msgs})
+            elif "claims" in props:
+                answer = split_all({"messages": msgs})
+            else:
+                answer = {"text": description(msgs)}
         else:
             answer = {"watch": WATCH, "research": TERMS, "plan": PLAN}[fmt["name"]]
         return httpx.Response(
@@ -359,7 +364,7 @@ def test_provider_402_at_plan_keeps_earlier_stages_and_a_rerun_resumes(
         speech=speech,
         run_id="t402",
     )
-    assert seen == ["plan", "finalize", "finalize", "finalize"]  # resumed at plan
+    assert seen == ["plan"] + ["finalize"] * 6  # resumed at plan: a split and a check per cue
     assert speech.calls == ["synthesize"] * 3
     assert res.manifest.exists()
 
@@ -484,7 +489,12 @@ def test_finalize_resumes_cue_by_cue(tone_slides, tmp_path, fast_media):
     entry = json.loads((run_dir / "stages" / "finalize" / "x002.json").read_text("utf-8"))
     (run_dir / entry["data"]["audio_path"]).unlink()  # a cached cue whose audio is gone
     _, tf, speech, events = _run(tone_slides, run_dir, ledger)
-    assert [description(c["messages"]) for c in tf.calls] == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
+    assert [description(c["messages"]) for c in tf.calls] == [
+        CUE_TEXT["c002"],
+        CUE_TEXT["c002"],
+        CUE_TEXT["x002"],
+        CUE_TEXT["x002"],
+    ]  # fmt: skip  (split, then judge, for each)
     assert speech.spoken == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
     cached = {e.data["id"]: e.data["cached"] for e in events if e.type == "cue"}
     assert cached == {"c001": True, "c002": False, "x002": False}
@@ -729,7 +739,12 @@ def test_a_spend_stop_mid_finalize_keeps_the_finished_cues(tone_slides, tmp_path
     with pytest.raises(BudgetExceeded):
         _run(tone_slides, tmp_path / "run", ledger, tf=FakeTF(ledger, verify=verify))
     _, tf, speech, events = _run(tone_slides, tmp_path / "run", ledger)
-    assert [description(c["messages"]) for c in tf.calls] == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
+    assert [description(c["messages"]) for c in tf.calls] == [
+        CUE_TEXT["c002"],
+        CUE_TEXT["c002"],
+        CUE_TEXT["x002"],
+        CUE_TEXT["x002"],
+    ]  # fmt: skip  (split, then judge, for each)
     assert speech.spoken == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
     cached = {e.data["id"]: e.data["cached"] for e in events if e.type == "cue"}
     assert cached == {"c001": True, "c002": False, "x002": False}
@@ -748,7 +763,7 @@ def test_an_option_change_reruns_only_the_stages_that_depend_on_it(
     # another voice: only the voiced cues
     _, tf, _, events = _run(tone_slides, run_dir, ledger, opts=RunOptions(voice="Aria"))
     assert _cached(events) == {**dict.fromkeys(CACHED, True), "finalize": False}
-    assert set(tf.roles()) == {"verify"}
+    assert set(tf.roles()) == {"split", "verify"}
     # a source page: research again; without Tavily nobody reads it, so the term list is the
     # kept one and nothing after research changes
     opts = RunOptions(voice="Aria", source_url="https://example.org/page")
@@ -1007,3 +1022,13 @@ def test_lull_no_verify_turns_verification_off_for_the_whole_run(
     cues = json.loads((tmp_path / "run" / "cues.json").read_text(encoding="utf-8"))
     assert {c["status"] for c in cues["cues"] + cues["extended"]} == {"unverified"}
     assert all(r["status"] != "met (automated checks)" for r in m["summary"]["wcag"])
+
+
+def test_each_verification_records_a_split_call_in_the_ledger(tone_slides, tmp_path, fast_media):
+    """One Lightning call splits each line into claims before Super VL judges them; the
+    ledger has it under role "split"."""
+    ledger = _ledger(tmp_path)
+    _run(tone_slides, tmp_path / "run", ledger)
+    rows = {(r["role"], r["model"]): r["calls"] for r in ledger.summary("t1")["by_role_model"]}
+    assert rows[("split", "nvidia/Nemotron-3_5-Lightning")] == 3
+    assert rows[("verify", "nvidia/Nemotron-3.5-Super-VL")] == 3

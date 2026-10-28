@@ -80,6 +80,8 @@ class Claim(BaseModel):
     text: str
     verdict: Literal["supported", "not_visible", "contradicted"]
     at: float | None
+    span: str | None = None  # the exact words of the cue text the claim comes from
+    evidence: str | None = None  # what the frames showed, in the vision model's words
 
 
 class Check(BaseModel):

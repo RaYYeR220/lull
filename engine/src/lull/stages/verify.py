@@ -1,13 +1,17 @@
-"""Verify: the vision model re-checks every claim of a description against its own frames.
+"""Verify: every claim of a description is judged against its own frames.
 
-A blind listener takes a description as fact, so it may say only what the frames show. The
-vision model sees a short clip around the cue's events (never the whole video), splits the
-description into atomic visual claims and judges each one supported, not visible or
-contradicted. Lightning then rewrites the description without the claims that failed.
+A blind listener takes a description as fact, so it may say only what the frames show.
+Lightning first splits the description into atomic visual claims, each with the exact words
+of the description it comes from (split_claims, checked by the engine: every span is in the
+text and every content word is covered). The vision model then sees a short clip around the
+cue's events (never the whole video) and judges only those claims, by id: supported, not
+visible or contradicted (judge). It cannot add a claim, and a claim it gives no verdict is not
+visible. Lightning then rewrites the words of the claims that failed (remove_claims).
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import re
@@ -15,6 +19,8 @@ from collections.abc import Iterable
 from functools import cache
 from importlib.resources import files
 from pathlib import Path
+
+from pydantic import BaseModel
 
 from lull.tf import LIGHTNING, VL, TokenFactory, video_part
 from lull.types import Claim, VisualEvent
@@ -31,6 +37,9 @@ CLIP_HEIGHT = 360
 VERIFY_MAX_TOKENS = 1500
 VERIFY_TEMPERATURE = 0.2
 VERIFY_ESTIMATE = 0.003
+SPLIT_MAX_TOKENS = 1200
+SPLIT_TEMPERATURE = 0.0
+SPLIT_ESTIMATE = 0.0003
 EDIT_MAX_TOKENS = 800
 EDIT_TEMPERATURE = 0.2
 EDIT_ESTIMATE = 0.0005
@@ -58,27 +67,46 @@ _FRAMING = frozenset(
     video clip""".split()
 )
 
-_CLAIM_PROPS: dict = {
+
+def _list_of(key: str, props: dict) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            key: {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": props,
+                    "required": list(props),
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": [key],
+        "additionalProperties": False,
+    }
+
+
+SPLIT_SCHEMA: dict = _list_of("claims", {
+    "id": {"type": "string", "minLength": 1},
     "text": {"type": "string", "minLength": 1},
+    "span": {"type": "string", "minLength": 1},
+})  # fmt: skip
+VERIFY_SCHEMA: dict = _list_of("verdicts", {
+    "id": {"type": "string", "minLength": 1},
     "verdict": {"type": "string", "enum": list(VERDICTS)},
+    "evidence": {"type": "string"},
     "at": {"anyOf": [{"type": "number"}, {"type": "null"}]},
-}
-VERIFY_SCHEMA: dict = {
-    "type": "object",
-    "properties": {
-        "claims": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": _CLAIM_PROPS,
-                "required": list(_CLAIM_PROPS),
-                "additionalProperties": False,
-            },
-        }
-    },
-    "required": ["claims"],
-    "additionalProperties": False,
-}
+})  # fmt: skip
+# words a claim span need not cover: function words, connectives and words that only frame
+# the time of a line ("In a moment, ", "then")
+_UNCOVERED_OK = frozenset(
+    """a an the and or but nor so yet of to in on at by for from with without into onto over
+    under up down off out about around through across along between behind beside near as is
+    are was were be been being am it its they them their theirs he him his she her hers this
+    that these those there here then now while when where who whom whose which what also
+    still just again too very both all each every some any moment meanwhile later soon""".split()
+)
 TEXT_SCHEMA: dict = {
     "type": "object",
     "properties": {"text": {"type": "string"}},
@@ -129,44 +157,6 @@ def tagged(tag: str, lines: Iterable[str]) -> str:
     """`lines` inside <tag>...</tag>, "(none)" when there are none: model input as data."""
     body = "\n".join(lines) or "(none)"
     return f"<{tag}>\n{body}\n</{tag}>"
-
-
-def parse_claims(out: object, *, offset: float = 0.0) -> list[Claim]:
-    """Claims from one verifier answer, `at` moved from clip time to video time.
-
-    An unknown verdict counts as not visible (never as supported). A claim without text is
-    dropped only when it is supported; otherwise it stays as UNSPECIFIED, so a failed check is
-    never lost. A missing or non-numeric time becomes None. An answer without a `claims` list,
-    or whose claims all end up dropped, raises ValueError: a broken answer never passes a cue.
-    """
-    raw = out.get("claims") if isinstance(out, dict) else None
-    if not isinstance(raw, list):
-        raise ValueError("verify: model answer has no 'claims' list")
-    claims: list[Claim] = []
-    for n, item in enumerate(raw):
-        item = item if isinstance(item, dict) else {}
-        verdict = item.get("verdict")
-        if verdict not in VERDICTS:
-            log.warning("verify: claim %d has verdict %r, counted as not visible", n, verdict)
-            verdict = "not_visible"
-        text = item.get("text")
-        if not isinstance(text, str) or not text.strip():
-            if verdict == "supported":
-                log.warning("verify: dropped supported claim %d without text", n)
-                continue
-            text = UNSPECIFIED
-        at = item.get("at")
-        ok = isinstance(at, int | float) and not isinstance(at, bool) and math.isfinite(at)
-        claims.append(
-            Claim(
-                text=" ".join(text.split()),
-                verdict=verdict,
-                at=round(max(0.0, float(at)) + offset, 3) if ok else None,
-            )
-        )
-    if raw and not claims:
-        raise ValueError(f"verify: all {len(raw)} claims were supported claims without text")
-    return _distinct(claims)
 
 
 _WORST = {"supported": 0, "not_visible": 1, "contradicted": 2}
@@ -230,7 +220,8 @@ def claims_of(text: str, claims: Iterable[Claim]) -> list[Claim]:
     filtered away, and it decides the cue's fate."""
     kept, extra = [], []
     for c in claims:
-        ok = c.verdict != "supported" or said_in(c.text, text)
+        ok = c.verdict != "supported" or (c.span is not None and c.span in text)
+        ok = ok or said_in(c.text, text)
         (kept if ok else extra).append(c)
     if extra:
         log.info("verify: %d supported claims the line does not make left out: %s", len(extra),
@@ -238,42 +229,126 @@ def claims_of(text: str, claims: Iterable[Claim]) -> list[Claim]:
     return kept
 
 
-FRESH_NOTE = (
-    "A previous check of this description listed a claim it does not make. List only the "
-    "claims this description makes, one checkable fact each, and judge them again."
-)
+class SplitClaim(BaseModel):
+    """One atomic visual claim of a description and the exact words it comes from."""
+
+    id: str
+    text: str
+    span: str
 
 
-SPLIT_NOTE = (
-    "A previous check of this description answered with a claim that holds several facts. "
-    'List one checkable fact per claim: split facts joined by "and", lists, and "X does Y '
-    'while Z", and judge each one on its own.'
-)
-_JOINS = re.compile(r"\b(?:and|while|as|then|but)\b|[,;]", re.IGNORECASE)
+def _tokens(s: str) -> list[str]:
+    return _WORD.findall(_POSSESSIVE.sub("", s.lower()))
 
 
-def bundles_facts(claim: Claim) -> bool:
-    """Whether a claim holds several facts the verifier should have split: six words or more
-    joined by "and", "while", "as", "then", "but" or a comma, or nine words or more (a whole
-    sentence of who, what they wear, what they do and where)."""
-    words = len(claim.text.split())
-    return words >= 9 or (words >= 6 and _JOINS.search(claim.text) is not None)
+def _must_cover(text: str, names: Iterable[str]) -> set[str]:
+    """The content words of `text` some claim must cover: not function words, connectives or
+    words that frame time, and not the names the programme established (context)."""
+    named = {t for n in names for t in _tokens(n)}
+    return {t for t in _tokens(text) if t not in _UNCOVERED_OK and t not in named}
 
 
-def verify(
-    text: str, clip: Path, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
-    offset: float = 0.0, note: str | None = None,
+def check_split(text: str, claims: list[SplitClaim], names: Iterable[str] = ()) -> list[str]:
+    """What is wrong with a split of `text`: an id used twice, a span that is not an exact
+    substring of the text, or a content word no span covers. Empty when it is sound."""
+    problems = []
+    ids = [c.id for c in claims]
+    if len(set(ids)) < len(ids):
+        problems.append("two claims share an id")
+    for c in claims:
+        if c.span not in text:
+            problems.append(f"the span {c.span!r} of claim {c.id} is not in the description")
+    covered = {t for c in claims if c.span in text for t in _tokens(c.span)}
+    missing = sorted(_must_cover(text, names) - covered)
+    if missing:
+        problems.append("no claim covers: " + ", ".join(missing))
+    return problems
+
+
+def _parse_split(out: object) -> list[SplitClaim]:
+    raw = out.get("claims") if isinstance(out, dict) else None
+    if not isinstance(raw, list):
+        raise ValueError("split: model answer has no 'claims' list")
+    claims = []
+    for item in raw:
+        item = item if isinstance(item, dict) else {}
+        cid, text, span = (str(item.get(k) or "").strip() for k in ("id", "text", "span"))
+        if cid and text and span:
+            claims.append(SplitClaim(id=cid, text=" ".join(text.split()), span=span))
+    return claims
+
+
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?…])\s+")
+_AHEAD_LEAD = re.compile(r"^in a moment,\s*", re.IGNORECASE)
+
+
+def sentence_claims(text: str) -> list[SplitClaim]:
+    """The fallback split: one claim per sentence, its look-ahead prefix aside."""
+    out = []
+    for n, piece in enumerate((p.strip() for p in _SENTENCE_BREAK.split(text)), start=1):
+        body = _AHEAD_LEAD.sub("", piece)
+        if any(ch.isalnum() for ch in body):
+            out.append(SplitClaim(id=f"s{n}", text=body.rstrip("."), span=body))
+    return out
+
+
+def split_claims(
+    text: str, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
+    cache: dict[str, list[SplitClaim]] | None = None,
+) -> list[SplitClaim]:  # fmt: skip
+    """The atomic visual claims of `text` (Lightning, temperature 0, role "split"), checked by
+    check_split; a split that fails the check is asked for once more with what was wrong,
+    then one claim per sentence stands in (logged). `cache` keeps a split per text (and
+    names), so a text checked again is not split again."""
+    known = sorted({n for n in names if n})
+    key = hashlib.sha256("\n".join([text, *known]).encode("utf-8")).hexdigest()
+    if cache is not None and key in cache:
+        return cache[key]
+    base = [tagged("description", [text]), tagged("names", [", ".join(known)] if known else [])]
+    note = None
+    claims: list[SplitClaim] = []
+    problems: list[str] = []
+    for _attempt in range(2):
+        messages = [
+            {"role": "system", "content": load_prompt("split")},
+            {"role": "user", "content": "\n\n".join([*base, note] if note else base)},
+        ]
+        out = tf.json(
+            LIGHTNING, messages, SPLIT_SCHEMA,
+            run_id=run_id, stage=STAGE, role="split", thinking=False,
+            max_tokens=SPLIT_MAX_TOKENS, temperature=SPLIT_TEMPERATURE, estimate=SPLIT_ESTIMATE,
+        )  # fmt: skip
+        claims = _parse_split(out)
+        problems = check_split(text, claims, known) if claims else ["no claim was returned"]
+        if not problems:
+            break
+        note = "Your previous answer was not usable: " + "; ".join(problems) + ". Split again."
+    else:
+        log.warning("verify: the claim split failed twice (%s); one claim per sentence",
+                    "; ".join(problems))  # fmt: skip
+        claims = sentence_claims(text)
+    if cache is not None:
+        cache[key] = claims
+    return claims
+
+
+def judge(
+    text: str, claims: list[SplitClaim], clip: Path, tf: TokenFactory, *, run_id: str,
+    names: Iterable[str] = (), offset: float = 0.0,
 ) -> list[Claim]:  # fmt: skip
-    """Atomic visual claims of `text`, each judged against the frames of `clip` only.
-
-    `names` are names the programme has established; they are context, not claims. `offset` is
-    the clip's start in the video, added to every claim time. Supported claims the line does
-    not make are left out; failed ones never are (claims_of). `note` is added after the data
-    (FRESH_NOTE asks for a fresh extraction).
-    """
-    known = sorted(set(names))
-    parts = [tagged("description", [text]), tagged("names", [", ".join(known)] if known else [])]
-    user = "\n\n".join([*parts, note] if note else parts)
+    """Each of `claims` judged against the frames of `clip` only (role "verify"). The vision
+    model returns a verdict per claim id and adds none: an id it gives no verdict (or an
+    unknown verdict) is not visible, an id it was not given is ignored, an id given twice
+    keeps its worse verdict. `offset` (the clip's start in the video) is added to every
+    time."""
+    if not claims:
+        return []
+    known = sorted({n for n in names if n})
+    user = "\n\n".join([
+        tagged("description", [text]),
+        tagged("names", [", ".join(known)] if known else []),
+        tagged("claims", [f"{c.id}: {c.text}" for c in claims]),
+    ])  # fmt: skip
     messages = [
         {"role": "system", "content": load_prompt("verify")},
         {"role": "user", "content": [video_part(clip), {"type": "text", "text": user}]},
@@ -283,7 +358,45 @@ def verify(
         run_id=run_id, stage=STAGE, role="verify", thinking=False,
         max_tokens=VERIFY_MAX_TOKENS, temperature=VERIFY_TEMPERATURE, estimate=VERIFY_ESTIMATE,
     )  # fmt: skip
-    return claims_of(text, parse_claims(out, offset=offset))
+    raw = out.get("verdicts") if isinstance(out, dict) else None
+    if not isinstance(raw, list):
+        raise ValueError("verify: model answer has no 'verdicts' list")
+    given: dict[str, dict] = {}
+    for item in raw:
+        if not (isinstance(item, dict) and isinstance(item.get("id"), str)):
+            continue
+        prev = given.get(item["id"])
+        if prev is None or _WORST.get(item.get("verdict"), 1) > _WORST.get(prev.get("verdict"), 1):
+            given[item["id"]] = item
+    result = []
+    for c in claims:
+        item = given.get(c.id) or {}
+        verdict = item.get("verdict")
+        if verdict not in VERDICTS:
+            log.warning("verify: claim %s got %s, counted as not visible", c.id,
+                        f"verdict {verdict!r}" if item else "no verdict")  # fmt: skip
+            verdict = "not_visible"
+        at = item.get("at")
+        ok = isinstance(at, int | float) and not isinstance(at, bool) and math.isfinite(at)
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), str) else ""
+        result.append(Claim(
+            text=c.text, verdict=verdict,
+            at=round(max(0.0, float(at)) + offset, 3) if ok and verdict != "not_visible" else None,
+            span=c.span, evidence=" ".join(evidence.split()) or None,
+        ))  # fmt: skip
+    return _distinct(result)
+
+
+def verify(
+    text: str, clip: Path, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
+    offset: float = 0.0, cache: dict[str, list[SplitClaim]] | None = None,
+) -> list[Claim]:  # fmt: skip
+    """The claims of `text`, each judged against the frames of `clip`: split_claims, then
+    judge. `names` are names the programme has established; they are context, not claims.
+    Failed claims are never filtered away (claims_of)."""
+    claims = split_claims(text, tf, run_id=run_id, names=names, cache=cache)
+    judged = judge(text, claims, clip, tf, run_id=run_id, names=names, offset=offset)
+    return claims_of(text, judged)
 
 
 def rewrite(prompt: str, user: str, tf: TokenFactory, *, run_id: str, role: str) -> str:
@@ -312,7 +425,11 @@ def remove_claims(
     what was wrong with a previous answer."""
     if not bad:
         return text
-    listed = [f"- {c.text} ({c.verdict.replace('_', ' ')})" for c in bad]
+    listed = [
+        f"- {c.text} ({c.verdict.replace('_', ' ')})"
+        + (f' -- the words: "{c.span}"' if c.span else "")
+        for c in bad
+    ]
     parts = [tagged("description", [text]), tagged("remove", listed)]
     user = "\n\n".join([*parts, note] if note else parts)
     return rewrite("remove", user, tf, run_id=run_id, role="remove")
