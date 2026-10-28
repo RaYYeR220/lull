@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import wave
 from pathlib import Path
@@ -417,3 +418,24 @@ def test_held_cues_come_with_their_reason_but_no_audio(exported, run_dir):
         assert "c002" not in (out / name).read_text(encoding="utf-8")
     assert data["summary"]["counts"] == SUMMARY["cues"]
     assert data["verifyExample"]["cueId"] != "c002"
+
+
+def test_a_held_cue_whose_text_was_withheld_shows_the_claims_of_its_last_check(run_dir, tmp_path):
+    """The text of a held cue can be withheld (a contradicted claim that could not be cut):
+    it publishes no claim, so the export takes the failed claims from its last check."""
+    data = json.loads((run_dir / "cues.json").read_text(encoding="utf-8"))
+    withheld = dict(
+        data["cues"][1],
+        text="",
+        claims=[],
+        note="text withheld",
+        checks=[{"text": "A dog barks.", "claims": [_claim("a dog barks", "contradicted", 2.4)]}],
+    )
+    copy = tmp_path / "run"
+    shutil.copytree(run_dir, copy)
+    (copy / "cues.json").write_text(
+        json.dumps({**data, "cues": [data["cues"][0], withheld, data["cues"][2]]}),
+        encoding="utf-8")  # fmt: skip
+    out = json.loads(export_showcase(copy, tmp_path / "site").read_text(encoding="utf-8"))
+    [held] = [c for c in out["cues"] if c["status"] == "held"]
+    assert held["claims"] == [{"text": "a dog barks", "verdict": "contradicted"}]

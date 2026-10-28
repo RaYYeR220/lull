@@ -476,6 +476,7 @@ class _Finalise:
     failed: dict[str, str] = field(default_factory=dict)  # failed claims' words -> verdict
     splits: dict = field(default_factory=dict)  # claim splits by text (verify.split_claims)
     extras: list[Claim] = field(default_factory=list)  # supported claims the line never made
+    split_notes: list[str] = field(default_factory=list)  # e.g. a split that fell back
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
     at: float | None = None  # where in its window the voiced line starts
@@ -539,6 +540,7 @@ class _Finalise:
             parts.append(f"compressed {self.words_before}→{count_words(self.text)} words")
         for eid in self.dropped:
             parts.append(f"dropped the sentence for {eid} to fit")
+        parts += list(dict.fromkeys(self.split_notes))
         if self.extras:
             seen = list(dict.fromkeys(c.text for c in self.extras))
             parts.append(f"left out {'a claim' if len(seen) == 1 else 'claims'} the line does "
@@ -668,7 +670,8 @@ class _Finalise:
         clip, offset = self.clip
         names = names_in(self.text, self.names)
         claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset,
-                        cache=self.splits, dropped=self.extras)  # fmt: skip
+                        cache=self.splits, dropped=self.extras,
+                        notes=self.split_notes)  # fmt: skip
         claims = self.carry_forward(claims)
         for c in claims:
             if c.verdict != "supported" and c.span:

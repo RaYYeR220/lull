@@ -169,7 +169,7 @@ def _distinct(claims: list[Claim]) -> list[Claim]:
     kept: dict[object, Claim] = {}
     for n, c in enumerate(claims):
         # a claim the verifier gave no text is its own claim: never folded into another
-        key = n if c.text == UNSPECIFIED else " ".join(c.text.lower().split())
+        key = n if c.text == UNSPECIFIED else (" ".join(c.text.lower().split()), c.span)
         first = kept.get(key)
         if first is None:
             kept[key] = c
@@ -330,9 +330,12 @@ def sentence_claims(text: str) -> list[SplitClaim]:
     return out
 
 
+FALLBACK_NOTE = "claims: one per sentence (split failed)"
+
+
 def split_claims(
     text: str, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
-    cache: dict[str, list[SplitClaim]] | None = None,
+    cache: dict[str, list[SplitClaim]] | None = None, notes: list[str] | None = None,
 ) -> list[SplitClaim]:  # fmt: skip
     """The atomic visual claims of `text` (Lightning, temperature 0, role "split"), checked by
     check_split; a split that fails the check is asked for once more with what was wrong,
@@ -365,6 +368,8 @@ def split_claims(
         log.warning("verify: the claim split failed twice (%s); one claim per sentence",
                     "; ".join(problems))  # fmt: skip
         claims = sentence_claims(text)
+        if notes is not None:
+            notes.append(FALLBACK_NOTE)
     if cache is not None:
         cache[key] = claims
     return claims
@@ -428,13 +433,13 @@ def judge(
 def verify(
     text: str, clip: Path, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
     offset: float = 0.0, cache: dict[str, list[SplitClaim]] | None = None,
-    dropped: list[Claim] | None = None,
+    dropped: list[Claim] | None = None, notes: list[str] | None = None,
 ) -> list[Claim]:  # fmt: skip
     """The claims of `text`, each judged against the frames of `clip`: split_claims, then
     judge. `names` are names the programme has established; they are context, not claims.
     Failed claims are never filtered away; supported ones the line does not make are left out
     and added to `dropped` (claims_of)."""
-    claims = split_claims(text, tf, run_id=run_id, names=names, cache=cache)
+    claims = split_claims(text, tf, run_id=run_id, names=names, cache=cache, notes=notes)
     judged = judge(text, claims, clip, tf, run_id=run_id, names=names, offset=offset)
     return claims_of(text, judged, dropped)
 

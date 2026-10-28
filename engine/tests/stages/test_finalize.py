@@ -1931,3 +1931,35 @@ def test_the_split_check_reads_each_claims_own_words(line, claims, names, proble
     got = check_split(line, [_sc(f"k{i}", t, sp) for i, (t, sp) in enumerate(claims, start=1)],
                       names)  # fmt: skip
     assert any(problem in p for p in got), got
+
+
+def test_the_same_words_from_two_places_are_two_claims(tmp_path):
+    """Two claims with the same wording but from different words of the line are judged
+    each on their own; only a true repeat (same text, same span) folds into one."""
+    from lull.stages.verify import judge
+
+    clip = tmp_path / "c.mp4"
+    clip.write_bytes(b"\0" * 16)
+    line = "A door opens. A door opens."
+    claims = [_sc("k1", "a door opens", "A door opens."), _sc("k2", "a door opens", "A door opens"),
+              _sc("k3", "a door opens", "A door opens")]  # fmt: skip
+    tf = FakeTF(split=[], verify=[_verdicts(("k1", "supported"), ("k2", "contradicted"),
+                                            ("k3", "supported"))])  # fmt: skip
+    got = judge(line, claims, clip, tf, run_id="r1")
+    assert [(c.span, c.verdict) for c in got] == [
+        ("A door opens.", "supported"), ("A door opens", "contradicted")
+    ]  # fmt: skip
+
+
+def test_a_line_whose_split_fell_back_says_so(tmp_path, video):
+    tf = FakeTF(split=[{"claims": []}, {"claims": []}],
+                verify=[_verdicts(("s1", "supported"))])  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert out.status == "verified"
+    assert "claims: one per sentence (split failed)" in out.note
+
+
+def test_the_judge_supports_a_claim_only_when_every_detail_is_visible():
+    from lull.stages.verify import load_prompt
+
+    assert "only when every detail in it is visible" in " ".join(load_prompt("verify").split())
