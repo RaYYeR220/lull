@@ -1,0 +1,403 @@
+{
+  "id": "a09",
+  "subject": "art history",
+  "title": "Art History Movements Timeline",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Key Art Periods",
+      "bullets": [
+        "Renaissance art marked realism revival",
+        "Baroque era used dramatic lighting",
+        "Neoclassicism returned to antiquity",
+        "Modernism broke traditional forms"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Art Movement Timeline",
+        "x_label": "Time Period",
+        "y_label": "Influence Score",
+        "points": [
+          {
+            "label": "1400s",
+            "value": 15.2
+          },
+          {
+            "label": "1600s",
+            "value": 22.5
+          },
+          {
+            "label": "1700s",
+            "value": 18.0
+          },
+          {
+            "label": "1800s",
+            "value": 25.3
+          },
+          {
+            "label": "1900s",
+            "value": 35.7
+          },
+          {
+            "label": "2000s",
+            "value": 42.1
+          }
+        ]
+      },
+      "narration": [
+        "Renaissance art marked realism revival as a cultural shift.",
+        "The period introduced a renewed focus on human experience."
+      ],
+      "pauses": [
+        2.5,
+        3.9
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Renaissance Characteristics",
+      "bullets": [
+        "Linear perspective created depth",
+        "Humanism focused on people",
+        "Chiaroscuro added dimension",
+        "Classical mythology themes appeared"
+      ],
+      "chart": null,
+      "narration": [
+        "Humanism focused on people as the central subject.",
+        "The philosophy shifted attention to individual experience."
+      ],
+      "pauses": [
+        3.1,
+        3.0
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Baroque Art Features",
+      "bullets": [
+        "Emotional intensity in scenes",
+        "Golden ratio composition",
+        "Rich color palettes",
+        "Movement and energy depicted"
+      ],
+      "chart": null,
+      "narration": [
+        "Rich color palettes created visual depth in works.",
+        "The choice of hues enhanced emotional impact."
+      ],
+      "pauses": [
+        3.8,
+        3.6
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Modern Art Evolution",
+      "bullets": [
+        "Abstract art rejected realism",
+        "Surrealism explored dreams",
+        "Pop art used mass media",
+        "Minimalism stripped details"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Modern Art Growth",
+        "x_label": "Art Style",
+        "y_label": "Popularity Rank",
+        "points": [
+          {
+            "label": "Abstract",
+            "value": 1
+          },
+          {
+            "label": "Surrealism",
+            "value": 2
+          },
+          {
+            "label": "Pop Art",
+            "value": 3
+          },
+          {
+            "label": "Minimalism",
+            "value": 4
+          }
+        ]
+      },
+      "narration": [
+        "Minimalism stripped details to essential forms.",
+        "The style reduced complexity to basic elements."
+      ],
+      "pauses": [
+        2.9,
+        3.1
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a09-v01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Baroque era used dramatic lighting\".",
+      "anchor": "Baroque era used dramatic lighting",
+      "value": null
+    },
+    {
+      "id": "a09-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Neoclassicism returned to antiquity\".",
+      "anchor": "Neoclassicism returned to antiquity",
+      "value": null
+    },
+    {
+      "id": "a09-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Modernism broke traditional forms\".",
+      "anchor": "Modernism broke traditional forms",
+      "value": null
+    },
+    {
+      "id": "a09-v04",
+      "slide": 1,
+      "kind": "label",
+      "text": "A line chart is titled \"Art Movement Timeline\".",
+      "anchor": "Art Movement Timeline",
+      "value": null
+    },
+    {
+      "id": "a09-v05",
+      "slide": 1,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Influence Score\".",
+      "anchor": "Influence Score",
+      "value": null
+    },
+    {
+      "id": "a09-v06",
+      "slide": 1,
+      "kind": "chart_value",
+      "anchor": "2000s",
+      "value": 42.1,
+      "text": "The highest value in the line chart \"Art Movement Timeline\" is 42.1, for \"2000s\"."
+    },
+    {
+      "id": "a09-v07",
+      "slide": 1,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Art Movement Timeline\" the values end higher than they start, from \"1400s\" to \"2000s\"."
+    },
+    {
+      "id": "a09-v08",
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Renaissance Characteristics\".",
+      "anchor": "Renaissance Characteristics",
+      "value": null
+    },
+    {
+      "id": "a09-v09",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Linear perspective created depth\".",
+      "anchor": "Linear perspective created depth",
+      "value": null
+    },
+    {
+      "id": "a09-v10",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Chiaroscuro added dimension\".",
+      "anchor": "Chiaroscuro added dimension",
+      "value": null
+    },
+    {
+      "id": "a09-v11",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Classical mythology themes appeared\".",
+      "anchor": "Classical mythology themes appeared",
+      "value": null
+    },
+    {
+      "id": "a09-v12",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Baroque Art Features\".",
+      "anchor": "Baroque Art Features",
+      "value": null
+    },
+    {
+      "id": "a09-v13",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Emotional intensity in scenes\".",
+      "anchor": "Emotional intensity in scenes",
+      "value": null
+    },
+    {
+      "id": "a09-v14",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Golden ratio composition\".",
+      "anchor": "Golden ratio composition",
+      "value": null
+    },
+    {
+      "id": "a09-v15",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Movement and energy depicted\".",
+      "anchor": "Movement and energy depicted",
+      "value": null
+    },
+    {
+      "id": "a09-v16",
+      "slide": 4,
+      "kind": "title",
+      "text": "The slide title reads \"Modern Art Evolution\".",
+      "anchor": "Modern Art Evolution",
+      "value": null
+    },
+    {
+      "id": "a09-v17",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Abstract art rejected realism\".",
+      "anchor": "Abstract art rejected realism",
+      "value": null
+    },
+    {
+      "id": "a09-v18",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Surrealism explored dreams\".",
+      "anchor": "Surrealism explored dreams",
+      "value": null
+    },
+    {
+      "id": "a09-v19",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Pop art used mass media\".",
+      "anchor": "Pop art used mass media",
+      "value": null
+    },
+    {
+      "id": "a09-v20",
+      "slide": 4,
+      "kind": "label",
+      "text": "A bar chart is titled \"Modern Art Growth\".",
+      "anchor": "Modern Art Growth",
+      "value": null
+    },
+    {
+      "id": "a09-v21",
+      "slide": 4,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Popularity Rank\".",
+      "anchor": "Popularity Rank",
+      "value": null
+    },
+    {
+      "id": "a09-v22",
+      "slide": 4,
+      "kind": "chart_value",
+      "anchor": "Minimalism",
+      "value": 4,
+      "text": "The highest value in the bar chart \"Modern Art Growth\" is 4, for \"Minimalism\"."
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a09-s01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Key Art Periods\".",
+      "anchor": "Key Art Periods"
+    },
+    {
+      "id": "a09-s02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Renaissance art marked realism revival\".",
+      "anchor": "Renaissance art marked realism revival"
+    },
+    {
+      "id": "a09-s03",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Humanism focused on people\".",
+      "anchor": "Humanism focused on people"
+    },
+    {
+      "id": "a09-s04",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Rich color palettes\".",
+      "anchor": "Rich color palettes"
+    },
+    {
+      "id": "a09-s05",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Minimalism stripped details\".",
+      "anchor": "Minimalism stripped details"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 1,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Time Period\".",
+      "anchor": "Time Period"
+    },
+    {
+      "slide": 4,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Art Style\".",
+      "anchor": "Art Style"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a09-d01",
+      "kind": "slide_title",
+      "text": "The lecture covers Impressionism techniques."
+    },
+    {
+      "id": "a09-d02",
+      "kind": "chart_value",
+      "text": "The line chart shows Renaissance period at value 12.7."
+    },
+    {
+      "id": "a09-d03",
+      "kind": "image",
+      "text": "A diagram of the Sistine Chapel ceiling is displayed."
+    },
+    {
+      "id": "a09-d04",
+      "kind": "bullet",
+      "text": "Bullet point about photography history appears on screen."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 1109,
+      "attempt": 1,
+      "prompt_sha256": "18d6754355316975197c5ca1d4d57e66894fe452f173b3f5e1a4cec2191618f5"
+    },
+    "narration": {
+      "seed": 1209,
+      "attempt": 1,
+      "prompt_sha256": "c1b166a5718487104e7265a46a76c52819229c682e857efdb8af258d125e513a"
+    }
+  }
+}

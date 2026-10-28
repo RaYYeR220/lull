@@ -1,0 +1,353 @@
+{
+  "id": "a02",
+  "subject": "economics",
+  "title": "GDP and Economic Growth",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Real GDP Over Time",
+      "bullets": [
+        "Real GDP measures total output of goods and services.",
+        "Adjusts for inflation to compare across different years.",
+        "Shows the general trend of economic expansion.",
+        "Used to determine the phase of the business cycle."
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Real GDP Growth",
+        "x_label": "Year",
+        "y_label": "Billions of $",
+        "points": [
+          {
+            "label": "2018",
+            "value": 20.5
+          },
+          {
+            "label": "2019",
+            "value": 21.0
+          },
+          {
+            "label": "2020",
+            "value": 19.6
+          },
+          {
+            "label": "2021",
+            "value": 21.4
+          },
+          {
+            "label": "2022",
+            "value": 22.1
+          },
+          {
+            "label": "2023",
+            "value": 22.8
+          }
+        ]
+      },
+      "narration": [
+        "Real GDP measures total output of goods and services.",
+        "This slide defines the core concept of economic measurement."
+      ],
+      "pauses": [
+        3.3,
+        1.8
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Business Cycle Basics",
+      "bullets": [
+        "Expansion phase features rising output and employment.",
+        "Contraction phase involves declining activity and demand.",
+        "Peak marks the highest point of economic activity.",
+        "Trough represents the lowest point before recovery."
+      ],
+      "chart": null,
+      "narration": [
+        "Peak marks the highest point of economic activity.",
+        "This slide identifies the top of the economic cycle."
+      ],
+      "pauses": [
+        3.2,
+        3.7
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Unemployment Rate Comparison",
+      "bullets": [
+        "Unemployment rate measures the percentage of workers jobless",
+        "Actively seeking work but unable to find employment.",
+        "Varies significantly across different sectors of the economy",
+        "A key indicator of labor market health and stability."
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Unemployment by Sector",
+        "x_label": "Economic Sector",
+        "y_label": "Percentage Rate",
+        "points": [
+          {
+            "label": "Manufacturing",
+            "value": 4.2
+          },
+          {
+            "label": "Services",
+            "value": 3.8
+          },
+          {
+            "label": "Construction",
+            "value": 5.1
+          },
+          {
+            "label": "Technology",
+            "value": 2.9
+          },
+          {
+            "label": "Retail",
+            "value": 4.6
+          },
+          {
+            "label": "Agriculture",
+            "value": 3.5
+          }
+        ]
+      },
+      "narration": [
+        "Varies significantly across different sectors of the economy.",
+        "This slide highlights differences between economic areas."
+      ],
+      "pauses": [
+        3.4,
+        2.5
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a02-v01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Adjusts for inflation to compare across different years.\".",
+      "anchor": "Adjusts for inflation to compare across different years.",
+      "value": null
+    },
+    {
+      "id": "a02-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Shows the general trend of economic expansion.\".",
+      "anchor": "Shows the general trend of economic expansion.",
+      "value": null
+    },
+    {
+      "id": "a02-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Used to determine the phase of the business cycle.\".",
+      "anchor": "Used to determine the phase of the business cycle.",
+      "value": null
+    },
+    {
+      "id": "a02-v04",
+      "slide": 1,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Year\".",
+      "anchor": "Year",
+      "value": null
+    },
+    {
+      "id": "a02-v05",
+      "slide": 1,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Billions of $\".",
+      "anchor": "Billions of $",
+      "value": null
+    },
+    {
+      "id": "a02-v06",
+      "slide": 1,
+      "kind": "chart_value",
+      "anchor": "2023",
+      "value": 22.8,
+      "text": "The highest value in the line chart \"Real GDP Growth\" is 22.8, for \"2023\"."
+    },
+    {
+      "id": "a02-v07",
+      "slide": 1,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Real GDP Growth\" the values end higher than they start, from \"2018\" to \"2023\"."
+    },
+    {
+      "id": "a02-v08",
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Business Cycle Basics\".",
+      "anchor": "Business Cycle Basics",
+      "value": null
+    },
+    {
+      "id": "a02-v09",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Expansion phase features rising output and employment.\".",
+      "anchor": "Expansion phase features rising output and employment.",
+      "value": null
+    },
+    {
+      "id": "a02-v10",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Contraction phase involves declining activity and demand.\".",
+      "anchor": "Contraction phase involves declining activity and demand.",
+      "value": null
+    },
+    {
+      "id": "a02-v11",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Trough represents the lowest point before recovery.\".",
+      "anchor": "Trough represents the lowest point before recovery.",
+      "value": null
+    },
+    {
+      "id": "a02-v12",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Unemployment Rate Comparison\".",
+      "anchor": "Unemployment Rate Comparison",
+      "value": null
+    },
+    {
+      "id": "a02-v13",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Unemployment rate measures the percentage of workers jobless\".",
+      "anchor": "Unemployment rate measures the percentage of workers jobless",
+      "value": null
+    },
+    {
+      "id": "a02-v14",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Actively seeking work but unable to find employment.\".",
+      "anchor": "Actively seeking work but unable to find employment.",
+      "value": null
+    },
+    {
+      "id": "a02-v15",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"A key indicator of labor market health and stability.\".",
+      "anchor": "A key indicator of labor market health and stability.",
+      "value": null
+    },
+    {
+      "id": "a02-v16",
+      "slide": 3,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Percentage Rate\".",
+      "anchor": "Percentage Rate",
+      "value": null
+    },
+    {
+      "id": "a02-v17",
+      "slide": 3,
+      "kind": "chart_value",
+      "anchor": "Construction",
+      "value": 5.1,
+      "text": "The highest value in the bar chart \"Unemployment by Sector\" is 5.1, for \"Construction\"."
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a02-s01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Real GDP Over Time\".",
+      "anchor": "Real GDP Over Time"
+    },
+    {
+      "id": "a02-s02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Real GDP measures total output of goods and services.\".",
+      "anchor": "Real GDP measures total output of goods and services."
+    },
+    {
+      "id": "a02-s03",
+      "slide": 1,
+      "kind": "label",
+      "text": "A line chart is titled \"Real GDP Growth\".",
+      "anchor": "Real GDP Growth"
+    },
+    {
+      "id": "a02-s04",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Peak marks the highest point of economic activity.\".",
+      "anchor": "Peak marks the highest point of economic activity."
+    },
+    {
+      "id": "a02-s05",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Varies significantly across different sectors of the economy\".",
+      "anchor": "Varies significantly across different sectors of the economy"
+    },
+    {
+      "id": "a02-s06",
+      "slide": 3,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Economic Sector\".",
+      "anchor": "Economic Sector"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 3,
+      "kind": "label",
+      "text": "A bar chart is titled \"Unemployment by Sector\".",
+      "anchor": "Unemployment by Sector"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a02-d01",
+      "kind": "slide_title",
+      "text": "The slide shows the circular flow model of the economy."
+    },
+    {
+      "id": "a02-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Manufacturing at 12.5 percent."
+    },
+    {
+      "id": "a02-d03",
+      "kind": "image",
+      "text": "A diagram illustrating the production possibilities frontier."
+    },
+    {
+      "id": "a02-d04",
+      "kind": "bullet",
+      "text": "Real GDP is calculated by multiplying price times quantity."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 3102,
+      "attempt": 3,
+      "prompt_sha256": "b9f87a827072198e37d9aee1814cf923c2d98affb14c255fedd6c2dd6553f671"
+    },
+    "narration": {
+      "seed": 3202,
+      "attempt": 1,
+      "prompt_sha256": "22911632114c91ec58649754785aa74029de5e52597026c06f5b47671e6dc621"
+    }
+  }
+}

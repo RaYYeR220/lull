@@ -1,0 +1,387 @@
+{
+  "id": "a05",
+  "subject": "statistics",
+  "title": "Introduction to Basic Statistics",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Understanding Data Distribution",
+      "bullets": [
+        "Data can be organized into categories for comparison",
+        "Bar charts display frequency or magnitude across groups",
+        "Each bar represents a distinct category of measurement",
+        "Height of bar indicates the value for that category"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Category Comparison",
+        "x_label": "Categories",
+        "y_label": "Frequency",
+        "points": [
+          {
+            "label": "Category A",
+            "value": 45.0
+          },
+          {
+            "label": "Category B",
+            "value": 32.5
+          },
+          {
+            "label": "Category C",
+            "value": 28.0
+          }
+        ]
+      },
+      "narration": [
+        "Data can be organized into categories for comparison",
+        "This slide shows how categories fit together"
+      ],
+      "pauses": [
+        3.4,
+        1.7
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Measures of Central Tendency",
+      "bullets": [
+        "Mean represents the arithmetic average of a dataset",
+        "Median is the middle value when data is ordered",
+        "Mode is the most frequently occurring value",
+        "These measures summarize the center of a distribution"
+      ],
+      "chart": null,
+      "narration": [
+        "Median is the middle value when data is ordered",
+        "This measure finds the center point"
+      ],
+      "pauses": [
+        2.8,
+        1.8
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Trends Over Time",
+      "bullets": [
+        "Line charts show how variables change across time periods",
+        "Upward slope indicates increase in the measured variable",
+        "Downward slope indicates decrease over the timeframe",
+        "Data points are connected to reveal patterns"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Time Series Data",
+        "x_label": "Time Period",
+        "y_label": "Value",
+        "points": [
+          {
+            "label": "2020",
+            "value": 12.3
+          },
+          {
+            "label": "2021",
+            "value": 15.7
+          },
+          {
+            "label": "2022",
+            "value": 14.2
+          },
+          {
+            "label": "2023",
+            "value": 16.8
+          }
+        ]
+      },
+      "narration": [
+        "Data points are connected to reveal patterns",
+        "Lines connect items to show trends"
+      ],
+      "pauses": [
+        1.9,
+        2.1
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Variability and Spread",
+      "bullets": [
+        "Range is the difference between highest and lowest values",
+        "Standard deviation measures average distance from mean",
+        "Variance is the square of the standard deviation",
+        "Spread indicates how clustered or dispersed data is"
+      ],
+      "chart": null,
+      "narration": [
+        "Spread indicates how clustered or dispersed data is",
+        "This shows how spread out values are"
+      ],
+      "pauses": [
+        3.2,
+        2.5
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a05-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Understanding Data Distribution\".",
+      "anchor": "Understanding Data Distribution",
+      "value": null
+    },
+    {
+      "id": "a05-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Bar charts display frequency or magnitude across groups\".",
+      "anchor": "Bar charts display frequency or magnitude across groups",
+      "value": null
+    },
+    {
+      "id": "a05-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Each bar represents a distinct category of measurement\".",
+      "anchor": "Each bar represents a distinct category of measurement",
+      "value": null
+    },
+    {
+      "id": "a05-v04",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Height of bar indicates the value for that category\".",
+      "anchor": "Height of bar indicates the value for that category",
+      "value": null
+    },
+    {
+      "id": "a05-v05",
+      "slide": 1,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Frequency\".",
+      "anchor": "Frequency",
+      "value": null
+    },
+    {
+      "id": "a05-v06",
+      "slide": 1,
+      "kind": "chart_value",
+      "anchor": "Category A",
+      "value": 45.0,
+      "text": "The highest value in the bar chart \"Category Comparison\" is 45, for \"Category A\"."
+    },
+    {
+      "id": "a05-v07",
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Measures of Central Tendency\".",
+      "anchor": "Measures of Central Tendency",
+      "value": null
+    },
+    {
+      "id": "a05-v08",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Mean represents the arithmetic average of a dataset\".",
+      "anchor": "Mean represents the arithmetic average of a dataset",
+      "value": null
+    },
+    {
+      "id": "a05-v09",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Mode is the most frequently occurring value\".",
+      "anchor": "Mode is the most frequently occurring value",
+      "value": null
+    },
+    {
+      "id": "a05-v10",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Line charts show how variables change across time periods\".",
+      "anchor": "Line charts show how variables change across time periods",
+      "value": null
+    },
+    {
+      "id": "a05-v11",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Upward slope indicates increase in the measured variable\".",
+      "anchor": "Upward slope indicates increase in the measured variable",
+      "value": null
+    },
+    {
+      "id": "a05-v12",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Downward slope indicates decrease over the timeframe\".",
+      "anchor": "Downward slope indicates decrease over the timeframe",
+      "value": null
+    },
+    {
+      "id": "a05-v13",
+      "slide": 3,
+      "kind": "label",
+      "text": "A line chart is titled \"Time Series Data\".",
+      "anchor": "Time Series Data",
+      "value": null
+    },
+    {
+      "id": "a05-v14",
+      "slide": 3,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Time Period\".",
+      "anchor": "Time Period",
+      "value": null
+    },
+    {
+      "id": "a05-v15",
+      "slide": 3,
+      "kind": "chart_value",
+      "anchor": "2023",
+      "value": 16.8,
+      "text": "The highest value in the line chart \"Time Series Data\" is 16.8, for \"2023\"."
+    },
+    {
+      "id": "a05-v16",
+      "slide": 3,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Time Series Data\" the values end higher than they start, from \"2020\" to \"2023\"."
+    },
+    {
+      "id": "a05-v17",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Range is the difference between highest and lowest values\".",
+      "anchor": "Range is the difference between highest and lowest values",
+      "value": null
+    },
+    {
+      "id": "a05-v18",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Standard deviation measures average distance from mean\".",
+      "anchor": "Standard deviation measures average distance from mean",
+      "value": null
+    },
+    {
+      "id": "a05-v19",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Variance is the square of the standard deviation\".",
+      "anchor": "Variance is the square of the standard deviation",
+      "value": null
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a05-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Data can be organized into categories for comparison\".",
+      "anchor": "Data can be organized into categories for comparison"
+    },
+    {
+      "id": "a05-s02",
+      "slide": 1,
+      "kind": "label",
+      "text": "A bar chart is titled \"Category Comparison\".",
+      "anchor": "Category Comparison"
+    },
+    {
+      "id": "a05-s03",
+      "slide": 1,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Categories\".",
+      "anchor": "Categories"
+    },
+    {
+      "id": "a05-s04",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Median is the middle value when data is ordered\".",
+      "anchor": "Median is the middle value when data is ordered"
+    },
+    {
+      "id": "a05-s05",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Data points are connected to reveal patterns\".",
+      "anchor": "Data points are connected to reveal patterns"
+    },
+    {
+      "id": "a05-s06",
+      "slide": 3,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Value\".",
+      "anchor": "Value"
+    },
+    {
+      "id": "a05-s07",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Spread indicates how clustered or dispersed data is\".",
+      "anchor": "Spread indicates how clustered or dispersed data is"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"These measures summarize the center of a distribution\".",
+      "anchor": "These measures summarize the center of a distribution"
+    },
+    {
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Trends Over Time\".",
+      "anchor": "Trends Over Time"
+    },
+    {
+      "slide": 4,
+      "kind": "title",
+      "text": "The slide title reads \"Variability and Spread\".",
+      "anchor": "Variability and Spread"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a05-d01",
+      "kind": "slide_title",
+      "text": "The slide shows Hypothesis Testing procedures."
+    },
+    {
+      "id": "a05-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Category D at 3.7."
+    },
+    {
+      "id": "a05-d03",
+      "kind": "image",
+      "text": "A diagram of a normal distribution curve is displayed."
+    },
+    {
+      "id": "a05-d04",
+      "kind": "bullet",
+      "text": "The bullet point discusses outliers in the dataset."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 2105,
+      "attempt": 2,
+      "prompt_sha256": "1676b85fea1e9fa20e33c3130b75869096ef428e88f165d75e834cb7684702bc"
+    },
+    "narration": {
+      "seed": 2205,
+      "attempt": 1,
+      "prompt_sha256": "37d257d5826ed26107b4455e00608ff671b0a2d3f7dbb3d874115a137f944187"
+    }
+  }
+}

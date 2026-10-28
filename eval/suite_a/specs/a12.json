@@ -1,0 +1,278 @@
+{
+  "id": "a12",
+  "subject": "engineering",
+  "title": "Engineering Thermodynamics Basics",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Fundamental Concepts",
+      "bullets": [
+        "Energy exists in multiple identifiable forms.",
+        "Systems exchange heat and work with surroundings."
+      ],
+      "chart": null,
+      "narration": [
+        "Energy exists in multiple identifiable forms across the universe.",
+        "These distinct forms allow energy to transform and transfer."
+      ],
+      "pauses": [
+        2.2,
+        2.1
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Energy Transfer Mechanisms",
+      "bullets": [
+        "Heat flows from higher to lower temperature.",
+        "Work is force applied over a distance."
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Heat Transfer Rates",
+        "x_label": "Temperature",
+        "y_label": "Rate (kW)",
+        "points": [
+          {
+            "label": "Low Temp",
+            "value": 1.2
+          },
+          {
+            "label": "Medium Temp",
+            "value": 3.5
+          },
+          {
+            "label": "High Temp",
+            "value": 7.8
+          }
+        ]
+      },
+      "narration": [
+        "Work occurs when force gets applied over a distance.",
+        "This mechanical action transfers energy between objects."
+      ],
+      "pauses": [
+        3.4,
+        1.6
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Process Analysis",
+      "bullets": [
+        "First law governs energy conservation.",
+        "Efficiency depends on process path."
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Temperature Change Over Time",
+        "x_label": "Time (s)",
+        "y_label": "Temp (K)",
+        "points": [
+          {
+            "label": "Start",
+            "value": 300.0
+          },
+          {
+            "label": "Midpoint",
+            "value": 350.5
+          },
+          {
+            "label": "End",
+            "value": 400.0
+          }
+        ]
+      },
+      "narration": [
+        "The First law governs energy conservation in all processes.",
+        "This fundamental principle ensures energy remains constant."
+      ],
+      "pauses": [
+        3.6,
+        3.3
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a12-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Fundamental Concepts\".",
+      "anchor": "Fundamental Concepts",
+      "value": null
+    },
+    {
+      "id": "a12-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Systems exchange heat and work with surroundings.\".",
+      "anchor": "Systems exchange heat and work with surroundings.",
+      "value": null
+    },
+    {
+      "id": "a12-v03",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Heat flows from higher to lower temperature.\".",
+      "anchor": "Heat flows from higher to lower temperature.",
+      "value": null
+    },
+    {
+      "id": "a12-v04",
+      "slide": 2,
+      "kind": "label",
+      "text": "A bar chart is titled \"Heat Transfer Rates\".",
+      "anchor": "Heat Transfer Rates",
+      "value": null
+    },
+    {
+      "id": "a12-v05",
+      "slide": 2,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Temperature\".",
+      "anchor": "Temperature",
+      "value": null
+    },
+    {
+      "id": "a12-v06",
+      "slide": 2,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Rate (kW)\".",
+      "anchor": "Rate (kW)",
+      "value": null
+    },
+    {
+      "id": "a12-v07",
+      "slide": 2,
+      "kind": "chart_value",
+      "anchor": "High Temp",
+      "value": 7.8,
+      "text": "The highest value in the bar chart \"Heat Transfer Rates\" is 7.8, for \"High Temp\"."
+    },
+    {
+      "id": "a12-v08",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Process Analysis\".",
+      "anchor": "Process Analysis",
+      "value": null
+    },
+    {
+      "id": "a12-v09",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Efficiency depends on process path.\".",
+      "anchor": "Efficiency depends on process path.",
+      "value": null
+    },
+    {
+      "id": "a12-v10",
+      "slide": 3,
+      "kind": "label",
+      "text": "A line chart is titled \"Temperature Change Over Time\".",
+      "anchor": "Temperature Change Over Time",
+      "value": null
+    },
+    {
+      "id": "a12-v11",
+      "slide": 3,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Time (s)\".",
+      "anchor": "Time (s)",
+      "value": null
+    },
+    {
+      "id": "a12-v12",
+      "slide": 3,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Temp (K)\".",
+      "anchor": "Temp (K)",
+      "value": null
+    },
+    {
+      "id": "a12-v13",
+      "slide": 3,
+      "kind": "chart_value",
+      "anchor": "End",
+      "value": 400.0,
+      "text": "The highest value in the line chart \"Temperature Change Over Time\" is 400, for \"End\"."
+    },
+    {
+      "id": "a12-v14",
+      "slide": 3,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Temperature Change Over Time\" the values rise at every step, from \"Start\" to \"End\"."
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a12-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Energy exists in multiple identifiable forms.\".",
+      "anchor": "Energy exists in multiple identifiable forms."
+    },
+    {
+      "id": "a12-s02",
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Energy Transfer Mechanisms\".",
+      "anchor": "Energy Transfer Mechanisms"
+    },
+    {
+      "id": "a12-s03",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Work is force applied over a distance.\".",
+      "anchor": "Work is force applied over a distance."
+    },
+    {
+      "id": "a12-s04",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"First law governs energy conservation.\".",
+      "anchor": "First law governs energy conservation."
+    }
+  ],
+  "partly_said": [],
+  "absent_decoys": [
+    {
+      "id": "a12-d01",
+      "kind": "slide_title",
+      "text": "The slide titled Efficiency Calculations is shown."
+    },
+    {
+      "id": "a12-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Heat Transfer at 5.7."
+    },
+    {
+      "id": "a12-d03",
+      "kind": "image",
+      "text": "A diagram of a steam turbine is shown."
+    },
+    {
+      "id": "a12-d04",
+      "kind": "bullet",
+      "text": "Friction reduces useful output energy."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 1112,
+      "attempt": 1,
+      "prompt_sha256": "6dae04acca4e34960a2669e92c34bcca483215094d1b3a5cebd632435aa0b8b2"
+    },
+    "narration": {
+      "seed": 1212,
+      "attempt": 1,
+      "prompt_sha256": "8c55399ccb32ba086a951d25ea3cf44d75c97117c791edd166831332a9624538"
+    }
+  }
+}

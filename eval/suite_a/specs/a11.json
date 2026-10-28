@@ -1,0 +1,392 @@
+{
+  "id": "a11",
+  "subject": "climate",
+  "title": "Climate Change Basics",
+  "slides": [
+    {
+      "index": 1,
+      "title": "Global Temperature Rise",
+      "bullets": [
+        "Human activity drives warming trends",
+        "Greenhouse gases trap heat in the atmosphere",
+        "Carbon dioxide levels have increased significantly",
+        "Average temperatures are rising worldwide"
+      ],
+      "chart": null,
+      "narration": [
+        "Human activity shapes warming trends.",
+        "Our actions influence climate patterns."
+      ],
+      "pauses": [
+        2.0,
+        2.4
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Temperature Trend Over Time",
+      "bullets": [
+        "Temperature has increased steadily",
+        "Recent decades show fastest warming",
+        "Natural cycles play a smaller role",
+        "Observed changes match model predictions"
+      ],
+      "chart": {
+        "type": "line",
+        "title": "Global Temperature Trend",
+        "x_label": "Year",
+        "y_label": "Temperature anomaly",
+        "points": [
+          {
+            "label": "1900",
+            "value": 0.1
+          },
+          {
+            "label": "1950",
+            "value": 0.3
+          },
+          {
+            "label": "1990",
+            "value": 0.5
+          },
+          {
+            "label": "2020",
+            "value": 1.1
+          }
+        ]
+      },
+      "narration": [
+        "Recent decades mark the fastest warming period.",
+        "The speed of change has accelerated recently."
+      ],
+      "pauses": [
+        3.1,
+        2.4
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Extreme Weather Events",
+      "bullets": [
+        "Heatwaves becoming more frequent",
+        "Sea levels are rising steadily",
+        "Storm intensity is increasing",
+        "Precipitation patterns are shifting"
+      ],
+      "chart": null,
+      "narration": [
+        "Precipitation patterns are shifting globally.",
+        "Rain and snow distribution is changing."
+      ],
+      "pauses": [
+        1.7,
+        2.8
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Emissions by Source",
+      "bullets": [
+        "Fossil fuel burning is the main source",
+        "Industrial processes release gases",
+        "Deforestation reduces carbon absorption",
+        "Agriculture contributes methane emissions"
+      ],
+      "chart": {
+        "type": "bar",
+        "title": "Emission Sources",
+        "x_label": "Emission source",
+        "y_label": "Annual output",
+        "points": [
+          {
+            "label": "Energy",
+            "value": 35.2
+          },
+          {
+            "label": "Industry",
+            "value": 21.0
+          },
+          {
+            "label": "Transport",
+            "value": 14.5
+          },
+          {
+            "label": "Agriculture",
+            "value": 10.8
+          }
+        ]
+      },
+      "narration": [
+        "Agriculture produces methane gas emissions.",
+        "Farming activities release greenhouse gases."
+      ],
+      "pauses": [
+        2.0,
+        3.7
+      ]
+    }
+  ],
+  "visual_facts": [
+    {
+      "id": "a11-v01",
+      "slide": 1,
+      "kind": "title",
+      "text": "The slide title reads \"Global Temperature Rise\".",
+      "anchor": "Global Temperature Rise",
+      "value": null
+    },
+    {
+      "id": "a11-v02",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Greenhouse gases trap heat in the atmosphere\".",
+      "anchor": "Greenhouse gases trap heat in the atmosphere",
+      "value": null
+    },
+    {
+      "id": "a11-v03",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Carbon dioxide levels have increased significantly\".",
+      "anchor": "Carbon dioxide levels have increased significantly",
+      "value": null
+    },
+    {
+      "id": "a11-v04",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Average temperatures are rising worldwide\".",
+      "anchor": "Average temperatures are rising worldwide",
+      "value": null
+    },
+    {
+      "id": "a11-v05",
+      "slide": 2,
+      "kind": "title",
+      "text": "The slide title reads \"Temperature Trend Over Time\".",
+      "anchor": "Temperature Trend Over Time",
+      "value": null
+    },
+    {
+      "id": "a11-v06",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Temperature has increased steadily\".",
+      "anchor": "Temperature has increased steadily",
+      "value": null
+    },
+    {
+      "id": "a11-v07",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Natural cycles play a smaller role\".",
+      "anchor": "Natural cycles play a smaller role",
+      "value": null
+    },
+    {
+      "id": "a11-v08",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Observed changes match model predictions\".",
+      "anchor": "Observed changes match model predictions",
+      "value": null
+    },
+    {
+      "id": "a11-v09",
+      "slide": 2,
+      "kind": "label",
+      "text": "A line chart is titled \"Global Temperature Trend\".",
+      "anchor": "Global Temperature Trend",
+      "value": null
+    },
+    {
+      "id": "a11-v10",
+      "slide": 2,
+      "kind": "label",
+      "text": "The line chart's horizontal axis is labelled \"Year\".",
+      "anchor": "Year",
+      "value": null
+    },
+    {
+      "id": "a11-v11",
+      "slide": 2,
+      "kind": "label",
+      "text": "The line chart's vertical axis is labelled \"Temperature anomaly\".",
+      "anchor": "Temperature anomaly",
+      "value": null
+    },
+    {
+      "id": "a11-v12",
+      "slide": 2,
+      "kind": "chart_value",
+      "anchor": "2020",
+      "value": 1.1,
+      "text": "The highest value in the line chart \"Global Temperature Trend\" is 1.1, for \"2020\"."
+    },
+    {
+      "id": "a11-v13",
+      "slide": 2,
+      "kind": "chart_trend",
+      "anchor": "",
+      "value": null,
+      "text": "In the line chart \"Global Temperature Trend\" the values rise at every step, from \"1900\" to \"2020\"."
+    },
+    {
+      "id": "a11-v14",
+      "slide": 3,
+      "kind": "title",
+      "text": "The slide title reads \"Extreme Weather Events\".",
+      "anchor": "Extreme Weather Events",
+      "value": null
+    },
+    {
+      "id": "a11-v15",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Heatwaves becoming more frequent\".",
+      "anchor": "Heatwaves becoming more frequent",
+      "value": null
+    },
+    {
+      "id": "a11-v16",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Sea levels are rising steadily\".",
+      "anchor": "Sea levels are rising steadily",
+      "value": null
+    },
+    {
+      "id": "a11-v17",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Storm intensity is increasing\".",
+      "anchor": "Storm intensity is increasing",
+      "value": null
+    },
+    {
+      "id": "a11-v18",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Fossil fuel burning is the main source\".",
+      "anchor": "Fossil fuel burning is the main source",
+      "value": null
+    },
+    {
+      "id": "a11-v19",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Deforestation reduces carbon absorption\".",
+      "anchor": "Deforestation reduces carbon absorption",
+      "value": null
+    },
+    {
+      "id": "a11-v20",
+      "slide": 4,
+      "kind": "label",
+      "text": "The bar chart's vertical axis is labelled \"Annual output\".",
+      "anchor": "Annual output",
+      "value": null
+    },
+    {
+      "id": "a11-v21",
+      "slide": 4,
+      "kind": "chart_value",
+      "anchor": "Energy",
+      "value": 35.2,
+      "text": "The highest value in the bar chart \"Emission Sources\" is 35.2, for \"Energy\"."
+    }
+  ],
+  "spoken_facts": [
+    {
+      "id": "a11-s01",
+      "slide": 1,
+      "kind": "bullet",
+      "text": "A bullet reads \"Human activity drives warming trends\".",
+      "anchor": "Human activity drives warming trends"
+    },
+    {
+      "id": "a11-s02",
+      "slide": 2,
+      "kind": "bullet",
+      "text": "A bullet reads \"Recent decades show fastest warming\".",
+      "anchor": "Recent decades show fastest warming"
+    },
+    {
+      "id": "a11-s03",
+      "slide": 3,
+      "kind": "bullet",
+      "text": "A bullet reads \"Precipitation patterns are shifting\".",
+      "anchor": "Precipitation patterns are shifting"
+    },
+    {
+      "id": "a11-s04",
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Agriculture contributes methane emissions\".",
+      "anchor": "Agriculture contributes methane emissions"
+    }
+  ],
+  "partly_said": [
+    {
+      "slide": 4,
+      "kind": "title",
+      "text": "The slide title reads \"Emissions by Source\".",
+      "anchor": "Emissions by Source"
+    },
+    {
+      "slide": 4,
+      "kind": "bullet",
+      "text": "A bullet reads \"Industrial processes release gases\".",
+      "anchor": "Industrial processes release gases"
+    },
+    {
+      "slide": 4,
+      "kind": "label",
+      "text": "A bar chart is titled \"Emission Sources\".",
+      "anchor": "Emission Sources"
+    },
+    {
+      "slide": 4,
+      "kind": "label",
+      "text": "The bar chart's horizontal axis is labelled \"Emission source\".",
+      "anchor": "Emission source"
+    }
+  ],
+  "absent_decoys": [
+    {
+      "id": "a11-d01",
+      "kind": "slide_title",
+      "text": "The slide shows causes of sea level rise."
+    },
+    {
+      "id": "a11-d02",
+      "kind": "chart_value",
+      "text": "The bar chart shows Land use at 5.7."
+    },
+    {
+      "id": "a11-d03",
+      "kind": "image",
+      "text": "A diagram of the carbon cycle is shown."
+    },
+    {
+      "id": "a11-d04",
+      "kind": "bullet",
+      "text": "Renewable energy is the solution to climate change."
+    }
+  ],
+  "generator": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "temperature": 0.7,
+    "thinking": false,
+    "slides": {
+      "seed": 2111,
+      "attempt": 2,
+      "prompt_sha256": "556dd03e4ada9207537c3fab9a5b92aee87b868bfa956c2224b6cd63743b1c1d"
+    },
+    "narration": {
+      "seed": 2211,
+      "attempt": 1,
+      "prompt_sha256": "349a575679ab7af2ea19d5620090c9cfb82f6dcdbc68f60c0891aa4878f9a8e2"
+    }
+  }
+}
