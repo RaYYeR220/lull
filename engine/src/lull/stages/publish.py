@@ -85,7 +85,7 @@ IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is ow
 MAX_DEMOTED = 0.25  # share of the watch-salient events the plan may judge repetitive
 MET_NOTHING_VISUAL = "met (no visual information beyond the soundtrack)"  # G203
 REVIEWED = ("edited", "approved")  # statuses a person has signed off
-STATUSES = ("verified", "edited", "approved", "held", "extended")  # counted in the summary
+STATUSES = ("verified", "edited", "approved", "held", "extended", "unverified")  # counted
 TTS_NAME = mixer.TTS_NAME
 MET, MET_AUTOMATED = "met", "met (automated checks)"
 REVIEW, NOT_CLAIMED = "needs review", "not claimed"
@@ -342,6 +342,7 @@ def _nothing_visual(cov: dict | None) -> bool:
 def wcag_status(
     *, standard: int, extended_produced: bool, held: int, overlap_s: float, f113: int,
     reviewed: bool = False, extended_error: str | None = None, coverage: dict | None = None,
+    verified: bool = True,
 ) -> list[dict]:  # fmt: skip
     """1.2.3, 1.2.5 and 1.2.7 as met / met (automated checks) / needs review / not claimed,
     with what meets them and why not.
@@ -375,6 +376,8 @@ def wcag_status(
         )
     if held:
         blockers.append(f"{_n(held, 'description')} held for review")
+    if not verified:  # the evaluation's ablation: nothing was checked against the frames
+        blockers.append("claim verification was off for this run (LULL_NO_VERIFY)")
     passed = MET if reviewed else MET_AUTOMATED
     if nothing_visual:
         passed = MET_NOTHING_VISUAL
@@ -916,6 +919,7 @@ def publish(
     since: float | None = None,
     words: list[Word] | None = None,
     reviewer: dict[str, list[str]] | None = None,
+    verify: bool = True,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
@@ -928,7 +932,9 @@ def publish(
     whose sentence ends decide where the extended version stops (mix.hold_point); `reviewer`
     the event ids a person should look at: "plan_unanswered" (salient events the plan wrote
     nothing for, even when asked again) and "undescribed" (salient events that got no
-    description anywhere), listed in the manifest and under "For the reviewer"."""
+    description anywhere), listed in the manifest and under "For the reviewer"; `verify`
+    False records an evaluation run without claim verification (manifest `verification:
+    "disabled"`, no WCAG row met)."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -957,7 +963,7 @@ def publish(
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
                 run_id, opts, speech, duplicates, overlap, priority, since, words or [],
-                reviewer or {},
+                reviewer or {}, verify,
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -1014,6 +1020,7 @@ def _stage(
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
     priority: dict[str, int] | None = None, since: float | None = None,
     words: list[Word] | None = None, reviewer: dict[str, list[str]] | None = None,
+    verify: bool = True,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
@@ -1062,7 +1069,7 @@ def _stage(
     wcag = wcag_status(
         standard=len(spoken), extended_produced=ext_video is not None, held=len(held),
         overlap_s=overlap["total_s"], f113=len(flags), reviewed=signed_off,
-        extended_error=ext_error, coverage=cov,
+        extended_error=ext_error, coverage=cov, verified=verify,
     )  # fmt: skip
     disclosure = tts_disclosure(everything)
     calls = ledger.summary(run_id, since=since)
@@ -1170,6 +1177,7 @@ def _stage(
             for name, path in sorted(out.items())
         },
         "summary": summary,
+        "verification": "enabled" if verify else "disabled",
         "versions": {"engine": lull.__version__, "models": models, "tts": TTS_NAME},
     }
     _write(run_dir / MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")

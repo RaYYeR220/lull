@@ -115,7 +115,14 @@ def test_full_run_publishes_every_output(runs):
     manifest = json.loads(res.manifest.read_text(encoding="utf-8"))
     assert manifest["run_id"] == "t1"
     summary = manifest["summary"]
-    assert summary["cues"] == {"verified": 2, "edited": 0, "approved": 0, "held": 0, "extended": 1}
+    assert summary["cues"] == {
+        "verified": 2,
+        "edited": 0,
+        "approved": 0,
+        "held": 0,
+        "extended": 1,
+        "unverified": 0,
+    }
     assert summary["overlap_seconds"] == 0.0
     assert summary["research"] == {"skipped": True, "terms": 1, "errors": [], "notes": []}
     cues = json.loads((run_dir / "cues.json").read_text(encoding="utf-8"))
@@ -980,3 +987,23 @@ def test_capped_research_is_reported_and_not_cached(tone_slides, tmp_path, fast_
     report = (tmp_path / "run" / "report.html").read_text(encoding="utf-8")
     assert "research capped: 3 searches" in report
     assert not (tmp_path / "run" / "stages" / "research.json").exists()
+
+
+def test_lull_no_verify_turns_verification_off_for_the_whole_run(
+    tone_slides, tmp_path, fast_media, monkeypatch
+):
+    from lull import config
+
+    monkeypatch.setenv("LULL_NO_VERIFY", "1")
+    config.get_settings.cache_clear()
+    try:
+        ledger = _ledger(tmp_path)
+        res, tf, _, _ = _run(tone_slides, tmp_path / "run", ledger)
+    finally:
+        config.get_settings.cache_clear()
+    assert "verify" not in tf.roles()
+    m = json.loads(res.manifest.read_text(encoding="utf-8"))
+    assert m["verification"] == "disabled"
+    cues = json.loads((tmp_path / "run" / "cues.json").read_text(encoding="utf-8"))
+    assert {c["status"] for c in cues["cues"] + cues["extended"]} == {"unverified"}
+    assert all(r["status"] != "met (automated checks)" for r in m["summary"]["wcag"])

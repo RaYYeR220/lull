@@ -61,7 +61,7 @@ log = logging.getLogger(__name__)
 MAX_ROUNDS = 4
 LEAD_IN_S = 0.3  # a line starts this long before its first visual when its pause allows
 COMPRESS_MARGIN = 0.95
-GATED = ("verified", "edited", "approved")  # statuses the overlap gate checks
+GATED = ("verified", "edited", "approved", "unverified")  # statuses the overlap gate checks
 OVERLAP_EPS = 1e-6
 _FIT_EPS = 1e-6
 _ARTICLES = frozenset({"a", "an", "the"})
@@ -88,6 +88,9 @@ class CueContext(BaseModel):
     verbatim: list[str] = Field(default_factory=list)  # on-screen text of the cue's events
     proper_nouns: set[str] = Field(default_factory=set)  # spelled exactly; never visual claims
     video_duration: float | None = None  # probed once by the caller; probed here when None
+    # False only for the evaluation's ablation (LULL_NO_VERIFY): no claim is checked and the
+    # fitted line is voiced with status "unverified"
+    verify: bool = True
 
 
 class OverlapError(Exception):
@@ -482,6 +485,11 @@ class _Finalise:
             reason = self.style()
             if reason:
                 return self.held(reason)
+            if not ctx.verify:  # evaluation only: voice the fitted line unchecked
+                out = self.speak(last)
+                if out is not None:
+                    return out
+                continue
             self.claims = self.check_frames()
             if not self.claims:
                 return self.held("the verifier found no visual claim to check")
@@ -538,7 +546,10 @@ class _Finalise:
     def recheck(self) -> list[Claim] | None:
         """When the text changed after its last check (a look-ahead added, a contradicted
         claim cut), its claims are judged again, on the text as it now is: a cue never
-        carries a verdict given to another text. None when nothing changed."""
+        carries a verdict given to another text. None when nothing changed, or when
+        verification is off."""
+        if not self.ctx.verify:
+            return None
         if not self.text or (self.checks and _same(self.checks[-1].text, self.text)):
             return None
         self.claims = self.check_frames()
@@ -556,7 +567,10 @@ class _Finalise:
         extra = ["look-ahead sentence removed"] if self.cue.ahead and not ahead else []
         if self.prefixed and ahead:
             extra.append("look-ahead added: the line starts before its visual")
-        status = "verified" if self.gap is not None else self.cue.status
+        if not self.ctx.verify:
+            status = "unverified"
+        else:
+            status = "verified" if self.gap is not None else self.cue.status
         return self._result(status, None, audio, dur, tempo, ahead, extra)
 
     # -- style ---------------------------------------------------------------------------

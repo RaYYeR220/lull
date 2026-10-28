@@ -555,7 +555,7 @@ def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
     rows = {r["criterion"]: r["status"] for r in manifest["summary"]["wcag"]}
     assert rows == {"1.2.3": "needs review", "1.2.5": "needs review", "1.2.7": "not claimed"}
     assert manifest["summary"]["cues"] == {
-        "verified": 0, "edited": 0, "approved": 0, "held": 1, "extended": 0,
+        "verified": 0, "edited": 0, "approved": 0, "held": 1, "extended": 0, "unverified": 0,
     }  # fmt: skip
     assert manifest["summary"]["held"] == [{"id": "x001", "reason": "not verified"}]
     html = (run / "report.html").read_text(encoding="utf-8")
@@ -605,7 +605,14 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     for name, meta in m["outputs"].items():
         assert meta == {"sha256": _sha(run / name), "bytes": (run / name).stat().st_size}
     s = m["summary"]
-    assert s["cues"] == {"verified": 1, "edited": 0, "approved": 0, "held": 1, "extended": 1}
+    assert s["cues"] == {
+        "verified": 1,
+        "edited": 0,
+        "approved": 0,
+        "held": 1,
+        "extended": 1,
+        "unverified": 0,
+    }
     assert s["coverage"]["described"] == 1 and s["coverage"]["important_events"] == 2
     assert s["overlap_seconds"] == 0.0
     assert s["overlap"] == {"speech_s": 0.0, "between_cues_s": 0.0, "outside_pauses_s": 0.0,
@@ -1904,3 +1911,36 @@ def test_a_publish_from_the_cache_keeps_the_spend_and_models_of_the_run(tmp_path
     assert first["summary"]["spend_from_cache"] is False
     html = " ".join((run / "report.html").read_text(encoding="utf-8").split())
     assert "Every stage of this attempt came from the cache" in html
+
+
+def test_wcag_never_reads_met_with_verification_off():
+    cov = {"important_events": 2, "salient_events": 2, "described": 2, "ratio": 1.0,
+           "described_with_extended": 2, "ratio_with_extended": 1.0, "undescribed": [],
+           "repetitive": 0, "watch_salient": 2}  # fmt: skip
+    on = wcag_status(standard=2, extended_produced=True, held=0, overlap_s=0.0, f113=0,
+                     coverage=cov)  # fmt: skip
+    assert {r["status"] for r in on} == {"met (automated checks)"}
+    off = wcag_status(standard=2, extended_produced=True, held=0, overlap_s=0.0, f113=0,
+                      coverage=cov, verified=False)  # fmt: skip
+    assert {r["status"] for r in off} == {"needs review"}
+    assert all(any("verification was off" in why for why in r["reasons"]) for r in off)
+
+
+def test_unverified_cues_are_published_and_the_manifest_says_verification_is_disabled(
+    tmp_path, fake_media
+):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    cue = _cue("c001", 2.0, 1.0, status="unverified", audio="c.wav")
+    run = tmp_path / "run"
+    res = publish(run, video, [cue], [], [_ev("e1", 2.0, 4.0)], [_gap("g001", 2.0, 5.0)], None,
+                  _ledger(tmp_path), "r1", RunOptions(), speech=[], verify=False)  # fmt: skip
+    m = json.loads(res.manifest.read_text(encoding="utf-8"))
+    assert m["verification"] == "disabled"
+    assert m["summary"]["cues"]["unverified"] == 1
+    assert "c001" in (run / "descriptions.vtt").read_text(encoding="utf-8")
+    on = json.loads(publish(run, video, [cue.model_copy(update={"status": "verified"})], [],
+                            [_ev("e1", 2.0, 4.0)], [_gap("g001", 2.0, 5.0)], None,
+                            _ledger(tmp_path), "r1", RunOptions(),
+                            speech=[]).manifest.read_text(encoding="utf-8"))  # fmt: skip
+    assert on["verification"] == "enabled"

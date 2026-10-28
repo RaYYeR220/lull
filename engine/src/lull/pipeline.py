@@ -44,6 +44,7 @@ from pydantic import BaseModel, ValidationError
 
 import lull
 from lull import media
+from lull.config import get_settings
 from lull.ledger import CallRecord, Ledger
 from lull.speech import SpeechClient
 from lull.stages import mix as mixer
@@ -193,6 +194,7 @@ def cue_context(
     speech: list[Span],
     finished: list[Cue],
     info: media.Probe | None = None,
+    verify: bool = True,
 ) -> CueContext:
     """What finalising `cue` needs to know about the rest of the programme. `named` are the
     names lint checks for introduction (cast and glossary people); `proper_nouns` every
@@ -209,6 +211,7 @@ def cue_context(
         verbatim=[e.verbatim_text for e in own if e.verbatim_text],
         proper_nouns=set(proper_nouns),
         video_duration=duration,
+        verify=verify,
     )
 
 
@@ -257,6 +260,7 @@ class _Run:
     stage: str | None = None
     info: media.Probe | None = None  # the probed video: frame rate and length for freezes
     undescribed: list[str] = field(default_factory=list)  # salient, and the plan wrote nothing
+    verify: bool = True  # False only with LULL_NO_VERIFY (the evaluation's ablation)
 
     @property
     def store(self) -> Store:
@@ -551,6 +555,7 @@ class _Run:
                     speech=heard.speech,
                     finished=finished,
                     info=self.info,
+                    verify=self.verify,
                 )
                 gap = by_gap.get(cue.gap_id) if cue.gap_id is not None else None
                 own = {i: by_event[i] for i in cue.event_ids if i in by_event}
@@ -716,7 +721,12 @@ def run(
             ledger,
             emit,
             info=info,
+            verify=not get_settings().lull_no_verify,
         )
+        if not state.verify:
+            emit("warning", None, kind="verification_off",
+                 message="LULL_NO_VERIFY is set: lines are voiced without claim verification "
+                 "(an evaluation run; nothing it publishes reads as met)")  # fmt: skip
 
         def on_call(rec: CallRecord) -> None:
             if rec.run_id == run_id:
@@ -787,6 +797,7 @@ def _stages(r: _Run, started: float | None = None) -> PublishResult:
                 "plan_unanswered": list(planned.unanswered),
                 "undescribed": list(r.undescribed),
             },  # fmt: skip
+            verify=r.verify,
         )
         info["files"] = len(result.files) + 1
     return result

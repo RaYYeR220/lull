@@ -37,6 +37,9 @@ class Settings(BaseSettings):
             return None
         return value
 
+    # Evaluation only: finalize skips claim verification and voices lines "unverified".
+    lull_no_verify: bool = Field(default=False, validation_alias="LULL_NO_VERIFY")
+
     # Ledger and voice calibration files live here.
     lull_home: Path = Field(
         default_factory=lambda: Path.home() / ".lull", validation_alias="LULL_HOME"

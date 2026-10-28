@@ -97,7 +97,8 @@ class Cue(BaseModel):
     end: float | None
     text: str
     event_ids: list[str]
-    status: Literal["verified", "held", "edited", "extended", "approved"]
+    # "unverified": voiced with claim verification turned off (LULL_NO_VERIFY, evaluation)
+    status: Literal["verified", "held", "edited", "extended", "approved", "unverified"]
     ahead: bool
     claims: list[Claim]
     audio_path: str | None

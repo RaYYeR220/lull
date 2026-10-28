@@ -1421,3 +1421,21 @@ def test_the_first_sentence_gets_the_look_ahead_when_it_starts_early(tmp_path, v
                events={"e001": door, "e009": CHART}, ctx=ctx)  # fmt: skip
     assert out.text == "In a moment, a door opens. In a moment, a bar chart shows sales."
     assert out.status == "verified" and out.ahead is True
+
+
+# -- evaluation switch: verification off ----------------------------------------------------
+
+
+def test_with_verification_off_a_line_is_voiced_unverified(tmp_path, video):
+    """For the evaluation's ablation only: no claim is checked, the lint-clean fitted line is
+    voiced with status "unverified" and carries no claim."""
+    tf = FakeTF()  # no verify answer: a call would fail the test
+    ctx = CTX.model_copy(update={"verify": False})
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), ctx=ctx)
+    assert tf.calls == []
+    assert out.status == "unverified" and out.claims == [] and out.checks == []
+    assert out.audio_dur == pytest.approx(2.0, abs=1e-3)
+    ext = _cue(TEXT, gap_id=None, status="extended")
+    out = finalize_cue(ext, None, EVENTS, video, tmp_path / "w2", tf, FakeSpeech([3.0]), OPTS,
+                       ctx, run_id="r1")  # fmt: skip
+    assert out.status == "unverified" and out.gap_id is None
