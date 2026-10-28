@@ -1,4 +1,4 @@
-"""Suite B fix round: evidence-backed ASR corrections, long-block windows, unresolved terms,
+"""Suite B corrections: evidence-backed ASR corrections, long-block windows, unresolved terms,
 the judge probe, results that need all four videos, and the overlap presentation."""
 
 import json

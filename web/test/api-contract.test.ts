@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { API_BASE, health } from "../lib/api";
 import { getRun, listRuns, lookupRun, readDetail } from "../lib/api-runs";
 
-/** The API's own answers (lull-api Task 6), as fixtures. */
+/** The API's own answers, as fixtures. */
 const fx = (name: string) => JSON.parse(readFileSync(path.join(__dirname, "fixtures", "api", name), "utf8"));
 const DONE = fx("detail-done.json");
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
