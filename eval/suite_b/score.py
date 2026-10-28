@@ -7,9 +7,10 @@
 
 A run directory is a finished Lull run of the reference video (cues.json, manifest.json); this
 scorer never runs the pipeline. Before anything else it checks the pin: facts.sha256 matches
-the reference set on disk, the annotated tag `suite-b-prereg` exists and is an ancestor of
-HEAD and carries the same first line, and refs/, facts/, rules.json, refs.py and facts.py are
-unchanged since the tag. The rules it applies are read from rules.json (pinned with the facts).
+the reference set on disk, the annotated tag `suite-b-prereg-2` (the second pin) exists, is
+an ancestor of HEAD and carries the same first line, and the pinned paths (refs/, facts/,
+rules.json, probes.json, refs.py, facts.py, evidence.py) are unchanged since the tag. The
+rules it applies are read from rules.json (pinned with the facts).
 
 Per reference fact, the judges (Suite A's: Nemotron 3 Ultra, reasoning on; Qwen3 235B Instruct
 as the second judge) name the cues that convey it, from the cue texts alone (neutral ids, no
