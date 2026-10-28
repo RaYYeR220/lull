@@ -250,3 +250,34 @@ def test_the_deploy_notes_state_the_platform_settings():
     assert "falls back to moving the files one by one" in notes
     assert "CPU always allocated" not in notes  # request-based billing
     assert (docker / "smoke.py").is_file()
+
+
+def test_a_recorded_run_carries_its_title_and_credit(client, data, make_run):
+    """showcase/<id>/about.json gives a recorded run its title and attribution (CC BY needs
+    the credit); a visitor's run never takes one."""
+    import json as _json
+
+    about = {
+        "title": "Elephants Dream (excerpt)",
+        "credit": "Orange Open Movie Team / Blender Foundation, elephantsdream.org",
+        "licence": "CC BY 2.5",
+        "licence_url": "https://creativecommons.org/licenses/by/2.5/",
+        "source_url": "https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm",
+        "excerpt": "1:00-2:30",
+        "unknown": "dropped",
+    }
+    d = make_run(data / "showcase", "ed90")
+    (d / "about.json").write_text(_json.dumps(about))
+    plain = make_run(data / "showcase", "plain")
+    live = make_run(data / "runs", "r1")
+    (live / "about.json").write_text(_json.dumps(about))
+    items = {i["id"]: i for i in client.get("/v1/runs").json()}
+    ed = items["ed90"]
+    assert ed["title"] == "Elephants Dream (excerpt)" and ed["credit"] == about["credit"]
+    assert ed["licence"] == "CC BY 2.5" and ed["excerpt"] == "1:00-2:30" and "unknown" not in ed
+    assert items["plain"]["credit"] is None and items["plain"]["title"] == "clip.mp4"
+    detail = client.get("/v1/runs/ed90").json()
+    assert detail["title"] == about["title"] and detail["licence_url"] == about["licence_url"]
+    r1 = client.get("/v1/runs/r1").json()
+    assert r1["title"] == "clip.mp4" and r1.get("credit") is None
+    assert plain.is_dir()

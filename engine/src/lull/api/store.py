@@ -8,8 +8,9 @@ writer in this process, also forgets a file it rewrites), and the run list is ke
 LIST_TTL seconds.
 
 The run list is the official recorded runs only (the showcase: runs of the licensed samples,
-put there at deploy). Nothing a visitor made is listed, whatever it is (a run of a sample, an
-upload, a fork): its id is what opens it.
+put there at deploy). A recorded run's about.json gives its title and attribution (ABOUT_KEYS:
+the credit its licence asks for); nothing else's is read. Nothing a visitor made is listed,
+whatever it is (a run of a sample, an upload, a fork): its id is what opens it.
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ JSON_CACHE = 256
 MANIFEST, CUES, STUDIO, ERROR = "manifest.json", "cues.json", "studio.json", "error.json"
 PENDING = ".pending"  # in a run folder still being filled (an upload, a fork): not listed
 OPTION_KEYS = ("mode", "profile", "voice", "language", "source_url")
+ABOUT, ABOUT_KEYS = "about.json", ("credit", "licence", "licence_url", "source_url", "excerpt")
 VERSION_KEYS = ("engine", "models", "tts")
 SUMMARY_KEYS = (
     "cues", "coverage", "overlap_seconds", "overlap", "held", "f113", "lint_warnings",
@@ -179,6 +181,18 @@ class RunStore:
                 return kind, d
         return None
 
+    def about(self, kind: str, d: Path) -> dict[str, Any]:
+        """A recorded run's title and attribution from its about.json (strings only); {} for
+        any other run."""
+        if kind != "showcase":
+            return {}
+        doc = _dict(self.read_json(d / ABOUT))
+        return {k: self.scrub(doc[k]) for k in ("title", *ABOUT_KEYS) if _str(doc.get(k))}
+
+    def attribution(self, kind: str, d: Path) -> dict[str, Any]:
+        about = self.about(kind, d)
+        return {k: about.get(k) for k in ABOUT_KEYS}
+
     def summary(self, kind: str, d: Path) -> dict[str, Any]:
         manifest = self.manifest(d)
         title, duration, cost, cues, created, spend = d.name, None, None, None, None, None
@@ -194,7 +208,8 @@ class RunStore:
         return {
             "id": d.name,
             "kind": kind,
-            "title": self.scrub(title),
+            "title": self.about(kind, d).get("title") or self.scrub(title),
+            **self.attribution(kind, d),
             "duration": duration,
             "created": created or _mtime_iso(d),
             "status": status,
@@ -257,7 +272,9 @@ class RunStore:
             "kind": kind,
             "status": status,
             "source": source,
-            "title": self.scrub(video_name or source_name or d.name),
+            "title": self.about(kind, d).get("title")
+            or self.scrub(video_name or source_name or d.name),
+            **self.attribution(kind, d),
             "duration": length,
             "created": created,
             "error": self.scrub.tree(facts.public_error(d)),

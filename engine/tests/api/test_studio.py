@@ -690,6 +690,7 @@ def _slow_finalizer(log, other_started: threading.Event, wait: float):
 
 
 def test_edits_of_one_run_are_serialized(app, rd):
+    app.state.studio.lock_wait = 30.0  # about the order, not the 2 s wait (a slow machine)
     log: list = []
     app.state.studio.finalizer = _slow_finalizer(log, threading.Event(), 0.5)
     r1, r2 = _async_patch(app, (RID, "c001", NEW_RED), (RID, "c002", "The screen turns blue."))
