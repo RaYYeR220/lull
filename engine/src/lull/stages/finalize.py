@@ -42,7 +42,7 @@ from lull.media import audio_duration, cut_clip, probe
 from lull.speech import SpeechClient
 from lull.stages.lint import Finding, autofix, lint, quoted_spans, screen_spans
 from lull.stages.plan import count_words
-from lull.stages.schedule import AHEAD_PREFIX, lower_first
+from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
     clip_window,
@@ -733,6 +733,12 @@ class _Finalise:
         """Compress towards `target` words; the held cue, or None to go round. A compression
         that cuts too much (see `overcut`) is asked for once more with a note; cutting too much
         again holds the cue with the line as it was before compression."""
+        if self.prefixed and self.text.startswith(AHEAD_PREFIX):
+            # the look-ahead was added only to place the line: compress the line itself, and
+            # let placement decide again whether the shorter line still needs it
+            body = self.text[len(AHEAD_PREFIX) :]
+            self.text, self.prefixed = body[:1].upper() + body[1:], False
+            target -= AHEAD_WORDS
         if target < 1:
             return self.held(reason)
         before = self.text

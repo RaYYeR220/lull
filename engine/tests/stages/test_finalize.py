@@ -1291,3 +1291,31 @@ def test_a_name_read_off_the_screen_gets_no_descriptor_there():
     )
     assert text == f"A banner reads Welcome, Proog. {PROOG[0].upper()}{PROOG[1:]}, Proog, waves."
     assert inserted == ["Proog"]
+
+
+def test_a_placement_look_ahead_is_not_kept_through_compression(tmp_path, video, monkeypatch):
+    """The line had to start early and got "In a moment, ", which made it too long for the
+    pause. Compression shortens the line itself (its word target less the three prefix words),
+    and placement decides again whether the shorter line needs the prefix. Asking a model to
+    keep a prefix the engine added kept it at its old length round after round."""
+    seen = []
+    real = fin.compress
+
+    def spy(text, target_words, keep, tf, *, run_id, note=None):
+        seen.append((text, target_words))
+        return real(text, target_words, keep, tf, run_id=run_id)
+
+    monkeypatch.setattr(fin, "compress", spy)
+    short = "A bar chart shows sales rising."
+    tf = FakeTF(
+        verify=lambda call: _supported(_description(call).removeprefix("In a moment, ")),
+        compress=[{"text": short}],
+    )
+    speech = FakeSpeech(lambda text: 0.42 * len(text.split()))
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, speech, cue=_cue(CHART_LINE, start=15.0, event_ids=["e009"]),
+               gap=_pause(15.0, 19.0), events={"e009": CHART}, ctx=ctx)  # fmt: skip
+    # 11 words prefixed: 4.62 s for a 4.0 s pause -> floor(11 x 4.0 / 4.62 x 0.95) = 9, less 3
+    assert seen == [(CHART_LINE, 6)]
+    assert out.status == "verified" and out.text == "In a moment, a bar chart shows sales rising."
+    assert out.ahead is True and out.end <= 19.0 + 1e-6
