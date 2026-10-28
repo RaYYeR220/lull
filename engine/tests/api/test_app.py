@@ -23,10 +23,10 @@ def test_health_shape(client, monkeypatch):
         "cap_day",
         "spent_total",
         "cap_total",
-        "models_today",
-        "models_total",
-        "tavily_credits_today",
-        "tavily_credits_total",
+        "cap_run",
+        "searches_today",
+        "searches_cap_run",
+        "searches_cap_day",
     }
 
 

@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from lull.api.health import Health
-from lull.api.live import Live, LiveError, live_error_handler
+from lull.api.live import SEARCHES_PER_RUN, Live, LiveError, live_error_handler
 from lull.api.live import router as live_router
 from lull.api.settings import ApiSettings
 from lull.api.store import RunStore
@@ -70,7 +70,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     app = FastAPI(title="Lull API", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.store = store
-    app.state.health = Health()
+    app.state.health = Health(searches_cap_run=SEARCHES_PER_RUN)
     app.state.live = Live(settings, store)
     app.state.studio = Studio(settings, store, app.state.live)
     app.add_exception_handler(LiveError, live_error_handler)

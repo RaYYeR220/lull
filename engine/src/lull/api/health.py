@@ -1,4 +1,5 @@
-"""GET /v1/health: the speech server and the spend so far, cached for a few seconds.
+"""GET /v1/health: the speech server, the model spend and the web searches so far, cached for
+a few seconds.
 
 The ledger is only read: a read-only SQLite connection opened and closed per check, never the
 engine's Ledger (which creates the folder, the file and its tables). A missing ledger is no
@@ -16,7 +17,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from lull.config import get_settings
-from lull.ledger import TAVILY_CREDIT_USD
 
 log = logging.getLogger(__name__)
 
@@ -29,39 +29,35 @@ def midnight_utc(now: datetime | None = None) -> float:
     return now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
-SPEND_KEYS = ("spent", "models", "tavily_credits")
-
-
-def ledger_budget(path: Path, *, cap_day: float, cap_total: float) -> dict:
-    """Spend today and in total from the ledger at `path`, read-only: all of it (what the caps
-    count), the model calls' share and the Tavily credits apart."""
-    out: dict = {"cap_day": cap_day, "cap_total": cap_total}
-    for key in SPEND_KEYS:
-        out[f"{key}_today"] = out[f"{key}_total"] = 0.0
+def ledger_budget(
+    path: Path, *, cap_day: float | None, cap_total: float | None, searches_cap_day: int | None
+) -> dict:
+    """From the ledger at `path`, read-only: model spend today and in total (what the caps
+    count; a cap of None is none) and the web searches made today (counted, never priced)."""
+    out: dict = {
+        "spent_today": 0.0, "cap_day": cap_day, "spent_total": 0.0, "cap_total": cap_total,
+        "searches_today": 0, "searches_cap_day": searches_cap_day,
+    }  # fmt: skip
     path = Path(path)
     if not path.is_file():
         return out
     try:
         con = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)
         try:
-            sql = (
-                "SELECT provider = 'tavily', COALESCE(SUM(cost_usd), 0) FROM calls{} "
-                "GROUP BY provider = 'tavily'"
-            )
-            today = con.execute(sql.format(" WHERE ts >= ?"), (midnight_utc(),)).fetchall()
-            total = con.execute(sql.format("")).fetchall()
+            spent = "SELECT COALESCE(SUM(cost_usd), 0) FROM calls WHERE provider != 'tavily'"
+            today = con.execute(spent + " AND ts >= ?", (midnight_utc(),)).fetchone()[0]
+            total = con.execute(spent).fetchone()[0]
+            searches = con.execute(
+                "SELECT COUNT(*) FROM calls WHERE provider = 'tavily' AND ts >= ?",
+                (midnight_utc(),),
+            ).fetchone()[0]
         finally:
             con.close()
     except sqlite3.Error:
         log.warning("health: the ledger could not be read", exc_info=True)
-        for key in SPEND_KEYS:
-            out[f"{key}_today"] = out[f"{key}_total"] = None
+        out["spent_today"] = out["spent_total"] = out["searches_today"] = None
         return out
-    for when, rows in (("today", today), ("total", total)):
-        by = {bool(tavily): float(cost) for tavily, cost in rows}
-        out[f"spent_{when}"] = by.get(False, 0.0) + by.get(True, 0.0)
-        out[f"models_{when}"] = by.get(False, 0.0)
-        out[f"tavily_credits_{when}"] = round(by.get(True, 0.0) / TAVILY_CREDIT_USD, 2)
+    out.update(spent_today=float(today), spent_total=float(total), searches_today=int(searches))
     return out
 
 
@@ -78,8 +74,15 @@ def speech_ok() -> bool:
 class Health:
     """The health answer, worked out at most once per `ttl` seconds."""
 
-    def __init__(self, ttl: float = HEALTH_TTL, clock: Callable[[], float] = time.monotonic):
+    def __init__(
+        self,
+        ttl: float = HEALTH_TTL,
+        clock: Callable[[], float] = time.monotonic,
+        *,
+        searches_cap_run: int | None = None,
+    ):
         self.ttl, self.clock = ttl, clock
+        self.searches_cap_run = searches_cap_run  # what a live run may search
         self._lock = threading.Lock()
         self._cached: tuple[float, dict] | None = None
 
@@ -93,9 +96,16 @@ class Health:
         body = {
             "ok": True,
             "speech": speech_ok(),
-            "budget": ledger_budget(
-                s.lull_home / "ledger.db", cap_day=s.lull_cap_day, cap_total=s.lull_cap_total
-            ),
+            "budget": {
+                **ledger_budget(
+                    s.lull_home / "ledger.db",
+                    cap_day=s.lull_cap_day,
+                    cap_total=s.lull_cap_total,
+                    searches_cap_day=s.lull_tavily_day,
+                ),
+                "cap_run": s.lull_cap_run,
+                "searches_cap_run": self.searches_cap_run,
+            },
         }
         with self._lock:
             self._cached = (self.clock() + self.ttl, body)

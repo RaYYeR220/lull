@@ -24,7 +24,7 @@ from typing import Any
 
 from lull.api.clean import Scrubber, default_roots
 from lull.api.settings import ApiSettings
-from lull.api.spend import split as split_spend
+from lull.api.spend import public_spend, public_summary
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +42,8 @@ VERSION_KEYS = ("engine", "models", "tts")
 SUMMARY_KEYS = (
     "cues", "coverage", "overlap_seconds", "overlap", "held", "f113", "lint_warnings",
     "cost_usd", "cost_per_min", "calls_by_role_model", "wcag", "reviewed", "extended_produced",
-    "extended_error", "levels", "tts_disclosure", "research",
+    "extended_error", "levels", "tts_disclosure", "research", "spend", "spend_from_cache",
+    "repetitive", "for_reviewer",
 )  # fmt: skip
 
 
@@ -198,7 +199,8 @@ class RunStore:
             video, summ = _dict(manifest.get("video")), _dict(manifest.get("summary"))
             title = _str(video.get("name")) or d.name
             duration, cost = _num(video.get("duration")), _num(summ.get("cost_usd"))
-            spend = split_spend(summ.get("calls_by_role_model"))
+            spend = public_spend(summ)  # model spend and searches, nothing priced
+            cost = spend["model_usd"] if spend["model_usd"] is not None else cost
             cues = summ.get("cues") if isinstance(summ.get("cues"), dict) else None
             created = _str(manifest.get("created"))
         elif (d / MANIFEST).exists() or (d / ERROR).exists():
@@ -213,7 +215,7 @@ class RunStore:
             "created": created or _mtime_iso(d),
             "status": status,
             "cost_usd": cost,
-            "spend": spend,  # model spend and Tavily credits apart
+            "spend": spend,
             "cues": cues,
         }
 
@@ -277,10 +279,7 @@ class RunStore:
                 k: options[k] for k in OPTION_KEYS if k in options and _str(options[k]) is not None
             },
             "outputs": outputs,
-            "summary": {
-                **{k: summ[k] for k in SUMMARY_KEYS if k in summ},
-                "spend": split_spend(summ.get("calls_by_role_model")),
-            },
+            "summary": public_summary({k: summ[k] for k in SUMMARY_KEYS if k in summ}),
             "versions": {k: versions[k] for k in VERSION_KEYS if k in versions},
         }
         return self.scrub.tree(out)

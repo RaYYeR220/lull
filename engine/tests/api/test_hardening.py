@@ -277,38 +277,39 @@ def test_ledger_budget_reads_spend(tmp_path):
                tokens_cached=0, tokens_out=1, latency_s=0.1)  # fmt: skip
     ledger.record(CallRecord(run_id="a", cost_usd=0.25, ts=time.time(), **rec))
     ledger.record(CallRecord(run_id="b", cost_usd=0.5, ts=midnight_utc() - 60, **rec))
-    b = ledger_budget(path, cap_day=3.0, cap_total=35.0)
+    search = {**rec, "provider": "tavily", "model": "tavily-search"}
+    for _ in range(2):  # counted, never priced
+        ledger.record(CallRecord(run_id="a", cost_usd=0.008, ts=time.time(), **search))
+    ledger.record(CallRecord(run_id="b", cost_usd=0.008, ts=midnight_utc() - 60, **search))
+    b = ledger_budget(path, cap_day=3.0, cap_total=35.0, searches_cap_day=60)
     assert b == {
         "spent_today": 0.25,
         "cap_day": 3.0,
         "spent_total": 0.75,
         "cap_total": 35.0,
-        "models_today": 0.25,
-        "models_total": 0.75,
-        "tavily_credits_today": 0.0,
-        "tavily_credits_total": 0.0,
+        "searches_today": 2,
+        "searches_cap_day": 60,
     }
 
 
 def test_ledger_budget_survives_a_damaged_ledger(tmp_path):
     path = tmp_path / "ledger.db"
     path.write_bytes(b"this is not sqlite" * 100)
-    b = ledger_budget(path, cap_day=3.0, cap_total=35.0)
+    b = ledger_budget(path, cap_day=3.0, cap_total=35.0, searches_cap_day=60)
     assert b == {
         "spent_today": None,
         "cap_day": 3.0,
         "spent_total": None,
         "cap_total": 35.0,
-        "models_today": None,
-        "models_total": None,
-        "tavily_credits_today": None,
-        "tavily_credits_total": None,
+        "searches_today": None,
+        "searches_cap_day": 60,
     }
     con = sqlite3.connect(tmp_path / "other.db")
     con.execute("CREATE TABLE unrelated (x)")
     con.commit()
     con.close()
-    assert ledger_budget(tmp_path / "other.db", cap_day=1.0, cap_total=2.0)["spent_total"] is None
+    other = ledger_budget(tmp_path / "other.db", cap_day=1.0, cap_total=2.0, searches_cap_day=1)
+    assert other["spent_total"] is None
 
 
 def test_health_with_a_damaged_ledger_still_answers(client, tmp_path, monkeypatch):
@@ -471,7 +472,7 @@ def test_scrubber_leaves_a_root_that_only_starts_a_word(url):
     assert _win_scrubber()(url) == url
 
 
-# -- fix round 2: model spend and Tavily credits apart ---------------------------------------------
+# -- model spend and web searches, never notional search dollars ---------------------------------
 
 GROUPS = [
     {"role": "watch", "model": "nvidia/Nemotron-3.5-Super-VL", "calls": 1, "cost_usd": 0.004},
@@ -479,30 +480,52 @@ GROUPS = [
     {"role": "research", "model": "tavily-search", "calls": 4, "cost_usd": 0.032},
     {"role": "research", "model": "tavily-extract", "calls": 1, "cost_usd": 0.008},
 ]
+ENGINE_SUMMARY = {
+    "cost_usd": 0.0127,
+    "spend": {
+        "model_usd_this_run": 0.0127,
+        "tavily_searches_this_run": 5,
+        "tavily_notional_usd_this_run": 0.04,
+        "model_usd_all_runs": 0.02,
+    },
+    "calls_by_role_model": GROUPS,
+}
 
 
-def test_spend_splits_models_from_tavily_credits():
-    from lull.api.spend import split
+def test_public_summary_has_model_spend_and_searches_only():
+    from lull.api.spend import public_summary
 
-    assert split(GROUPS) == {"models_usd": 0.0127, "tavily_credits": 5.0}
-    assert split(None) is None and split("nope") is None
-    assert split([]) == {"models_usd": 0.0, "tavily_credits": 0.0}
+    out = public_summary(ENGINE_SUMMARY)
+    assert out["spend"] == {"model_usd": 0.0127, "model_usd_all_runs": 0.02, "searches": 5}
+    assert out["cost_usd"] == 0.0127
+    searches = [g for g in out["calls_by_role_model"] if g["model"].startswith("tavily")]
+    assert [g.get("searches") for g in searches] == [4, 1]
+    assert all("cost_usd" not in g for g in searches)
+    assert "notional" not in json.dumps(out)
+    # a summary from before searches were counted: the split comes from the calls
+    old = public_summary({"cost_usd": 0.0527, "calls_by_role_model": GROUPS})
+    assert old["spend"] == {"model_usd": 0.0127, "model_usd_all_runs": None, "searches": 5}
+    assert old["cost_usd"] == 0.0127
+    bare = public_summary({"cost_usd": 0.03})
+    assert bare["spend"] == {"model_usd": 0.03, "model_usd_all_runs": None, "searches": None}
 
 
-def test_runs_show_model_spend_and_tavily_credits_apart(client, data, make_run):
+def test_runs_show_model_spend_and_searches(client, data, make_run):
     d = make_run(data / "runs", "r1")
     manifest = json.loads((d / "manifest.json").read_text())
-    manifest["summary"]["calls_by_role_model"] = GROUPS
+    manifest["summary"].update(ENGINE_SUMMARY)
     (d / "manifest.json").write_text(json.dumps(manifest))
-    make_run(data / "runs", "r2")  # an older manifest without the calls: no split to show
-    items = {i["id"]: i for i in client.get("/v1/runs").json()}
-    assert items["r1"]["spend"] == {"models_usd": 0.0127, "tavily_credits": 5.0}
-    assert items["r2"]["spend"] is None
-    detail = client.get("/v1/runs/r1").json()
-    assert detail["manifest"]["summary"]["spend"] == {"models_usd": 0.0127, "tavily_credits": 5.0}
+    listed = client.get("/v1/runs")
+    item = next(i for i in listed.json() if i["id"] == "r1")
+    assert item["cost_usd"] == 0.0127
+    assert item["spend"] == {"model_usd": 0.0127, "model_usd_all_runs": 0.02, "searches": 5}
+    detail = client.get("/v1/runs/r1")
+    assert detail.json()["manifest"]["summary"]["spend"]["searches"] == 5
+    for text in (listed.text, detail.text):
+        assert "notional" not in text
 
 
-def test_health_shows_model_spend_and_tavily_credits_apart(client, tmp_path, monkeypatch):
+def test_health_shows_model_spend_against_the_caps_and_searches(client, tmp_path, monkeypatch):
     import lull.speech
     from lull.ledger import CallRecord, Ledger
 
@@ -510,14 +533,18 @@ def test_health_shows_model_spend_and_tavily_credits_apart(client, tmp_path, mon
     ledger = Ledger(tmp_path / "home" / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
     for provider, model, cost in (
         ("tokenfactory", "nvidia/Nemotron-3-Ultra-550b-a55b", 0.01),
-        ("tavily", "tavily-search", 0.016),
+        ("tavily", "tavily-search", 0.008),
+        ("tavily", "tavily-search", 0.008),
     ):
         ledger.record(
             CallRecord(run_id="r", stage="s", role="x", provider=provider, model=model,
                        tokens_in=1, tokens_cached=0, tokens_out=1, latency_s=0.1,
                        cost_usd=cost, ts=time.time())
         )  # fmt: skip
-    b = client.get("/v1/health").json()["budget"]
-    assert b["spent_today"] == pytest.approx(0.026)
-    assert b["models_today"] == pytest.approx(0.01) and b["models_total"] == pytest.approx(0.01)
-    assert b["tavily_credits_today"] == 2.0 and b["tavily_credits_total"] == 2.0
+    r = client.get("/v1/health")
+    b = r.json()["budget"]
+    assert b["spent_today"] == pytest.approx(0.01) and b["spent_total"] == pytest.approx(0.01)
+    assert b["searches_today"] == 2
+    assert b["searches_cap_run"] == 3 and b["searches_cap_day"] == 60
+    assert {"cap_run", "cap_day", "cap_total"} <= set(b)
+    assert "tavily" not in r.text and "notional" not in r.text

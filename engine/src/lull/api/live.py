@@ -55,7 +55,7 @@ from lull.api.clean import Scrubber, default_roots
 from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import HOUR, RateLimiter
 from lull.api.settings import ApiSettings
-from lull.api.spend import split as split_spend
+from lull.api.spend import public_summary
 from lull.api.store import PENDING, RunStore
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, Ledger
@@ -83,6 +83,7 @@ UPLOAD_DEADLINE_S = 60.0  # to receive and store the whole body
 FORM_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
 REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
 WALL_CLOCK_S = 600.0
+SEARCHES_PER_RUN = 3  # web searches a live run may make (the day cap is LULL_TAVILY_DAY)
 NOT_COUNTED = (402, 409, 503)  # refusals that are not the visitor's doing
 
 EVENTS, REQUEST, ERROR, MANIFEST, INPUT = (
@@ -334,9 +335,8 @@ class LiveRun:
         elif ev.type == "done":  # published by the executor once after_run has run
             data = {k: v for k, v in data.items() if k not in ("output", "manifest")}
             summary = data.get("summary")
-            if isinstance(summary, dict):  # model spend and Tavily credits apart
-                spend = split_spend(summary.get("calls_by_role_model"))
-                data["summary"] = {**summary, "spend": spend}
+            if isinstance(summary, dict):  # model spend and searches, nothing priced
+                data["summary"] = public_summary(summary)
             self.done = {**data, "run_id": self.run_id}
             return
         self.publish(ev.type, ev.stage, data, ev.ts)
@@ -519,7 +519,9 @@ class Live:
     @property
     def ledger(self) -> Ledger:
         if self._ledger is None:
-            self._ledger = Ledger(get_settings().lull_home / "ledger.db")
+            self._ledger = Ledger(
+                get_settings().lull_home / "ledger.db", tavily_run=SEARCHES_PER_RUN
+            )
         return self._ledger
 
     @ledger.setter

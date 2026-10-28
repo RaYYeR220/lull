@@ -265,7 +265,9 @@ def test_post_streams_run_then_engine_events_then_done(lc, live, data, tmp_path)
     assert events[4]["text"] == "A red screen." and events[4]["status"] == "verified"
     done = events[-1]
     assert done["run_id"] == run_id
-    assert done["summary"] == {"cost_usd": 0.01, "spend": None}  # no calls listed: no split
+    assert done["summary"]["spend"] == {
+        "model_usd": 0.01, "model_usd_all_runs": None, "searches": None
+    }  # fmt: skip
     assert "output" not in done and "manifest" not in done
     assert leaks(events, tmp_path) == []
 
@@ -1315,17 +1317,39 @@ def test_the_real_probe_reports_the_container(noaudio):
     assert not hasattr(clip, "SAFE_CONTAINERS") and not hasattr(clip, "ClipProbe")
 
 
-def test_done_shows_model_spend_and_tavily_credits_apart(lc, live):
+def test_done_shows_model_spend_and_searches(lc, live):
     groups = [
-        {"role": "plan", "model": "nvidia/Nemotron-3-Ultra-550b-a55b", "cost_usd": 0.01},
-        {"role": "research", "model": "tavily-search", "cost_usd": 0.024},
+        {
+            "role": "plan",
+            "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "calls": 1,
+            "cost_usd": 0.01,
+        },
+        {"role": "research", "model": "tavily-search", "calls": 3, "cost_usd": 0.024},
     ]
+    summary = {
+        "cost_usd": 0.01,
+        "spend": {"model_usd_this_run": 0.01, "tavily_searches_this_run": 3,
+                  "tavily_notional_usd_this_run": 0.024, "model_usd_all_runs": 0.01},
+        "calls_by_role_model": groups,
+    }  # fmt: skip
 
     def events(job):
-        summary = {"cost_usd": 0.034, "calls_by_role_model": groups}
         return [Event("done", None, {"run_id": job.run_id, "summary": summary}, 1.0)]
 
     live.runner = Script(events)
-    done = parse_sse(post(lc).text)[-1]
-    assert done["summary"]["spend"] == {"models_usd": 0.01, "tavily_credits": 3.0}
-    assert done["summary"]["cost_usd"] == 0.034
+    r = post(lc)
+    done = parse_sse(r.text)[-1]
+    assert done["summary"]["spend"] == {
+        "model_usd": 0.01,
+        "model_usd_all_runs": 0.01,
+        "searches": 3,
+    }
+    assert "notional" not in r.text
+
+
+def test_live_runs_make_at_most_3_web_searches(lc, live):
+    assert live.ledger.tavily_run == 3
+    post(lc)
+    (job,) = live.runner.jobs
+    assert job.ledger.tavily_run == 3
