@@ -315,11 +315,14 @@ test.describe("studio screens @screens", () => {
         localStorage.setItem("lull-edit-token:live-20261028-091500-f0c4e2", "tok-fork-e2e-9876543210");
         localStorage.setItem("lull-fork:live-20261028-091500-f0c4e2", JSON.stringify({ source: "ed90", made: Date.now() - 3600_000 }));
         localStorage.setItem("lull-edit-token:live-20261027-214500-a1b2c3", "tok-e2e-0123456789");
+        localStorage.setItem("lull-edit-token:live-20261028-111500-5a3e90", "tok-sample-e2e-1357924680");
       });
       await routeApi(page, `studio--screens${size.name}`);
       await shoot(page, "/studio/live-20261028-091500-f0c4e2?cue=c002", "studio-copy", size);
       await shoot(page, "/studio/live-20261027-214500-a1b2c3?cue=c003", "studio-live", size);
       await shoot(page, "/studio/ed90?cue=c005", "studio-recorded", size);
+      // a run of the sample whose own files lack speech and pauses: they are lent, and labelled
+      await shoot(page, "/studio/live-20261028-111500-5a3e90?cue=c002", "studio-sample", size);
       await page.goto("/studio", { waitUntil: "networkidle" });
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(300);

@@ -12,7 +12,19 @@ const MAX_SPILL = 12;
  * lit as the line fills them, and the words that don't fit spilling past its edge, hatched.
  * The words and seconds are said in text beside it (`id`, for the editor's description).
  */
-export function BudgetMeter({ budget: b, id, className }: { budget: Budget; id?: string; className?: string }) {
+export function BudgetMeter({
+  budget: b,
+  id,
+  className,
+  borrowed = false,
+}: {
+  budget: Budget;
+  id?: string;
+  className?: string;
+  /** The pause is the recorded run's, not this run's own: a guide, never a limit. */
+  borrowed?: boolean;
+}) {
+  const over = b.over && !borrowed;
   const seconds =
     b.seconds !== null
       ? b.room !== null
@@ -35,7 +47,7 @@ export function BudgetMeter({ budget: b, id, className }: { budget: Budget; id?:
             ))}
           </span>
           {spill ? (
-            <span className={styles.spill}>
+            <span className={cx(styles.spill, borrowed && styles.soft)}>
               {Array.from({ length: Math.min(spill, MAX_SPILL) }, (_, i) => (
                 <i key={i} />
               ))}
@@ -49,17 +61,19 @@ export function BudgetMeter({ budget: b, id, className }: { budget: Budget; id?:
           <span className={styles.barPause}>
             <i style={{ width: `${(Math.min(1, b.fill ?? 0) * 100).toFixed(1)}%` }} />
           </span>
-          {spill ? <span className={styles.barSpill} style={{ width: `${Math.min(40, (spill / b.capacity) * 100).toFixed(1)}%` }} /> : null}
+          {spill ? <span className={cx(styles.barSpill, borrowed && styles.soft)} style={{ width: `${Math.min(40, (spill / b.capacity) * 100).toFixed(1)}%` }} /> : null}
         </span>
       );
     }
   }
 
   return (
-    <div className={cx(styles.meter, b.over && styles.over, className)} data-over={b.over ? "" : undefined}>
+    <div className={cx(styles.meter, over && styles.over, className)} data-over={over ? "" : undefined}>
       {drawing}
       <p id={id} className={styles.words}>
-        <span className={styles.count}>{budgetWords(b)}</span>
+        <span className={styles.count}>
+          {borrowed && b.capacity !== null ? `${b.words} ${b.words === 1 ? "word" : "words"}; the recorded run’s pause here holds ${b.capacity}` : budgetWords(b)}
+        </span>
         {seconds ? <span className={styles.secs}>{seconds}</span> : null}
       </p>
     </div>

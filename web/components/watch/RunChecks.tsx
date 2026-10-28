@@ -6,7 +6,8 @@ type Check = { name: string; value: string; detail: string; tone?: "good" | "war
 
 /** Seconds of voiced standard lines over speech, worked out from the run's speech spans. */
 function overSpeech(run: RunData): { cues: number; seconds: number } | null {
-  if (!run.speech) return null;
+  // speech lent by the recorded run of the clip isn't this run's own measure
+  if (!run.speech || run.borrowed?.speech) return null;
   let cues = 0;
   let seconds = 0;
   for (const c of voicedLines(run)) {
@@ -52,7 +53,7 @@ export function RunChecks({ run }: { run: RunData }) {
     });
   }
   const placed = voiced.filter((c) => c.gap && c.end !== null);
-  if (run.gaps && voiced.length && placed.length === voiced.length) {
+  if (run.gaps && !run.borrowed?.gaps && voiced.length && placed.length === voiced.length) {
     const inside = placed.filter((c) => c.end! <= c.gap!.end + 1e-3).length;
     const used = new Set(placed.map((c) => c.gap!.id)).size;
     checks.push({

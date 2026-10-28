@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Glyph } from "@/components/ui/Glyph";
 import { StatusMark } from "@/components/ui/StatusMark";
 import { EvidenceFrame } from "@/components/watch/CueScript";
@@ -38,12 +38,13 @@ export function approveBlock(c: RunCue): string | null {
   return null;
 }
 
-function where(c: RunCue): string {
+function where(c: RunCue, borrowed: boolean): string {
   if (c.kind === "extended") {
     const hold = c.end !== null ? `, for ${(c.end - c.start).toFixed(2)} s` : "";
     return `The video holds at ${formatTimecode(c.start)}${hold} while this line is said.`;
   }
-  if (c.gap) return `In the pause from ${formatTimecode(c.gap.start)} to ${formatTimecode(c.gap.end)}, ${(c.gap.end - c.gap.start).toFixed(2)} s.`;
+  if (c.gap)
+    return `In ${borrowed ? "the recorded run’s" : "the"} pause from ${formatTimecode(c.gap.start)} to ${formatTimecode(c.gap.end)}, ${(c.gap.end - c.gap.start).toFixed(2)} s.`;
   return `Starts at ${formatTimecode(c.start)}.`;
 }
 
@@ -83,6 +84,8 @@ type Props = {
   locked?: boolean;
   outcome: Outcome | null;
   headingRef: RefObject<HTMLHeadingElement | null>;
+  /** The pauses are the recorded run's (the run's own files lack them): the budget is a guide. */
+  borrowedGaps?: boolean;
 };
 
 /**
@@ -90,12 +93,18 @@ type Props = {
  * frames said about each claim, the writing checks, who made it, and the actions: edit (the
  * API checks and voices it again), approve, hold.
  */
-export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave, onApprove, onHold, busy: own, locked = false, outcome, headingRef }: Props) {
+export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave, onApprove, onHold, busy: own, locked = false, outcome, headingRef, borrowedGaps = false }: Props) {
   // while another line is being changed, this one's actions wait as if busy
   const busy: Busy | "other" = own ?? (locked ? "other" : null);
   const ids = useId();
   const meterId = `${ids}-meter`;
   const [holding, setHolding] = useState(false);
+  const holdButton = useRef<HTMLButtonElement>(null);
+  /** Closes the hold form and gives the focus back to the button that opened it. */
+  const closeHold = () => {
+    setHolding(false);
+    holdButton.current?.focus();
+  };
   const [reason, setReason] = useState("");
   const [elapsed, setElapsed] = useState(0);
 
@@ -117,6 +126,8 @@ export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave
   const text = editable ? draft : cue.text;
   const b = budget(text, cue.kind === "standard" ? cue.gap : null, run.wps);
   const changed = editable && draft.trim() !== cue.text.trim();
+  // a borrowed pause is a guide: the server's own check decides whether the line fits
+  const over = b.over && !borrowedGaps;
   const empty = !draft.trim();
   const approve = approveBlock(cue);
   const findings = cue.findings ?? [];
@@ -138,7 +149,7 @@ export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave
         </h2>
         <StatusMark status={cue.status} variant="pill" />
       </div>
-      <p className={styles.where}>{where(cue)}</p>
+      <p className={styles.where}>{where(cue, borrowedGaps)}</p>
 
       <figure className={styles.frame}>
         <EvidenceFrame src={cue.frame} className={styles.img} empty="No frame was kept for this line." />
@@ -162,15 +173,19 @@ export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave
               rows={3}
               maxLength={1000}
               spellCheck
+              readOnly={busy === "edit"}
               aria-describedby={meterId}
-              aria-invalid={b.over || undefined}
+              aria-invalid={over || undefined}
             />
           </>
         ) : (
           <p className={styles.said}>{cue.text}</p>
         )}
-        <BudgetMeter budget={b} id={meterId} className={styles.meter} />
-        {b.over && editable ? (
+        <BudgetMeter budget={b} id={meterId} className={styles.meter} borrowed={borrowedGaps && b.capacity !== null} />
+        {borrowedGaps && b.capacity !== null ? (
+          <p className={styles.why}>This pause is from the recorded run of this clip; the server’s check decides whether the line fits.</p>
+        ) : null}
+        {over && editable ? (
           <p className={styles.warn}>Longer than its pause holds. The check may speed it up a little, or hold it if it still doesn’t fit.</p>
         ) : null}
       </div>
@@ -204,6 +219,7 @@ export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave
               {busy === "approve" ? "Approving…" : "Approve"}
             </button>
             <button
+              ref={holdButton}
               type="button"
               className={styles.btn}
               aria-expanded={holding}
@@ -230,7 +246,7 @@ export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave
                 e.preventDefault();
                 if (busy) return;
                 onHold(reason);
-                setHolding(false);
+                closeHold();
               }}
             >
               <label htmlFor={`${ids}-reason`} className={styles.label}>
@@ -241,7 +257,7 @@ export function CueDrawer({ run, cue, editable, readOnly, draft, onDraft, onSave
                 <button type="submit" className={styles.btn}>
                   Hold this line
                 </button>
-                <button type="button" className={styles.textBtn} onClick={() => setHolding(false)}>
+                <button type="button" className={styles.textBtn} onClick={closeHold}>
                   Cancel
                 </button>
               </div>

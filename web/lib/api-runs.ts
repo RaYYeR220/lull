@@ -85,8 +85,23 @@ export type RunManifest = {
   versions: { engine: string | null; models: string[]; tts: string | null };
 };
 
-/** GET /v1/runs/{id}: a published run. `dirty`: changed in the studio since it was last published. */
-export type RunDetail = { manifest: RunManifest; cues: ApiCue[]; extended: ApiCue[]; dirty: boolean };
+/**
+ * Where a run came from, as the API records it (request.json `source`): "sample" (one of its
+ * samples, `id` the sample's), "fork" (a copy, `id` the run it copies), "upload", "showcase".
+ */
+export type RunSource = { kind: string; id: string | null };
+
+/**
+ * GET /v1/runs/{id}: a published run. `dirty`: changed in the studio since it was last
+ * published. `source`: null when the API doesn't say.
+ */
+export type RunDetail = { manifest: RunManifest; cues: ApiCue[]; extended: ApiCue[]; dirty: boolean; source: RunSource | null };
+
+function readSource(raw: unknown): RunSource | null {
+  if (!isObj(raw)) return null;
+  const kind = str(raw.kind);
+  return kind ? { kind, id: str(raw.id) } : null;
+}
 
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 const bool = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
@@ -209,7 +224,13 @@ export function readDetail(raw: unknown): RunDetail | null {
   if (!isObj(raw) || !isObj(raw.manifest)) return null;
   const cues = isObj(raw.cues) ? raw.cues : {};
   const list = (v: unknown) => (Array.isArray(v) ? v.map(readCue).filter((c): c is ApiCue => c !== null) : []);
-  return { manifest: readManifest(raw.manifest), cues: list(cues.cues), extended: list(cues.extended), dirty: raw.dirty === true };
+  return {
+    manifest: readManifest(raw.manifest),
+    cues: list(cues.cues),
+    extended: list(cues.extended),
+    dirty: raw.dirty === true,
+    source: readSource(raw.source) ?? readSource(raw.manifest.source),
+  };
 }
 
 const runUrl = (id: string) => `${API_BASE}/v1/runs/${encodeURIComponent(id)}`;

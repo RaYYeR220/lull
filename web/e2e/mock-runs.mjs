@@ -19,8 +19,14 @@
 // running side by side never see each other's edits; a scenario named "<behaviour>--<suffix>"
 // behaves as <behaviour>:
 //   overlap   publishing is refused by the overlap gate (409, the first voiced line named)
-//   slow      edits take 1.5 s to be checked
+//   slow      edits take 1.5 s to be checked, a publish 1.5 s
 //   empty-list the run list is empty (a run that isn't published is then not there)
+//   reread500 once a change is made, reading the run back fails (500)
+//   refuse409 every change answers 409 without the API's own body (a proxy, an older API)
+//
+// Each detail says where the run came from (`source`, from its request.json): FORK_ID is a copy
+// of ed90, SAMPLE_ID a run of the sample ed90 whose cues.json predates speech and pauses,
+// UPLOAD_ED90_ID an upload that happens to be called ed90.mp4 (the same older cues.json).
 
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -34,6 +40,9 @@ export const RUN_TOKEN = "tok-e2e-0123456789";
 export const FORK_ID = "live-20261028-091500-f0c4e2";
 export const FORK_TOKEN = "tok-fork-e2e-9876543210";
 export const RUNNING_ID = "live-20261028-101500-0b5e11";
+export const SAMPLE_ID = "live-20261028-111500-5a3e90";
+export const SAMPLE_TOKEN = "tok-sample-e2e-1357924680";
+export const UPLOAD_ED90_ID = "live-20261028-112000-0ed90u";
 export const FAILED_ID = "live-20261028-100000-de4d00";
 
 const show = JSON.parse(readFileSync(path.join(SHOWCASE, "showcase.json"), "utf8"));
@@ -90,7 +99,13 @@ function ed90() {
     gaps,
     speech: show.speech.map(([start, end]) => ({ start, end })),
     clip: true,
+    source: { kind: "fork", id: "ed90" },
   };
+}
+
+/** A run of the recorded clip's cues whose cues.json, from an older engine, has no speech or pauses. */
+function older(source, name) {
+  return () => ({ ...ed90(), video: { name, duration: show.duration }, gaps: null, speech: null, clip: source.kind === "sample", source });
 }
 
 /** The live run of an uploaded clip (the try-it stream's run), with a held line and a reviewer warning. */
@@ -152,11 +167,18 @@ function upload() {
     gaps,
     speech,
     clip: false,
+    source: { kind: "upload", id: null },
   };
 }
 
-const BASE = { ed90: ed90, [FORK_ID]: ed90, [RUN_ID]: upload };
-const TOKENS = { [FORK_ID]: FORK_TOKEN, [RUN_ID]: RUN_TOKEN };
+const BASE = {
+  ed90: () => ({ ...ed90(), source: { kind: "showcase", id: "ed90" } }),
+  [FORK_ID]: ed90,
+  [RUN_ID]: upload,
+  [SAMPLE_ID]: older({ kind: "sample", id: "ed90" }, "ed90.mp4"),
+  [UPLOAD_ED90_ID]: older({ kind: "upload", id: null }, "ed90.mp4"),
+};
+const TOKENS = { [FORK_ID]: FORK_TOKEN, [RUN_ID]: RUN_TOKEN, [SAMPLE_ID]: SAMPLE_TOKEN };
 
 /** scenario|run id -> the run as that scenario has changed it */
 const state = new Map();
@@ -260,11 +282,13 @@ function detail(run) {
     },
     cues: { run_id: run.id, language: "en", cues: run.cues.map((c) => view(run, c)), extended: run.extended.map((c) => view(run, c)) },
     dirty: run.dirty,
+    source: run.source,
   };
 }
 
 function cuesFile(run) {
-  return { run_id: run.id, language: "en", cues: run.cues, extended: run.extended, gaps: run.gaps, speech: run.speech };
+  const timeline = run.gaps ? { gaps: run.gaps, speech: run.speech } : {};
+  return { run_id: run.id, language: "en", cues: run.cues, extended: run.extended, ...timeline };
 }
 
 const vttTime = (t) => {
@@ -398,6 +422,8 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
       row(FAILED_ID, "live", "lecture.mp4", "failed"),
       row(FORK_ID, "live", "ed90.mp4", "published"),
       row(RUN_ID, "live", "corridor-walk.mp4", "published"),
+      row(SAMPLE_ID, "live", "ed90.mp4", "published"),
+      row(UPLOAD_ED90_ID, "live", "ed90.mp4", "published"),
     ]);
   }
 
@@ -428,7 +454,10 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
     return refuse(ERR.no_run);
   }
 
-  if (req.method === "GET" && rest === "") return send(200, detail(run));
+  if (req.method === "GET" && rest === "") {
+    if (behaviour === "reread500" && (run.version || run.published)) return send(500, { detail: "Internal Server Error" });
+    return send(200, detail(run));
+  }
   const file = rest.match(/^\/files\/(.+)$/);
   if ((req.method === "GET" || req.method === "HEAD") && file) return serveFile(req, res, cors, run, decodeURIComponent(file[1]));
   const audio = rest.match(/^\/cues\/([\w-]+)\/audio$/);
@@ -446,6 +475,10 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
   if (id === "ed90") return refuse(ERR.read_only);
   const given = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
   if (given !== TOKENS[id]) return refuse(ERR.forbidden);
+  if (behaviour === "refuse409") {
+    await body(req);
+    return send(409, { detail: "Conflict" });
+  }
 
   if (rest === "/publish" && req.method === "POST") {
     await body(req);
@@ -454,7 +487,7 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
       const first = run.cues.find((c) => VOICED.has(c.status));
       return refuse(ERR.overlap, { cue_ids: [first?.id ?? "c001"] });
     }
-    await sleep(400);
+    await sleep(behaviour === "slow" ? 1500 : 400);
     run.dirty = false;
     run.published += 1;
     return send(200, detail(run));
@@ -506,7 +539,7 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
         tempo: 1.0,
       });
     }
-    const gap = run.gaps.find((g) => g.id === cue.gap_id);
+    const gap = run.gaps?.find((g) => g.id === cue.gap_id);
     const dur = Number((words(checked) / 3.0).toFixed(3));
     return replace({
       ...cue,

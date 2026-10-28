@@ -3,14 +3,16 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { API_BASE } from "../lib/api";
 import { readDetail, type RunDetail } from "../lib/api-runs";
-import { fitWords, fromApi, fromShowcase, sameClip, voicedLines } from "../lib/run-data";
+import { borrowedWords, clipOf, fitWords, fromApi, fromShowcase, voicedLines } from "../lib/run-data";
 import { parseShowcase } from "../lib/showcase";
 import { countWords } from "../lib/studio-budget";
 
 const raw = JSON.parse(readFileSync(path.join(__dirname, "..", "public", "showcase", "ed90", "showcase.json"), "utf8"));
 const show = parseShowcase(raw, "ed90");
 
-function detail(over: { name?: string; duration?: number; outputs?: string[]; cues?: unknown[]; extended?: unknown[] } = {}): RunDetail {
+function detail(
+  over: { name?: string; duration?: number; outputs?: string[]; cues?: unknown[]; extended?: unknown[]; source?: unknown } = {},
+): RunDetail {
   const outputs = Object.fromEntries((over.outputs ?? ["descriptions.vtt", "extended.vtt", "described-audio.m4a", "described.mp4", "cues.json"]).map((n) => [n, { bytes: 100 }]));
   return readDetail({
     manifest: {
@@ -38,8 +40,11 @@ function detail(over: { name?: string; duration?: number; outputs?: string[]; cu
       extended: over.extended ?? [{ id: "x001", gap_id: null, start: 0, text: "A room.", event_ids: [], status: "approved", claims: [], audio_dur: 1.2 }],
     },
     dirty: false,
+    ...(over.source !== undefined ? { source: over.source } : {}),
   })!;
 }
+
+const INDEX = [{ id: "ed90", title: "Elephants Dream", credit: "c", duration: 90, cues: 10 }];
 
 describe("a recorded run", () => {
   const run = fromShowcase(show);
@@ -116,27 +121,58 @@ describe("a run from the API", () => {
     expect(fitWords(run.cues[0]!, countWords)).toBe("video holds 1.20 s");
   });
 
-  it("a sample's clip borrows the recorded run's soundtrack and video, and its timeline only when the run lacks one", () => {
-    const d = detail({ name: "ed90.mp4", duration: 90 });
-    const entry = sameClip(d, [{ id: "ed90", title: "Elephants Dream", credit: "c", duration: 90, cues: 10 }]);
-    expect(entry?.id).toBe("ed90");
-    expect(sameClip(detail({ name: "ed90.mp4", duration: 42 }), [{ id: "ed90", title: "E", credit: "c", duration: 90, cues: 10 }])).toBeNull();
+  it("borrows from a recorded run only when the API says the run is that sample, or a copy of that recorded run", () => {
+    expect(clipOf(detail({ name: "x.mp4", source: { kind: "sample", id: "ed90" } }), INDEX)?.id).toBe("ed90");
+    expect(clipOf(detail({ source: { kind: "fork", id: "ed90" } }), INDEX)?.id).toBe("ed90");
+    // never by the file's name: an upload called ed90.mp4 is an upload
+    expect(clipOf(detail({ name: "ed90.mp4", duration: 90, source: { kind: "upload", id: null } }), INDEX)).toBeNull();
+    expect(clipOf(detail({ name: "ed90.mp4", duration: 90 }), INDEX)).toBeNull();
+    expect(clipOf(detail({ source: { kind: "sample", id: "other" } }), INDEX)).toBeNull();
+    expect(clipOf(detail({ source: { kind: "fork", id: "live-20261027-214500-a1b2c3" } }), INDEX)).toBeNull();
+  });
 
+  it("a sample run lends the recorded run's soundtrack and video, and speech and pauses only where its own files lack them", () => {
+    const d = detail({ name: "ed90.mp4", duration: 90, source: { kind: "sample", id: "ed90" } });
     const lent = fromApi("r1", d, { clip: show, timeline: { speech: null, gaps: null } });
     expect(lent.title).toBe("Elephants Dream");
     expect(lent.loudness).toHaveLength(900);
     expect(lent.gaps).toHaveLength(13);
-    expect(lent.borrowed).toEqual({ from: "ed90", title: "Elephants Dream", timeline: true });
+    expect(lent.borrowed).toEqual({ from: "ed90", title: "Elephants Dream", loudness: true, speech: true, gaps: true });
     expect(lent.media?.src).toBe("/showcase/ed90/video.mp4");
     expect(lent.media?.sound).toBeUndefined();
 
     const own = fromApi("r1", d, { clip: show, timeline: { speech: [[0, 1]], gaps: [{ id: "g1", start: 1.8, end: 6, capacity: 12 }] } });
     expect(own.gaps).toEqual([{ id: "g1", start: 1.8, end: 6, capacity: 12 }]);
-    expect(own.borrowed?.timeline).toBe(false);
+    expect(own.borrowed).toEqual({ from: "ed90", title: "Elephants Dream", loudness: true, speech: false, gaps: false });
+
+    const speechOnly = fromApi("r1", d, { clip: show, timeline: { speech: null, gaps: [{ id: "g1", start: 1.8, end: 6, capacity: 12 }] } });
+    expect(speechOnly.borrowed).toMatchObject({ speech: true, gaps: false });
+  });
+
+  it("says exactly which pieces were lent", () => {
+    const b = { from: "ed90", title: "Elephants Dream" };
+    expect(borrowedWords({ ...b, loudness: true, speech: false, gaps: false })).toBe("The soundtrack levels are from the recorded run of this clip, Elephants Dream.");
+    expect(borrowedWords({ ...b, loudness: true, speech: true, gaps: false })).toBe(
+      "The soundtrack levels and speech are from the recorded run of this clip, Elephants Dream; this run’s own files don’t include its speech.",
+    );
+    expect(borrowedWords({ ...b, loudness: true, speech: true, gaps: true })).toBe(
+      "The soundtrack levels, speech and pauses are from the recorded run of this clip, Elephants Dream; this run’s own files don’t include its speech or pauses.",
+    );
+    expect(borrowedWords({ ...b, loudness: true, speech: false, gaps: true })).toBe(
+      "The soundtrack levels and pauses are from the recorded run of this clip, Elephants Dream; this run’s own files don’t include its pauses.",
+    );
+  });
+
+  it("a line's fit names a borrowed pause as the recorded run's", () => {
+    const d = detail({ name: "ed90.mp4", duration: 90, source: { kind: "sample", id: "ed90" }, cues: [{ id: "c001", gap_id: "g001", start: 9, text: "Two people walk on.", event_ids: [], status: "verified", claims: [], audio_dur: 2 }], extended: [] });
+    const lent = fromApi("r1", d, { clip: show, timeline: { speech: null, gaps: null } });
+    expect(fitWords(lent.cues[0]!, countWords)).toBe("4 of 19 words");
+    expect(fitWords(lent.cues[0]!, countWords, { borrowed: true })).toBe("4 of 19 words, in the recorded run’s pause");
   });
 
   it("the recorded run opened through the API keeps the site's media and files", () => {
     const run = fromApi("ed90", detail({ name: "ed90.mp4", duration: 90 }), { clip: show, clipFiles: fromShowcase(show).files });
+    expect(run.loudness).toHaveLength(900);
     expect(run.media?.src).toBe("/showcase/ed90/video.mp4");
     expect(run.files[0]?.href).toBe("/showcase/ed90/descriptions.vtt");
     expect(run.borrowed).toBeNull();

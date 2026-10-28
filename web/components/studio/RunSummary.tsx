@@ -14,9 +14,9 @@ function tone(status: string): "good" | "warn" | "none" {
   return "none";
 }
 
-function Wcag({ rows }: { rows: WcagStatus[] }) {
+function Wcag({ rows, stale }: { rows: WcagStatus[]; stale: boolean }) {
   return (
-    <ul className={styles.wcag} aria-label="WCAG statuses">
+    <ul className={styles.wcag} aria-label="WCAG statuses" data-stale={stale ? "" : undefined}>
       {rows.map((w) => (
         <li key={w.criterion} data-tone={tone(w.status)}>
           <span className={styles.crit}>
@@ -47,7 +47,8 @@ export function RunSummary({ run }: { run: RunData }) {
   const held = run.cues.filter((c) => c.status === "held").length;
   if (!s) return null;
   const cov = s.coverage;
-  const facts: { name: string; value: string; detail: string; tone?: "good" | "warn" }[] = [];
+  const stale = run.dirty === true;
+  const facts: { name: string; value: string; detail: string; tone?: "good" | "warn"; stale?: boolean }[] = [];
   if (cov && cov.important !== null && cov.described !== null) {
     const withExt = cov.describedWithExtended !== null && cov.describedWithExtended !== cov.described;
     facts.push({
@@ -57,6 +58,7 @@ export function RunSummary({ run }: { run: RunData }) {
         `Important moments described${cov.ratio !== null ? ` (${pct(cov.ratio)})` : ""}` +
         (withExt ? `; ${cov.describedWithExtended} with the extended lines.` : "."),
       tone: cov.described >= cov.important ? "good" : "warn",
+      stale,
     });
   }
   facts.push({
@@ -73,7 +75,7 @@ export function RunSummary({ run }: { run: RunData }) {
       </h2>
       <dl className={styles.facts}>
         {facts.map((f) => (
-          <div key={f.name} className={styles.fact} data-tone={f.tone}>
+          <div key={f.name} className={styles.fact} data-tone={f.tone} data-stale={f.stale ? "" : undefined}>
             <dt>{f.name}</dt>
             <dd className={styles.factValue}>{f.value}</dd>
             <dd className={styles.factDetail}>{f.detail}</dd>
@@ -103,10 +105,13 @@ export function RunSummary({ run }: { run: RunData }) {
       {s.wcag?.length ? (
         <div className={cx(styles.fact, styles.wcagBlock)}>
           <p className={styles.wcagHead}>WCAG audio description</p>
-          <Wcag rows={s.wcag} />
+          {/* said before what it qualifies */}
+          {stale ? <p className={styles.stale}>Coverage and WCAG are as of the last publish. Publish to bring your changes into them.</p> : null}
+          <Wcag rows={s.wcag} stale={stale} />
         </div>
+      ) : stale ? (
+        <p className={styles.stale}>Coverage is as of the last publish. Publish to bring your changes into it.</p>
       ) : null}
-      {run.dirty ? <p className={styles.stale}>Coverage and WCAG are as of the last publish. Publish to bring your changes into them.</p> : null}
     </section>
   );
 }

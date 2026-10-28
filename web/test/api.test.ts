@@ -356,6 +356,16 @@ describe("studio refusals", () => {
     // a 403 without the API's body is still a refusal to change the run
     expect((await toApiError(new Response("nope", { status: 403 }))).code).toBe("forbidden");
   });
+
+  it("keeps apart what the API said and what the client guessed from the status", async () => {
+    const said = await toApiError(json(409, { error: "busy", message: "This run is still being described." }));
+    expect(said).toMatchObject({ apiCode: "busy", said: "This run is still being described." });
+    const guessed = await toApiError(json(409, { detail: "Conflict" }));
+    // not the API's own refusal: the code is a guess, its words are whatever the server said
+    expect(guessed).toMatchObject({ code: "busy", apiCode: null, said: "Conflict" });
+    const unknown = await toApiError(json(403, { error: "csrf", message: "Origin not allowed." }));
+    expect(unknown).toMatchObject({ code: "forbidden", apiCode: "csrf", said: "Origin not allowed." });
+  });
 });
 
 describe("forkRun", () => {

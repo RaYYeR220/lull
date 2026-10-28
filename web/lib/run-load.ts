@@ -5,7 +5,7 @@
  */
 import { isAbort } from "./api";
 import { getCueFileTimeline, lookupRun, type RunDetail } from "./api-runs";
-import { fromApi, sameClip, type RunData, type RunFile } from "./run-data";
+import { clipOf, fromApi, type RunData, type RunFile } from "./run-data";
 import { LAYOUT, parseShowcase, showcaseUrl } from "./showcase-schema.mjs";
 import type { Showcase, ShowcaseIndexEntry } from "./showcase-schema.mjs";
 
@@ -40,7 +40,8 @@ type LoadOpts = {
 
 /** A published run's data, ready for the pages; built again from a fresh detail by `build`. */
 export async function buildRun(id: string, detail: RunDetail, opts: LoadOpts): Promise<RunData> {
-  const entry = sameClip(detail, opts.index) ?? (opts.clip && opts.clip.id === id ? opts.clip : null);
+  // the recorded run itself (opened through the API), or the one the API says this run is of
+  const entry = opts.clip && opts.clip.id === id ? opts.clip : clipOf(detail, opts.index);
   const [timeline, clip] = await Promise.all([
     "cues.json" in detail.manifest.outputs ? getCueFileTimeline(id, opts.signal) : Promise.resolve({ speech: null, gaps: null }),
     entry ? (opts.clip?.id === entry.id ? Promise.resolve(opts.clip) : fetchShowcase(entry.id, opts.signal)) : Promise.resolve(null),

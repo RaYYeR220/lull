@@ -9,7 +9,7 @@ import { Glyph } from "@/components/ui/Glyph";
 import { MetaList } from "@/components/ui/MetaList";
 import { STATUS } from "@/components/ui/StatusMark";
 import { ForkDoor } from "@/components/watch/ForkDoor";
-import { ApiError, FORK_TTL_MS, isAbort, readEditToken, readForkRecord, type CueStatus, type ForkRecord } from "@/lib/api";
+import { API_REFUSALS, ApiError, FORK_TTL_MS, isAbort, readEditToken, readForkRecord, type CueStatus, type ForkRecord } from "@/lib/api";
 import { approveCue, editCue, getRun, holdCue, publishRun, type RunDetail } from "@/lib/api-runs";
 import { cx } from "@/lib/cx";
 import { followHref, runHref, watchHref } from "@/lib/routes";
@@ -144,12 +144,16 @@ export function StudioApp({ id, initial, clip, index }: Props) {
     return () => ctl.current?.abort();
   }, [id, initial, fetchRun]);
 
-  /** The run as the API has it now (after a change: its cues, takes and dirty flag). */
-  const refresh = useCallback(async () => {
+  /**
+   * The run as the API has it now (after a change: its cues, takes and dirty flag). False when
+   * it can't be read back: the change went through, but the page would only show stale data.
+   */
+  const refresh = useCallback(async (): Promise<boolean> => {
     try {
       setRun(await build(await getRun(id)));
+      return true;
     } catch {
-      // the change itself went through; the page shows it on the next load
+      return false;
     }
   }, [id, build]);
 
@@ -171,70 +175,82 @@ export function StudioApp({ id, initial, clip, index }: Props) {
   const openDrawer = useCallback(() => drawerHeading.current?.focus(), []);
 
   const say = (cueId: string, o: Outcome) => setOutcomes((all) => ({ ...all, [cueId]: o }));
-  const refused = (e: unknown): Outcome =>
-    e instanceof ApiError
-      ? { tone: "refused", text: e.message, findings: e.detail.findings, checked: e.detail.text }
-      : { tone: "refused", text: "The change couldn’t be made. Try again." };
+  const refused = (e: unknown): Outcome => {
+    if (!(e instanceof ApiError)) return { tone: "refused", text: "The change couldn’t be made. Try again." };
+    // the API's own refusals carry their words; anything else is the server's, not a guess
+    const own = e.apiCode !== null && API_REFUSALS.has(e.apiCode);
+    if (!own && e.status >= 400 && e.status < 500)
+      return { tone: "refused", text: `The server refused this change: ${(e.said ?? `it answered ${e.status}`).replace(/[.\s]+$/, "")}.` };
+    return { tone: "refused", text: e.message, findings: e.detail.findings, checked: e.detail.text };
+  };
+  /** Said when a change went through but the run couldn't be read back. */
+  const STALE: Outcome = { tone: "held", text: "Saved, but the page couldn’t reload the run. Reload to see its current state." };
 
-  const save = async () => {
-    if (!cue || !token || busy || publishing) return;
-    const text = drafts[cue.id] ?? cue.text;
-    setBusy({ id: cue.id, action: "edit" });
+  /** One change at a time, even from a double press (state alone updates too late for that). */
+  const inFlight = useRef(false);
+  const change = async (cueId: string, action: Exclude<Busy, null>, work: () => Promise<Outcome | null>) => {
+    if (inFlight.current || !token) return;
+    inFlight.current = true;
+    setBusy({ id: cueId, action });
     setPublish({ kind: "idle" });
     try {
-      const done = await editCue(id, cue.id, text, token);
+      const said = await work();
+      if (said) say(cueId, said);
+    } catch (e) {
+      say(cueId, refused(e));
+    } finally {
+      inFlight.current = false;
+      setBusy(null);
+    }
+  };
+
+  const save = () => {
+    if (!cue || !token || busy || publishing) return;
+    const c = cue;
+    const text = drafts[c.id] ?? c.text;
+    return change(c.id, "edit", async () => {
+      const done = await editCue(id, c.id, text, token);
       versions.current.audio += 1;
-      await refresh();
+      if (!(await refresh())) return STALE; // the draft stays until the run is read back
+      // the draft goes only when it is still the text that was saved
       setDrafts((d) => {
+        if (d[c.id] !== text) return d;
         const next = { ...d };
-        delete next[cue.id];
+        delete next[c.id];
         return next;
       });
-      say(
-        cue.id,
-        done.status === "held"
-          ? { tone: "held", text: `${cue.label} is held: ${done.note ?? "it didn’t pass the check"}. Edit it again, or leave it held.` }
-          : { tone: "good", text: `${cue.label} is edited: it passed the frame check and was voiced again.${done.note ? ` ${done.note.charAt(0).toUpperCase()}${done.note.slice(1)}.` : ""}` },
-      );
-    } catch (e) {
-      say(cue.id, refused(e));
-    } finally {
-      setBusy(null);
-    }
+      return done.status === "held"
+        ? { tone: "held", text: `${c.label} is held: ${done.note ?? "it didn’t pass the check"}. Edit it again, or leave it held.` }
+        : {
+            tone: "good",
+            text: `${c.label} is edited: it passed the frame check and was voiced again.${done.note ? ` ${done.note.charAt(0).toUpperCase()}${done.note.slice(1)}.` : ""}`,
+          };
+    });
   };
 
-  const approve = async () => {
+  const approve = () => {
     if (!cue || !token || busy || publishing) return;
-    setBusy({ id: cue.id, action: "approve" });
-    setPublish({ kind: "idle" });
-    try {
-      await approveCue(id, cue.id, token);
-      await refresh();
-      say(cue.id, { tone: "good", text: `${cue.label} is approved.` });
-    } catch (e) {
-      say(cue.id, refused(e));
-    } finally {
-      setBusy(null);
-    }
+    const c = cue;
+    return change(c.id, "approve", async () => {
+      await approveCue(id, c.id, token);
+      if (!(await refresh())) return STALE;
+      return { tone: "good", text: `${c.label} is approved.` };
+    });
   };
 
-  const hold = async (reason: string) => {
+  const hold = (reason: string) => {
     if (!cue || !token || busy || publishing) return;
-    setBusy({ id: cue.id, action: "hold" });
-    setPublish({ kind: "idle" });
-    try {
-      const done = await holdCue(id, cue.id, token, reason);
-      await refresh();
-      say(cue.id, { tone: "held", text: `${cue.label} is held${done.note ? `: ${done.note}` : ""}. It won’t be voiced until it is edited.` });
-    } catch (e) {
-      say(cue.id, refused(e));
-    } finally {
-      setBusy(null);
-    }
+    const c = cue;
+    return change(c.id, "hold", async () => {
+      const done = await holdCue(id, c.id, token, reason);
+      if (!(await refresh())) return STALE;
+      return { tone: "held", text: `${c.label} is held${done.note ? `: ${done.note}` : ""}. It won’t be voiced until it is edited.` };
+    });
   };
 
   const doPublish = async () => {
-    if (!token || busy || publish.kind === "publishing" || !run?.dirty) return;
+    if (!token || busy || inFlight.current || publish.kind === "publishing" || !run?.dirty) return;
+    inFlight.current = true;
     setPublish({ kind: "publishing" });
     try {
       const detail = await publishRun(id, token);
@@ -242,8 +258,9 @@ export function StudioApp({ id, initial, clip, index }: Props) {
       setRun(await build(detail));
       setPublish({ kind: "done" });
     } catch (e) {
-      const err = e instanceof ApiError ? e : null;
-      setPublish({ kind: "refused", message: err?.message ?? "Publishing failed. Try again.", cueIds: err?.detail.cueIds ?? [] });
+      setPublish({ kind: "refused", message: refused(e).text, cueIds: e instanceof ApiError ? (e.detail.cueIds ?? []) : [] });
+    } finally {
+      inFlight.current = false;
     }
   };
 
@@ -485,6 +502,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
                 onSave={() => void save()}
                 onApprove={() => void approve()}
                 onHold={(r) => void hold(r)}
+                borrowedGaps={!!run.borrowed?.gaps}
                 busy={busy?.id === cue.id ? busy.action : null}
                 locked={(busy !== null && busy.id !== cue.id) || publishing}
                 outcome={outcomes[cue.id] ?? null}
@@ -497,7 +515,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
             )}
           </aside>
           <div className={styles.listArea}>
-            <CueList cues={run.cues} selected={selected} onChoose={chooseFromList} />
+            <CueList cues={run.cues} selected={selected} onChoose={chooseFromList} borrowedGaps={!!run.borrowed?.gaps} />
           </div>
         </div>
       </div>

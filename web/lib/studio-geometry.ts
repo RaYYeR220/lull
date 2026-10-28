@@ -82,3 +82,23 @@ export function waveHeights(loudness: readonly number[], half: number): number[]
     return Math.pow(a, 1.3) * half + 0.4;
   });
 }
+
+export type LabelSpot = { id: string; left: number; label: string; /** Drawn centred on `left` (an extended mark's). */ centred?: boolean };
+
+/**
+ * The labels that can show without running into each other, in time order: each label is
+ * about `charWidth` pixels a character, and shows only when it starts `gap` pixels past the end
+ * of the last one shown. The lines keep their full names for assistive tech either way.
+ */
+export function declutter(spots: readonly LabelSpot[], { charWidth, gap }: { charWidth: number; gap: number }): Set<string> {
+  const shown = new Set<string>();
+  let end = -Infinity;
+  for (const s of [...spots].sort((a, b) => a.left - b.left)) {
+    const w = s.label.length * charWidth;
+    const start = s.centred ? s.left - w / 2 : s.left;
+    if (start < end + gap) continue;
+    shown.add(s.id);
+    end = start + w;
+  }
+  return shown;
+}

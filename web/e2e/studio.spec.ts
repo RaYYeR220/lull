@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { waitReady } from "./player-fixtures";
-import { API, FORK_ID, FORK_TOKEN, RUN_ID, RUNNING_ID, apiDown, holdToken, own, routeApi } from "./try-api";
+import { API, FORK_ID, FORK_TOKEN, RUN_ID, RUNNING_ID, SAMPLE_ID, SAMPLE_TOKEN, UPLOAD_ED90_ID, apiDown, holdToken, own, routeApi } from "./try-api";
 
 /**
  * The studio, /studio/<id>, against the scripted API (e2e/mock-runs.mjs): a copy of the recorded
@@ -268,6 +268,162 @@ test.describe("the studio, editing a copy", () => {
         expect(scrollWidth, `${url} at ${viewport.width}px`).toBeLessThanOrEqual(clientWidth);
       }
     }
+  });
+});
+
+test.describe("the studio, when things go wrong or go twice", () => {
+  test("a change that is saved but can't be read back says so, and keeps the draft", async ({ page }) => {
+    await openCopy(page, "c002", "reread500");
+    await line(page).fill("The two people stand among hanging wires.");
+    await save(page).click();
+    await expect(outcome(page)).toHaveText("Saved, but the page couldn’t reload the run. Reload to see its current state.", { timeout: 15_000 });
+    // nothing claimed from the stale copy: the line still shows what was last read, and the draft stays
+    await expect(option(page, "c002")).toHaveAttribute("data-status", "verified");
+    await expect(line(page)).toHaveValue("The two people stand among hanging wires.");
+
+    await option(page, "c001").click();
+    await drawer(page).getByRole("button", { name: "Approve" }).click();
+    await expect(outcome(page)).toHaveText("Saved, but the page couldn’t reload the run. Reload to see its current state.", { timeout: 15_000 });
+    await expect(option(page, "c001")).toHaveAttribute("data-status", "verified");
+  });
+
+  test("a double press saves once and publishes once", async ({ page }) => {
+    const sent: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() === "PATCH" || (r.method() === "POST" && r.url().endsWith("/publish"))) sent.push(`${r.method()} ${r.url().replace(API, "")}`);
+    });
+    await openCopy(page, "c002", "slow");
+    await line(page).fill("The two people stand among hanging wires.");
+    // two presses in the same moment, before the page can re-render between them
+    const twice = (el: HTMLElement | SVGElement) => {
+      (el as HTMLElement).click();
+      (el as HTMLElement).click();
+    };
+    await save(page).evaluate(twice);
+    await expect(outcome(page)).toHaveText(/Cue 2 is edited/, { timeout: 15_000 });
+    await publish(page).evaluate(twice);
+    await expect(page.getByRole("status").filter({ hasText: /^Published/ })).toBeVisible({ timeout: 15_000 });
+    expect(sent).toEqual([`PATCH /v1/runs/${FORK_ID}/cues/c002`, `POST /v1/runs/${FORK_ID}/publish`]);
+  });
+
+  test("while a publish runs, the lines wait: no edit is sent", async ({ page }) => {
+    let patches = 0;
+    page.on("request", (r) => {
+      if (r.method() === "PATCH") patches += 1;
+    });
+    await openCopy(page, "c001", "slow");
+    await drawer(page).getByRole("button", { name: "Approve" }).click();
+    await expect(outcome(page)).toHaveText("Cue 1 is approved.", { timeout: 15_000 });
+    await option(page, "c002").click();
+    await line(page).fill("The two people stand among hanging wires.");
+    await publish(page).click();
+    await expect(publish(page)).toHaveText("Publishing…");
+    await expect(save(page)).toHaveAttribute("aria-disabled", "true");
+    // pressed anyway (Playwright would otherwise wait for it to be enabled again)
+    await save(page).click({ force: true });
+    await expect(page.getByRole("status").filter({ hasText: /^Published/ })).toBeVisible({ timeout: 15_000 });
+    expect(patches).toBe(0);
+  });
+
+  test("the text can't change while it is being checked", async ({ page }) => {
+    await openCopy(page, "c002", "slow");
+    await line(page).fill("The two people stand among hanging wires.");
+    await save(page).click();
+    await expect(line(page)).toHaveAttribute("readonly", "");
+    await expect(outcome(page)).toHaveText(/Cue 2 is edited/, { timeout: 15_000 });
+    await expect(line(page)).not.toHaveAttribute("readonly", "");
+  });
+
+  test("the hold form gives the focus back to Hold, whether held or cancelled", async ({ page }) => {
+    await openCopy(page, "c001");
+    const holdBtn = drawer(page).getByRole("button", { name: "Hold…" });
+    await holdBtn.click();
+    await drawer(page).getByRole("button", { name: "Cancel" }).click();
+    await expect(holdBtn).toBeFocused();
+    await holdBtn.click();
+    await drawer(page).getByRole("textbox", { name: "Why hold it? (optional)" }).fill("not sure about the coat");
+    await page.keyboard.press("Enter");
+    await expect(outcome(page)).toHaveText(/Cue 1 is held/, { timeout: 15_000 });
+    await expect(holdBtn).toBeFocused();
+  });
+
+  test("a refusal the API didn't word itself is shown as the server's, not guessed", async ({ page }) => {
+    await openCopy(page, "c001", "refuse409");
+    await drawer(page).getByRole("button", { name: "Approve" }).click();
+    await expect(outcome(page)).toHaveText("The server refused this change: Conflict.", { timeout: 15_000 });
+  });
+
+  test("after a change, coverage and WCAG are marked as the last publish's", async ({ page }) => {
+    await openCopy(page, "c001");
+    const wcag = page.getByRole("list", { name: "WCAG statuses" });
+    await expect(wcag).not.toHaveAttribute("data-stale", "");
+    await drawer(page).getByRole("button", { name: "Approve" }).click();
+    await expect(outcome(page)).toHaveText("Cue 1 is approved.", { timeout: 15_000 });
+    await expect(wcag).toHaveAttribute("data-stale", "");
+    await expect(page.getByText("Coverage and WCAG are as of the last publish. Publish to bring your changes into them.")).toBeVisible();
+    // the note sits above what it qualifies
+    const note = await page.getByText(/as of the last publish/).boundingBox();
+    const list = await wcag.boundingBox();
+    expect(note!.y).toBeLessThan(list!.y);
+  });
+
+  test("the whole clip is measured again when the window changes size", async ({ page }) => {
+    const whole = page.getByRole("button", { name: "Whole clip" });
+    const fits = () =>
+      page.getByRole("region", { name: "Timeline" }).evaluate((el) => {
+        const sc = el.querySelector("[class*='scroller']") as HTMLElement;
+        return sc.scrollWidth <= sc.clientWidth + 1;
+      });
+    await openCopy(page, "c001");
+    await expect(whole).toBeDisabled(); // opened at the whole clip
+    await expect.poll(fits).toBe(true);
+    // narrower: the whole clip would be too small to read, so it opens at a readable zoom...
+    await page.setViewportSize({ width: 1240, height: 900 });
+    await expect(whole).toBeEnabled();
+    // ...and "Whole clip" knows the new width
+    await whole.click();
+    await expect(whole).toBeDisabled();
+    await expect.poll(fits).toBe(true);
+    // wider again: back at the whole clip, it follows the width
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(whole).toBeDisabled();
+    await expect.poll(fits).toBe(true);
+  });
+});
+
+test.describe("the studio, borrowing only what the API vouches for", () => {
+  test("a run of the sample lends the recorded run's pauses, labelled where they are used, and never as a hard limit", async ({ page }) => {
+    await holdToken(page, SAMPLE_ID, SAMPLE_TOKEN);
+    await routeApi(page, own());
+    await page.goto(`/studio/${SAMPLE_ID}?cue=c002`);
+    await expect(drawer(page)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Elephants Dream");
+    await expect(
+      page.getByText(
+        "The soundtrack levels, speech and pauses are from the recorded run of this clip, Elephants Dream; this run’s own files don’t include its speech or pauses.",
+      ),
+    ).toBeVisible();
+    await expect(drawer(page).getByText("This pause is from the recorded run of this clip; the server’s check decides whether the line fits.")).toBeVisible();
+    await line(page).fill("The two people stand among hanging wires and cables, looking up at a tall shaft full of moving lights.");
+    await expect(line(page)).toHaveAccessibleDescription(/19 words; the recorded run’s pause here holds 15/);
+    await expect(line(page)).not.toHaveAttribute("aria-invalid", "true");
+    await expect(drawer(page).getByText(/Longer than its pause holds/)).toHaveCount(0);
+    await expect(page.locator('[data-row="c002"]')).toContainText("in the recorded run’s pause");
+  });
+
+  test("an upload that is merely called ed90.mp4 borrows nothing", async ({ page }) => {
+    await routeApi(page, own());
+    await page.goto(`/studio/${UPLOAD_ED90_ID}?cue=c002`);
+    await expect(drawer(page)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("ed90.mp4");
+    await expect(page.locator("lull-player")).toHaveAttribute("src", `${API}/v1/runs/${UPLOAD_ED90_ID}/files/described.mp4`);
+    await expect(page.locator("lull-player")).toHaveAttribute("sound", "described");
+    await expect(page.locator("[class*='h_wave'], [class*='h_gaps'], [class*='h_speech']")).toHaveCount(0);
+    await expect(page.getByText(/from the recorded run of this clip/)).toHaveCount(0);
+    await expect(drawer(page).getByText("7 words", { exact: true })).toBeVisible();
+    await page.goto(`/run/${UPLOAD_ED90_ID}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("ed90.mp4");
+    await expect(page.locator("lull-player")).toHaveAttribute("sound", "described");
   });
 });
 

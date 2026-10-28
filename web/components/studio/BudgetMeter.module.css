@@ -9,6 +9,8 @@
 /* words past the pause's edge */
 .spill{display:flex;flex-wrap:wrap;gap:2px;padding:3px 0}
 .spill i{width:7px;height:8px;background:var(--hatch-held)}
+/* past a borrowed pause: only a guide, so no warning colour */
+.soft i,.barSpill.soft{background:var(--night-5)}
 
 .bar{display:flex;align-items:center;gap:4px;height:14px}
 .barPause{position:relative;flex:1;height:8px;border:1px solid rgb(var(--lamp-rgb) / .42);background:var(--night-4)}

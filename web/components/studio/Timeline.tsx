@@ -5,8 +5,8 @@ import type { PlayerElement } from "@/components/player/Player";
 import { Glyph } from "@/components/ui/Glyph";
 import { STATUS } from "@/components/ui/StatusMark";
 import { cx } from "@/lib/cx";
-import type { RunCue, RunData } from "@/lib/run-data";
-import { block, fitPps, neighbour, rulerTicks, scrollToShow, stepPps, waveHeights, zoomScroll, MAX_PPS, MIN_PPS } from "@/lib/studio-geometry";
+import { borrowedWords, type RunCue, type RunData } from "@/lib/run-data";
+import { block, declutter, fitPps, neighbour, rulerTicks, scrollToShow, stepPps, waveHeights, zoomScroll, MAX_PPS, MIN_PPS } from "@/lib/studio-geometry";
 import { formatTimecode } from "@/lib/timecode";
 import styles from "./Timeline.module.css";
 
@@ -17,6 +17,8 @@ const LEAD = 14;
 const TAIL = 28;
 /** How often the playhead follows the player. */
 const TICK_MS = 100;
+/** The cue labels' type: about 7 px a character, and 6 px clear between labels. */
+const LABEL_ROOM = { charWidth: 7, gap: 6 };
 
 const LEGEND: { status: RunCue["status"]; word: string }[] = [
   { status: "verified", word: "Verified" },
@@ -99,17 +101,31 @@ export function Timeline({ run, selected, onSelect, onOpen, player, blocked }: P
   const T = Math.max(run.duration, 1);
   const order = useMemo(() => [...run.cues].sort((a, b) => a.start - b.start || a.id.localeCompare(b.id)), [run.cues]);
   const ids = useMemo(() => order.map((c) => c.id), [order]);
-  const standard = order.filter((c) => c.kind === "standard");
-  const extended = order.filter((c) => c.kind === "extended");
+  const standard = useMemo(() => order.filter((c) => c.kind === "standard"), [order]);
+  const extended = useMemo(() => order.filter((c) => c.kind === "extended"), [order]);
   const selectedCue = order.find((c) => c.id === selected) ?? null;
 
-  // open at the whole clip where it is readable, else at a readable zoom
+  /** Whether the person has zoomed: until then a new width brings back the opening zoom. */
+  const zoomed = useRef(false);
+
+  // open at the whole clip where it is readable, else at a readable zoom; again whenever the
+  // view's width changes, unless the person has chosen a zoom of their own
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const f = fitPps(el.clientWidth - LEAD - TAIL, T);
-    setFit(f);
-    setPps(Math.max(f, Math.min(READABLE_PPS, MAX_PPS)));
+    let width = -1;
+    const measure = () => {
+      if (el.clientWidth === width) return;
+      width = el.clientWidth;
+      const f = fitPps(width - LEAD - TAIL, T);
+      setFit(f);
+      if (!zoomed.current) setPps(Math.max(f, Math.min(READABLE_PPS, MAX_PPS)));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [T]);
 
   useLayoutEffect(() => {
@@ -135,9 +151,11 @@ export function Timeline({ run, selected, onSelect, onOpen, player, blocked }: P
       }
       // the clock's origin is LEAD pixels into the canvas
       pendingScroll.current = zoomScroll(el.scrollLeft, anchor - LEAD, from, next, el.clientWidth - LEAD - TAIL, T);
+      // back at the whole clip, the zoom follows the view's width again
+      zoomed.current = Math.abs(next - fit) > 1e-6;
       setPps(next);
     },
-    [selectedCue, T],
+    [selectedCue, T, fit],
   );
 
   // the selected line stays in view; after a key press it also takes the focus
@@ -205,6 +223,21 @@ export function Timeline({ run, selected, onSelect, onOpen, player, blocked }: P
   };
 
   const ticks = rulerTicks(T, pps);
+  // a short name under each line, where it doesn't run into the one before
+  const named = useMemo(
+    () =>
+      new Set([
+        ...declutter(
+          standard.map((c) => ({ id: c.id, left: c.start * pps, label: String(c.n) })),
+          LABEL_ROOM,
+        ),
+        ...declutter(
+          extended.map((c) => ({ id: c.id, left: c.start * pps, label: `E${c.n}`, centred: true })),
+          LABEL_ROOM,
+        ),
+      ]),
+    [standard, extended, pps],
+  );
   const width = LEAD + T * pps + TAIL;
   const option = (c: RunCue) => {
     const b = block(c.start, c.end, pps, c.kind === "extended" ? 18 : 14);
@@ -228,9 +261,11 @@ export function Timeline({ run, selected, onSelect, onOpen, player, blocked }: P
           <Glyph name={STATUS[c.status].glyph} size={10} />
         </div>
         {/* the short name under the block; the option's own name says it in full */}
-        <span className={cx(styles.cueName, mark && styles.markName, sel && styles.nameOn)} style={{ left: b.left }} aria-hidden="true">
-          {mark ? `E${c.n}` : c.n}
-        </span>
+        {named.has(c.id) || sel ? (
+          <span className={cx(styles.cueName, mark && styles.markName, sel && styles.nameOn)} style={{ left: b.left }} aria-hidden="true">
+            {mark ? `E${c.n}` : c.n}
+          </span>
+        ) : null}
       </Fragment>
     );
   };
@@ -362,13 +397,7 @@ export function Timeline({ run, selected, onSelect, onOpen, player, blocked }: P
           </li>
         ) : null}
       </ul>
-      {run.borrowed ? (
-        <p className={styles.borrowed}>
-          {run.borrowed.timeline
-            ? `The soundtrack, speech and pauses are from the recorded run of this clip, ${run.borrowed.title}: this run’s files don’t include them.`
-            : `The soundtrack levels are from the recorded run of this clip, ${run.borrowed.title}.`}
-        </p>
-      ) : null}
+      {run.borrowed ? <p className={styles.borrowed}>{borrowedWords(run.borrowed)}</p> : null}
     </section>
   );
 }

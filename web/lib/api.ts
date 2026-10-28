@@ -273,7 +273,8 @@ export type RefusalCode =
   | "unavailable"
   | "server";
 
-const API_CODES: ReadonlySet<string> = new Set([
+/** The refusal codes the API sends itself (live.py, studio.py). */
+export const API_REFUSALS: ReadonlySet<string> = new Set([
   "budget",
   "busy",
   "too_large",
@@ -355,6 +356,10 @@ export class ApiError extends Error {
   /** For a budget refusal: which cap ("run", "day", "total", "provider"). */
   readonly scope: string | null;
   readonly detail: RefusalDetail;
+  /** The `error` code the API sent, or null when the code was guessed from the status. */
+  readonly apiCode: string | null;
+  /** The server's own words, when it gave any (its message, else a plain detail string). */
+  readonly said: string | null;
 
   constructor(init: {
     status: number;
@@ -363,6 +368,8 @@ export class ApiError extends Error {
     retryAfter?: number | null;
     scope?: string | null;
     detail?: RefusalDetail;
+    apiCode?: string | null;
+    said?: string | null;
   }) {
     super(init.message || FALLBACK_MESSAGE[init.code]);
     this.name = "ApiError";
@@ -371,6 +378,8 @@ export class ApiError extends Error {
     this.retryAfter = init.retryAfter ?? null;
     this.scope = init.scope ?? null;
     this.detail = init.detail ?? {};
+    this.apiCode = init.apiCode ?? null;
+    this.said = init.said ?? null;
   }
 }
 
@@ -441,7 +450,7 @@ export async function toApiError(res: Response): Promise<ApiError> {
   }
   const b = isObj(body) ? body : {};
   const given = str(b.error);
-  const code = given && API_CODES.has(given) ? (given as RefusalCode) : codeForStatus(res.status);
+  const code = given && API_REFUSALS.has(given) ? (given as RefusalCode) : codeForStatus(res.status);
   const message = str(b.message)?.trim() || null;
   return new ApiError({
     status: res.status,
@@ -450,6 +459,8 @@ export async function toApiError(res: Response): Promise<ApiError> {
     retryAfter: parseRetryAfter(res.headers.get("retry-after")),
     scope: str(b.scope),
     detail: readDetail(b),
+    apiCode: given,
+    said: message ?? (str(b.detail)?.trim() || null),
   });
 }
 

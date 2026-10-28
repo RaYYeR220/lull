@@ -16,7 +16,7 @@ export function EvidenceFrame({ src, className, empty }: { src: string | null; c
   return <img className={className} src={src} alt="" width={854} height={480} loading="lazy" decoding="async" onError={() => setFailed(src)} />;
 }
 
-const Row = memo(function Row({ cue, current, onSeek }: { cue: RunCue; current: boolean; onSeek: (cue: RunCue) => void }) {
+const Row = memo(function Row({ cue, current, onSeek, borrowed }: { cue: RunCue; current: boolean; onSeek: (cue: RunCue) => void; borrowed: boolean }) {
   return (
     <li className={cx(styles.line, current && styles.current)} data-line={cue.id} data-status={cue.status}>
       <button type="button" className={styles.lineBtn} aria-current={current ? "true" : undefined} onClick={() => onSeek(cue)}>
@@ -28,7 +28,7 @@ const Row = memo(function Row({ cue, current, onSeek }: { cue: RunCue; current: 
         <span className={styles.said}>{cue.text}</span>
         <span className={styles.verdict}>
           <StatusMark status={cue.status} />
-          <span className={styles.fit}>{fitWords(cue, countWords)}</span>
+          <span className={styles.fit}>{fitWords(cue, countWords, { borrowed })}</span>
         </span>
       </button>
     </li>
@@ -44,11 +44,14 @@ export const CueScript = memo(function CueScript({
   active,
   onSeek,
   className,
+  borrowedGaps = false,
 }: {
   cues: RunCue[];
   active: string | null;
   onSeek: (cue: RunCue) => void;
   className?: string;
+  /** The pauses are the recorded run's: each line's fit says so. */
+  borrowedGaps?: boolean;
 }) {
   return (
     <section aria-labelledby="script-title" aria-describedby="script-how" className={cx(styles.script, className)}>
@@ -62,7 +65,7 @@ export const CueScript = memo(function CueScript({
       </div>
       <ol className={styles.lines}>
         {cues.map((c) => (
-          <Row key={c.id} cue={c} current={c.id === active} onSeek={onSeek} />
+          <Row key={c.id} cue={c} current={c.id === active} onSeek={onSeek} borrowed={borrowedGaps} />
         ))}
       </ol>
     </section>

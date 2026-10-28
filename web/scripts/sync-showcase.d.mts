@@ -7,3 +7,4 @@ export declare class SyncError extends Error {
 }
 export declare function syncShowcase(opts: { src: string; id: string; dest?: string }): { files: string[]; index: ShowcaseIndexEntry[] };
 export declare function writeIndex(dest?: string): ShowcaseIndexEntry[];
+export declare function isInside(outer: string, inner: string): boolean;

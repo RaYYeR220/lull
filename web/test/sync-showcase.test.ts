@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { syncShowcase, writeIndex } from "../scripts/sync-showcase.mjs";
+import { isInside, syncShowcase, writeIndex } from "../scripts/sync-showcase.mjs";
 
 const SCRIPT = path.join(__dirname, "..", "scripts", "sync-showcase.mjs");
 const REAL = JSON.parse(readFileSync(path.join(__dirname, "..", "public", "showcase", "ed90", "showcase.json"), "utf8")) as Record<string, unknown>;
@@ -116,6 +116,17 @@ describe("sync-showcase", () => {
     symlinkSync(elsewhere, path.join(src, "audio"), "junction");
     expect(() => syncShowcase({ src, id: "ed90", dest })).toThrow(/audio\/\w+\.m4a resolves outside .*linked through a linked folder/);
     expect(readFileSync(path.join(dest, "ed90", "audio", "c001.m4a"))).toEqual(before);
+  });
+
+  it("tells inside from outside by whole path segments", () => {
+    const root = path.join(work, "export");
+    expect(isInside(root, root)).toBe(true);
+    expect(isInside(root, path.join(root, "audio", "c001.m4a"))).toBe(true);
+    // a folder whose name merely starts with two dots is still inside
+    expect(isInside(root, path.join(root, "..cache", "c001.m4a"))).toBe(true);
+    expect(isInside(root, path.join(work, "export-2", "c001.m4a"))).toBe(false);
+    expect(isInside(root, path.join(work, "c001.m4a"))).toBe(false);
+    expect(isInside(root, work)).toBe(false);
   });
 
   it("refuses an interim placeholder", () => {

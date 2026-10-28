@@ -175,6 +175,7 @@ export function LiveRun({ id, index }: { id: string; index: readonly ShowcaseInd
           edit={<EditBlock data={state.run} owner={owner} />}
           files={<RunFiles files={state.run.files} note="Served by the live service." />}
           checks={<RunChecks run={state.run} />}
+          borrowedGaps={!!state.run.borrowed?.gaps}
         />
       ) : state.kind === "running" ? (
         <Notice

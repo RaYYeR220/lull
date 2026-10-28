@@ -12,6 +12,18 @@ import { inferWps } from "./studio-budget";
 
 export type RunGap = { id: string; start: number; end: number; capacity: number };
 
+/** The pieces a run took from the recorded run of its clip. */
+export type Borrowed = { from: string; title: string; loudness: boolean; speech: boolean; gaps: boolean };
+
+/** Exactly which pieces were lent, in words: "The soundtrack levels and speech are from …". */
+export function borrowedWords(b: Borrowed): string {
+  const lent = [b.loudness && "soundtrack levels", b.speech && "speech", b.gaps && "pauses"].filter((x): x is string => !!x);
+  const list = lent.length > 1 ? `${lent.slice(0, -1).join(", ")} and ${lent[lent.length - 1]}` : (lent[0] ?? "");
+  const missing = [b.speech && "speech", b.gaps && "pauses"].filter((x): x is string => !!x);
+  const why = missing.length ? `; this run’s own files don’t include its ${missing.join(" or ")}` : "";
+  return `The ${list} ${lent.length === 1 && !lent[0]!.endsWith("s") ? "is" : "are"} from the recorded run of this clip, ${b.title}${why}.`;
+}
+
 export type RunCue = {
   id: string;
   kind: "standard" | "extended";
@@ -67,8 +79,8 @@ export type RunData = {
   speech: [number, number][] | null;
   gaps: RunGap[] | null;
   words: ShowcaseWord[] | null;
-  /** The recorded run of the same clip that lent the soundtrack (and, when the run lacks them, speech and pauses). */
-  borrowed: { from: string; title: string; timeline: boolean } | null;
+  /** What the recorded run of the same clip lent: always its soundtrack levels, and speech and pauses only where the run's own files lack them. */
+  borrowed: Borrowed | null;
   cues: RunCue[];
   media: RunMedia | null;
   files: RunFile[];
@@ -197,15 +209,15 @@ const API_FILES: { name: string; kind: string; what: string }[] = [
   { name: "cues.json", kind: "JSON", what: "Every cue, held ones too, with its checks: the studio’s working copy." },
 ];
 
-/** The recorded run of the same clip, when the run described one of the site's samples. */
-export function sameClip(detail: Pick<RunDetail, "manifest">, index: readonly ShowcaseIndexEntry[]): ShowcaseIndexEntry | null {
-  const name = detail.manifest.video.name;
-  if (!name) return null;
-  const stem = name.replace(/\.[A-Za-z0-9]+$/, "");
-  const entry = index.find((e) => e.id === stem);
-  if (!entry) return null;
-  const d = detail.manifest.video.duration;
-  return d === null || Math.abs(d - entry.duration) <= 0.5 ? entry : null;
+/**
+ * The recorded run whose clip this run described, as the API says: a run of one of the samples
+ * the site ships (source "sample"), or a copy of one of its recorded runs (source "fork").
+ * Never guessed from the file's name: an upload is never matched to a recorded run.
+ */
+export function clipOf(detail: Pick<RunDetail, "source">, index: readonly ShowcaseIndexEntry[]): ShowcaseIndexEntry | null {
+  const src = detail.source;
+  if (!src || !src.id || (src.kind !== "sample" && src.kind !== "fork")) return null;
+  return index.find((e) => e.id === src.id) ?? null;
 }
 
 function provenance(summary: ManifestSummary, tts: string | null): Provenance | null {
@@ -240,7 +252,6 @@ export function fromApi(
   const { manifest } = detail;
   const clip = opts.clip ?? null;
   const own = opts.timeline ?? { speech: null, gaps: null };
-  const lendTimeline = !!clip && (!own.gaps || !own.speech);
   const gaps: RunGap[] | null = own.gaps ?? (clip ? clip.gaps.map((g) => ({ id: g.id, start: g.start, end: g.end, capacity: g.capacity })) : null);
   const speech = own.speech ?? clip?.speech ?? null;
   const byId = new Map((gaps ?? []).map((g) => [g.id, g]));
@@ -302,7 +313,7 @@ export function fromApi(
     speech,
     gaps,
     words: clip?.words ?? null,
-    borrowed: clip && !itself ? { from: clip.id, title: clip.title, timeline: lendTimeline } : null,
+    borrowed: clip && !itself ? { from: clip.id, title: clip.title, loudness: true, speech: !own.speech, gaps: !own.gaps } : null,
     cues,
     media,
     files,
@@ -319,10 +330,13 @@ export function fromApi(
 /** The voiced standard lines (the ones in the described soundtrack), in time order. */
 export const voicedLines = (run: Pick<RunData, "cues">) => run.cues.filter((c) => c.kind === "standard" && VOICED.has(c.status));
 
-/** How a line fits: "11 of 13 words", or how long the video waits for an extended line. */
-export function fitWords(c: RunCue, count: (text: string) => number): string {
+/**
+ * How a line fits: "11 of 13 words", or how long the video waits for an extended line. With
+ * `borrowed`, the pause is the recorded run's (the run's own files don't have one), and says so.
+ */
+export function fitWords(c: RunCue, count: (text: string) => number, opts: { borrowed?: boolean } = {}): string {
   if (c.kind === "extended") return c.end !== null ? `video holds ${(c.end - c.start).toFixed(2)} s` : "extended";
   const n = count(c.text);
-  if (c.gap) return `${n} of ${c.gap.capacity} words`;
+  if (c.gap) return `${n} of ${c.gap.capacity} words${opts.borrowed ? ", in the recorded run’s pause" : ""}`;
   return `${n} ${n === 1 ? "word" : "words"}`;
 }

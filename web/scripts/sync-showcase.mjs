@@ -29,11 +29,17 @@ export class SyncError extends Error {
   }
 }
 
-/** True when `inner` is `outer` itself or lies under it. */
-const under = (outer, inner) => {
+/**
+ * True when `inner` is `outer` itself or lies under it, judged by whole path segments: a
+ * folder whose name merely starts with two dots ("..cache") is inside, "../x" is not, and
+ * another drive (an absolute relative path) is not.
+ */
+export function isInside(outer, inner) {
   const back = path.relative(outer, inner);
-  return !back.startsWith("..") && !path.isAbsolute(back);
-};
+  if (path.isAbsolute(back)) return false;
+  const first = back.split(path.sep)[0];
+  return first !== "..";
+}
 
 /**
  * dir/rel when it is a regular file inside dir; null when there is nothing there. A link is
@@ -42,8 +48,7 @@ const under = (outer, inner) => {
  */
 function fileIn(dir, rel) {
   const full = path.join(dir, ...rel.split("/"));
-  const back = path.relative(dir, full);
-  if (!back || back.startsWith("..") || path.isAbsolute(back)) throw new SyncError(`${rel} is not inside ${dir}`);
+  if (!isInside(dir, full) || path.relative(dir, full) === "") throw new SyncError(`${rel} is not inside ${dir}`);
   let st;
   try {
     st = lstatSync(full);
@@ -52,7 +57,7 @@ function fileIn(dir, rel) {
   }
   if (st.isSymbolicLink()) throw new SyncError(`${rel} is a link; put the file itself in the export`);
   if (!st.isFile()) return null;
-  if (!under(realpathSync(dir), realpathSync(full)))
+  if (!isInside(realpathSync(dir), realpathSync(full)))
     throw new SyncError(`${rel} resolves outside ${dir} through a linked folder; put the files themselves in the export`);
   return full;
 }

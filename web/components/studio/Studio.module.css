@@ -40,7 +40,11 @@
 .wcag > li[data-tone="good"] .wcagStatus{color:var(--verified)}
 .wcag > li[data-tone="warn"] .wcagStatus{color:var(--held)}
 .reasons{list-style:none;font-size:12.5px;line-height:1.45;color:var(--cream-2)}
-.stale{margin-top:10px;font-size:12.5px;line-height:1.45;color:var(--cream-2)}
+.stale{margin-top:6px;padding-left:10px;border-left:2px solid var(--edited);font-size:12.5px;line-height:1.45;color:var(--cream-1)}
+/* figures from before the changes: dimmed to the quieter inks (still AA), status colours dropped */
+.wcag[data-stale] > li .crit,.wcag[data-stale] > li .wcagStatus,.fact[data-stale] .factValue{color:var(--cream-2)}
+.wcag[data-stale] .level,.wcag[data-stale] .reasons,.fact[data-stale] .factDetail{color:var(--cream-3)}
+.fact[data-stale] dt::before{background:var(--night-5)}
 
 /* the desk: the one raised panel */
 .desk{position:relative;margin-top:var(--s-6);border:1px solid var(--hair-strong);background:var(--night-2)}

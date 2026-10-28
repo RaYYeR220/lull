@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PPS, MIN_PPS, ZOOM_STEPS, block, clampPps, fitPps, neighbour, rulerTicks, scrollToShow, stepPps, timeToX, waveHeights, xToTime, zoomScroll } from "../lib/studio-geometry";
+import { MAX_PPS, MIN_PPS, ZOOM_STEPS, block, declutter, clampPps, fitPps, neighbour, rulerTicks, scrollToShow, stepPps, timeToX, waveHeights, xToTime, zoomScroll } from "../lib/studio-geometry";
 
 describe("zoom", () => {
   it("fits the whole clip into the view, within the zoom's range", () => {
@@ -68,6 +68,35 @@ describe("placing things on the clock", () => {
     expect(quiet!).toBeGreaterThan(silent!);
     expect(loud).toBeCloseTo(18.4, 6);
     expect(louder).toBeCloseTo(18.4, 6);
+  });
+});
+
+describe("labels that would run into each other", () => {
+  it("shows a label only where it clears the last one shown", () => {
+    const shown = declutter(
+      [
+        { id: "a", left: 0, label: "1" },
+        { id: "b", left: 6, label: "2" }, // on top of 1
+        { id: "c", left: 30, label: "3" },
+        { id: "d", left: 34, label: "10" },
+        { id: "e", left: 60, label: "E1" },
+      ],
+      { charWidth: 7, gap: 6 },
+    );
+    expect([...shown]).toEqual(["a", "c", "e"]);
+    expect([...declutter([], { charWidth: 7, gap: 6 })]).toEqual([]);
+  });
+
+  it("a centred label (an extended mark's) is measured from its middle", () => {
+    const shown = declutter(
+      [
+        { id: "x1", left: 10, label: "E1", centred: true },
+        { id: "x2", left: 24, label: "E2", centred: true },
+        { id: "x3", left: 60, label: "E3", centred: true },
+      ],
+      { charWidth: 7, gap: 6 },
+    );
+    expect([...shown]).toEqual(["x1", "x3"]);
   });
 });
 

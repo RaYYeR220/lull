@@ -22,6 +22,7 @@ export function WatchRun({
   edit,
   files,
   checks,
+  borrowedGaps = false,
 }: {
   media: RunMedia | null;
   label: string;
@@ -30,6 +31,8 @@ export function WatchRun({
   edit: ReactNode;
   files: ReactNode;
   checks: ReactNode;
+  /** The pauses are the recorded run's (the run's own files lack them). */
+  borrowedGaps?: boolean;
 }) {
   const player = useRef<PlayerElement>(null);
   const [active, setActive] = useState<string | null>(null);
@@ -83,7 +86,7 @@ export function WatchRun({
         )}
       </div>
       <div className={styles.edit}>{edit}</div>
-      <CueScript className={styles.scriptArea} cues={cues} active={active} onSeek={seek} />
+      <CueScript className={styles.scriptArea} cues={cues} active={active} onSeek={seek} borrowedGaps={borrowedGaps} />
       <div className={styles.checks}>{checks}</div>
       <div className={styles.files}>{files}</div>
     </div>

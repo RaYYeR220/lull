@@ -14,6 +14,10 @@ export const FORK_TOKEN = "tok-fork-e2e-9876543210";
 /** A live run the mock lists as still being described, and one that stopped. */
 export const RUNNING_ID = "live-20261028-101500-0b5e11";
 export const FAILED_ID = "live-20261028-100000-de4d00";
+/** A run of the sample ed90 whose cues.json has no speech or pauses, and an upload that is merely called ed90.mp4. */
+export const SAMPLE_ID = "live-20261028-111500-5a3e90";
+export const SAMPLE_TOKEN = "tok-sample-e2e-1357924680";
+export const UPLOAD_ED90_ID = "live-20261028-112000-0ed90u";
 
 /**
  * A scenario of its own for one test: the mock keeps each scenario's edits apart, so tests that
