@@ -720,8 +720,24 @@ def _release(path: Path) -> None:
             time.sleep(OWNER_RECHECK_S)
 
 
+_rename = os.replace  # one name to stand in for a filesystem in the tests
+
+
 def _move(src: Path, dst: Path) -> None:
-    os.replace(src, dst)
+    """`src` renamed to `dst`. A filesystem that cannot rename a folder (a flat namespace
+    such as Cloud Storage FUSE: EXDEV, EPERM, ENOTSUP) gets the folder's entries moved one by
+    one into `dst`, and the emptied folder removed; a file that cannot be renamed raises as
+    before, so the commit rolls back."""
+    try:
+        _rename(src, dst)
+    except OSError:
+        if not src.is_dir() or src.is_symlink():
+            raise
+        log.info("publish: cannot rename the folder %s; moving its files one by one", src.name)
+        dst.mkdir(exist_ok=True)
+        for item in sorted(src.iterdir()):
+            _move(item, dst / item.name)
+        src.rmdir()
 
 
 def _replace_with(item: Path, dst: Path) -> None:

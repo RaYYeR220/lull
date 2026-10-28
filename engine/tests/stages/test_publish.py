@@ -1960,3 +1960,67 @@ def test_an_unverified_cue_means_verification_disabled(tmp_path, fake_media):
     m = json.loads(res.manifest.read_text(encoding="utf-8"))
     assert m["verification"] == "disabled"
     assert all(r["status"] != "met (automated checks)" for r in m["summary"]["wcag"])
+
+
+# -- filesystems that cannot rename a folder ------------------------------------------------------
+
+
+def _refuse_folders(monkeypatch, refused: list):
+    """A filesystem with a flat namespace (Cloud Storage FUSE): renaming a folder fails, as
+    os.replace there does with EXDEV; renaming a file works."""
+    import errno
+
+    from lull.stages import publish as pub
+
+    real = pub._rename
+
+    def rename(src, dst):
+        if Path(src).is_dir():
+            refused.append(Path(src).name)
+            raise OSError(errno.EXDEV, "Invalid cross-device link", str(src))
+        return real(src, dst)
+
+    monkeypatch.setattr(pub, "_rename", rename)
+
+
+def test_publish_moves_a_folder_file_by_file_where_folders_cannot_be_renamed(
+    tmp_path, fake_media, monkeypatch
+):
+    refused: list = []
+    _refuse_folders(monkeypatch, refused)
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    publish(run, video, [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")], [], *args,
+            speech=[])  # fmt: skip
+    publish(run, video, [_cue("c002", 2.0, 1.2, ev=["e1"], audio="d.wav")], [], *args,
+            speech=[])  # fmt: skip
+    assert "keyframes" in refused
+    assert sorted(p.name for p in (run / "keyframes").iterdir()) == ["c002.jpg"]
+    assert not [p.name for p in run.iterdir() if p.name.startswith(".publish")]
+
+
+def test_a_failed_publish_rolls_back_where_folders_cannot_be_renamed(
+    tmp_path, fake_media, monkeypatch
+):
+    from lull.stages import publish as pub
+
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    publish(run, video, [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")], [], *args,
+            speech=[])  # fmt: skip
+    before = _tree(run)
+    _refuse_folders(monkeypatch, [])
+    real = pub._rename
+    said_no = []
+
+    def no_manifest(src, dst):  # the new manifest cannot move in (once)
+        if not said_no and Path(dst) == run / "manifest.json" and ".publish-" in str(src):
+            said_no.append(src)
+            raise OSError("the bucket said no")
+        return real(src, dst)
+
+    monkeypatch.setattr(pub, "_rename", no_manifest)
+    with pytest.raises(OSError, match="the bucket said no"):
+        publish(run, video, [_cue("c002", 2.0, 1.2, ev=["e1"], audio="d.wav")], [], *args,
+                speech=[])  # fmt: skip
+    assert _tree(run) == before
