@@ -5,8 +5,9 @@ other run is going (409) and at most MAX_UPLOADS uploads are being received (503
 visitor's rate limits (429: runs started, and uploads refused), the size (413), the format, the
 limits on what decoding it costs (422 unsupported: lull.api.clip.over_limits) and the duration
 (422: uploads up to MAX_SECONDS, samples MAX_SAMPLE_SECONDS) and the spend caps (402). The
-run gets a remuxed copy cut at that limit and probed again (lull.api.clip), so the duration
-that counts is the copy's, not what the container claims. Then it answers with
+run gets its own copy, one bounded transcode cut at that limit and probed again
+(lull.api.clip.transcode: at most 720p, 30 frames a second, H.264/AAC), so what counts is the
+copy, not what the container claims. Then it answers with
 text/event-stream: a `run` event, every engine event as it happens (stage_start / stage_end /
 call / cue / warning), a final `done` or `error`, and a `: ping` comment whenever the stream
 has been quiet for 15 s.
@@ -502,7 +503,7 @@ class Live:
         self.settings, self.store = settings, store
         self.runner: Runner = _run_pipeline
         self.probe: Callable[[Path], media.Probe] = clip.probe
-        self.trim: Callable[[Path, Path, float], Path] = clip.trim
+        self.transcode: Callable[[Path, Path, float, media.Probe], Path] = clip.transcode
         self.limiter = RateLimiter()
         self.refusals = RateLimiter(
             per_client=REFUSALS_PER_HOUR, client_window=HOUR, per_day=1_000_000
@@ -746,23 +747,36 @@ async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
     return info
 
 
-async def _cut(live: Live, run_id: str, video: Path, limit: float) -> media.Probe:
-    """Check the video, then replace it by a remuxed copy cut at `limit` seconds, and return
-    what probing that copy says: the container's own claim is not trusted."""
+def not_converted() -> LiveError:
+    return LiveError(
+        422,
+        "unsupported",
+        "This video could not be prepared for a live description. Export it again as an "
+        "H.264 mp4 and try once more.",
+    )
+
+
+async def _cut(live: Live, run_id: str, video: Path, limit: float) -> tuple[Path, media.Probe]:
+    """Check the video, then replace it by the run's copy (lull.api.clip.transcode: bounded,
+    at most `limit` seconds, an mp4 named after it) and return that copy and what probing it
+    says: the file's own claims are not trusted. Every engine stage works on the copy."""
     info = await _probe(live, run_id, video)
     if info.duration > limit:
         raise too_long(info.duration, limit)
-    cut = video.with_name(f".trim-{video.name}")
+    copy = video.with_name(f".copy-{video.stem}.mp4")
     try:
-        await anyio.to_thread.run_sync(live.trim, video, cut, limit)
+        await anyio.to_thread.run_sync(live.transcode, video, copy, limit, info)
     except Exception:
-        log.info("live run %s: %s does not remux", run_id, video.name, exc_info=True)
-        raise unreadable() from None
-    info = await _probe(live, run_id, cut)
+        log.info("live run %s: %s does not transcode", run_id, video.name, exc_info=True)
+        raise not_converted() from None
+    info = await _probe(live, run_id, copy)
     if info.duration > limit + TRIM_SLACK:
         raise too_long(info.duration, limit)
-    os.replace(cut, video)
-    return info
+    final = video.with_name(f"{video.stem}.mp4")
+    os.replace(copy, final)
+    if final != video:
+        video.unlink()
+    return final, info
 
 
 def _sample(settings: ApiSettings, sample_id: str) -> Path | None:
@@ -789,7 +803,7 @@ async def _accept(
     finally:
         await form.close()
     limit = live.max_sample_seconds if source["kind"] == "sample" else live.max_seconds
-    info = await _cut(live, run_id, video, limit)
+    video, info = await _cut(live, run_id, video, limit)
     live.check_budget(run_id, info.duration)
     token, token_hash = new_token()
     _write_json(

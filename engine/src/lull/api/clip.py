@@ -1,18 +1,25 @@
 """An upload checked before a run, with the engine's own rules (lull.media: local files only,
-the MP4/MOV and Matroska/WebM demuxers only, assert_safe_container) and two things the engine
-does not do for it: a time limit on each ffprobe/ffmpeg call, and the run's copy remuxed and
-cut at the length limit, so a container that misstates its duration cannot make a longer run.
+the MP4/MOV and Matroska/WebM demuxers only, assert_safe_container) and what the engine does
+not do for it: a time limit on each ffprobe/ffmpeg call, limits on what the file says it is,
+and the run's own copy of it, made to be bounded whatever the file says.
 
-Limits (over_limits): every engine stage decodes the video in full, so a small file that asks
-for a lot of work (a huge frame, a high frame rate, extra pictures) is refused before any work:
-at most 1920x1080 (2.1 megapixels, either way up), 60 frames a second, one video stream, two
+Limits (over_limits), checked before any work: at most 1920x1080 (2.1 megapixels, either way
+up), 60 frames a second (the higher of the nominal and average rates), one video stream, two
 audio streams of up to 8 channels at 192 kHz, no subtitle, data or attachment streams, and a
-bit rate of at most 100 Mb/s. The run's copy keeps the one video stream and the audio only.
+bit rate of at most 100 Mb/s. Anything unknown or zero is refused too.
+
+The run's copy (transcode): one normalising transcode, and every engine stage works on it only.
+The first video stream, scaled to fit 1280x720 (720x1280 upright; never upscaled), at its
+stated frame rate capped at 30, at most `seconds` long and 30 frames a second of it; the first
+audio stream at 48 kHz, at most 2 channels; H.264/AAC in MP4, no metadata. Decoding refuses
+frames over 2.1 megapixels, so a stream that grows past its header stops the copy. A copy
+that fails or runs out of time refuses the upload.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -21,7 +28,7 @@ from pathlib import Path
 from lull.media import SAFE_FORMATS, SAFE_PROTOCOLS, MediaError, Probe
 
 PROBE_TIMEOUT = 20.0
-TRIM_TIMEOUT = 120.0
+TRANSCODE_TIMEOUT = 180.0
 
 MAX_LONG_SIDE, MAX_SHORT_SIDE, MAX_PIXELS = 1920, 1080, 2_100_000
 MAX_FPS = 60.0
@@ -29,6 +36,8 @@ FPS_SLACK = 0.5  # a nominal 60 that a phone reports as 60.02
 MAX_VIDEO_STREAMS, MAX_AUDIO_STREAMS = 1, 2
 MAX_CHANNELS, MAX_SAMPLE_RATE = 8, 192_000
 MAX_BIT_RATE = 100_000_000  # bits a second, the whole file
+OUT_LONG_SIDE, OUT_SHORT_SIDE = 1280, 720  # the run's copy
+OUT_FPS, OUT_CHANNELS, OUT_SAMPLE_RATE = 30, 2, 48_000
 
 
 @dataclass(frozen=True)
@@ -41,6 +50,7 @@ class Media(Probe):
     audios: tuple[tuple[int, int], ...] = ()
     others: tuple[str, ...] = ()
     bit_rate: float | None = None
+    rate: str = ""  # the first video stream's frame rate as ffprobe states it ("30000/1001")
 
 
 def _bin(name: str) -> str:
@@ -72,12 +82,13 @@ def _fps(rate: str) -> float:
         return 0.0
 
 
-def _rate(stream: dict) -> float:
-    """The stream's frame rate: the lower of its nominal and average rates that is known (a
-    variable-rate file can state a nominal rate far above what it plays at)."""
-    rates = [_fps(str(stream.get(k) or "")) for k in ("r_frame_rate", "avg_frame_rate")]
-    known = [r for r in rates if r > 0]
-    return min(known) if known else 0.0
+def _rate(stream: dict) -> tuple[float, str]:
+    """The stream's frame rate, and as stated: the higher of its nominal and average rates
+    (either can understate what the packets carry); (0.0, "") when neither is known."""
+    rates = [(_fps(str(stream.get(k) or "")), str(stream.get(k) or ""))
+             for k in ("r_frame_rate", "avg_frame_rate")]  # fmt: skip
+    known = [r for r in rates if r[0] > 0]
+    return max(known) if known else (0.0, "")
 
 
 def _int(x: object) -> int:
@@ -96,9 +107,11 @@ def _number(x: object) -> float | None:
 
 def over_limits(info: Probe) -> str | None:
     """Why a live run does not take this video, in plain words; None when it is within the
-    limits. A plain Probe (no stream list) is checked on its first video stream alone."""
-    videos = getattr(info, "videos", ()) or ((info.width, info.height, info.fps),)
-    audios = getattr(info, "audios", ())
+    limits. Unknown or zero is refused (fail closed). A plain Probe (no stream list: the test
+    doubles) is checked on its first video stream alone."""
+    full = isinstance(info, Media)
+    videos = info.videos if full else ((info.width, info.height, info.fps),)
+    audios = info.audios if full else ()
     for kind in getattr(info, "others", ()):
         return (
             f"This file carries a {kind} track besides its picture and sound. Live "
@@ -116,6 +129,10 @@ def over_limits(info: Probe) -> str | None:
             f"{MAX_AUDIO_STREAMS}."
         )
     for w, h, fps in videos:
+        if w <= 0 or h <= 0:
+            return "This video does not state its picture size. Export it again as an mp4."
+        if not fps > 0:
+            return "This video does not state its frame rate. Export it again as an mp4."
         if max(w, h) > MAX_LONG_SIDE or min(w, h) > MAX_SHORT_SIDE or w * h > MAX_PIXELS:
             return (
                 f"This video is {w}x{h}. Live descriptions take videos up to "
@@ -127,13 +144,20 @@ def over_limits(info: Probe) -> str | None:
                 f"{MAX_FPS:g} frames a second."
             )
     for channels, rate in audios:
+        if channels <= 0 or rate <= 0:
+            return (
+                "This video's sound does not state its channels or sample rate. Export it "
+                "again as an mp4."
+            )
         if channels > MAX_CHANNELS or rate > MAX_SAMPLE_RATE:
             return (
                 f"This video's sound has {channels} channels at {rate} Hz. Live descriptions "
                 f"take up to {MAX_CHANNELS} channels at {MAX_SAMPLE_RATE // 1000} kHz."
             )
-    bit_rate = getattr(info, "bit_rate", None)
-    if bit_rate is not None and bit_rate > MAX_BIT_RATE:
+    bit_rate = info.bit_rate if full else 1.0
+    if bit_rate is None or not bit_rate > 0:
+        return "This video does not state its bit rate. Export it again as an mp4."
+    if bit_rate > MAX_BIT_RATE:
         return (
             f"This video's bit rate is {bit_rate / 1e6:.0f} Mb/s. Live descriptions take up "
             f"to {MAX_BIT_RATE // 1_000_000} Mb/s: export it again at a lower quality."
@@ -163,11 +187,12 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
         if duration is None:
             raise MediaError(f"cannot determine duration of {path}")
         kinds = [str(s.get("codec_type") or "unknown") for s in streams]
+        fps, rate = _rate(video)
         return Media(
             duration=float(duration),
             width=int(video["width"]),
             height=int(video["height"]),
-            fps=_fps(video.get("r_frame_rate", "0/1")),
+            fps=fps,
             has_audio=audio is not None,
             video_codec=video.get("codec_name", ""),
             audio_codec=None if audio is None else audio.get("codec_name", ""),
@@ -175,7 +200,7 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
             audio_streams=kinds.count("audio"),
             fps_rational=str(video.get("r_frame_rate") or ""),
             videos=tuple(
-                (_int(s.get("width")), _int(s.get("height")), _rate(s))
+                (_int(s.get("width")), _int(s.get("height")), _rate(s)[0])
                 for s in streams
                 if s.get("codec_type") == "video"
             ),
@@ -186,19 +211,45 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
             ),
             others=tuple(k for k in kinds if k not in ("video", "audio")),
             bit_rate=_number(fmt.get("bit_rate")),
+            rate=rate,
         )
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise MediaError(f"ffprobe output for {path} does not read: {e}") from None
 
 
-def trim(src: Path, dst: Path, seconds: float, *, timeout: float = TRIM_TIMEOUT) -> Path:
-    """`src` remuxed (no re-encoding) into `dst`, cut at `seconds`: its first video stream (the
-    one probed and checked) and its audio, nothing else."""
+def _out_rate(info: Probe) -> str:
+    """The copy's frame rate: the stated one (exactly), capped at OUT_FPS."""
+    rate = info.rate if isinstance(info, Media) else ""
+    if 0 < info.fps <= OUT_FPS:
+        return rate or f"{info.fps:.6g}"
+    return str(OUT_FPS)
+
+
+# fit OUT_LONG_SIDE x OUT_SHORT_SIDE the way the picture is turned; never larger than it is
+_SCALE = (
+    f"scale=w='if(gte(iw,ih),min({OUT_LONG_SIDE},iw),min({OUT_SHORT_SIDE},iw))'"
+    f":h='if(gte(iw,ih),min({OUT_SHORT_SIDE},ih),min({OUT_LONG_SIDE},ih))'"
+    ":force_original_aspect_ratio=decrease:force_divisible_by=2"
+)
+
+
+def transcode(
+    src: Path, dst: Path, seconds: float, info: Probe, *, timeout: float = TRANSCODE_TIMEOUT
+) -> Path:
+    """The run's copy of `src` (what `info` probed) in `dst`: see the module notes. Raises
+    MediaError when it fails or runs out of time."""
+    audios = info.audios if isinstance(info, Media) else ()
+    channels = min(OUT_CHANNELS, audios[0][0]) if audios and audios[0][0] > 0 else OUT_CHANNELS
     _run(
-        [_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
+        [_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
          "-protocol_whitelist", SAFE_PROTOCOLS, "-format_whitelist", SAFE_FORMATS,
-         "-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-c", "copy", "-t", f"{seconds:g}",
-         str(dst)],
+         "-max_pixels", str(MAX_PIXELS), "-i", str(src),
+         "-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1", "-map_chapters", "-1",
+         "-t", f"{seconds:g}", "-frames:v", str(math.ceil(seconds * OUT_FPS)),
+         "-vf", f"{_SCALE},fps=fps={_out_rate(info)},format=yuv420p",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+         "-c:a", "aac", "-b:a", "128k", "-ar", str(OUT_SAMPLE_RATE), "-ac", str(channels),
+         "-movflags", "+faststart", "-f", "mp4", str(dst)],
         timeout,
     )  # fmt: skip
     return dst

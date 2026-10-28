@@ -42,7 +42,7 @@ def fake_probe(path):
     )
 
 
-def fake_trim(src, dst, seconds):
+def fake_transcode(src, dst, seconds, info=None):
     shutil.copyfile(src, dst)
     return dst
 
@@ -222,7 +222,7 @@ def app(settings, monkeypatch, tmp_path):
     get_settings.cache_clear()
     app = create_app(settings)
     app.state.live.probe = fake_probe
-    app.state.live.trim = fake_trim
+    app.state.live.transcode = fake_transcode
     app.state.live.runner = Script()
     app.state.live.envelope = None  # no ffmpeg on fake videos; tests that need it set it
     yield app
@@ -292,7 +292,7 @@ def test_post_streams_run_then_engine_events_then_done(lc, live, data, tmp_path)
 def test_post_with_real_probe(lc, live, noaudio):
     from lull.api import clip
 
-    live.probe, live.trim = clip.probe, clip.trim
+    live.probe, live.transcode = clip.probe, clip.transcode
     r = post(lc, noaudio.read_bytes(), name="portrait.mp4")
     assert types(parse_sse(r.text))[-1] == "done"
     assert live.runner.jobs[0].duration == pytest.approx(4.0, abs=0.1)
@@ -393,7 +393,7 @@ def test_unsupported_extension_422(lc, data, name):
 def test_unreadable_container_422_without_paths(lc, live, data, tmp_path):
     from lull.api import clip
 
-    live.probe, live.trim = clip.probe, clip.trim
+    live.probe, live.transcode = clip.probe, clip.transcode
     r = post(lc, b"definitely not a video" * 10, name="clip.webm")
     assert r.status_code == 422
     j = r.json()
@@ -659,7 +659,7 @@ def test_real_pipeline_through_the_api(
     monkeypatch.setattr(live_mod.Tavily, "from_settings", staticmethod(lambda ledger: None))
     monkeypatch.setattr(live_mod.NemoSpeechHTTP, "from_settings", staticmethod(FakeSpeech))
     live.runner = live_mod._run_pipeline
-    live.probe, live.trim = clip.probe, clip.trim
+    live.probe, live.transcode = clip.probe, clip.transcode
     live.ledger = Ledger(tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
 
     r = post(lc, tone_slides.read_bytes(), name="tone slides.mp4")
@@ -737,12 +737,12 @@ def test_refused_uploads_count_in_their_own_window(lc, live):
 
 
 def test_runs_use_the_trimmed_copy_and_its_duration(lc, live, data):
-    def trim(src, dst, seconds):
-        assert seconds == live.max_seconds
+    def trim(src, dst, seconds, info):
+        assert seconds == live.max_seconds and info.duration == 9.0
         Path(dst).write_bytes(b"DUR=5;trimmed")
         return dst
 
-    live.trim = trim
+    live.transcode = trim
     r = post(lc, b"DUR=9;original")
     assert types(parse_sse(r.text))[-1] == "done"
     (job,) = live.runner.jobs
@@ -753,11 +753,11 @@ def test_runs_use_the_trimmed_copy_and_its_duration(lc, live, data):
 
 
 def test_trimmed_copy_still_too_long_422(lc, live, data):
-    def trim(src, dst, seconds):
+    def trim(src, dst, seconds, info):
         Path(dst).write_bytes(b"DUR=300;")
         return dst
 
-    live.trim = trim
+    live.transcode = trim
     r = post(lc, b"DUR=9;")
     assert r.status_code == 422 and r.json()["error"] == "too_long"
     assert "300.0 s" in r.json()["message"]
@@ -769,13 +769,13 @@ def test_a_container_that_understates_its_length_is_cut(lc, live, noaudio):
     from lull.api import clip
 
     def lying(path):
-        if Path(path).name.startswith(".trim-"):
+        if Path(path).name.startswith(".copy-"):
             return clip.probe(path)
         return Probe(
             duration=1.0, width=720, height=1280, fps=25.0, has_audio=False, format_name=MP4_FORMAT
         )
 
-    live.probe, live.trim, live.max_seconds = lying, clip.trim, 2.0
+    live.probe, live.transcode, live.max_seconds = lying, clip.transcode, 2.0
     r = post(lc, noaudio.read_bytes(), name="portrait.mp4")
     assert types(parse_sse(r.text))[-1] == "done", r.text
     (job,) = live.runner.jobs
@@ -799,7 +799,7 @@ def test_concat_scripts_and_other_demuxers_are_refused(lc, live, noaudio, tmp_pa
     script.write_text(f"ffconcat version 1.0\nfile '{noaudio.as_posix()}'\n")
     with pytest.raises(MediaError):
         clip.probe(script)
-    live.probe, live.trim = clip.probe, clip.trim
+    live.probe, live.transcode = clip.probe, clip.transcode
     r = post(lc, script.read_bytes(), name="evil.mp4")
     assert r.status_code == 422 and r.json()["error"] == "unreadable"
 
@@ -1268,10 +1268,12 @@ def test_samples_take_up_to_45_s(lc, live, data, secs, ok):
     (data / "samples").mkdir(parents=True)
     (data / "samples" / "street.mp4").write_bytes(f"DUR={secs};".encode())
     seen = []
-    live.trim = lambda src, dst, limit: seen.append(limit) or fake_trim(src, dst, limit)
+    live.transcode = lambda src, dst, limit, info: (
+        seen.append(limit) or fake_transcode(src, dst, limit)
+    )
     r = post(lc, None, sample="street")
     if ok:
-        assert r.status_code == 200 and seen == [45.0]
+        assert r.status_code == 200 and seen == [45.0], r.text
     else:
         assert r.status_code == 422 and "45 s" in r.json()["message"]
 
@@ -1572,10 +1574,10 @@ def bombs(tmp_path_factory) -> dict[str, Path]:
 def test_media_over_the_limits_is_refused_before_any_work(lc, live, bombs, name, says):
     from lull.api import clip
 
-    live.probe, live.trim = clip.probe, clip.trim
+    live.probe, live.transcode = clip.probe, clip.transcode
     live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
     trims: list = []
-    live.trim = lambda *a: trims.append(a) or clip.trim(*a)
+    live.transcode = lambda *a: trims.append(a) or clip.transcode(*a)
     r = post(lc, bombs[name].read_bytes(), name=f"{name}.mp4")
     assert r.status_code == 422, r.text
     assert r.json()["error"] == "unsupported" and says in r.json()["message"]
@@ -1583,14 +1585,98 @@ def test_media_over_the_limits_is_refused_before_any_work(lc, live, bombs, name,
     assert post(lc).status_code == 429  # it counted as a refused upload
 
 
-def test_the_run_gets_one_picture_and_its_sound(lc, live, bombs):
+def test_the_runs_copy_is_one_bounded_picture_and_its_first_sound(lc, live, bombs):
     from lull.api import clip
 
-    live.probe, live.trim = clip.probe, clip.trim
-    assert types(parse_sse(post(lc, bombs["two_sounds"].read_bytes()).text))[-1] == "done"
+    live.probe, live.transcode = clip.probe, clip.transcode
+    r = post(lc, bombs["two_sounds"].read_bytes(), name="two sounds.mov")
+    assert types(parse_sse(r.text))[-1] == "done"
+    (job,) = live.runner.jobs
+    assert job.video.name == "two sounds.mp4"  # an H.264/AAC mp4 whatever came in
+    assert sorted(p.name for p in job.video.parent.iterdir()) == ["two sounds.mp4"]
+    info = clip.probe(job.video)
+    assert (info.video_codec, info.audio_codec, info.audio_streams) == ("h264", "aac", 1)
+    assert info.audios == ((1, 48000),) and info.width == 320 and info.fps <= 30
+    req = json.loads((job.run_dir / "request.json").read_text("utf-8"))
+    assert req["input"] == "input/two sounds.mp4" and req["source"]["name"] == "two sounds.mov"
+
+
+def _packets(path) -> int:
+    import subprocess
+
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
+         "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(path)],
+        check=True, capture_output=True, text=True,
+    )  # fmt: skip
+    return int(out.stdout.strip())
+
+
+def test_a_file_whose_headers_understate_its_frame_rate_ends_bounded(lc, live, tmp_path):
+    """240 frames a second, but the headers (as far as the API can tell) claim 25: the run's
+    copy is cut to the claimed rate, so its work is bounded by the claim and the limits."""
+    from dataclasses import replace
+
+    from lull.api import clip
+
+    fast = tmp_path / "fast.mp4"
+    _ff("-f", "lavfi", "-i", "testsrc2=s=160x120:r=240:d=2", "-c:v", "libx264", "-preset",
+        "ultrafast", "-pix_fmt", "yuv420p", str(fast))  # fmt: skip
+    assert _packets(fast) == 480
+
+    def claims_25(path):
+        info = clip.probe(path)
+        if Path(path).name.startswith(".copy-"):
+            return info
+        return replace(info, fps=25.0, videos=((160, 120, 25.0),), rate="25/1")
+
+    live.probe, live.transcode = claims_25, clip.transcode
+    assert types(parse_sse(post(lc, fast.read_bytes()).text))[-1] == "done"
+    (job,) = live.runner.jobs
+    assert _packets(job.video) <= 2 * 25 + 1
+    assert clip.probe(job.video).fps <= 25
+
+
+@pytest.mark.parametrize(
+    "size,expect", [("1920x1080", (1280, 720)), ("1080x1920", (720, 1280)), ("640x480", (640, 480))]
+)
+def test_the_runs_copy_fits_720p_and_is_never_upscaled(lc, live, tmp_path, size, expect):
+    from lull.api import clip
+
+    src = tmp_path / "in.mp4"
+    _ff("-f", "lavfi", "-i", f"testsrc2=s={size}:r=10:d=1", "-c:v", "libx264", "-preset",
+        "ultrafast", "-pix_fmt", "yuv420p", str(src))  # fmt: skip
+    live.probe, live.transcode = clip.probe, clip.transcode
+    assert types(parse_sse(post(lc, src.read_bytes()).text))[-1] == "done"
     (job,) = live.runner.jobs
     info = clip.probe(job.video)
-    assert info.audio_streams == 2 and info.width == 320
+    assert (info.width, info.height) == expect
+
+
+def test_an_unknown_frame_rate_is_refused(lc, live, bombs):
+    from dataclasses import replace
+
+    from lull.api import clip
+
+    live.probe = lambda p: replace(clip.probe(p), videos=((320, 240, 0.0),), fps=0.0, rate="")
+    r = post(lc, bombs["two_sounds"].read_bytes())
+    assert r.status_code == 422 and r.json()["error"] == "unsupported"
+    assert "frame rate" in r.json()["message"] and live.runner.jobs == []
+
+
+def test_a_copy_that_cannot_be_made_is_refused(lc, live, monkeypatch):
+    from lull.api import clip
+
+    def stuck(src, dst, seconds, info):
+        raise MediaError("ffmpeg timed out after 180 s")
+
+    live.transcode = stuck
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+    r = post(lc)
+    assert r.status_code == 422 and r.json()["error"] == "unsupported"
+    assert "timed out" not in r.json()["message"] and live.runner.jobs == []
+    assert post(lc).status_code == 429  # counted: it was the file
+    assert clip.TRANSCODE_TIMEOUT <= 300
 
 
 def test_storing_the_upload_is_not_on_the_visitors_clock(lc, live, monkeypatch):
@@ -1633,3 +1719,19 @@ def test_the_limits_in_plain_words():
     assert "150 Mb/s" in over_limits(m(bit_rate=150e6))
     assert "data track" in over_limits(m(others=("data",)))
     assert "4096x2160" in over_limits(m(videos=((4096, 2160, 25.0),)))
+    # unknown or zero is refused, never waved through
+    assert "frame rate" in over_limits(m(videos=((1920, 1080, 0.0),)))
+    assert "size" in over_limits(m(videos=((0, 0, 25.0),)))
+    assert "sound" in over_limits(m(audios=((0, 48000),)))
+    assert "sound" in over_limits(m(audios=((2, 0),)))
+    assert "bit rate" in over_limits(m(bit_rate=None))
+    assert "bit rate" in over_limits(m(bit_rate=0.0))
+
+
+def test_the_frame_rate_is_the_higher_of_the_two_stated():
+    from lull.api.clip import _rate
+
+    assert _rate({"r_frame_rate": "240/1", "avg_frame_rate": "24/1"}) == (240.0, "240/1")
+    assert _rate({"r_frame_rate": "0/0", "avg_frame_rate": "30000/1001"}) == (
+        pytest.approx(29.97, abs=0.01), "30000/1001")  # fmt: skip
+    assert _rate({}) == (0.0, "")
