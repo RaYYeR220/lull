@@ -2,3 +2,5 @@
 suite_a/out/
 # suite B: transcoded audio, judge and extraction caches, partial reports
 suite_b/out/
+# controls: clips, verifier cache, ablation runs and judge answers, partial reports
+controls/out/

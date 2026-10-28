@@ -499,3 +499,82 @@ spend (default $0.50).
   voiced intervals; Pfeiffer's track was never voiced.
 - How much the human tracks overlap speech depends on what counts as speech: ~10 % against
   the run's diarized spans, under 1 % against the transcript's words.
+
+## Controls: does the verifier catch false descriptions?
+
+Lull checks every claim of a description against the frames it describes before voicing it.
+Two controls test that this check does work: a negative control (does the verifier accept a
+description checked against footage that does not show it?) and an ablation (how much does
+hallucination rise on Suite A when the check is switched off?). Both are pre-registered in
+`controls/prereg.json` under the annotated tag **`controls-prereg`**, committed before either
+was run; they run on the merged engine after the Suite A scored run.
+
+### The pin and the one engine-facing file
+
+Both harnesses refuse to run unless the tag exists and is an ancestor of HEAD, the tagged
+`controls/prereg.sha256` is the sha256 of the `prereg.json` on disk, and `prereg.json`,
+`prereg.sha256`, `negative.py` and `ablation.py` are unchanged since the tag (Suite A's
+check, reused). Every call into the engine's verification goes through
+`controls/verify_adapter.py` (the clip window, cutting the clip, the verifier call, the
+verification-off switch); it is deliberately not pinned, so following a change of the
+engine's signature is a one-place edit that leaves the pin intact.
+
+### Negative control (`controls/negative.py`)
+
+- **Selection** (pre-registered, deterministic): every published verified cue (standard cues
+  with status "verified", extended cues with status "extended") of the Suite A counting run
+  and of the showcase runs passed in, ordered by (video, start, id); with more than 40, 40
+  drawn with `random.Random(20261028)`, kept in that order.
+- **True clip**: the engine's own verification window for the cue (its watch events, the
+  pipeline's padding, cap, minimum and clip height).
+- **Mismatched clip**, same length: in a Suite A lecture the centre of another slide (one the
+  true window does not touch, long enough, the nearest by start); in a showcase video a window
+  at least 30 s from the true one, meeting at least one watch event and none of the cue's (the
+  nearest on a 0.5 s grid); otherwise the next video that has room.
+- **Check**: the engine's verifier, with the pipeline's model and settings (Nemotron 3.5 Super
+  VL, its prompt, temperature 0.2), on the cue's final text and each clip; no names are passed.
+- **Metrics** (95 % bootstrap over cues): false accept (the mismatched clip supports every
+  claim), per-claim false accept, true accept on the true clip (re-run consistency).
+  `results/CONTROLS.md` lists every false accept with its text and both clips' times.
+
+### Ablation (`controls/ablation.py`)
+
+Suite A's 12 lectures run again with `LULL_NO_VERIFY=1` (the engine switch; every run's
+manifest must say verification "disabled"), with Suite A's run function and options, into
+`controls/out/ablation/` under run ids `ablation-<id>-<stamp>`; cues voiced unverified count
+as published. Judged by Suite A's primary judge and requests and measured by Suite A's code;
+compared with the Suite A counting run on the same engine. Reported side by side with the
+paired difference (without - with) and its 95 % bootstrap over videos: hallucination over
+claims (Suite A's pre-registered metric), over cues and over voiced statements, cues with an
+unsupported voiced statement, recall and decoys. The headline is the voiced-statement rate:
+the judge splits both arms' text the same way, whereas the claim split comes from the
+verifier, which this arm switches off. Added after the pre-registration of Suite A (whose pin
+applies unchanged); written to `results/ablation.json` and `results/ABLATION.md`, never to
+`results/suite_a.json`.
+
+### How to run (after the engine merge and the Suite A scored run)
+
+```sh
+uv run --directory eval pytest -q
+uv run --directory eval python -m controls.negative --suite-a \
+    --showcase elephants_dream=RUN_DIR::VIDEO --showcase woodshole=RUN_DIR::VIDEO \
+    --showcase aquatic_connectivity=RUN_DIR::VIDEO --showcase csc_intro=RUN_DIR::VIDEO
+LULL_NO_VERIFY=1 uv run --directory eval python -m controls.ablation --all
+```
+
+Expected spend: the negative control about 80 Super VL calls (2 per cue), about $0.25 (cap
+$0.50); the ablation the Suite A pipeline without the verifier's calls plus Suite A judging,
+about $0.7-0.8 (cap $2.00).
+
+### Known limitations
+
+- A mismatched window can still show what the cue says (a recurring setting, a title that
+  stays on screen, a wire-filled shaft 30 s later): a false accept is then a correct accept.
+  Every false accept is listed with both clips so a reader can check.
+- 40 cues give a wide interval; the selection is spread over the inputs as they come, not
+  balanced between Suite A and the showcase videos.
+- The verifier runs at temperature 0.2: the true-accept rate measures its own consistency,
+  and a single draw per clip is taken.
+- No names are passed to the verifier; the pipeline passes the cast names a line uses.
+- The ablation's two arms differ in when they ran (the with-arm is the Suite A counting run);
+  the remote models may change between the runs.

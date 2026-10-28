@@ -1,0 +1,49 @@
+{
+  "controls": "Plan 4 Task 4: is Lull's claim-level frame verification more than decoration?",
+  "preregistered": "Committed with the harness and tagged `controls-prereg` (annotated) before any control or ablation run; prereg.sha256 holds this file's sha256. Both harnesses refuse to run unless the tag is an ancestor of HEAD, its prereg.sha256 matches this file, and prereg.json, prereg.sha256, negative.py and ablation.py are unchanged since the tag. controls/verify_adapter.py (the only code that calls the engine's verifier) is deliberately not pinned, so a change of the engine's signature after the merge is a one-place edit there.",
+  "when": "On the merged engine, after the Suite A scored run (results/suite_a.json) exists; the negative control also needs the showcase runs.",
+  "negative_control": {
+    "question": "How often does the verifier accept a correct-looking description against footage that does not show it?",
+    "inputs": "The published cues of the Suite A counting run (the runs listed in results/suite_a.json) and of the showcase runs passed in (LABEL=RUN_DIR::VIDEO).",
+    "selection": "Every published verified cue: standard cues with status 'verified' (a gap id), extended cues with status 'extended' (no gap id). Ordered by (video label, start, cue id). If there are more than max_cues, max_cues of them drawn with random.Random(seed).sample over that order, kept in that order. Cues without watch events are skipped and listed.",
+    "max_cues": 40,
+    "seed": 20261028,
+    "true_clip": "The engine's own verification window for the cue: clip_window(the cue's watch events, video duration) with the pipeline's padding, cap and minimum, cut at the pipeline's clip height.",
+    "mismatch": {
+      "suite_a": "The centre of another slide of the same lecture: among the slides the true window does not touch and that last at least as long as it, the one whose start is nearest the true window's start (ties: the earlier); a window of the true window's length.",
+      "showcase": "A window of the true window's length, inside the video, at least away_s seconds from the true window, meeting at least one watch event and none of the cue's event ids: the nearest such start on a grid_s grid (ties: the later).",
+      "fallback": "When the same video has no such window: the next video in label order (cyclic) that has room (Suite A: a slide at least as long, nearest the same start; showcase: an event-covered window nearest the same start)."
+    },
+    "away_s": 30.0,
+    "grid_s": 0.5,
+    "verifier": "The engine's verification function (lull.stages.verify.verify, through controls/verify_adapter.py) with the pipeline's model and settings (Nemotron 3.5 Super VL, its prompt, temperature and token limit), on (the cue's final text, the clip, the clip's start as offset), with no names. Answers cached by (text, clip sha256, offset, settings).",
+    "metrics": {
+      "false_accept": "Share of cues whose mismatched clip supports every claim (at least one claim). Primary.",
+      "false_accept_claims": "Supported claims / claims on the mismatched clips.",
+      "true_accept": "Share of cues whose true clip supports every claim (re-run consistency of the verifier at its own temperature).",
+      "interval": "95% percentile bootstrap over cues, 10 000 resamples, seed 20261028 (Suite A's bootstrap_ratio)."
+    },
+    "report": "results/controls_negative.json and results/CONTROLS.md (only with the Suite A runs and at least one showcase run, from a clean tree; else controls/out/partial/): the metrics, and every false accept with its text, its true clip times and the mismatched video and clip times and rule; every true clip not fully supported.",
+    "budget": "About 80 verifier calls (2 per cue); cap $0.50 per invocation."
+  },
+  "ablation": {
+    "question": "How much does hallucination rise when the verifier is switched off?",
+    "added_after": "Added after the pre-registration of Suite A (tag suite-a-prereg); Suite A's own pin applies unchanged.",
+    "runs": "Suite A's 12 lectures run again by Suite A's run function and options (mode standard, profile education, voice Sofia, research off, no source URL) into controls/out/ablation/runs/ with run ids ablation-<id>-<stamp>, in a process started with LULL_NO_VERIFY=1; every run's manifest must record verification 'disabled' (else the harness stops). Cues the engine voiced unverified (status 'unverified') count as published.",
+    "with_arm": "The Suite A counting run (results/suite_a.json: complete, on the same engine fingerprint as the ablation process; else the harness refuses).",
+    "judging": "Suite A's primary judge (Nemotron 3 Ultra, temperature 0, reasoning on) with Suite A's coverage, claims and voiced-text requests, answers cached in controls/out/ablation/judge/; Suite A's video_metrics.",
+    "metrics": [
+      "hallucination_claims (Suite A's pre-registered metric)",
+      "hallucination_cues",
+      "hallucination_voiced_text (Suite A supplementary)",
+      "voiced_cues_with_unsupported",
+      "recall_standard",
+      "recall_with_extended",
+      "decoys_stated"
+    ],
+    "headline": "hallucination_voiced_text: the judge splits both arms' voiced text the same way. The claims metric depends on the verifier's claim split, which the ablation switches off (without it Suite A judges each cue's whole text as one claim), so it is reported with the share of cues that carry a claim split in each arm.",
+    "difference": "Per metric: pooled rate of each arm over the same videos, the difference (without - with) and its 95% percentile bootstrap over videos (the same resampled videos in both arms; 10 000 resamples, seed 20261028).",
+    "report": "results/ablation.json and results/ABLATION.md, never results/suite_a.json; only for all 12 videos from a clean tree, else controls/out/partial/.",
+    "budget": "The Suite A pipeline cost without the verifier's calls plus Suite A judging: about $0.7-0.8 for 12 videos; cap $2.00 per invocation."
+  }
+}

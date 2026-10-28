@@ -1283,13 +1283,24 @@ def now_utc() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def run_video(entry: dict, video: Path, clients: dict, stamp: str, budget: Budget) -> dict:
-    """One fresh pipeline run; its record (seconds, cost, counts) or the error it raised."""
+def run_video(
+    entry: dict,
+    video: Path,
+    clients: dict,
+    stamp: str,
+    budget: Budget,
+    *,
+    runs: Path | None = None,
+    prefix: str = "suite-a",
+) -> dict:
+    """One fresh pipeline run; its record (seconds, cost, counts) or the error it raised.
+    `runs` and `prefix` (Suite A's RUNS and "suite-a" by default) let the controls' ablation
+    run the same thing into its own folder under its own run ids."""
     from lull.pipeline import budget_estimate, engine_fingerprint, run
     from lull.types import RunOptions
 
-    run_id = f"suite-a-{entry['id']}-{stamp}"
-    run_dir = RUNS / run_id
+    run_id = f"{prefix}-{entry['id']}-{stamp}"
+    run_dir = (RUNS if runs is None else runs) / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     budget.check(budget_estimate(entry["duration"]), f"the pipeline on {entry['id']}")
     budget.add_run(run_id)
