@@ -236,12 +236,15 @@ def test_contradicted_claim_is_removed(tmp_path, video):
     assert out.status == "verified" and "red" not in out.text
 
 
-def _new_failure_each_round(*last_round):
-    """A verifier that rejects a different detail in each of rounds 1-3, then `last_round`."""
+def _new_failure_each_round(*last_round, then=()):
+    """A verifier that rejects a different detail of the line in each of rounds 1-3 ("red",
+    "coat", "opens": every line these tests verify says them), then `last_round`, then the
+    answers in `then`."""
     answers = iter(
-        [_claims(("a person", "supported"), (f"detail {n}", "not_visible")) for n in (1, 2, 3)]
-        + [_claims(*last_round)]
-    )
+        [_claims(("a person", "supported"), (word, "not_visible"))
+         for word in ("red", "coat", "opens")]
+        + [_claims(*last_round), *then]
+    )  # fmt: skip
     return lambda call: next(answers)
 
 
@@ -256,17 +259,25 @@ def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
     removes = iter(["A person in a red coat opens the door.", "A person in a red coat opens it.",
                     TEXT, "A person opens a door."])  # fmt: skip
     tf = FakeTF(
-        verify=_new_failure_each_round(("a red coat", "contradicted"), ("a door", "not_visible")),
+        verify=_new_failure_each_round(
+            ("a red coat", "contradicted"),
+            ("a door", "not_visible"),
+            then=[_claims(("a person", "supported"), ("opens a door", "not_visible"))],
+        ),  # fmt: skip
         remove=lambda call: {"text": next(removes)},
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
-    assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 4
+    assert len(tf.of("verify")) == 5 and len(tf.of("remove")) == 4
     last = _user_text(tf.of("remove")[-1]).split("<remove>", 1)[1]
     assert "a red coat" in last and "a door" not in last
     assert out.text == "A person opens a door."
-    assert [(c.text, c.verdict) for c in out.claims] == [("a door", "not_visible")]
+    # the claims it is held with are those of the cut text, judged on it (a fifth check)
+    assert _description(tf.of("verify")[-1]) == out.text == out.checks[-1].text
+    assert [(c.text, c.verdict) for c in out.claims] == [
+        ("a person", "supported"), ("opens a door", "not_visible")
+    ]  # fmt: skip
     assert "not verified after 4 rounds" in out.note and "a red coat" in out.note
     assert speech.calls == []
     assert (out.audio_path, out.audio_dur) == (None, None)
@@ -303,7 +314,8 @@ def test_contradiction_that_cannot_be_cut_withholds_the_text(tmp_path, video):
     assert tf.roles() == ["verify", "remove"]
     assert out.status == "held" and out.text == ""
     assert "withheld" in out.note
-    assert [c.verdict for c in out.claims] == ["supported"]
+    assert out.claims == []  # nothing is said, so no claim is published; the check is kept
+    assert [k.verdict for k in out.checks[-1].claims] == ["supported", "contradicted"]
 
 
 def test_everything_removed_is_held(tmp_path, video):
@@ -536,15 +548,15 @@ def test_remove_claims_sends_the_note_only_when_given():
 def test_verify_always_fails_is_held_after_four_rounds(tmp_path, video):
     """A new claim fails in every round; each is cut, and the fourth failure holds the cue."""
     tf = FakeTF(
-        verify=_new_failure_each_round(("a person", "supported"), ("detail 4", "not_visible")),
+        verify=_new_failure_each_round(("a person", "supported"), ("door", "not_visible")),
         remove=_changed_each_time(),
     )
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
     assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 3
-    assert "not verified after 4 rounds: detail 4 (not visible)" in out.note
-    assert "3 claims removed: detail 1; detail 2; detail 3" in out.note
+    assert "not verified after 4 rounds: door (not visible)" in out.note
+    assert "3 claims removed: red; coat; opens" in out.note
     assert speech.calls == []
     assert out.start == GAP.usable_start
     assert {c["stage"] for c in tf.calls} == {"finalize"}
@@ -1209,14 +1221,60 @@ def test_a_cue_that_cannot_wait_starts_as_late_as_it_can_with_a_look_ahead(tmp_p
     is voiced again with "In a moment, " and its fit checked again."""
     gap = _pause(10.2, 19.0)
     cue = _cue(CHART_LINE, start=10.2, event_ids=["e009"])
-    tf = FakeTF(verify=[_supported("a bar chart shows sales rising each year")])
+    tf = FakeTF(verify=[_supported("a bar chart shows sales rising each year")] * 2)
     speech = FakeSpeech([2.7, 3.7])
     ctx = CTX.model_copy(update={"video_duration": 30.0})
     out = _run(tmp_path, video, tf, speech, cue=cue, gap=gap, events={"e009": CHART}, ctx=ctx)
     assert [c["text"] for c in speech.calls] == [
         CHART_LINE, "In a moment, a bar chart shows sales rising each year."
     ]  # fmt: skip
+    # the line changed after it was verified: it is verified again as it is voiced
+    assert [_description(c) for c in tf.of("verify")] == [CHART_LINE, out.text]
+    assert out.checks[-1].text == out.text
     assert out.status == "verified" and out.ahead is True
     assert out.text == "In a moment, a bar chart shows sales rising each year."
     assert out.start == pytest.approx(15.3) and out.end == pytest.approx(19.0)
     assert "look-ahead" in out.note
+
+
+# -- the published claims are those of the final text -----------------------------------------
+
+
+def test_a_compressed_cue_publishes_only_the_claims_its_final_text_makes(tmp_path, video):
+    """A line compressed after it was verified is verified again, and the claims it carries
+    are the final text's, each judged on that text. What the verifier lists beyond the line
+    (other things the frames show) is not a claim of the line and is never published."""
+    long_text = "A person in a long red coat opens the wooden door of the shed."  # 14 words
+    final = "A person in a red coat opens a door."
+    tf = FakeTF(
+        verify=[
+            _supported("a person", "a long red coat", "opens the wooden door of the shed"),
+            _supported(
+                "a person",
+                "wears a red coat",
+                "opens a door",
+                "the shed has a green roof",
+                "a dog sleeps on the porch",
+            ),
+        ],  # fmt: skip
+        compress=[{"text": final}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([5.6, 3.0]), cue=_cue(long_text))
+    assert out.status == "verified" and out.text == final
+    assert [c.text for c in out.claims] == ["a person", "wears a red coat", "opens a door"]
+    last = out.checks[-1]
+    assert last.text == out.text
+    assert all(c in last.claims for c in out.claims)  # each verdict judged on the final text
+
+
+def test_claims_of_the_text_tolerate_inflection_and_framing_words():
+    from lull.stages.verify import said_in
+
+    text = "Glycolysis and Krebs Cycle. A woman waves at two children."
+    assert said_in("The slide is titled Glycolysis and Krebs Cycle.", text)
+    assert said_in("a woman is waving", text)
+    assert said_in("there are 2 children", text)
+    assert said_in("there are three children", text) is False  # a different number
+    assert said_in("The slide lists Glycolysis occurs in cytoplasm.", text) is False
+    assert said_in("NADH and FADH2 are carriers", text) is False
+    assert said_in("a slide is there", "A slide.")  # nothing but framing: the text says it

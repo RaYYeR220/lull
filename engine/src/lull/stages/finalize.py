@@ -521,7 +521,23 @@ class _Finalise:
         """Held for a person; it keeps its placement, look-ahead included."""
         return self._result("held", reason, None, None, 1.0, self.cue.ahead, [])
 
+    def recheck(self) -> list[Claim] | None:
+        """When the text changed after its last check (a look-ahead added, a contradicted
+        claim cut), its claims are judged again, on the text as it now is: a cue never
+        carries a verdict given to another text. None when nothing changed."""
+        if not self.text or (self.checks and _same(self.checks[-1].text, self.text)):
+            return None
+        self.claims = self.check_frames()
+        return self.claims
+
     def done(self, audio: Path, dur: float, tempo: float) -> Cue:
+        again = self.recheck()
+        if again is not None:
+            bad = [c for c in again if c.verdict != "supported"]
+            if not again or bad:
+                self.claims = [c for c in again if c.verdict != "contradicted"]
+                why = _claims_note(bad) if bad else "no visual claim left to check"
+                return self.held("not verified as voiced: " + why)
         ahead = (self.cue.ahead or self.prefixed) and count_ahead(self.text) > 0
         extra = ["look-ahead sentence removed"] if self.cue.ahead and not ahead else []
         if self.prefixed and ahead:
@@ -654,6 +670,10 @@ class _Finalise:
                 self.text = autofix(cut)
                 self._removed_add(wrong)
             self.claims = [c for c in self.claims if c.verdict != "contradicted"]
+            if not self.text:
+                self.claims = []  # nothing is said: no claim is the text's
+            elif self.recheck() is not None:
+                self.claims = [c for c in self.claims if c.verdict != "contradicted"]
             keep = [k for k in self.keep if _occurs(self.text, k)]
             self.findings = _lint(self.text, keep, self.ctx)
         return self.held(reason)

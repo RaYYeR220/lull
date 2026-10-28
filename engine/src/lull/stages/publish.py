@@ -895,6 +895,19 @@ def publish(
     return PublishResult(files=files, manifest=run_dir / MANIFEST)
 
 
+def own_claims(c: Cue) -> Cue:
+    """`c` with only the claims judged on its current text: none when the text changed after
+    its last check (an edit), since every verdict belongs to the text it was given to. A cue
+    without a check history keeps its claims."""
+    if not c.claims or not c.checks:
+        return c
+    if " ".join(c.checks[-1].text.split()) == " ".join(c.text.split()):
+        return c
+    log.info("publish: %s changed after its last check; its %d claims are not published",
+             c.id, len(c.claims))  # fmt: skip
+    return c.model_copy(update={"claims": []})
+
+
 def _stage(
     run_dir: Path, final: Path, video: Path, info: media.Probe, cues: list[Cue],
     extended: list[Cue], events: list[VisualEvent], gaps: list[Gap],
@@ -906,6 +919,7 @@ def _stage(
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
     manifest left out."""
+    cues, extended = [own_claims(c) for c in cues], [own_claims(c) for c in extended]
     everything = cues + extended
     spoken, spoken_ext = mixer.voiced(cues), mixer.voiced_extended(extended)
     out: dict[str, Path] = {}

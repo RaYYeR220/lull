@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from collections.abc import Iterable
 from functools import cache
 from importlib.resources import files
@@ -33,6 +34,27 @@ EDIT_TEMPERATURE = 0.2
 EDIT_ESTIMATE = 0.0005
 VERDICTS = ("supported", "not_visible", "contradicted")
 UNSPECIFIED = "(unspecified claim)"  # stands in for a failed claim the verifier gave no text
+SAID_SHARE = 0.5  # a claim is the text's when at least this share of its words is in it
+_WORD = re.compile(r"[a-z0-9]+")
+_POSSESSIVE = re.compile(r"['\u2019]s\b")
+_NUMBER_WORDS = {
+    w: str(n)
+    for n, w in enumerate(
+        "zero _ two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+        "fifteen sixteen seventeen eighteen nineteen twenty".split()
+    )
+    if w != "_"  # "one" is as often "a" as a count
+}
+# words that frame a claim rather than state it ("the slide is titled ...", "there is ...")
+_FRAMING = frozenset(
+    """a an the and or but of to in on at by for from with into onto over under as is are was
+    were be been being am there here this that these those it its they them their he she his her
+    has have had do does did can could will would now then still also just some any each one
+    moment visible seen see shown show shows showing displays display displayed list lists
+    listed reads read reading says say said titled title labelled labeled label caption
+    captioned text words word written appears appear appearing screen slide frame image picture
+    video clip""".split()
+)
 
 _CLAIM_PROPS: dict = {
     "text": {"type": "string", "minLength": 1},
@@ -160,6 +182,51 @@ def _distinct(claims: list[Claim]) -> list[Claim]:
     return list(kept.values())
 
 
+def _stem(word: str) -> str:
+    """A crude English stem, enough to match "waves", "waved" and "waving"."""
+    for suffix in ("ing", "ed", "s"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            word = word[: -len(suffix)]
+            break
+    return word[:-1] if word.endswith("e") and len(word) > 3 else word
+
+
+def _said_words(s: str) -> set[str]:
+    plain = _POSSESSIVE.sub("", s.lower())
+    return {_stem(w) for w in _WORD.findall(plain) if w not in _FRAMING}
+
+
+def _numbers(s: str) -> set[str]:
+    words = _WORD.findall(s.lower())
+    return {_NUMBER_WORDS.get(w, w) for w in words if w in _NUMBER_WORDS or w.isdigit()}
+
+
+def said_in(claim: str, text: str) -> bool:
+    """Whether `claim` is something `text` says: every number it gives is in the text ("2" and
+    "two" alike), and at least SAID_SHARE of its words (inflection and framing words such as
+    "the slide is titled" aside) are. A claim of framing words only is the text's. The
+    verifier also lists what the frames show beyond the line (the other bullets of a slide);
+    those are not claims of the line."""
+    if not _numbers(claim) <= _numbers(text):
+        return False
+    words = _said_words(claim)
+    if not words:
+        return True
+    return len(words & _said_words(text)) >= SAID_SHARE * len(words)
+
+
+def claims_of(text: str, claims: Iterable[Claim]) -> list[Claim]:
+    """The claims `text` makes (said_in); a failed claim without text (UNSPECIFIED) stays, so
+    a failed check is never lost."""
+    kept, extra = [], []
+    for c in claims:
+        (kept if c.text == UNSPECIFIED or said_in(c.text, text) else extra).append(c)
+    if extra:
+        log.info("verify: %d claims the line does not make left out: %s", len(extra),
+                 "; ".join(c.text for c in extra))  # fmt: skip
+    return kept
+
+
 def verify(
     text: str, clip: Path, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
     offset: float = 0.0,
@@ -167,7 +234,8 @@ def verify(
     """Atomic visual claims of `text`, each judged against the frames of `clip` only.
 
     `names` are names the programme has established; they are context, not claims. `offset` is
-    the clip's start in the video, added to every claim time.
+    the clip's start in the video, added to every claim time. Only the claims `text` makes
+    are returned (claims_of).
     """
     known = sorted(set(names))
     user = "\n\n".join(
@@ -182,7 +250,7 @@ def verify(
         run_id=run_id, stage=STAGE, role="verify", thinking=False,
         max_tokens=VERIFY_MAX_TOKENS, temperature=VERIFY_TEMPERATURE, estimate=VERIFY_ESTIMATE,
     )  # fmt: skip
-    return parse_claims(out, offset=offset)
+    return claims_of(text, parse_claims(out, offset=offset))
 
 
 def rewrite(prompt: str, user: str, tf: TokenFactory, *, run_id: str, role: str) -> str:

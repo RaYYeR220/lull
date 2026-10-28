@@ -1697,3 +1697,24 @@ def test_script_both_tracks_and_cues_json_place_every_cue_at_the_same_time(publi
         assert timecode(in_json[cid]) == a, cid
     assert in_vtt["x002"][0] == "00:00:04.320"  # the freeze point, not the visual (4.0 s)
 
+
+def test_claims_judged_on_another_text_are_never_published(tmp_path, fake_media):
+    """A cue whose text changed after its last check (an edit) publishes no claim: each
+    verdict belongs to the text it was given to."""
+    from lull.types import Check
+
+    video = tmp_path / "lecture.mp4"
+    video.write_bytes(b"lecture video")
+    claim = Claim(text="a door opens", verdict="supported", at=2.5)
+    same = _cue("c001", 2.0, 1.0, claims=[claim], audio="c.wav",
+                checks=[Check(text="A door opens.", claims=[claim])])  # fmt: skip
+    edited = _cue("c002", 20.0, 1.0, gap="g002", status="edited", text="A gate swings shut.",
+                  claims=[claim], audio="d.wav",
+                  checks=[Check(text="A door opens.", claims=[claim])])  # fmt: skip
+    gaps = [_gap("g001", 2.0, 5.0), _gap("g002", 20.0, 23.0)]
+    run = tmp_path / "run"
+    publish(run, video, [same, edited], [], [_ev("e1", 2.0, 4.0)], gaps, None,
+            _ledger(tmp_path), "r1", RunOptions(), speech=[])  # fmt: skip
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    assert [(c["id"], len(c["claims"])) for c in data["cues"]] == [("c001", 1), ("c002", 0)]
+    assert "a door opens" not in (run / "script.md").read_text(encoding="utf-8").split("c002")[1]
