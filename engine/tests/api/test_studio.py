@@ -941,7 +941,7 @@ def test_fork_a_showcase_run_into_an_editable_copy(make_app, template, data, fas
         r = c.post(f"/v1/runs/{RID}/fork")
         assert r.status_code == 201, r.text
         new, token = r.json()["run_id"], r.json()["edit_token"]
-        assert re.fullmatch(r"live-\d{8}-\d{6}-[0-9a-f]{6}", new) and len(token) >= 40
+        assert re.fullmatch(r"live-\d{8}-[0-9a-f]{24}", new) and len(token) >= 40
         assert fakes.tf == []  # no model call
         d = data / "runs" / new
         assert json.loads((d / "manifest.json").read_text(encoding="utf-8"))["run_id"] == new

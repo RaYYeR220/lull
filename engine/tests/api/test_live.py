@@ -26,7 +26,7 @@ MP4_FORMAT = "mov,mp4,m4a,3gp,3g2,mj2"
 OWNER = "owner-token-of-the-unfinished-run"
 OWNER_AUTH = {"Authorization": f"Bearer {OWNER}"}
 BUSY = "Another description is running. Try again in a minute, or open a recorded run."
-RUN_ID = re.compile(r"^live-\d{8}-\d{6}-[0-9a-f]{6}$")
+RUN_ID = re.compile(r"^live-\d{8}-[0-9a-f]{24}$")
 
 
 # -- fakes -------------------------------------------------------------------------------------

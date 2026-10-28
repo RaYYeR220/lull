@@ -583,8 +583,14 @@ def client_ip(request: Request, hops: int = 0) -> str:
     return request.client.host if request.client else "unknown"
 
 
+RUN_ID_BYTES = 12  # 96 random bits
+
+
 def new_run_id() -> str:
-    return f"live-{datetime.now(UTC):%Y%m%d-%H%M%S}-{secrets.token_hex(3)}"
+    """A new live run id: `live-<UTC date>-<24 hex>`. The id is the read capability for a
+    visitor's upload (a finished run replays without a token), so it must not be guessable.
+    Ids of the old `live-<date>-<time>-<6 hex>` form still read: the store takes any safe name."""
+    return f"live-{datetime.now(UTC):%Y%m%d}-{secrets.token_hex(RUN_ID_BYTES)}"
 
 
 # -- the upload --------------------------------------------------------------------------------
