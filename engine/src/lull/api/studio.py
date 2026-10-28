@@ -78,10 +78,11 @@ from pydantic import BaseModel, ValidationError
 
 from lull import media
 from lull.api import facts
-from lull.api.live import Live, LiveError, budget_message, client_ip, new_run_id
+from lull.api.live import Live, LiveError, budget_message, client_ip, new_run_id, wait_words
 from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import DAY, HOUR, RateLimiter
 from lull.api.settings import ApiSettings
+from lull.api.spend import public_spend
 from lull.api.store import (
     CUE_ID_RE,
     CUES,
@@ -122,14 +123,12 @@ log = logging.getLogger(__name__)
 M = TypeVar("M", bound=BaseModel)
 
 EDIT_ESTIMATE = 0.01  # USD the spend check reserves for one edit
-EDITS_PER_MIN = 30
-EDITS_PER_DAY = 2000
-PUBLISHES_PER_MIN = 4
-PUBLISHES_PER_DAY = 500
+EDITS_PER_MIN, EDITS_PER_VISITOR_DAY, EDITS_PER_DAY = 30, 200, 2000  # approvals, holds too
+PUBLISHES_PER_MIN, PUBLISHES_PER_VISITOR_DAY, PUBLISHES_PER_DAY = 4, 50, 500
 MAX_EDITS, MAX_PUBLISHES = 2, 1  # re-checked / published at once, across all runs
 OVERLOADED_RETRY_S = 10
 LOCK_WAIT_S = 2.0  # a change waits this long for another change to the same run, then 409
-FORKS_PER_HOUR, FORKS_PER_DAY = 5, 100  # each fork copies the run's media: keep them few
+FORKS_PER_HOUR, FORKS_PER_VISITOR_DAY, FORKS_PER_DAY = 5, 10, 100  # each copies the media
 FORK_TTL_S = 24 * 3600.0  # a fork is removed a day after it was made
 FORK_SWEEP_S = 3600.0
 MAX_TEXT = 1000
@@ -707,19 +706,25 @@ class Studio:
     def __init__(self, settings: ApiSettings, store: RunStore, live: Live) -> None:
         self.settings, self.store, self.live = settings, store, live
         self.limiter = RateLimiter(
-            per_client=EDITS_PER_MIN, client_window=60.0, per_day=EDITS_PER_DAY, day_window=DAY
+            per_client=EDITS_PER_MIN,
+            client_window=60.0,
+            per_client_day=EDITS_PER_VISITOR_DAY,
+            per_day=EDITS_PER_DAY,
         )
         self.publish_limiter = RateLimiter(
             per_client=PUBLISHES_PER_MIN,
             client_window=60.0,
+            per_client_day=PUBLISHES_PER_VISITOR_DAY,
             per_day=PUBLISHES_PER_DAY,
-            day_window=DAY,
         )
         self.clients: Clients = real_clients
         self.finalizer: Callable[[EditJob], Cue] = finalize_edit
         self.publisher: Callable[[RunContext, CueDoc, Ledger], Path] = republish
         self.fork_limiter = RateLimiter(
-            per_client=FORKS_PER_HOUR, client_window=HOUR, per_day=FORKS_PER_DAY, day_window=DAY
+            per_client=FORKS_PER_HOUR,
+            client_window=HOUR,
+            per_client_day=FORKS_PER_VISITOR_DAY,
+            per_day=FORKS_PER_DAY,
         )
         self.max_edits, self.max_publishes = MAX_EDITS, MAX_PUBLISHES
         self.editing = self.publishing = 0  # across all runs, now
@@ -826,24 +831,55 @@ class Studio:
         if executor.get(run_id) is not None or executor.lingers(run_id):
             raise LiveError(409, "busy", DESCRIBING, headers={"Retry-After": "60"})
 
-    def check_rate(self, request: Request, limiter: RateLimiter | None = None) -> None:
+    def check_rate(
+        self, request: Request, limiter: RateLimiter | None = None, what: str = "changes"
+    ) -> None:
+        """The visitor's short window, their share of the day, everyone's day (429)."""
         limiter = limiter or self.limiter
         key = limiter.client_key(client_ip(request, self.settings.lull_proxy_hops))
         stop = limiter.retry_after(key)
         if stop is not None:
             limit, wait = stop
-            message = (
-                f"Too many changes in a minute. Try again in {wait} s."
-                if limit == "client"
-                else f"The Studio has had too many changes today. Try again in "
-                f"{max(1, round(wait / 3600))} h."
-            )
+            if limit == "client":
+                window = "minute" if limiter.client_window <= 60 else "hour"
+                message = f"Too many {what} in a {window}. Try again in {wait_words(wait)}."
+            elif limit == "client_day":
+                message = (
+                    f"You have made {limiter.per_client_day} {what} today, as many as one "
+                    f"visitor may. Try again in {wait_words(wait)}."
+                )
+            else:
+                message = (
+                    f"The Studio has had too many {what} today. Try again in {wait_words(wait)}."
+                )
             raise LiveError(429, "rate_limited", message, headers={"Retry-After": str(wait)})
         limiter.hit(key)
 
-    def check_budget(self, run_id: str) -> None:
+    def spent_by(self, kind: str, run_dir: Path) -> float:
+        """The model spend that counts against the run's cap: what it was forked with, its own
+        ledger rows, and for a recorded run what its manifest says it spent."""
+        request = _dict(_read_json(run_dir / REQUEST))
+        manifest = _dict(_read_json(run_dir / MANIFEST))
+        before = request.get("spend_before")
+        before = float(before) if isinstance(before, int | float) and before > 0 else 0.0
+        run_id = manifest.get("run_id") if isinstance(manifest.get("run_id"), str) else None
+        own = self.live.ledger.spent(run_id=run_id or run_dir.name)
+        if kind == "showcase":
+            spend = public_spend(_dict(manifest.get("summary")))
+            recorded = spend["model_usd_all_runs"] or spend["model_usd"] or 0.0
+            own = max(own, float(recorded))
+        return round(before + own, 6)
+
+    def ledger_for(self, run_dir: Path) -> Ledger:
+        """The live ledger, counting what a fork was made with against its run cap."""
+        before = _dict(_read_json(run_dir / REQUEST)).get("spend_before")
+        if isinstance(before, int | float) and before > 0:
+            return CarriedLedger(self.live.ledger, float(before))  # type: ignore[return-value]
+        return self.live.ledger
+
+    def check_budget(self, run_id: str, ledger: Ledger | None = None) -> None:
         try:
-            self.live.ledger.check(run_id, EDIT_ESTIMATE)
+            (ledger or self.live.ledger).check(run_id, EDIT_ESTIMATE)
         except BudgetExceeded as e:
             raise LiveError(402, "budget", budget_message(e.scope), scope=e.scope) from None
 
@@ -880,6 +916,30 @@ class Studio:
 
     def scrub(self, run_dir: Path, text: str) -> str:
         return self.live.scrubber(run_dir)(text)[:300]
+
+
+class CarriedLedger:
+    """A fork's ledger: the live one, with what the fork's source had spent counted against
+    the run cap too, so forking does not hand out a fresh cap."""
+
+    def __init__(self, inner: Ledger, before: float) -> None:
+        self.inner, self.before = inner, before
+
+    def check(self, run_id: str, estimate: float) -> None:
+        self.inner.check(run_id, estimate)
+        cap = self.inner.cap_run
+        if cap is None:
+            return
+        spent = self.before + self.inner.spent(run_id=run_id)
+        if spent + estimate > cap:
+            raise BudgetExceeded(
+                "run",
+                f"run cap ${cap:.2f} would be exceeded (spent ${spent:.4f}, with the run it was "
+                f"copied from, + estimate ${estimate:.4f})",
+            )
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)
 
 
 def not_editable(e: NotEditable) -> LiveError:
@@ -971,12 +1031,13 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
                 text=checked,
                 findings=[f.model_dump(mode="json") for f in findings],
             )
-        studio.check_budget(rc.run_id)
+        ledger = studio.ledger_for(run_dir)
+        studio.check_budget(rc.run_id, ledger)
         if studio.editing >= studio.max_edits:
             raise overloaded()
 
         work = run_dir / WORK / EDITS / f"{cue.id}-{secrets.token_hex(4)}"
-        job = EditJob(rc, cue, text, ctx, work, studio.live.ledger, studio.clients)
+        job = EditJob(rc, cue, text, ctx, work, ledger, studio.clients)
         studio.editing += 1
         try:
             done = await anyio.to_thread.run_sync(studio.finalizer, job)
@@ -1062,7 +1123,7 @@ async def publish_run(run_id: str, request: Request) -> dict:
         doc = await studio.load(run_dir)
         if not studio.store.dirty(run_dir):  # nothing changed since it was published
             return await _detail(studio, run_dir)
-        studio.check_rate(request, studio.publish_limiter)
+        studio.check_rate(request, studio.publish_limiter, "publishes")
         rc = await studio.context(run_dir)
         missing = unvoiced(doc)
         if missing:
@@ -1146,13 +1207,15 @@ def fork_run(
     client: str,
     origin: dict | None = None,
     envelope: Callable[[Path, Path, float | None], object] | None = None,
+    spend_before: float = 0.0,
 ) -> None:
     """Copy what the Studio and a new publish need from the published run `src` into the new
     live run folder `dst`, left out of the run list until it is complete: the manifest and
     cues.json (under the new run id), studio.json, the outputs and keyframes, the stage
     records (absolute paths into `src` pointed at `dst`), the takes the cues and the overlay
     use, and the source video when the run keeps it (a recorded run's is found among the
-    samples). Not events.jsonl: the fork's history starts with it. No model is called."""
+    samples). Not events.jsonl: the fork's history starts with it. No model is called.
+    `spend_before` (what the source had spent) counts against the fork's run cap."""
     dst.mkdir(parents=True)
     (dst / PENDING).touch()
     manifest = _dict(_read_json(src / MANIFEST))
@@ -1215,6 +1278,7 @@ def fork_run(
             "options": {k: options[k] for k in ("mode", "voice") if k in options},
             "video": {"duration": duration},
             "client": client,
+            "spend_before": spend_before,
             TOKEN_KEY: token_hash,
         },
     )
@@ -1248,7 +1312,7 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
     studio.not_described(run_id)
     if not (src / MANIFEST).is_file():
         raise LiveError(409, "not_ready", NOT_READY)
-    studio.check_rate(request, studio.fork_limiter)
+    studio.check_rate(request, studio.fork_limiter, "copies")
     studio.check_rate(request)
     new_id, (token, token_hash) = new_run_id(), new_token()
     client = studio.limiter.client_key(client_ip(request, studio.settings.lull_proxy_hops))
@@ -1265,6 +1329,7 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
                     client=client[:16],
                     origin=fork_origin(studio, found[0], src),
                     envelope=studio.live.envelope,
+                    spend_before=studio.spent_by(found[0], src),
                 )  # fmt: skip
             )
         except Exception:

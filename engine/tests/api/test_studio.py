@@ -1454,3 +1454,86 @@ def test_uploads_expire_after_7_days_samples_and_showcase_never(make_app, data):
     assert app.state.studio.upload_ttl == 7 * 24 * 3600
     assert sorted(app.state.studio.expire_runs()) == ["fork-25h", "up-8d"]
     assert not any(d.exists() for d in gone) and all(d.is_dir() for d in kept)
+
+
+# -- per-visitor day limits; a fork carries its source's spend -------------------------------------
+
+
+def _spend(ledger: Ledger, run_id: str, usd: float) -> None:
+    ledger.record(
+        CallRecord(run_id=run_id, stage="watch", role="watch", provider="tokenfactory", model="m",
+                   tokens_in=1, tokens_cached=0, tokens_out=1, latency_s=0.1, cost_usd=usd,
+                   ts=time.time())
+    )  # fmt: skip
+
+
+def test_each_visitor_has_day_limits_besides_the_global_ones(app):
+    studio = app.state.studio
+    assert (studio.limiter.per_client_day, studio.limiter.per_day) == (200, 2000)
+    assert (studio.publish_limiter.per_client_day, studio.publish_limiter.per_day) == (50, 500)
+    assert (studio.fork_limiter.per_client_day, studio.fork_limiter.per_day) == (10, 100)
+
+
+def test_a_visitor_past_their_day_of_changes_is_429(sc, rd, app):
+    app.state.studio.limiter = RateLimiter(
+        per_client=100, client_window=60, per_client_day=2, per_day=1000
+    )
+    for _ in range(2):
+        assert sc.post(f"/v1/runs/{RID}/cues/c001/approve").status_code == 200
+    r = sc.post(f"/v1/runs/{RID}/cues/c001/approve")
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    assert "today" in r.json()["message"] and int(r.headers["retry-after"]) > 3600
+
+
+def test_a_visitor_past_their_day_of_forks_is_429(make_app, template, data, fast_media):
+    place(template, data / "showcase")
+    app = make_app()
+    app.state.studio.fork_limiter = RateLimiter(
+        per_client=100, client_window=3600, per_client_day=1, per_day=1000
+    )
+    with TestClient(app) as c:
+        assert c.post(f"/v1/runs/{RID}/fork").status_code == 201
+        r = c.post(f"/v1/runs/{RID}/fork")
+        assert r.status_code == 429 and "today" in r.json()["message"]
+
+
+def test_a_fork_carries_its_sources_spend_into_its_run_cap(make_app, template, data, fast_media):
+    src = place(template, data / "runs")  # a live run that spent most of its cap
+    app = make_app()
+    ledger = Ledger(data.parent / "capped.db", cap_run=0.05, cap_day=None, cap_total=None)
+    app.state.live.ledger = ledger
+    _spend(ledger, RID, 0.035)
+    fakes = app.state.studio.clients
+    with TestClient(app) as c:
+        r = c.post(f"/v1/runs/{RID}/fork")
+        fid, token = r.json()["run_id"], r.json()["edit_token"]
+        req = json.loads((data / "runs" / fid / "request.json").read_text(encoding="utf-8"))
+        assert req["spend_before"] == pytest.approx(0.035)
+        owner = {"Authorization": f"Bearer {token}"}
+        # 0.035 + this fork's own 0.006 + an edit's 0.01 would pass a fresh cap, not this one
+        _spend(ledger, fid, 0.006)
+        r = c.patch(f"/v1/runs/{fid}/cues/c001", json={"text": NEW_RED}, headers=owner)
+        assert r.status_code == 402 and r.json()["scope"] == "run", r.text
+        assert fakes.tf == []
+        # and a fork of the fork carries both
+        r = c.post(f"/v1/runs/{fid}/fork")
+        req2 = json.loads(
+            (data / "runs" / r.json()["run_id"] / "request.json").read_text(encoding="utf-8")
+        )
+        assert req2["spend_before"] == pytest.approx(0.041)
+    assert src.is_dir()
+
+
+def test_a_fork_of_a_recorded_run_carries_its_recorded_spend(make_app, template, data, fast_media):
+    src = place(template, data / "showcase")
+    _made_in(src, template)
+    app = make_app()
+    with TestClient(app) as c:
+        fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+    req = json.loads((data / "runs" / fid / "request.json").read_text(encoding="utf-8"))
+    summary = json.loads((src / "manifest.json").read_text(encoding="utf-8"))["summary"]
+    from lull.api.spend import public_spend
+
+    spend = public_spend(summary)
+    expected = spend["model_usd_all_runs"] or spend["model_usd"]
+    assert expected and req["spend_before"] == pytest.approx(expected)

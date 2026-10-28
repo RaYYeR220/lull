@@ -1,4 +1,5 @@
-"""In-memory sliding windows for starting live runs: a few per visitor an hour, a cap a day.
+"""In-memory sliding windows: a few per visitor in a short window (an hour for live runs, a
+minute for Studio changes), optionally a day's worth per visitor, and a cap a day for everyone.
 
 Visitors are known only by sha256(daily salt + ip): the salt is random, lives in memory and
 changes at UTC midnight, so the key cannot be turned back into an address or linked across
@@ -20,7 +21,7 @@ from typing import Literal
 DAY = 86_400.0
 HOUR = 3_600.0
 
-Limit = Literal["client", "global"]
+Limit = Literal["client", "client_day", "global"]
 
 
 def subject(ip: str) -> str:
@@ -44,12 +45,15 @@ class RateLimiter:
         client_window: float = HOUR,
         per_day: int = 20,
         day_window: float = DAY,
+        per_client_day: int | None = None,
         clock: Callable[[], float] = time.time,
     ) -> None:
         self.per_client, self.client_window = per_client, client_window
         self.per_day, self.day_window = per_day, day_window
+        self.per_client_day = per_client_day  # one visitor's share of a day (None: no limit)
         self._clock = clock
         self._clients: dict[str, deque[float]] = {}
+        self._client_days: dict[str, deque[float]] = {}
         self._all: deque[float] = deque()
         self._salt: tuple[int, bytes] = (-1, b"")
 
@@ -63,12 +67,13 @@ class RateLimiter:
     def _prune(self, now: float) -> None:
         while self._all and self._all[0] <= now - self.day_window:
             self._all.popleft()
-        for key in list(self._clients):
-            hits = self._clients[key]
-            while hits and hits[0] <= now - self.client_window:
-                hits.popleft()
-            if not hits:
-                del self._clients[key]
+        for windows, span in ((self._clients, self.client_window), (self._client_days, DAY)):
+            for key in list(windows):
+                hits = windows[key]
+                while hits and hits[0] <= now - span:
+                    hits.popleft()
+                if not hits:
+                    del windows[key]
 
     def retry_after(self, key: str) -> tuple[Limit, int] | None:
         """None when `key` may start a run now, else which limit stops it and the whole
@@ -78,6 +83,9 @@ class RateLimiter:
         hits = self._clients.get(key, ())
         if len(hits) >= self.per_client:
             return "client", max(1, math.ceil(hits[0] + self.client_window - now))
+        days = self._client_days.get(key, ())
+        if self.per_client_day is not None and len(days) >= self.per_client_day:
+            return "client_day", max(1, math.ceil(days[0] + DAY - now))
         if len(self._all) >= self.per_day:
             return "global", max(1, math.ceil(self._all[0] + self.day_window - now))
         return None
@@ -85,4 +93,6 @@ class RateLimiter:
     def hit(self, key: str) -> None:
         now = self._clock()
         self._clients.setdefault(key, deque()).append(now)
+        if self.per_client_day is not None:
+            self._client_days.setdefault(key, deque()).append(now)
         self._all.append(now)

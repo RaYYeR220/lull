@@ -433,6 +433,22 @@ def test_rate_limit_429_global_day(lc, live):
     assert 86000 < int(r.headers["retry-after"]) <= 86400
 
 
+def test_rate_limiter_counts_a_day_per_visitor_too():
+    now = [0.0]
+    rl = RateLimiter(
+        per_client=5, client_window=60, per_client_day=3, per_day=100, clock=lambda: now[0]
+    )
+    for _ in range(3):
+        assert rl.retry_after("a") is None
+        rl.hit("a")
+        now[0] += 61  # past the minute each time
+    stop = rl.retry_after("a")
+    assert stop is not None and stop[0] == "client_day" and stop[1] > 3600
+    assert rl.retry_after("b") is None
+    now[0] += 86_400
+    assert rl.retry_after("a") is None
+
+
 def test_rate_limiter_sliding_windows():
     now = [1000.0]
     rl = RateLimiter(per_client=3, per_day=20, clock=lambda: now[0])

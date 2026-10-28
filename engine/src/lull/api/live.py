@@ -188,7 +188,7 @@ def budget_message(scope: str) -> str:
     return f"The live demo has used its model budget for {when}. Recorded runs still work."
 
 
-def _wait_words(seconds: int) -> str:
+def wait_words(seconds: int) -> str:
     if seconds < 3600:
         n = max(1, math.ceil(seconds / 60))
         return f"{n} minute{'s' if n > 1 else ''}"
@@ -569,7 +569,7 @@ class Executor:
             if waited == "late":
                 job.stop.set()  # its next model call is refused; what it reports is dropped
                 log.warning("live run %s given up after %g s", job.run_id, self.wall_clock)
-                limit = _wait_words(math.ceil(self.wall_clock))
+                limit = wait_words(math.ceil(self.wall_clock))
                 raise RunTimeout(f"This description took longer than {limit} and was stopped.")
             assert work is not None
             extra = work.result()
@@ -684,12 +684,12 @@ class Live:
         if limit == "client":
             message = (
                 f"You have started {self.limiter.per_client} live descriptions in the last "
-                f"hour. Try again in {_wait_words(wait)}, or open a recorded run."
+                f"hour. Try again in {wait_words(wait)}, or open a recorded run."
             )
         else:
             message = (
                 f"The live demo has run its {self.limiter.per_day} descriptions for today. "
-                f"Try again in {_wait_words(wait)}, or open a recorded run."
+                f"Try again in {wait_words(wait)}, or open a recorded run."
             )
         raise LiveError(429, "rate_limited", message, headers={"Retry-After": str(wait)})
 
@@ -699,7 +699,7 @@ class Live:
             wait = stop[1]
             message = (
                 f"Too many of your uploads were refused in the last hour. Try again in "
-                f"{_wait_words(wait)}, or open a recorded run."
+                f"{wait_words(wait)}, or open a recorded run."
             )
             raise LiveError(429, "rate_limited", message, headers={"Retry-After": str(wait)})
 
