@@ -1,0 +1,1650 @@
+{
+  "video": "woodshole",
+  "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+  "temperature": 0.0,
+  "thinking": false,
+  "max_tokens": 8000,
+  "chunk": 10,
+  "context": 3,
+  "refs_sha256": "940a47ea0e845297ab2d8f7e4d29eec58cb962dfb895554c18736f78ad4af221",
+  "prompt_template_sha256": "510f3e87d48d1174825ab0da21b431326f16ec85afe707822612d63a3cdf03ca",
+  "facts": [
+    {
+      "id": "usgs-001.1",
+      "ref_cue_id": "usgs-001",
+      "source": "usgs_ad",
+      "text": "Text reads USGS Science for a Changing World.",
+      "kind": "on_screen_text",
+      "anchor_time": 0.88,
+      "anchor_end": 0.88,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-002.1",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "Video shows the Woodshole Coastal and Marine Science Center main building.",
+      "kind": "visual",
+      "anchor_time": 8.08,
+      "anchor_end": 8.08,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-003.1",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "Text reads the U.S. Geological Survey, which hold Coastal Marine Science Center.",
+      "kind": "on_screen_text",
+      "anchor_time": 8.08,
+      "anchor_end": 8.08,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-004.1",
+      "ref_cue_id": "usgs-004",
+      "source": "usgs_ad",
+      "text": "Sandy beach with inrush of ocean water.",
+      "kind": "visual",
+      "anchor_time": 12.16,
+      "anchor_end": 12.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-005.1",
+      "ref_cue_id": "usgs-005",
+      "source": "usgs_ad",
+      "text": "Scientists on research vessel collecting seafloor samples.",
+      "kind": "visual",
+      "anchor_time": 12.32,
+      "anchor_end": 12.32,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-006.1",
+      "ref_cue_id": "usgs-006",
+      "source": "usgs_ad",
+      "text": "Signed with text reading tsunami hazard zone in case of earthquake, go to high ground or inland.",
+      "kind": "on_screen_text",
+      "anchor_time": 14.48,
+      "anchor_end": 14.48,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-007.1",
+      "ref_cue_id": "usgs-007",
+      "source": "usgs_ad",
+      "text": "Large waves and sign reading danger, no swimming.",
+      "kind": "visual",
+      "anchor_time": 17.44,
+      "anchor_end": 17.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-008.1",
+      "ref_cue_id": "usgs-008",
+      "source": "usgs_ad",
+      "text": "Car driving on flooded road, large wave crashing on road.",
+      "kind": "visual",
+      "anchor_time": 18.48,
+      "anchor_end": 18.48,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-009.1",
+      "ref_cue_id": "usgs-009",
+      "source": "usgs_ad",
+      "text": "Piping clover chicks in nest on sandy beach.",
+      "kind": "visual",
+      "anchor_time": 22.48,
+      "anchor_end": 22.48,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-010.1",
+      "ref_cue_id": "usgs-010",
+      "source": "usgs_ad",
+      "text": "Map of Cape Cod with arrow pointing to the Woodhole Coastal and Marine Science Center.",
+      "kind": "visual",
+      "anchor_time": 26.48,
+      "anchor_end": 26.48,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-011.1",
+      "ref_cue_id": "usgs-011",
+      "source": "usgs_ad",
+      "text": "Scientists are in a lab.",
+      "kind": "visual",
+      "anchor_time": 30.32,
+      "anchor_end": 30.32,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-011.2",
+      "ref_cue_id": "usgs-011",
+      "source": "usgs_ad",
+      "text": "Scientists are using pressure core characterization tools.",
+      "kind": "visual",
+      "anchor_time": 30.32,
+      "anchor_end": 30.32,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-012.1",
+      "ref_cue_id": "usgs-012",
+      "source": "usgs_ad",
+      "text": "Two men are on a boat.",
+      "kind": "visual",
+      "anchor_time": 32.56,
+      "anchor_end": 32.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-012.2",
+      "ref_cue_id": "usgs-012",
+      "source": "usgs_ad",
+      "text": "The boat is in the middle of the ocean.",
+      "kind": "visual",
+      "anchor_time": 32.56,
+      "anchor_end": 32.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-012.3",
+      "ref_cue_id": "usgs-012",
+      "source": "usgs_ad",
+      "text": "The men are on seafloor mapping crews.",
+      "kind": "visual",
+      "anchor_time": 32.56,
+      "anchor_end": 32.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-013.1",
+      "ref_cue_id": "usgs-013",
+      "source": "usgs_ad",
+      "text": "A man is on a small boat.",
+      "kind": "visual",
+      "anchor_time": 33.84,
+      "anchor_end": 33.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-013.2",
+      "ref_cue_id": "usgs-013",
+      "source": "usgs_ad",
+      "text": "The boat is in a body of water.",
+      "kind": "visual",
+      "anchor_time": 33.84,
+      "anchor_end": 33.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-013.3",
+      "ref_cue_id": "usgs-013",
+      "source": "usgs_ad",
+      "text": "The man is smiling.",
+      "kind": "visual",
+      "anchor_time": 33.84,
+      "anchor_end": 33.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-014.1",
+      "ref_cue_id": "usgs-014",
+      "source": "usgs_ad",
+      "text": "A group of researchers is on a docked research vessel.",
+      "kind": "visual",
+      "anchor_time": 37.84,
+      "anchor_end": 37.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-015.1",
+      "ref_cue_id": "usgs-015",
+      "source": "usgs_ad",
+      "text": "A sign reads 'Woodshole Oceanographic Institution'.",
+      "kind": "on_screen_text",
+      "anchor_time": 37.84,
+      "anchor_end": 37.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-016.1",
+      "ref_cue_id": "usgs-016",
+      "source": "usgs_ad",
+      "text": "Quesset campus is shown.",
+      "kind": "visual",
+      "anchor_time": 37.84,
+      "anchor_end": 37.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-016.2",
+      "ref_cue_id": "usgs-016",
+      "source": "usgs_ad",
+      "text": "The address is 360 Woods Hole Road.",
+      "kind": "on_screen_text",
+      "anchor_time": 37.84,
+      "anchor_end": 37.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-017.1",
+      "ref_cue_id": "usgs-017",
+      "source": "usgs_ad",
+      "text": "A research vessel is shown.",
+      "kind": "visual",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-017.2",
+      "ref_cue_id": "usgs-017",
+      "source": "usgs_ad",
+      "text": "The vessel has a NOAA logo on the side.",
+      "kind": "visual",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-017.3",
+      "ref_cue_id": "usgs-017",
+      "source": "usgs_ad",
+      "text": "The vessel has 'R226' written on the side.",
+      "kind": "on_screen_text",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-018.1",
+      "ref_cue_id": "usgs-018",
+      "source": "usgs_ad",
+      "text": "Scientists are presenting to a large group.",
+      "kind": "visual",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-019.1",
+      "ref_cue_id": "usgs-019",
+      "source": "usgs_ad",
+      "text": "A large room has long desks.",
+      "kind": "visual",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-019.2",
+      "ref_cue_id": "usgs-019",
+      "source": "usgs_ad",
+      "text": "People are sitting in chairs in a semicircle.",
+      "kind": "visual",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-019.3",
+      "ref_cue_id": "usgs-019",
+      "source": "usgs_ad",
+      "text": "The people are facing a tall podium.",
+      "kind": "visual",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-019.4",
+      "ref_cue_id": "usgs-019",
+      "source": "usgs_ad",
+      "text": "People are sitting behind the podium.",
+      "kind": "visual",
+      "anchor_time": 45.76,
+      "anchor_end": 45.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-020.1",
+      "ref_cue_id": "usgs-020",
+      "source": "usgs_ad",
+      "text": "An aerial view shows a boat near shore.",
+      "kind": "visual",
+      "anchor_time": 49.76,
+      "anchor_end": 49.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-020.2",
+      "ref_cue_id": "usgs-020",
+      "source": "usgs_ad",
+      "text": "The boat is pulling a chirp subbottom profiler.",
+      "kind": "visual",
+      "anchor_time": 49.76,
+      "anchor_end": 49.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-020.3",
+      "ref_cue_id": "usgs-020",
+      "source": "usgs_ad",
+      "text": "The profiler is used to map the seafloor.",
+      "kind": "visual",
+      "anchor_time": 49.76,
+      "anchor_end": 49.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-021.1",
+      "ref_cue_id": "usgs-021",
+      "source": "usgs_ad",
+      "text": "Pacific Ocean waves are near a sea cliff.",
+      "kind": "visual",
+      "anchor_time": 50.48,
+      "anchor_end": 50.48,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-022.1",
+      "ref_cue_id": "usgs-022",
+      "source": "usgs_ad",
+      "text": "An aerial view shows wetlands.",
+      "kind": "visual",
+      "anchor_time": 59.6,
+      "anchor_end": 59.6,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-023.1",
+      "ref_cue_id": "usgs-023",
+      "source": "usgs_ad",
+      "text": "An aerial view shows a research vessel moving through the ocean.",
+      "kind": "visual",
+      "anchor_time": 66.8,
+      "anchor_end": 66.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-024.1",
+      "ref_cue_id": "usgs-024",
+      "source": "usgs_ad",
+      "text": "Scientists are on research vessels.",
+      "kind": "visual",
+      "anchor_time": 73.04,
+      "anchor_end": 73.04,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-024.2",
+      "ref_cue_id": "usgs-024",
+      "source": "usgs_ad",
+      "text": "Scientists deploy sampling equipment.",
+      "kind": "visual",
+      "anchor_time": 73.04,
+      "anchor_end": 73.04,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-025.1",
+      "ref_cue_id": "usgs-025",
+      "source": "usgs_ad",
+      "text": "A view shows a lobster on the seafloor.",
+      "kind": "visual",
+      "anchor_time": 75.76,
+      "anchor_end": 75.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-026.1",
+      "ref_cue_id": "usgs-026",
+      "source": "usgs_ad",
+      "text": "Scientists are on a ship.",
+      "kind": "visual",
+      "anchor_time": 76.48,
+      "anchor_end": 76.48,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-026.2",
+      "ref_cue_id": "usgs-026",
+      "source": "usgs_ad",
+      "text": "Scientists bag a sample of seafloor sediment.",
+      "kind": "visual",
+      "anchor_time": 76.48,
+      "anchor_end": 76.48,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-027.1",
+      "ref_cue_id": "usgs-027",
+      "source": "usgs_ad",
+      "text": "Seafloor mapping equipment is being pulled through the ocean by a boat.",
+      "kind": "visual",
+      "anchor_time": 77.84,
+      "anchor_end": 77.84,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-028.1",
+      "ref_cue_id": "usgs-028",
+      "source": "usgs_ad",
+      "text": "Scientists sit in front of a computer.",
+      "kind": "visual",
+      "anchor_time": 82.8,
+      "anchor_end": 82.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-028.2",
+      "ref_cue_id": "usgs-028",
+      "source": "usgs_ad",
+      "text": "Scientists analyze seafloor mapping data.",
+      "kind": "visual",
+      "anchor_time": 82.8,
+      "anchor_end": 82.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-029.1",
+      "ref_cue_id": "usgs-029",
+      "source": "usgs_ad",
+      "text": "An asymmetry map of Nantucket Seafloor is shown.",
+      "kind": "visual",
+      "anchor_time": 82.8,
+      "anchor_end": 82.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-030.1",
+      "ref_cue_id": "usgs-030",
+      "source": "usgs_ad",
+      "text": "A coast modeling system shows forecasted wave heights.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-031.1",
+      "ref_cue_id": "usgs-031",
+      "source": "usgs_ad",
+      "text": "Text reading DSAS appears across the screen.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-031.2",
+      "ref_cue_id": "usgs-031",
+      "source": "usgs_ad",
+      "text": "Text reading digital shoreline analysis system appears across the screen.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-032.1",
+      "ref_cue_id": "usgs-032",
+      "source": "usgs_ad",
+      "text": "A map of Delmarva shoreline is shown.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-032.2",
+      "ref_cue_id": "usgs-032",
+      "source": "usgs_ad",
+      "text": "A toolbar is in the background.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-032.3",
+      "ref_cue_id": "usgs-032",
+      "source": "usgs_ad",
+      "text": "A table of contents is in the background.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-033.1",
+      "ref_cue_id": "usgs-033",
+      "source": "usgs_ad",
+      "text": "Toolbar text reads DSOS V5 toolbar.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-034.1",
+      "ref_cue_id": "usgs-034",
+      "source": "usgs_ad",
+      "text": "Transsex layer selection is shown.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-035.1",
+      "ref_cue_id": "usgs-035",
+      "source": "usgs_ad",
+      "text": "1852 is shown.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-035.2",
+      "ref_cue_id": "usgs-035",
+      "source": "usgs_ad",
+      "text": "1871 is shown.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-035.3",
+      "ref_cue_id": "usgs-035",
+      "source": "usgs_ad",
+      "text": "1911 is shown.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-035.4",
+      "ref_cue_id": "usgs-035",
+      "source": "usgs_ad",
+      "text": "1919 is shown.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-036.1",
+      "ref_cue_id": "usgs-036",
+      "source": "usgs_ad",
+      "text": "Basemap is shown.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-036.2",
+      "ref_cue_id": "usgs-036",
+      "source": "usgs_ad",
+      "text": "World imagery is shown.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-037.1",
+      "ref_cue_id": "usgs-037",
+      "source": "usgs_ad",
+      "text": "Total water level and coastal change forecast viewer is shown.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-037.2",
+      "ref_cue_id": "usgs-037",
+      "source": "usgs_ad",
+      "text": "The viewer shows water elevation data.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-037.3",
+      "ref_cue_id": "usgs-037",
+      "source": "usgs_ad",
+      "text": "The viewer shows potential inundation.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-037.4",
+      "ref_cue_id": "usgs-037",
+      "source": "usgs_ad",
+      "text": "The viewer shows overwashed sites for Masonboro Island, Myrtle Grove, North Carolina.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-037.5",
+      "ref_cue_id": "usgs-037",
+      "source": "usgs_ad",
+      "text": "The viewer shows dune erosion sites for Masonboro Island, Myrtle Grove, North Carolina.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-037.6",
+      "ref_cue_id": "usgs-037",
+      "source": "usgs_ad",
+      "text": "The date is September 4th, 2019.",
+      "kind": "on_screen_text",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-038.1",
+      "ref_cue_id": "usgs-038",
+      "source": "usgs_ad",
+      "text": "High resolution multi-beam bathymetry collected by the USGS in 2018 is shown.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-038.2",
+      "ref_cue_id": "usgs-038",
+      "source": "usgs_ad",
+      "text": "The bathymetry shows the submerged portions of Glen Canyon.",
+      "kind": "visual",
+      "anchor_time": 86.56,
+      "anchor_end": 86.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-039.1",
+      "ref_cue_id": "usgs-039",
+      "source": "usgs_ad",
+      "text": "An aerial view of Cape Cod coastline is shown.",
+      "kind": "visual",
+      "anchor_time": 96.24,
+      "anchor_end": 96.24,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-040.1",
+      "ref_cue_id": "usgs-040",
+      "source": "usgs_ad",
+      "text": "An underwater view of fish swimming is shown.",
+      "kind": "visual",
+      "anchor_time": 96.24,
+      "anchor_end": 96.24,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-041.1",
+      "ref_cue_id": "usgs-041",
+      "source": "usgs_ad",
+      "text": "A scientist crashed down collecting water samples from Salt Marsh Title Creek.",
+      "kind": "visual",
+      "anchor_time": 97.2,
+      "anchor_end": 97.2,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-042.1",
+      "ref_cue_id": "usgs-042",
+      "source": "usgs_ad",
+      "text": "U.S. Coastal Wetland Synthesis Geo narrative.",
+      "kind": "on_screen_text",
+      "anchor_time": 102.32,
+      "anchor_end": 102.32,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-043.1",
+      "ref_cue_id": "usgs-043",
+      "source": "usgs_ad",
+      "text": "Tabs reading motivation, geospatial synthesis, interactive map, synthesis sites, national UVVR, resources and credits.",
+      "kind": "on_screen_text",
+      "anchor_time": 102.32,
+      "anchor_end": 102.32,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-044.1",
+      "ref_cue_id": "usgs-044",
+      "source": "usgs_ad",
+      "text": "Open tab is National UV VR showing salt marsh vulnerability in Jamaica Bay.",
+      "kind": "visual",
+      "anchor_time": 102.32,
+      "anchor_end": 102.32,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-045.1",
+      "ref_cue_id": "usgs-045",
+      "source": "usgs_ad",
+      "text": "Map of world highlighting the 200 nautical mile U.S. exclusive economic zone.",
+      "kind": "visual",
+      "anchor_time": 106.8,
+      "anchor_end": 106.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-046.1",
+      "ref_cue_id": "usgs-046",
+      "source": "usgs_ad",
+      "text": "Yellow lines indicate the extended continental shelf in the Arctic and Atlantic Oceans, and the Bering Sea where sediment thickness data has been collected.",
+      "kind": "visual",
+      "anchor_time": 106.8,
+      "anchor_end": 106.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-047.1",
+      "ref_cue_id": "usgs-047",
+      "source": "usgs_ad",
+      "text": "An atmospheric model for Hurricane Florence.",
+      "kind": "visual",
+      "anchor_time": 111.52,
+      "anchor_end": 111.52,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-048.1",
+      "ref_cue_id": "usgs-048",
+      "source": "usgs_ad",
+      "text": "The animation shows the changing atmospheric pressure and windfields during the storm as simulated by the model.",
+      "kind": "visual",
+      "anchor_time": 111.52,
+      "anchor_end": 111.52,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-049.1",
+      "ref_cue_id": "usgs-049",
+      "source": "usgs_ad",
+      "text": "Aeros display wind direction and colors indicate atmospheric pressure ranging from 97,500 pescals in red to 102,460 Pascals in blue.",
+      "kind": "visual",
+      "anchor_time": 111.52,
+      "anchor_end": 111.52,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-050.1",
+      "ref_cue_id": "usgs-050",
+      "source": "usgs_ad",
+      "text": "Regional map of Puerto Rico showing the faults that are ruptured during 2020 seismic activity.",
+      "kind": "visual",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-051.1",
+      "ref_cue_id": "usgs-051",
+      "source": "usgs_ad",
+      "text": "A black box has text inside.",
+      "kind": "visual",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-051.2",
+      "ref_cue_id": "usgs-051",
+      "source": "usgs_ad",
+      "text": "The text reads zone of recent seismicity.",
+      "kind": "on_screen_text",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-052.1",
+      "ref_cue_id": "usgs-052",
+      "source": "usgs_ad",
+      "text": "Location of detailed survey and fault map is shown.",
+      "kind": "visual",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-053.1",
+      "ref_cue_id": "usgs-053",
+      "source": "usgs_ad",
+      "text": "View starts at top of map next to text that reads 1918.",
+      "kind": "visual",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-053.2",
+      "ref_cue_id": "usgs-053",
+      "source": "usgs_ad",
+      "text": "Text reads 1918.",
+      "kind": "on_screen_text",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-054.1",
+      "ref_cue_id": "usgs-054",
+      "source": "usgs_ad",
+      "text": "M7.2 question mark is shown.",
+      "kind": "visual",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-054.2",
+      "ref_cue_id": "usgs-054",
+      "source": "usgs_ad",
+      "text": "Text reads M7.2 question mark.",
+      "kind": "on_screen_text",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-055.1",
+      "ref_cue_id": "usgs-055",
+      "source": "usgs_ad",
+      "text": "Earthquake epicenter question mark is shown.",
+      "kind": "visual",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-055.2",
+      "ref_cue_id": "usgs-055",
+      "source": "usgs_ad",
+      "text": "Text reads earthquake epicenter question mark.",
+      "kind": "on_screen_text",
+      "anchor_time": 116.56,
+      "anchor_end": 116.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-056.1",
+      "ref_cue_id": "usgs-056",
+      "source": "usgs_ad",
+      "text": "Coastal change hazards portal showing map of the United States is displayed.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-057.1",
+      "ref_cue_id": "usgs-057",
+      "source": "usgs_ad",
+      "text": "User clicks on extreme storms.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-057.2",
+      "ref_cue_id": "usgs-057",
+      "source": "usgs_ad",
+      "text": "User clicks on coastal change forecasts.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-057.3",
+      "ref_cue_id": "usgs-057",
+      "source": "usgs_ad",
+      "text": "User clicks on hurricane scenarios.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-057.4",
+      "ref_cue_id": "usgs-057",
+      "source": "usgs_ad",
+      "text": "User pans data on East Coast.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-058.1",
+      "ref_cue_id": "usgs-058",
+      "source": "usgs_ad",
+      "text": "Text reads: this data set contains information on the probabilities of erosion on sandy beaches along the US Gulf and Atlantic Coast string generalized category one through five hurricane conditions.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-059.1",
+      "ref_cue_id": "usgs-059",
+      "source": "usgs_ad",
+      "text": "Hurricane induced water levels due to surge in waves are compared to beach and dune elevations.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-059.2",
+      "ref_cue_id": "usgs-059",
+      "source": "usgs_ad",
+      "text": "Comparison determines the probabilities of collision, overwash, and inundation.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-060.1",
+      "ref_cue_id": "usgs-060",
+      "source": "usgs_ad",
+      "text": "Related morphologic and hydrogenamic data are also included.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-061.1",
+      "ref_cue_id": "usgs-061",
+      "source": "usgs_ad",
+      "text": "User clicks on shoreline change tab.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-062.1",
+      "ref_cue_id": "usgs-062",
+      "source": "usgs_ad",
+      "text": "Text reads long-term shoreline change rates.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-062.2",
+      "ref_cue_id": "usgs-062",
+      "source": "usgs_ad",
+      "text": "Text reads long-term, 78 plus years.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-062.3",
+      "ref_cue_id": "usgs-062",
+      "source": "usgs_ad",
+      "text": "Text reads rates of shoreline change for open ocean shorelines of the United States and parts of Hawaii.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-062.4",
+      "ref_cue_id": "usgs-062",
+      "source": "usgs_ad",
+      "text": "Text reads ranging from 1800s to 2018.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-063.1",
+      "ref_cue_id": "usgs-063",
+      "source": "usgs_ad",
+      "text": "Tabs below read Explore Contents.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-063.2",
+      "ref_cue_id": "usgs-063",
+      "source": "usgs_ad",
+      "text": "Tabs below read New England LAT rates.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-063.3",
+      "ref_cue_id": "usgs-063",
+      "source": "usgs_ad",
+      "text": "Tabs below read Massachusetts statewide LAT rates.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-063.4",
+      "ref_cue_id": "usgs-063",
+      "source": "usgs_ad",
+      "text": "Tabs below read mid-Altantic LT rates.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-064.1",
+      "ref_cue_id": "usgs-064",
+      "source": "usgs_ad",
+      "text": "Map shows long-term shoreline change rates along the east coast of US.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-065.1",
+      "ref_cue_id": "usgs-065",
+      "source": "usgs_ad",
+      "text": "User clicks on sea level rise tab.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-066.1",
+      "ref_cue_id": "usgs-066",
+      "source": "usgs_ad",
+      "text": "Text reads coastal vulnerability index.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-067.1",
+      "ref_cue_id": "usgs-067",
+      "source": "usgs_ad",
+      "text": "These data provide a preliminary overview at a national scale of the relative susceptibility of the nation's coast to sea level rise through the use of a coastal vulnerability in text, C VI.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-068.1",
+      "ref_cue_id": "usgs-068",
+      "source": "usgs_ad",
+      "text": "This classification is based upon the following variables.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-069.1",
+      "ref_cue_id": "usgs-069",
+      "source": "usgs_ad",
+      "text": "Geomorphology.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-069.2",
+      "ref_cue_id": "usgs-069",
+      "source": "usgs_ad",
+      "text": "Regional coastal slope.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-069.3",
+      "ref_cue_id": "usgs-069",
+      "source": "usgs_ad",
+      "text": "Tide range.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-069.4",
+      "ref_cue_id": "usgs-069",
+      "source": "usgs_ad",
+      "text": "Wave height.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-069.5",
+      "ref_cue_id": "usgs-069",
+      "source": "usgs_ad",
+      "text": "Relative sea level rise.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-069.6",
+      "ref_cue_id": "usgs-069",
+      "source": "usgs_ad",
+      "text": "Shoreline erosion and accretion rates.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-070.1",
+      "ref_cue_id": "usgs-070",
+      "source": "usgs_ad",
+      "text": "The combination of these variables in the association and the rest is cut off.",
+      "kind": "on_screen_text",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-071.1",
+      "ref_cue_id": "usgs-071",
+      "source": "usgs_ad",
+      "text": "Map pans CVI data from low to high along east coast.",
+      "kind": "visual",
+      "anchor_time": 125.44,
+      "anchor_end": 125.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-072.1",
+      "ref_cue_id": "usgs-072",
+      "source": "usgs_ad",
+      "text": "Group of scientists next to an anti flux tower in an unpounded wetland in Well Fleet, Massachusetts.",
+      "kind": "visual",
+      "anchor_time": 130.16,
+      "anchor_end": 130.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-073.1",
+      "ref_cue_id": "usgs-073",
+      "source": "usgs_ad",
+      "text": "Two cars driving down road.",
+      "kind": "visual",
+      "anchor_time": 135.12,
+      "anchor_end": 135.12,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-074.1",
+      "ref_cue_id": "usgs-074",
+      "source": "usgs_ad",
+      "text": "Road has ocean and beach on one side.",
+      "kind": "visual",
+      "anchor_time": 135.12,
+      "anchor_end": 135.12,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-074.2",
+      "ref_cue_id": "usgs-074",
+      "source": "usgs_ad",
+      "text": "Road has sand on the other side.",
+      "kind": "visual",
+      "anchor_time": 135.12,
+      "anchor_end": 135.12,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-075.1",
+      "ref_cue_id": "usgs-075",
+      "source": "usgs_ad",
+      "text": "Piping clover walking along shoreline.",
+      "kind": "visual",
+      "anchor_time": 135.12,
+      "anchor_end": 135.12,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-076.1",
+      "ref_cue_id": "usgs-076",
+      "source": "usgs_ad",
+      "text": "Man in USGS hat standing next to three men with binoculars.",
+      "kind": "visual",
+      "anchor_time": 139.28,
+      "anchor_end": 139.28,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-077.1",
+      "ref_cue_id": "usgs-077",
+      "source": "usgs_ad",
+      "text": "Two with a national park service patch on one arm.",
+      "kind": "visual",
+      "anchor_time": 139.28,
+      "anchor_end": 139.28,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-077.2",
+      "ref_cue_id": "usgs-077",
+      "source": "usgs_ad",
+      "text": "One with a fish and wildlife patch on his arm.",
+      "kind": "visual",
+      "anchor_time": 139.28,
+      "anchor_end": 139.28,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-078.1",
+      "ref_cue_id": "usgs-078",
+      "source": "usgs_ad",
+      "text": "Scientists giving presentation to a group of people sitting at tables.",
+      "kind": "visual",
+      "anchor_time": 141.12,
+      "anchor_end": 141.12,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-079.1",
+      "ref_cue_id": "usgs-079",
+      "source": "usgs_ad",
+      "text": "Group of people putting large sticky notes on wall.",
+      "kind": "visual",
+      "anchor_time": 142.64,
+      "anchor_end": 142.64,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-080.1",
+      "ref_cue_id": "usgs-080",
+      "source": "usgs_ad",
+      "text": "Man in USGS shirt walking on bike path next to sand and ocean.",
+      "kind": "visual",
+      "anchor_time": 145.2,
+      "anchor_end": 145.2,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-080.2",
+      "ref_cue_id": "usgs-080",
+      "source": "usgs_ad",
+      "text": "Man talking to a reporter and cameraman.",
+      "kind": "visual",
+      "anchor_time": 145.2,
+      "anchor_end": 145.2,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-081.1",
+      "ref_cue_id": "usgs-081",
+      "source": "usgs_ad",
+      "text": "Aerial view shows body of water entries.",
+      "kind": "visual",
+      "anchor_time": 152.08,
+      "anchor_end": 152.08,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-082.1",
+      "ref_cue_id": "usgs-082",
+      "source": "usgs_ad",
+      "text": "House has damaged deck.",
+      "kind": "visual",
+      "anchor_time": 158.16,
+      "anchor_end": 158.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-082.2",
+      "ref_cue_id": "usgs-082",
+      "source": "usgs_ad",
+      "text": "House is on snow covered beach.",
+      "kind": "visual",
+      "anchor_time": 158.16,
+      "anchor_end": 158.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-082.3",
+      "ref_cue_id": "usgs-082",
+      "source": "usgs_ad",
+      "text": "Beach is in Sandwich, Massachusetts.",
+      "kind": "visual",
+      "anchor_time": 158.16,
+      "anchor_end": 158.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-083.1",
+      "ref_cue_id": "usgs-083",
+      "source": "usgs_ad",
+      "text": "Road collapsed next to beach.",
+      "kind": "visual",
+      "anchor_time": 158.16,
+      "anchor_end": 158.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-084.1",
+      "ref_cue_id": "usgs-084",
+      "source": "usgs_ad",
+      "text": "Man holding drone controller.",
+      "kind": "visual",
+      "anchor_time": 160.56,
+      "anchor_end": 160.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-084.2",
+      "ref_cue_id": "usgs-084",
+      "source": "usgs_ad",
+      "text": "Women holding clipboard and pen.",
+      "kind": "visual",
+      "anchor_time": 160.56,
+      "anchor_end": 160.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-084.3",
+      "ref_cue_id": "usgs-084",
+      "source": "usgs_ad",
+      "text": "Man smiling on grassy beach.",
+      "kind": "visual",
+      "anchor_time": 160.56,
+      "anchor_end": 160.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-084.4",
+      "ref_cue_id": "usgs-084",
+      "source": "usgs_ad",
+      "text": "Women smiling on grassy beach.",
+      "kind": "visual",
+      "anchor_time": 160.56,
+      "anchor_end": 160.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-085.1",
+      "ref_cue_id": "usgs-085",
+      "source": "usgs_ad",
+      "text": "Video panning scenic house.",
+      "kind": "visual",
+      "anchor_time": 168.16,
+      "anchor_end": 168.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-085.2",
+      "ref_cue_id": "usgs-085",
+      "source": "usgs_ad",
+      "text": "Video panning road.",
+      "kind": "visual",
+      "anchor_time": 168.16,
+      "anchor_end": 168.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-085.3",
+      "ref_cue_id": "usgs-085",
+      "source": "usgs_ad",
+      "text": "Video panning beach.",
+      "kind": "visual",
+      "anchor_time": 168.16,
+      "anchor_end": 168.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-085.4",
+      "ref_cue_id": "usgs-085",
+      "source": "usgs_ad",
+      "text": "Video panning ocean.",
+      "kind": "visual",
+      "anchor_time": 168.16,
+      "anchor_end": 168.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-086.1",
+      "ref_cue_id": "usgs-086",
+      "source": "usgs_ad",
+      "text": "On-screen text reads for more information, visit www.usgs.gov slash centers slash WHCMSC.",
+      "kind": "on_screen_text",
+      "anchor_time": 170.56,
+      "anchor_end": 170.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-087.1",
+      "ref_cue_id": "usgs-087",
+      "source": "usgs_ad",
+      "text": "On-screen text reads video by Sarah Ernst, USGS.",
+      "kind": "on_screen_text",
+      "anchor_time": 173.311,
+      "anchor_end": 173.311,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-088.1",
+      "ref_cue_id": "usgs-088",
+      "source": "usgs_ad",
+      "text": "On-screen text reads Music by Bensound.com.",
+      "kind": "on_screen_text",
+      "anchor_time": 173.311,
+      "anchor_end": 173.311,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-089.1",
+      "ref_cue_id": "usgs-089",
+      "source": "usgs_ad",
+      "text": "On-screen text reads Any use of trade, firm, logos, or product names is for descriptive purposes only and does not imply endorsement by the US government.",
+      "kind": "on_screen_text",
+      "anchor_time": 173.311,
+      "anchor_end": 173.311,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-090.1",
+      "ref_cue_id": "usgs-090",
+      "source": "usgs_ad",
+      "text": "On-screen text reads USGS Science for a Changing World.",
+      "kind": "on_screen_text",
+      "anchor_time": 173.311,
+      "anchor_end": 173.311,
+      "placement": "timed"
+    }
+  ],
+  "calls": [
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-001",
+        "usgs-002",
+        "usgs-003",
+        "usgs-004",
+        "usgs-005",
+        "usgs-006",
+        "usgs-007",
+        "usgs-008",
+        "usgs-009",
+        "usgs-010"
+      ],
+      "request_sha256": "d434e28f9c9bbbcdde12c39ab0f00a04032ba8d1558e75c5f4f2df6e30b6bd8f"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-011",
+        "usgs-012",
+        "usgs-013",
+        "usgs-014",
+        "usgs-015",
+        "usgs-016",
+        "usgs-017",
+        "usgs-018",
+        "usgs-019",
+        "usgs-020"
+      ],
+      "request_sha256": "98328a585971b17e84e29050d1fe5071fa39ccc8e90e9d4940f8cd63e7cae0d7"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-021",
+        "usgs-022",
+        "usgs-023",
+        "usgs-024",
+        "usgs-025",
+        "usgs-026",
+        "usgs-027",
+        "usgs-028",
+        "usgs-029",
+        "usgs-030"
+      ],
+      "request_sha256": "6ef1038c2fb73850994077d18d7c0343114b35c22851539c6b05cc4f199a6aef"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-031",
+        "usgs-032",
+        "usgs-033",
+        "usgs-034",
+        "usgs-035",
+        "usgs-036",
+        "usgs-037",
+        "usgs-038",
+        "usgs-039",
+        "usgs-040"
+      ],
+      "request_sha256": "9d89a4dfc7b21b8f46ab142434a3102ef300c620570b713cab5833e5445a5daa"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-041",
+        "usgs-042",
+        "usgs-043",
+        "usgs-044",
+        "usgs-045",
+        "usgs-046",
+        "usgs-047",
+        "usgs-048",
+        "usgs-049",
+        "usgs-050"
+      ],
+      "request_sha256": "14c2e8e9856fe492889074fa4750ca5714ca40a146ca76bc819afe8404c85c72"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-051",
+        "usgs-052",
+        "usgs-053",
+        "usgs-054",
+        "usgs-055",
+        "usgs-056",
+        "usgs-057",
+        "usgs-058",
+        "usgs-059",
+        "usgs-060"
+      ],
+      "request_sha256": "f41edbc16f458e939f7775eb876a7eace707ac748df0711337fc56e95242a1d2"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-061",
+        "usgs-062",
+        "usgs-063",
+        "usgs-064",
+        "usgs-065",
+        "usgs-066",
+        "usgs-067",
+        "usgs-068",
+        "usgs-069",
+        "usgs-070"
+      ],
+      "request_sha256": "9c860329ada486cf137792f3cd86e07ef765ca74651ffbf720cdc459fbc04205"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-071",
+        "usgs-072",
+        "usgs-073",
+        "usgs-074",
+        "usgs-075",
+        "usgs-076",
+        "usgs-077",
+        "usgs-078",
+        "usgs-079",
+        "usgs-080"
+      ],
+      "request_sha256": "fa81bf9577e4784be0b5b1741e92325c5edb7700f7345b03baef888d80b2b35e"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-081",
+        "usgs-082",
+        "usgs-083",
+        "usgs-084",
+        "usgs-085",
+        "usgs-086",
+        "usgs-087",
+        "usgs-088",
+        "usgs-089",
+        "usgs-090"
+      ],
+      "request_sha256": "db9a2bb300efb56c73381ad59bd4471a9d2e52810ec6cecc18198e3658b02095"
+    }
+  ],
+  "problems": []
+}

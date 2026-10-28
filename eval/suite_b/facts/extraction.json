@@ -1,0 +1,53 @@
+{
+  "run_id": "suite-b-facts",
+  "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+  "calls": 59,
+  "cost_usd": 0.222809,
+  "by_role_model": [
+    {
+      "role": "eval-facts",
+      "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "calls": 59,
+      "tokens_in": 60911,
+      "tokens_cached": 0,
+      "tokens_out": 53966,
+      "cost_usd": 0.222809,
+      "latency_s": 137.80604930018308
+    }
+  ],
+  "facts": {
+    "elephants_dream": {
+      "pfeiffer": {
+        "on_screen_text": 37,
+        "visual": 115,
+        "interpretation": 8,
+        "sound": 12
+      },
+      "hunt": {
+        "visual": 100,
+        "on_screen_text": 24,
+        "interpretation": 1,
+        "not_in_video": 3
+      }
+    },
+    "woodshole": {
+      "usgs_ad": {
+        "on_screen_text": 46,
+        "visual": 103
+      }
+    },
+    "aquatic_connectivity": {
+      "usgs_ad": {
+        "visual": 30,
+        "on_screen_text": 4,
+        "interpretation": 1
+      }
+    },
+    "csc_intro": {
+      "usgs_ad": {
+        "visual": 13,
+        "on_screen_text": 1
+      }
+    }
+  }
+}

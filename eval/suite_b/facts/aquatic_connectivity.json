@@ -1,0 +1,407 @@
+{
+  "video": "aquatic_connectivity",
+  "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+  "temperature": 0.0,
+  "thinking": false,
+  "max_tokens": 8000,
+  "chunk": 10,
+  "context": 3,
+  "refs_sha256": "11c3e9d0909e68dbea9d81c19d48777078c9d9674774450b873e300bb43b6fba",
+  "prompt_template_sha256": "510f3e87d48d1174825ab0da21b431326f16ec85afe707822612d63a3cdf03ca",
+  "facts": [
+    {
+      "id": "usgs-001.1",
+      "ref_cue_id": "usgs-001",
+      "source": "usgs_ad",
+      "text": "The letters USGS appear in white.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-001.2",
+      "ref_cue_id": "usgs-001",
+      "source": "usgs_ad",
+      "text": "The words Science for a Changing World appear in white.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-001.3",
+      "ref_cue_id": "usgs-001",
+      "source": "usgs_ad",
+      "text": "The letters USGS fade to black.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-001.4",
+      "ref_cue_id": "usgs-001",
+      "source": "usgs_ad",
+      "text": "The words Science for a Changing World fade to black.",
+      "kind": "visual",
+      "anchor_time": 0.0,
+      "anchor_end": 0.0,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-002.1",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "On screen text reads The importance of aquatic connectivity for maintaining cold water species in the face of climate change.",
+      "kind": "on_screen_text",
+      "anchor_time": 4.8,
+      "anchor_end": 4.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-002.2",
+      "ref_cue_id": "usgs-002",
+      "source": "usgs_ad",
+      "text": "A photo of a brook trout swims across the bottom of the screen from right to left.",
+      "kind": "visual",
+      "anchor_time": 4.8,
+      "anchor_end": 4.8,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-003.1",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "The scene shows a drawing of a stream network.",
+      "kind": "visual",
+      "anchor_time": 12.72,
+      "anchor_end": 12.72,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-003.2",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "The mainstem and tributaries are highlighted.",
+      "kind": "visual",
+      "anchor_time": 12.72,
+      "anchor_end": 12.72,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-003.3",
+      "ref_cue_id": "usgs-003",
+      "source": "usgs_ad",
+      "text": "The highlighting illustrates suitable cold water brook trout habitat.",
+      "kind": "visual",
+      "anchor_time": 12.72,
+      "anchor_end": 12.72,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-004.1",
+      "ref_cue_id": "usgs-004",
+      "source": "usgs_ad",
+      "text": "A photo of a brook trout swims in place at the bottom right of the screen.",
+      "kind": "visual",
+      "anchor_time": 12.72,
+      "anchor_end": 12.72,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-005.1",
+      "ref_cue_id": "usgs-005",
+      "source": "usgs_ad",
+      "text": "A photo of a stream bed during a drought with low flowing water appears on screen.",
+      "kind": "visual",
+      "anchor_time": 28.16,
+      "anchor_end": 28.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-005.2",
+      "ref_cue_id": "usgs-005",
+      "source": "usgs_ad",
+      "text": "The photo fades away.",
+      "kind": "visual",
+      "anchor_time": 28.16,
+      "anchor_end": 28.16,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-006.1",
+      "ref_cue_id": "usgs-006",
+      "source": "usgs_ad",
+      "text": "Arrows appear to show the movement between highlighted tributaries.",
+      "kind": "visual",
+      "anchor_time": 42.56,
+      "anchor_end": 42.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-007.1",
+      "ref_cue_id": "usgs-007",
+      "source": "usgs_ad",
+      "text": "A photo appears that shows a dried up stream channel surrounded by vegetation and overhanging trees.",
+      "kind": "visual",
+      "anchor_time": 49.76,
+      "anchor_end": 49.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-008.1",
+      "ref_cue_id": "usgs-008",
+      "source": "usgs_ad",
+      "text": "Another photo shows a flooding river during a tropical storm.",
+      "kind": "visual",
+      "anchor_time": 49.76,
+      "anchor_end": 49.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-009.1",
+      "ref_cue_id": "usgs-009",
+      "source": "usgs_ad",
+      "text": "Both photos fade away.",
+      "kind": "visual",
+      "anchor_time": 49.76,
+      "anchor_end": 49.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-010.1",
+      "ref_cue_id": "usgs-010",
+      "source": "usgs_ad",
+      "text": "A photo appears showing a dried up river that flows beneath a road bridge.",
+      "kind": "visual",
+      "anchor_time": 97.44,
+      "anchor_end": 97.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-011.1",
+      "ref_cue_id": "usgs-011",
+      "source": "usgs_ad",
+      "text": "The photo of a dried up river that flows beneath a road bridge disappears.",
+      "kind": "visual",
+      "anchor_time": 97.44,
+      "anchor_end": 97.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-012.1",
+      "ref_cue_id": "usgs-012",
+      "source": "usgs_ad",
+      "text": "Two tributaries are highlighted in the stream network drawing.",
+      "kind": "visual",
+      "anchor_time": 97.44,
+      "anchor_end": 97.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-012.2",
+      "ref_cue_id": "usgs-012",
+      "source": "usgs_ad",
+      "text": "Three remaining tributaries are not highlighted.",
+      "kind": "visual",
+      "anchor_time": 97.44,
+      "anchor_end": 97.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-012.3",
+      "ref_cue_id": "usgs-012",
+      "source": "usgs_ad",
+      "text": "The three not highlighted tributaries show unoccupied habitat.",
+      "kind": "interpretation",
+      "anchor_time": 97.44,
+      "anchor_end": 97.44,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-013.1",
+      "ref_cue_id": "usgs-013",
+      "source": "usgs_ad",
+      "text": "Arrows appear to show the movement between two highlighted tributaries and three not highlighted tributaries.",
+      "kind": "visual",
+      "anchor_time": 112.08,
+      "anchor_end": 112.08,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-014.1",
+      "ref_cue_id": "usgs-014",
+      "source": "usgs_ad",
+      "text": "Two of the three not highlighted tributaries are now highlighted.",
+      "kind": "visual",
+      "anchor_time": 119.12,
+      "anchor_end": 119.12,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-015.1",
+      "ref_cue_id": "usgs-015",
+      "source": "usgs_ad",
+      "text": "A new arrow appears showing movement from a highlighted tributary to the last not highlighted tributary.",
+      "kind": "visual",
+      "anchor_time": 128.72,
+      "anchor_end": 128.72,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-016.1",
+      "ref_cue_id": "usgs-016",
+      "source": "usgs_ad",
+      "text": "This last tributary has now become highlighted.",
+      "kind": "visual",
+      "anchor_time": 128.72,
+      "anchor_end": 128.72,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-017.1",
+      "ref_cue_id": "usgs-017",
+      "source": "usgs_ad",
+      "text": "A photo appears that shows a culvert with shallow water in the pipe and an outlet drop.",
+      "kind": "visual",
+      "anchor_time": 165.68,
+      "anchor_end": 165.68,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-018.1",
+      "ref_cue_id": "usgs-018",
+      "source": "usgs_ad",
+      "text": "A drawing of the stream network is now overlaid by a road with culverts shown at the roadstream crossings.",
+      "kind": "visual",
+      "anchor_time": 184.56,
+      "anchor_end": 184.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-019.1",
+      "ref_cue_id": "usgs-019",
+      "source": "usgs_ad",
+      "text": "Only two of the five tributaries are highlighted.",
+      "kind": "visual",
+      "anchor_time": 184.56,
+      "anchor_end": 184.56,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-020.1",
+      "ref_cue_id": "usgs-020",
+      "source": "usgs_ad",
+      "text": "Arrows appear going from the highlighted tributaries to point at the roadstream crossings.",
+      "kind": "visual",
+      "anchor_time": 193.76,
+      "anchor_end": 193.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-021.1",
+      "ref_cue_id": "usgs-021",
+      "source": "usgs_ad",
+      "text": "A photo appears of a road stream crossing.",
+      "kind": "visual",
+      "anchor_time": 220.24,
+      "anchor_end": 220.24,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-021.2",
+      "ref_cue_id": "usgs-021",
+      "source": "usgs_ad",
+      "text": "The crossing has an open bottom arch.",
+      "kind": "visual",
+      "anchor_time": 220.24,
+      "anchor_end": 220.24,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-021.3",
+      "ref_cue_id": "usgs-021",
+      "source": "usgs_ad",
+      "text": "The open bottom arch is constructed to meet the Massachusetts River and Stream Crossing Standards.",
+      "kind": "visual",
+      "anchor_time": 220.24,
+      "anchor_end": 220.24,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-022.1",
+      "ref_cue_id": "usgs-022",
+      "source": "usgs_ad",
+      "text": "Credits role.org.",
+      "kind": "on_screen_text",
+      "anchor_time": 242.76,
+      "anchor_end": 242.76,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-023.1",
+      "ref_cue_id": "usgs-023",
+      "source": "usgs_ad",
+      "text": "The letters USGS appear in white.",
+      "kind": "on_screen_text",
+      "anchor_time": 265.054,
+      "anchor_end": 265.054,
+      "placement": "timed"
+    },
+    {
+      "id": "usgs-023.2",
+      "ref_cue_id": "usgs-023",
+      "source": "usgs_ad",
+      "text": "The words Science for a Changing World appear in white.",
+      "kind": "on_screen_text",
+      "anchor_time": 265.054,
+      "anchor_end": 265.054,
+      "placement": "timed"
+    }
+  ],
+  "calls": [
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-001",
+        "usgs-002",
+        "usgs-003",
+        "usgs-004",
+        "usgs-005",
+        "usgs-006",
+        "usgs-007",
+        "usgs-008",
+        "usgs-009",
+        "usgs-010"
+      ],
+      "request_sha256": "d59a86451f2a1196591e058a107d63deecf4ac7817702878fb7ab33ceaa18096"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-011",
+        "usgs-012",
+        "usgs-013",
+        "usgs-014",
+        "usgs-015",
+        "usgs-016",
+        "usgs-017",
+        "usgs-018",
+        "usgs-019",
+        "usgs-020"
+      ],
+      "request_sha256": "77f7945d52f9f8b7fc7024d972401b37305103504a2407c882f5ff31da22f6ce"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-021",
+        "usgs-022",
+        "usgs-023"
+      ],
+      "request_sha256": "24b01c5188cd413a5dca7569c4b00e88c3a46362701376181a1763f61591ee3c"
+    }
+  ],
+  "problems": []
+}

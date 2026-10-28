@@ -1,0 +1,475 @@
+{
+  "file": "usgs/csc_intro.mp4",
+  "sha256": "358832f7e61044dfdaac7525db48836ddcf979d9b3e1c50945b889d52b6e5959",
+  "asr_models": [
+    "parakeet-tdt-0.6b-v3.oss-align.q8_0"
+  ],
+  "request": "POST /v1/audio/transcriptions response_format=verbose_json, word timestamps (lull.speech.NemoSpeechHTTP.transcribe), 16 kHz mono PCM of audio stream 0:a:0",
+  "words": [
+    {
+      "text": "We",
+      "start": 0.0,
+      "end": 0.32
+    },
+    {
+      "text": "at",
+      "start": 0.32,
+      "end": 0.48
+    },
+    {
+      "text": "the",
+      "start": 0.48,
+      "end": 0.64
+    },
+    {
+      "text": "U.S.",
+      "start": 0.64,
+      "end": 1.04
+    },
+    {
+      "text": "Geological",
+      "start": 1.04,
+      "end": 1.76
+    },
+    {
+      "text": "Survey",
+      "start": 1.76,
+      "end": 2.24
+    },
+    {
+      "text": "study",
+      "start": 2.24,
+      "end": 2.56
+    },
+    {
+      "text": "much",
+      "start": 2.56,
+      "end": 2.8
+    },
+    {
+      "text": "more",
+      "start": 2.8,
+      "end": 2.96
+    },
+    {
+      "text": "than",
+      "start": 2.96,
+      "end": 3.12
+    },
+    {
+      "text": "just",
+      "start": 3.12,
+      "end": 3.28
+    },
+    {
+      "text": "rocks",
+      "start": 3.28,
+      "end": 3.6
+    },
+    {
+      "text": "and",
+      "start": 3.6,
+      "end": 3.76
+    },
+    {
+      "text": "volcanoes.",
+      "start": 3.76,
+      "end": 4.8
+    },
+    {
+      "text": "We",
+      "start": 4.8,
+      "end": 5.12
+    },
+    {
+      "text": "investigate",
+      "start": 5.12,
+      "end": 5.68
+    },
+    {
+      "text": "the",
+      "start": 5.68,
+      "end": 5.92
+    },
+    {
+      "text": "processes",
+      "start": 5.92,
+      "end": 6.48
+    },
+    {
+      "text": "that",
+      "start": 6.48,
+      "end": 6.72
+    },
+    {
+      "text": "form",
+      "start": 6.72,
+      "end": 6.96
+    },
+    {
+      "text": "and",
+      "start": 6.96,
+      "end": 7.12
+    },
+    {
+      "text": "shape",
+      "start": 7.12,
+      "end": 7.44
+    },
+    {
+      "text": "Earth's",
+      "start": 7.44,
+      "end": 8.0
+    },
+    {
+      "text": "surface,",
+      "start": 8.0,
+      "end": 8.64
+    },
+    {
+      "text": "from",
+      "start": 8.64,
+      "end": 8.88
+    },
+    {
+      "text": "mountains",
+      "start": 8.88,
+      "end": 9.44
+    },
+    {
+      "text": "and",
+      "start": 9.44,
+      "end": 9.6
+    },
+    {
+      "text": "forests,",
+      "start": 9.6,
+      "end": 10.4
+    },
+    {
+      "text": "to",
+      "start": 10.4,
+      "end": 10.64
+    },
+    {
+      "text": "deserts",
+      "start": 10.64,
+      "end": 11.12
+    },
+    {
+      "text": "and",
+      "start": 11.12,
+      "end": 11.36
+    },
+    {
+      "text": "coasts,",
+      "start": 11.36,
+      "end": 12.24
+    },
+    {
+      "text": "down",
+      "start": 12.24,
+      "end": 12.48
+    },
+    {
+      "text": "to",
+      "start": 12.48,
+      "end": 12.64
+    },
+    {
+      "text": "the",
+      "start": 12.64,
+      "end": 12.88
+    },
+    {
+      "text": "seafloor.",
+      "start": 12.88,
+      "end": 14.16
+    },
+    {
+      "text": "We",
+      "start": 14.16,
+      "end": 14.48
+    },
+    {
+      "text": "study",
+      "start": 14.48,
+      "end": 14.88
+    },
+    {
+      "text": "the",
+      "start": 14.88,
+      "end": 15.04
+    },
+    {
+      "text": "complex",
+      "start": 15.04,
+      "end": 15.52
+    },
+    {
+      "text": "interactions",
+      "start": 15.52,
+      "end": 16.08
+    },
+    {
+      "text": "between",
+      "start": 16.08,
+      "end": 16.48
+    },
+    {
+      "text": "water,",
+      "start": 16.48,
+      "end": 16.96
+    },
+    {
+      "text": "land",
+      "start": 16.96,
+      "end": 17.28
+    },
+    {
+      "text": "use,",
+      "start": 17.28,
+      "end": 17.6
+    },
+    {
+      "text": "and",
+      "start": 17.6,
+      "end": 17.76
+    },
+    {
+      "text": "ecological",
+      "start": 17.76,
+      "end": 18.48
+    },
+    {
+      "text": "health.",
+      "start": 18.48,
+      "end": 19.2
+    },
+    {
+      "text": "We",
+      "start": 19.2,
+      "end": 19.52
+    },
+    {
+      "text": "are",
+      "start": 19.52,
+      "end": 19.76
+    },
+    {
+      "text": "biologists,",
+      "start": 19.76,
+      "end": 20.88
+    },
+    {
+      "text": "geologists,",
+      "start": 20.88,
+      "end": 22.0
+    },
+    {
+      "text": "oceanographers,",
+      "start": 22.0,
+      "end": 23.36
+    },
+    {
+      "text": "volcanologists,",
+      "start": 23.36,
+      "end": 24.72
+    },
+    {
+      "text": "paleontologists,",
+      "start": 24.72,
+      "end": 26.08
+    },
+    {
+      "text": "and",
+      "start": 26.08,
+      "end": 26.4
+    },
+    {
+      "text": "more.",
+      "start": 26.4,
+      "end": 26.8
+    },
+    {
+      "text": "We",
+      "start": 26.8,
+      "end": 27.04
+    },
+    {
+      "text": "contribute",
+      "start": 27.04,
+      "end": 27.6
+    },
+    {
+      "text": "to",
+      "start": 27.6,
+      "end": 27.68
+    },
+    {
+      "text": "a",
+      "start": 27.68,
+      "end": 27.84
+    },
+    {
+      "text": "better",
+      "start": 27.84,
+      "end": 28.16
+    },
+    {
+      "text": "understanding",
+      "start": 28.16,
+      "end": 28.64
+    },
+    {
+      "text": "of",
+      "start": 28.64,
+      "end": 28.8
+    },
+    {
+      "text": "how",
+      "start": 28.8,
+      "end": 29.04
+    },
+    {
+      "text": "Earth's",
+      "start": 29.04,
+      "end": 29.6
+    },
+    {
+      "text": "systems",
+      "start": 29.6,
+      "end": 30.0
+    },
+    {
+      "text": "respond",
+      "start": 30.0,
+      "end": 30.48
+    },
+    {
+      "text": "to",
+      "start": 30.48,
+      "end": 30.72
+    },
+    {
+      "text": "a",
+      "start": 30.72,
+      "end": 30.8
+    },
+    {
+      "text": "changing",
+      "start": 30.8,
+      "end": 31.2
+    },
+    {
+      "text": "climate.",
+      "start": 31.2,
+      "end": 31.76
+    },
+    {
+      "text": "At",
+      "start": 31.76,
+      "end": 31.92
+    },
+    {
+      "text": "the",
+      "start": 31.92,
+      "end": 32.08
+    },
+    {
+      "text": "USGS,",
+      "start": 32.08,
+      "end": 33.12
+    },
+    {
+      "text": "we",
+      "start": 33.12,
+      "end": 33.36
+    },
+    {
+      "text": "each",
+      "start": 33.36,
+      "end": 33.6
+    },
+    {
+      "text": "play",
+      "start": 33.6,
+      "end": 33.84
+    },
+    {
+      "text": "a",
+      "start": 33.84,
+      "end": 33.92
+    },
+    {
+      "text": "unique",
+      "start": 33.92,
+      "end": 34.24
+    },
+    {
+      "text": "role",
+      "start": 34.24,
+      "end": 34.56
+    },
+    {
+      "text": "to",
+      "start": 34.56,
+      "end": 34.72
+    },
+    {
+      "text": "support",
+      "start": 34.72,
+      "end": 35.04
+    },
+    {
+      "text": "the",
+      "start": 35.04,
+      "end": 35.28
+    },
+    {
+      "text": "agency's",
+      "start": 35.28,
+      "end": 35.92
+    },
+    {
+      "text": "mission",
+      "start": 35.92,
+      "end": 36.32
+    },
+    {
+      "text": "of",
+      "start": 36.32,
+      "end": 36.48
+    },
+    {
+      "text": "providing",
+      "start": 36.48,
+      "end": 37.04
+    },
+    {
+      "text": "science",
+      "start": 37.04,
+      "end": 37.52
+    },
+    {
+      "text": "for",
+      "start": 37.52,
+      "end": 37.6
+    },
+    {
+      "text": "a",
+      "start": 37.6,
+      "end": 37.84
+    },
+    {
+      "text": "changing",
+      "start": 37.84,
+      "end": 38.48
+    },
+    {
+      "text": "world.",
+      "start": 38.48,
+      "end": 39.44
+    }
+  ]
+}

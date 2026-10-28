@@ -1,0 +1,1770 @@
+{
+  "file": "usgs/woodshole.mp4",
+  "sha256": "32ba3bcc450ea6426e168470a2f8258bddf5056a1ee4bfe71c5e100c733dbd12",
+  "asr_models": [
+    "parakeet-tdt-0.6b-v3.oss-align.q8_0"
+  ],
+  "request": "POST /v1/audio/transcriptions response_format=verbose_json, word timestamps (lull.speech.NemoSpeechHTTP.transcribe), 16 kHz mono PCM of audio stream 0:a:0",
+  "words": [
+    {
+      "text": "At",
+      "start": 4.64,
+      "end": 4.88
+    },
+    {
+      "text": "the",
+      "start": 4.88,
+      "end": 5.12
+    },
+    {
+      "text": "Woods",
+      "start": 5.12,
+      "end": 5.6
+    },
+    {
+      "text": "Hole",
+      "start": 5.6,
+      "end": 6.0
+    },
+    {
+      "text": "Coastal",
+      "start": 6.0,
+      "end": 6.32
+    },
+    {
+      "text": "and",
+      "start": 6.32,
+      "end": 6.48
+    },
+    {
+      "text": "Marine",
+      "start": 6.48,
+      "end": 6.88
+    },
+    {
+      "text": "Science",
+      "start": 6.88,
+      "end": 7.44
+    },
+    {
+      "text": "Center,",
+      "start": 7.44,
+      "end": 8.08
+    },
+    {
+      "text": "we",
+      "start": 8.08,
+      "end": 8.4
+    },
+    {
+      "text": "study",
+      "start": 8.4,
+      "end": 8.8
+    },
+    {
+      "text": "the",
+      "start": 8.8,
+      "end": 9.04
+    },
+    {
+      "text": "processes",
+      "start": 9.04,
+      "end": 9.6
+    },
+    {
+      "text": "that",
+      "start": 9.6,
+      "end": 9.76
+    },
+    {
+      "text": "shape",
+      "start": 9.76,
+      "end": 10.16
+    },
+    {
+      "text": "our",
+      "start": 10.16,
+      "end": 10.32
+    },
+    {
+      "text": "coastal",
+      "start": 10.32,
+      "end": 10.8
+    },
+    {
+      "text": "and",
+      "start": 10.8,
+      "end": 10.96
+    },
+    {
+      "text": "ocean",
+      "start": 10.96,
+      "end": 11.68
+    },
+    {
+      "text": "systems",
+      "start": 11.68,
+      "end": 12.16
+    },
+    {
+      "text": "and",
+      "start": 12.32,
+      "end": 12.56
+    },
+    {
+      "text": "learn",
+      "start": 12.56,
+      "end": 12.96
+    },
+    {
+      "text": "more",
+      "start": 12.96,
+      "end": 13.28
+    },
+    {
+      "text": "about",
+      "start": 13.28,
+      "end": 13.52
+    },
+    {
+      "text": "natural",
+      "start": 13.52,
+      "end": 13.92
+    },
+    {
+      "text": "hazards",
+      "start": 13.92,
+      "end": 14.48
+    },
+    {
+      "text": "and",
+      "start": 14.48,
+      "end": 14.64
+    },
+    {
+      "text": "the",
+      "start": 14.64,
+      "end": 14.8
+    },
+    {
+      "text": "potential",
+      "start": 14.8,
+      "end": 15.28
+    },
+    {
+      "text": "threats",
+      "start": 15.28,
+      "end": 15.84
+    },
+    {
+      "text": "they",
+      "start": 15.84,
+      "end": 16.08
+    },
+    {
+      "text": "pose",
+      "start": 16.08,
+      "end": 16.48
+    },
+    {
+      "text": "to",
+      "start": 16.48,
+      "end": 16.72
+    },
+    {
+      "text": "lives,",
+      "start": 16.72,
+      "end": 17.44
+    },
+    {
+      "text": "infrastructure,",
+      "start": 17.44,
+      "end": 18.48
+    },
+    {
+      "text": "and",
+      "start": 18.48,
+      "end": 18.72
+    },
+    {
+      "text": "valuable",
+      "start": 18.72,
+      "end": 19.2
+    },
+    {
+      "text": "habitats",
+      "start": 19.2,
+      "end": 19.92
+    },
+    {
+      "text": "along",
+      "start": 19.92,
+      "end": 20.24
+    },
+    {
+      "text": "our",
+      "start": 20.24,
+      "end": 20.48
+    },
+    {
+      "text": "nation's",
+      "start": 20.48,
+      "end": 21.12
+    },
+    {
+      "text": "coasts.",
+      "start": 21.12,
+      "end": 22.48
+    },
+    {
+      "text": "Our",
+      "start": 22.48,
+      "end": 22.96
+    },
+    {
+      "text": "Science",
+      "start": 22.96,
+      "end": 23.44
+    },
+    {
+      "text": "Center",
+      "start": 23.44,
+      "end": 23.84
+    },
+    {
+      "text": "is",
+      "start": 23.84,
+      "end": 24.0
+    },
+    {
+      "text": "located",
+      "start": 24.0,
+      "end": 24.32
+    },
+    {
+      "text": "in",
+      "start": 24.32,
+      "end": 24.48
+    },
+    {
+      "text": "Woodshole,",
+      "start": 24.48,
+      "end": 25.44
+    },
+    {
+      "text": "Massachusetts,",
+      "start": 25.44,
+      "end": 26.48
+    },
+    {
+      "text": "a",
+      "start": 26.48,
+      "end": 26.64
+    },
+    {
+      "text": "world",
+      "start": 26.64,
+      "end": 26.88
+    },
+    {
+      "text": "renowned",
+      "start": 26.96,
+      "end": 27.6
+    },
+    {
+      "text": "center",
+      "start": 27.6,
+      "end": 27.84
+    },
+    {
+      "text": "for",
+      "start": 27.84,
+      "end": 28.0
+    },
+    {
+      "text": "the",
+      "start": 28.0,
+      "end": 28.16
+    },
+    {
+      "text": "study",
+      "start": 28.16,
+      "end": 28.48
+    },
+    {
+      "text": "of",
+      "start": 28.48,
+      "end": 28.64
+    },
+    {
+      "text": "Earth",
+      "start": 28.64,
+      "end": 29.04
+    },
+    {
+      "text": "and",
+      "start": 29.04,
+      "end": 29.2
+    },
+    {
+      "text": "Ocean",
+      "start": 29.2,
+      "end": 29.76
+    },
+    {
+      "text": "Science,",
+      "start": 29.76,
+      "end": 30.32
+    },
+    {
+      "text": "where",
+      "start": 30.32,
+      "end": 30.56
+    },
+    {
+      "text": "we",
+      "start": 30.56,
+      "end": 30.72
+    },
+    {
+      "text": "belong",
+      "start": 30.72,
+      "end": 31.04
+    },
+    {
+      "text": "to",
+      "start": 31.04,
+      "end": 31.2
+    },
+    {
+      "text": "a",
+      "start": 31.2,
+      "end": 31.36
+    },
+    {
+      "text": "vibrant",
+      "start": 31.36,
+      "end": 31.92
+    },
+    {
+      "text": "scientific",
+      "start": 31.92,
+      "end": 32.64
+    },
+    {
+      "text": "community.",
+      "start": 32.64,
+      "end": 33.84
+    },
+    {
+      "text": "We",
+      "start": 33.84,
+      "end": 34.16
+    },
+    {
+      "text": "have",
+      "start": 34.16,
+      "end": 34.32
+    },
+    {
+      "text": "a",
+      "start": 34.32,
+      "end": 34.56
+    },
+    {
+      "text": "long",
+      "start": 34.56,
+      "end": 34.8
+    },
+    {
+      "text": "history",
+      "start": 34.8,
+      "end": 35.12
+    },
+    {
+      "text": "of",
+      "start": 35.12,
+      "end": 35.28
+    },
+    {
+      "text": "collaboration",
+      "start": 35.28,
+      "end": 36.08
+    },
+    {
+      "text": "with",
+      "start": 36.08,
+      "end": 36.32
+    },
+    {
+      "text": "local",
+      "start": 36.32,
+      "end": 36.88
+    },
+    {
+      "text": "institutions,",
+      "start": 36.88,
+      "end": 37.84
+    },
+    {
+      "text": "as",
+      "start": 37.84,
+      "end": 38.0
+    },
+    {
+      "text": "well",
+      "start": 38.0,
+      "end": 38.24
+    },
+    {
+      "text": "as",
+      "start": 38.24,
+      "end": 38.4
+    },
+    {
+      "text": "other",
+      "start": 38.4,
+      "end": 38.72
+    },
+    {
+      "text": "federal",
+      "start": 38.72,
+      "end": 39.12
+    },
+    {
+      "text": "and",
+      "start": 39.12,
+      "end": 39.36
+    },
+    {
+      "text": "state",
+      "start": 39.36,
+      "end": 39.76
+    },
+    {
+      "text": "agencies,",
+      "start": 39.76,
+      "end": 40.8
+    },
+    {
+      "text": "academic",
+      "start": 40.8,
+      "end": 41.6
+    },
+    {
+      "text": "institutions,",
+      "start": 41.6,
+      "end": 42.64
+    },
+    {
+      "text": "and",
+      "start": 42.64,
+      "end": 42.96
+    },
+    {
+      "text": "international",
+      "start": 42.96,
+      "end": 43.6
+    },
+    {
+      "text": "entities.",
+      "start": 43.92,
+      "end": 45.76
+    },
+    {
+      "text": "Scientists",
+      "start": 45.76,
+      "end": 46.64
+    },
+    {
+      "text": "at",
+      "start": 46.64,
+      "end": 46.8
+    },
+    {
+      "text": "the",
+      "start": 46.8,
+      "end": 47.04
+    },
+    {
+      "text": "center",
+      "start": 47.04,
+      "end": 47.52
+    },
+    {
+      "text": "conduct",
+      "start": 47.52,
+      "end": 48.0
+    },
+    {
+      "text": "research",
+      "start": 48.0,
+      "end": 48.48
+    },
+    {
+      "text": "in",
+      "start": 48.48,
+      "end": 48.64
+    },
+    {
+      "text": "the",
+      "start": 48.64,
+      "end": 48.88
+    },
+    {
+      "text": "Atlantic,",
+      "start": 48.88,
+      "end": 49.76
+    },
+    {
+      "text": "Pacific,",
+      "start": 49.76,
+      "end": 50.48
+    },
+    {
+      "text": "and",
+      "start": 50.48,
+      "end": 50.72
+    },
+    {
+      "text": "Arctic",
+      "start": 50.72,
+      "end": 51.2
+    },
+    {
+      "text": "Oceans,",
+      "start": 51.2,
+      "end": 52.08
+    },
+    {
+      "text": "the",
+      "start": 52.08,
+      "end": 52.32
+    },
+    {
+      "text": "Gulf",
+      "start": 52.32,
+      "end": 52.72
+    },
+    {
+      "text": "of",
+      "start": 52.72,
+      "end": 52.88
+    },
+    {
+      "text": "Mexico,",
+      "start": 52.88,
+      "end": 53.92
+    },
+    {
+      "text": "and",
+      "start": 53.92,
+      "end": 54.24
+    },
+    {
+      "text": "in",
+      "start": 54.24,
+      "end": 54.4
+    },
+    {
+      "text": "numerous",
+      "start": 54.4,
+      "end": 54.96
+    },
+    {
+      "text": "estuaries",
+      "start": 54.96,
+      "end": 55.68
+    },
+    {
+      "text": "and",
+      "start": 55.68,
+      "end": 55.92
+    },
+    {
+      "text": "inland",
+      "start": 55.92,
+      "end": 56.4
+    },
+    {
+      "text": "waterways,",
+      "start": 56.4,
+      "end": 57.2
+    },
+    {
+      "text": "including",
+      "start": 57.2,
+      "end": 57.68
+    },
+    {
+      "text": "the",
+      "start": 57.68,
+      "end": 57.84
+    },
+    {
+      "text": "Great",
+      "start": 57.84,
+      "end": 58.24
+    },
+    {
+      "text": "Lakes.",
+      "start": 58.24,
+      "end": 59.6
+    },
+    {
+      "text": "We",
+      "start": 59.6,
+      "end": 59.92
+    },
+    {
+      "text": "also",
+      "start": 59.92,
+      "end": 60.24
+    },
+    {
+      "text": "work",
+      "start": 60.24,
+      "end": 60.56
+    },
+    {
+      "text": "extensively",
+      "start": 60.56,
+      "end": 61.28
+    },
+    {
+      "text": "in",
+      "start": 61.28,
+      "end": 61.44
+    },
+    {
+      "text": "our",
+      "start": 61.44,
+      "end": 61.6
+    },
+    {
+      "text": "own",
+      "start": 61.6,
+      "end": 61.92
+    },
+    {
+      "text": "coastal",
+      "start": 61.92,
+      "end": 62.32
+    },
+    {
+      "text": "backyard",
+      "start": 62.32,
+      "end": 62.96
+    },
+    {
+      "text": "along",
+      "start": 63.12,
+      "end": 63.36
+    },
+    {
+      "text": "the",
+      "start": 63.36,
+      "end": 63.52
+    },
+    {
+      "text": "Mid-Atlantic",
+      "start": 63.52,
+      "end": 64.32
+    },
+    {
+      "text": "and",
+      "start": 64.32,
+      "end": 64.48
+    },
+    {
+      "text": "New",
+      "start": 64.48,
+      "end": 64.8
+    },
+    {
+      "text": "England",
+      "start": 64.8,
+      "end": 65.36
+    },
+    {
+      "text": "coast.",
+      "start": 65.36,
+      "end": 66.8
+    },
+    {
+      "text": "In",
+      "start": 66.8,
+      "end": 67.12
+    },
+    {
+      "text": "these",
+      "start": 67.12,
+      "end": 67.44
+    },
+    {
+      "text": "various",
+      "start": 67.44,
+      "end": 68.0
+    },
+    {
+      "text": "regions",
+      "start": 68.0,
+      "end": 68.4
+    },
+    {
+      "text": "and",
+      "start": 68.4,
+      "end": 68.64
+    },
+    {
+      "text": "environments,",
+      "start": 68.64,
+      "end": 69.68
+    },
+    {
+      "text": "we",
+      "start": 69.68,
+      "end": 70.0
+    },
+    {
+      "text": "use",
+      "start": 70.0,
+      "end": 70.24
+    },
+    {
+      "text": "specialized",
+      "start": 70.24,
+      "end": 71.04
+    },
+    {
+      "text": "technologies",
+      "start": 71.04,
+      "end": 71.84
+    },
+    {
+      "text": "and",
+      "start": 71.84,
+      "end": 72.08
+    },
+    {
+      "text": "capabilities",
+      "start": 72.08,
+      "end": 73.04
+    },
+    {
+      "text": "to",
+      "start": 73.04,
+      "end": 73.28
+    },
+    {
+      "text": "collect",
+      "start": 73.28,
+      "end": 73.84
+    },
+    {
+      "text": "observations",
+      "start": 73.84,
+      "end": 74.56
+    },
+    {
+      "text": "of",
+      "start": 74.56,
+      "end": 74.72
+    },
+    {
+      "text": "what",
+      "start": 74.72,
+      "end": 74.96
+    },
+    {
+      "text": "can",
+      "start": 74.96,
+      "end": 75.12
+    },
+    {
+      "text": "be",
+      "start": 75.12,
+      "end": 75.28
+    },
+    {
+      "text": "seen,",
+      "start": 75.28,
+      "end": 75.76
+    },
+    {
+      "text": "recorded,",
+      "start": 75.76,
+      "end": 76.48
+    },
+    {
+      "text": "and",
+      "start": 76.48,
+      "end": 76.64
+    },
+    {
+      "text": "measured.",
+      "start": 76.64,
+      "end": 77.84
+    },
+    {
+      "text": "The",
+      "start": 77.84,
+      "end": 78.08
+    },
+    {
+      "text": "knowledge",
+      "start": 78.08,
+      "end": 78.48
+    },
+    {
+      "text": "we",
+      "start": 78.48,
+      "end": 78.72
+    },
+    {
+      "text": "gain",
+      "start": 78.72,
+      "end": 79.04
+    },
+    {
+      "text": "from",
+      "start": 79.04,
+      "end": 79.2
+    },
+    {
+      "text": "this",
+      "start": 79.2,
+      "end": 79.44
+    },
+    {
+      "text": "primary",
+      "start": 79.44,
+      "end": 80.0
+    },
+    {
+      "text": "data",
+      "start": 80.0,
+      "end": 80.4
+    },
+    {
+      "text": "is",
+      "start": 80.4,
+      "end": 80.56
+    },
+    {
+      "text": "used",
+      "start": 80.56,
+      "end": 80.88
+    },
+    {
+      "text": "to",
+      "start": 80.88,
+      "end": 81.04
+    },
+    {
+      "text": "develop",
+      "start": 81.04,
+      "end": 81.44
+    },
+    {
+      "text": "detailed",
+      "start": 81.44,
+      "end": 82.08
+    },
+    {
+      "text": "maps,",
+      "start": 82.08,
+      "end": 82.8
+    },
+    {
+      "text": "models,",
+      "start": 82.8,
+      "end": 83.52
+    },
+    {
+      "text": "tools,",
+      "start": 83.52,
+      "end": 84.32
+    },
+    {
+      "text": "forecasts,",
+      "start": 84.32,
+      "end": 85.44
+    },
+    {
+      "text": "and",
+      "start": 85.44,
+      "end": 85.68
+    },
+    {
+      "text": "other",
+      "start": 85.68,
+      "end": 86.0
+    },
+    {
+      "text": "products",
+      "start": 86.0,
+      "end": 86.56
+    },
+    {
+      "text": "that",
+      "start": 86.56,
+      "end": 86.8
+    },
+    {
+      "text": "help",
+      "start": 86.8,
+      "end": 87.2
+    },
+    {
+      "text": "us",
+      "start": 87.2,
+      "end": 87.44
+    },
+    {
+      "text": "and",
+      "start": 87.44,
+      "end": 87.68
+    },
+    {
+      "text": "others",
+      "start": 87.68,
+      "end": 88.16
+    },
+    {
+      "text": "to",
+      "start": 88.16,
+      "end": 88.48
+    },
+    {
+      "text": "better",
+      "start": 88.48,
+      "end": 88.88
+    },
+    {
+      "text": "understand",
+      "start": 88.88,
+      "end": 89.28
+    },
+    {
+      "text": "the",
+      "start": 89.28,
+      "end": 89.6
+    },
+    {
+      "text": "past,",
+      "start": 89.6,
+      "end": 90.16
+    },
+    {
+      "text": "present,",
+      "start": 90.16,
+      "end": 90.64
+    },
+    {
+      "text": "and",
+      "start": 90.64,
+      "end": 90.96
+    },
+    {
+      "text": "future",
+      "start": 90.96,
+      "end": 91.52
+    },
+    {
+      "text": "states",
+      "start": 91.52,
+      "end": 92.0
+    },
+    {
+      "text": "of",
+      "start": 92.0,
+      "end": 92.24
+    },
+    {
+      "text": "coastal",
+      "start": 92.24,
+      "end": 92.72
+    },
+    {
+      "text": "and",
+      "start": 92.72,
+      "end": 92.88
+    },
+    {
+      "text": "marine",
+      "start": 92.88,
+      "end": 93.36
+    },
+    {
+      "text": "systems",
+      "start": 93.36,
+      "end": 93.68
+    },
+    {
+      "text": "and",
+      "start": 93.84,
+      "end": 94.16
+    },
+    {
+      "text": "resources.",
+      "start": 94.16,
+      "end": 96.24
+    },
+    {
+      "text": "Our",
+      "start": 96.24,
+      "end": 96.64
+    },
+    {
+      "text": "research",
+      "start": 96.64,
+      "end": 97.2
+    },
+    {
+      "text": "and",
+      "start": 97.2,
+      "end": 97.36
+    },
+    {
+      "text": "science-based",
+      "start": 97.36,
+      "end": 98.24
+    },
+    {
+      "text": "products",
+      "start": 98.24,
+      "end": 98.72
+    },
+    {
+      "text": "are",
+      "start": 98.72,
+      "end": 98.88
+    },
+    {
+      "text": "used",
+      "start": 98.88,
+      "end": 99.2
+    },
+    {
+      "text": "to",
+      "start": 99.2,
+      "end": 99.36
+    },
+    {
+      "text": "assess",
+      "start": 99.36,
+      "end": 99.84
+    },
+    {
+      "text": "national",
+      "start": 99.84,
+      "end": 100.24
+    },
+    {
+      "text": "salt",
+      "start": 100.24,
+      "end": 100.56
+    },
+    {
+      "text": "marsh",
+      "start": 100.56,
+      "end": 101.04
+    },
+    {
+      "text": "vulnerability,",
+      "start": 101.04,
+      "end": 102.32
+    },
+    {
+      "text": "define",
+      "start": 102.32,
+      "end": 102.8
+    },
+    {
+      "text": "the",
+      "start": 102.8,
+      "end": 102.96
+    },
+    {
+      "text": "limits",
+      "start": 102.96,
+      "end": 103.28
+    },
+    {
+      "text": "of",
+      "start": 103.28,
+      "end": 103.44
+    },
+    {
+      "text": "the",
+      "start": 103.44,
+      "end": 103.68
+    },
+    {
+      "text": "U.S.",
+      "start": 103.68,
+      "end": 104.08
+    },
+    {
+      "text": "extended",
+      "start": 104.16,
+      "end": 104.8
+    },
+    {
+      "text": "continental",
+      "start": 104.8,
+      "end": 105.52
+    },
+    {
+      "text": "shelf,",
+      "start": 105.52,
+      "end": 106.8
+    },
+    {
+      "text": "understand",
+      "start": 106.8,
+      "end": 107.6
+    },
+    {
+      "text": "and",
+      "start": 107.6,
+      "end": 107.84
+    },
+    {
+      "text": "predict",
+      "start": 107.84,
+      "end": 108.32
+    },
+    {
+      "text": "the",
+      "start": 108.32,
+      "end": 108.48
+    },
+    {
+      "text": "impacts",
+      "start": 108.48,
+      "end": 108.96
+    },
+    {
+      "text": "of",
+      "start": 108.96,
+      "end": 109.2
+    },
+    {
+      "text": "storms",
+      "start": 109.2,
+      "end": 109.76
+    },
+    {
+      "text": "on",
+      "start": 109.76,
+      "end": 109.92
+    },
+    {
+      "text": "the",
+      "start": 109.92,
+      "end": 110.16
+    },
+    {
+      "text": "coast,",
+      "start": 110.16,
+      "end": 111.52
+    },
+    {
+      "text": "evaluate",
+      "start": 111.52,
+      "end": 112.24
+    },
+    {
+      "text": "the",
+      "start": 112.24,
+      "end": 112.48
+    },
+    {
+      "text": "future",
+      "start": 112.48,
+      "end": 112.88
+    },
+    {
+      "text": "potential",
+      "start": 112.88,
+      "end": 113.36
+    },
+    {
+      "text": "for",
+      "start": 113.36,
+      "end": 113.52
+    },
+    {
+      "text": "underwater",
+      "start": 113.52,
+      "end": 114.08
+    },
+    {
+      "text": "earthquakes",
+      "start": 114.08,
+      "end": 114.64
+    },
+    {
+      "text": "and",
+      "start": 114.64,
+      "end": 114.88
+    },
+    {
+      "text": "tsunamis,",
+      "start": 114.88,
+      "end": 116.56
+    },
+    {
+      "text": "forecast",
+      "start": 116.56,
+      "end": 117.36
+    },
+    {
+      "text": "coastal",
+      "start": 117.36,
+      "end": 117.84
+    },
+    {
+      "text": "change",
+      "start": 117.84,
+      "end": 118.16
+    },
+    {
+      "text": "and",
+      "start": 118.32,
+      "end": 118.48
+    },
+    {
+      "text": "identify",
+      "start": 118.48,
+      "end": 119.12
+    },
+    {
+      "text": "hazards",
+      "start": 119.12,
+      "end": 119.76
+    },
+    {
+      "text": "in",
+      "start": 119.76,
+      "end": 119.92
+    },
+    {
+      "text": "areas",
+      "start": 119.92,
+      "end": 120.4
+    },
+    {
+      "text": "vulnerable",
+      "start": 120.4,
+      "end": 121.12
+    },
+    {
+      "text": "to",
+      "start": 121.12,
+      "end": 121.36
+    },
+    {
+      "text": "storms,",
+      "start": 121.36,
+      "end": 122.0
+    },
+    {
+      "text": "chronic",
+      "start": 122.0,
+      "end": 122.56
+    },
+    {
+      "text": "erosion,",
+      "start": 122.56,
+      "end": 123.2
+    },
+    {
+      "text": "and",
+      "start": 123.2,
+      "end": 123.44
+    },
+    {
+      "text": "sea",
+      "start": 123.44,
+      "end": 123.76
+    },
+    {
+      "text": "level",
+      "start": 123.76,
+      "end": 124.32
+    },
+    {
+      "text": "rise.",
+      "start": 124.32,
+      "end": 125.44
+    },
+    {
+      "text": "Determine",
+      "start": 125.44,
+      "end": 126.08
+    },
+    {
+      "text": "the",
+      "start": 126.08,
+      "end": 126.24
+    },
+    {
+      "text": "effects",
+      "start": 126.24,
+      "end": 126.64
+    },
+    {
+      "text": "of",
+      "start": 126.64,
+      "end": 126.8
+    },
+    {
+      "text": "changing",
+      "start": 126.8,
+      "end": 127.28
+    },
+    {
+      "text": "environmental",
+      "start": 127.28,
+      "end": 128.0
+    },
+    {
+      "text": "conditions",
+      "start": 128.0,
+      "end": 128.48
+    },
+    {
+      "text": "caused",
+      "start": 128.48,
+      "end": 128.88
+    },
+    {
+      "text": "by",
+      "start": 128.88,
+      "end": 129.04
+    },
+    {
+      "text": "climate",
+      "start": 129.04,
+      "end": 129.6
+    },
+    {
+      "text": "change,",
+      "start": 129.6,
+      "end": 130.16
+    },
+    {
+      "text": "as",
+      "start": 130.16,
+      "end": 130.32
+    },
+    {
+      "text": "well",
+      "start": 130.32,
+      "end": 130.56
+    },
+    {
+      "text": "as",
+      "start": 130.56,
+      "end": 130.72
+    },
+    {
+      "text": "the",
+      "start": 130.72,
+      "end": 130.88
+    },
+    {
+      "text": "effects",
+      "start": 130.88,
+      "end": 131.2
+    },
+    {
+      "text": "of",
+      "start": 131.2,
+      "end": 131.36
+    },
+    {
+      "text": "expanding",
+      "start": 131.36,
+      "end": 131.92
+    },
+    {
+      "text": "coastal",
+      "start": 131.92,
+      "end": 132.32
+    },
+    {
+      "text": "infrastructure",
+      "start": 132.32,
+      "end": 133.04
+    },
+    {
+      "text": "on",
+      "start": 133.04,
+      "end": 133.2
+    },
+    {
+      "text": "critical",
+      "start": 133.2,
+      "end": 133.76
+    },
+    {
+      "text": "ecosystems,",
+      "start": 133.76,
+      "end": 135.12
+    },
+    {
+      "text": "and",
+      "start": 135.12,
+      "end": 135.36
+    },
+    {
+      "text": "the",
+      "start": 135.36,
+      "end": 135.68
+    },
+    {
+      "text": "list",
+      "start": 135.68,
+      "end": 136.0
+    },
+    {
+      "text": "continues.",
+      "start": 136.0,
+      "end": 137.28
+    },
+    {
+      "text": "Other",
+      "start": 137.28,
+      "end": 137.76
+    },
+    {
+      "text": "federal",
+      "start": 137.76,
+      "end": 138.4
+    },
+    {
+      "text": "agencies,",
+      "start": 138.4,
+      "end": 139.28
+    },
+    {
+      "text": "state",
+      "start": 139.28,
+      "end": 139.52
+    },
+    {
+      "text": "and",
+      "start": 139.6,
+      "end": 139.84
+    },
+    {
+      "text": "local",
+      "start": 139.84,
+      "end": 140.24
+    },
+    {
+      "text": "entities,",
+      "start": 140.24,
+      "end": 141.12
+    },
+    {
+      "text": "private",
+      "start": 141.12,
+      "end": 141.76
+    },
+    {
+      "text": "organizations,",
+      "start": 141.76,
+      "end": 142.64
+    },
+    {
+      "text": "and",
+      "start": 142.64,
+      "end": 142.88
+    },
+    {
+      "text": "the",
+      "start": 142.88,
+      "end": 143.2
+    },
+    {
+      "text": "public",
+      "start": 143.2,
+      "end": 143.52
+    },
+    {
+      "text": "rely",
+      "start": 143.52,
+      "end": 144.0
+    },
+    {
+      "text": "on",
+      "start": 144.0,
+      "end": 144.24
+    },
+    {
+      "text": "this",
+      "start": 144.24,
+      "end": 144.56
+    },
+    {
+      "text": "information",
+      "start": 144.56,
+      "end": 145.2
+    },
+    {
+      "text": "to",
+      "start": 145.2,
+      "end": 145.52
+    },
+    {
+      "text": "help",
+      "start": 145.52,
+      "end": 145.84
+    },
+    {
+      "text": "make",
+      "start": 145.84,
+      "end": 146.08
+    },
+    {
+      "text": "decisions",
+      "start": 146.08,
+      "end": 146.88
+    },
+    {
+      "text": "about",
+      "start": 146.88,
+      "end": 147.04
+    },
+    {
+      "text": "the",
+      "start": 147.04,
+      "end": 147.36
+    },
+    {
+      "text": "use,",
+      "start": 147.36,
+      "end": 147.84
+    },
+    {
+      "text": "management,",
+      "start": 147.84,
+      "end": 148.56
+    },
+    {
+      "text": "and",
+      "start": 148.56,
+      "end": 148.88
+    },
+    {
+      "text": "protection",
+      "start": 148.88,
+      "end": 149.44
+    },
+    {
+      "text": "of",
+      "start": 149.44,
+      "end": 149.6
+    },
+    {
+      "text": "our",
+      "start": 149.6,
+      "end": 149.84
+    },
+    {
+      "text": "coastal",
+      "start": 149.84,
+      "end": 150.24
+    },
+    {
+      "text": "and",
+      "start": 150.24,
+      "end": 150.4
+    },
+    {
+      "text": "marine",
+      "start": 150.4,
+      "end": 150.96
+    },
+    {
+      "text": "resources,",
+      "start": 150.96,
+      "end": 152.08
+    },
+    {
+      "text": "and",
+      "start": 152.08,
+      "end": 152.32
+    },
+    {
+      "text": "to",
+      "start": 152.32,
+      "end": 152.56
+    },
+    {
+      "text": "help",
+      "start": 152.56,
+      "end": 152.88
+    },
+    {
+      "text": "mitigate",
+      "start": 152.88,
+      "end": 153.44
+    },
+    {
+      "text": "potential",
+      "start": 153.44,
+      "end": 153.92
+    },
+    {
+      "text": "hazards",
+      "start": 153.92,
+      "end": 154.56
+    },
+    {
+      "text": "to",
+      "start": 154.56,
+      "end": 154.88
+    },
+    {
+      "text": "lives",
+      "start": 154.88,
+      "end": 155.28
+    },
+    {
+      "text": "and",
+      "start": 155.28,
+      "end": 155.6
+    },
+    {
+      "text": "property",
+      "start": 155.6,
+      "end": 156.16
+    },
+    {
+      "text": "along",
+      "start": 156.16,
+      "end": 156.64
+    },
+    {
+      "text": "the",
+      "start": 156.64,
+      "end": 156.96
+    },
+    {
+      "text": "coast.",
+      "start": 156.96,
+      "end": 158.16
+    },
+    {
+      "text": "We",
+      "start": 158.16,
+      "end": 158.48
+    },
+    {
+      "text": "are",
+      "start": 158.48,
+      "end": 158.64
+    },
+    {
+      "text": "passionate",
+      "start": 158.64,
+      "end": 159.36
+    },
+    {
+      "text": "about",
+      "start": 159.36,
+      "end": 159.6
+    },
+    {
+      "text": "our",
+      "start": 159.6,
+      "end": 159.92
+    },
+    {
+      "text": "mission,",
+      "start": 159.92,
+      "end": 160.56
+    },
+    {
+      "text": "and",
+      "start": 160.56,
+      "end": 160.8
+    },
+    {
+      "text": "we",
+      "start": 160.8,
+      "end": 160.96
+    },
+    {
+      "text": "are",
+      "start": 160.96,
+      "end": 161.12
+    },
+    {
+      "text": "committed",
+      "start": 161.12,
+      "end": 161.6
+    },
+    {
+      "text": "to",
+      "start": 161.6,
+      "end": 161.76
+    },
+    {
+      "text": "meeting",
+      "start": 161.76,
+      "end": 162.16
+    },
+    {
+      "text": "the",
+      "start": 162.16,
+      "end": 162.32
+    },
+    {
+      "text": "coastal",
+      "start": 162.32,
+      "end": 162.8
+    },
+    {
+      "text": "and",
+      "start": 162.8,
+      "end": 162.96
+    },
+    {
+      "text": "ocean",
+      "start": 162.96,
+      "end": 163.44
+    },
+    {
+      "text": "science",
+      "start": 163.44,
+      "end": 164.0
+    },
+    {
+      "text": "needs",
+      "start": 164.0,
+      "end": 164.4
+    },
+    {
+      "text": "of",
+      "start": 164.4,
+      "end": 164.72
+    },
+    {
+      "text": "our",
+      "start": 164.72,
+      "end": 165.04
+    },
+    {
+      "text": "nation.",
+      "start": 165.04,
+      "end": 172.72
+    }
+  ]
+}
