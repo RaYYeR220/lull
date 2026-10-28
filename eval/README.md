@@ -506,8 +506,8 @@ Lull checks every claim of a description against the frames it describes before 
 Two controls test that this check does work: a negative control (does the verifier accept a
 description checked against footage that does not show it?) and an ablation (how much does
 hallucination rise on Suite A when the check is switched off?). Both are pre-registered in
-`controls/prereg.json` under the annotated tag **`controls-prereg`**, committed before either
-was run; they run on the merged engine after the Suite A scored run.
+`controls/prereg.json` under the annotated tag **`controls-prereg-2`**, committed before
+either was run; they run on the merged engine after the Suite A scored run.
 
 ### The pin and the one engine-facing file
 
@@ -517,7 +517,9 @@ Both harnesses refuse to run unless the tag exists and is an ancestor of HEAD, t
 check, reused). Every call into the engine's verification goes through
 `controls/verify_adapter.py` (the clip window, cutting the clip, the verifier call, the
 verification-off switch); it is deliberately not pinned, so following a change of the
-engine's signature is a one-place edit that leaves the pin intact.
+engine's signature is a one-place edit that leaves the pin intact. A test walks the import
+statements of `negative.py` and `ablation.py` and fails if either imports the engine's stages
+or media directly.
 
 ### Negative control (`controls/negative.py`)
 
@@ -528,29 +530,67 @@ engine's signature is a one-place edit that leaves the pin intact.
 - **True clip**: the engine's own verification window for the cue (its watch events, the
   pipeline's padding, cap, minimum and clip height).
 - **Mismatched clip**, same length: in a Suite A lecture the centre of another slide (one the
-  true window does not touch, long enough, the nearest by start); in a showcase video a window
-  at least 30 s from the true one, meeting at least one watch event and none of the cue's (the
-  nearest on a 0.5 s grid); otherwise the next video that has room.
+  true window does not touch, long enough, not carrying the title of a slide it touches; the
+  nearest by start); in a showcase video a window at least 30 s from the true one that shares
+  at least 0.5 s with a watch event and no time with any of the cue's (the nearest on a 0.5 s
+  grid); otherwise the next video that has room ("other video"). Every row records its rule,
+  the mismatched window and slide, and the watch events it overlaps with the seconds shared.
 - **Check**: the engine's verifier, with the pipeline's model and settings (Nemotron 3.5 Super
   VL, its prompt, temperature 0.2), on the cue's final text and each clip; no names are passed.
-- **Metrics** (95 % bootstrap over cues): false accept (the mismatched clip supports every
-  claim), per-claim false accept, true accept on the true clip (re-run consistency).
-  `results/CONTROLS.md` lists every false accept with its text and both clips' times.
+- **Metrics** (95 % bootstrap over cues), per mismatch rule with row counts, and a headline
+  over the same-video rules only (another slide; other events 30 s away). Other-video rows
+  are reported apart and never pooled into the headline.
+  - **False accept** (the mismatched clip supports every claim) and per-claim false accept.
+    The headline false accept is an **upper bound** on verifier failure: it also counts
+    claims that are genuinely true of the other footage (a generic layout, a recurring
+    setting).
+  - **Discriminative false accept** (Suite A): a false accept counts only when the cue conveys
+    at least one key visual fact of the true slide that the mismatched slide does not show.
+    Conveyed means credited by the Suite A judge's coverage verdict for that cue in the
+    scored run, or, without verdicts, an exact match of the slide title or of a chart value
+    with its category. Showcase videos have no key and get the raw rate only.
+  - **True accept** on the true clip: an optimistic upper bound on the verifier's
+    consistency, because every selected cue already passed verification (and edited cues are
+    excluded).
+  - `results/CONTROLS.md` lists every false accept with its text, both clips' times, its rule
+    and whether it is discriminative.
 
 ### Ablation (`controls/ablation.py`)
 
-Suite A's 12 lectures run again with `LULL_NO_VERIFY=1` (the engine switch; every run's
-manifest must say verification "disabled"), with Suite A's run function and options, into
-`controls/out/ablation/` under run ids `ablation-<id>-<stamp>`; cues voiced unverified count
-as published. Judged by Suite A's primary judge and requests and measured by Suite A's code;
-compared with the Suite A counting run on the same engine. Reported side by side with the
-paired difference (without - with) and its 95 % bootstrap over videos: hallucination over
-claims (Suite A's pre-registered metric), over cues and over voiced statements, cues with an
-unsupported voiced statement, recall and decoys. The headline is the voiced-statement rate:
-the judge splits both arms' text the same way, whereas the claim split comes from the
-verifier, which this arm switches off. Added after the pre-registration of Suite A (whose pin
-applies unchanged); written to `results/ablation.json` and `results/ABLATION.md`, never to
+Suite A's 12 lectures run again with `LULL_NO_VERIFY=1`, using Suite A's run function and
+options, into `controls/out/ablation/` under run ids `ablation-<id>-<stamp>`. The engine
+switch must be set, and every run's manifest must say verification is "disabled". Cues voiced
+unverified count as published.
+
+The runs are judged by Suite A's primary judge and requests, measured by Suite A's code, and
+compared with the Suite A counting run on the same engine. Every requested video must be
+paired, and results need all 12. Both arms are reported side by side, with the paired
+difference (without − with) and its 95 % bootstrap over videos, for these metrics:
+
+- hallucination over claims (Suite A's pre-registered metric), over cues and over voiced
+  statements;
+- cues with an unsupported voiced statement;
+- recall and decoys.
+
+The headline is the voiced-statement rate, because the judge splits both arms' text the same
+way. The claim split comes from the verifier, which this arm switches off.
+
+The ablation was added after the pre-registration of Suite A, whose pin applies unchanged.
+It writes to `results/ablation.json` and `results/ABLATION.md`, never to
 `results/suite_a.json`.
+
+### Deviations: the two pins
+
+The first pin, tag `controls-prereg`, points to commit `3e80579` (2026-10-28 04:12:16 UTC).
+After a review, and before any control or ablation run, the second pin `controls-prereg-2`
+added the following (listed in `prereg.json` under `changes_since_first_pin`):
+
+- per-rule reporting, with a same-video headline called an upper bound;
+- the discriminative false accept;
+- the true-accept disclosure;
+- the 0.5 s event-overlap rule and per-row event overlap;
+- the title rule for slide fallbacks;
+- the ablation's all-videos-paired check.
 
 ### How to run (after the engine merge and the Suite A scored run)
 
@@ -562,19 +602,24 @@ uv run --directory eval python -m controls.negative --suite-a \
 LULL_NO_VERIFY=1 uv run --directory eval python -m controls.ablation --all
 ```
 
-Expected spend: the negative control about 80 Super VL calls (2 per cue), about $0.25 (cap
-$0.50); the ablation the Suite A pipeline without the verifier's calls plus Suite A judging,
-about $0.7-0.8 (cap $2.00).
+Expected spend:
+
+- negative control: about 80 Super VL calls (2 per cue), about $0.25 (cap $0.50);
+- ablation: the Suite A pipeline without the verifier's calls plus Suite A judging, about
+  $0.7–0.8 (cap $2.00).
 
 ### Known limitations
 
 - A mismatched window can still show what the cue says (a recurring setting, a title that
-  stays on screen, a wire-filled shaft 30 s later): a false accept is then a correct accept.
-  Every false accept is listed with both clips so a reader can check.
-- 40 cues give a wide interval; the selection is spread over the inputs as they come, not
+  stays on screen, a wire-filled shaft 30 s later). This is why the raw rate is an upper
+  bound and why Suite A gets the discriminative rate. For showcase videos only the listed
+  false accepts let a reader judge.
+- The discriminative rate is only as good as the Suite A judge's coverage verdicts and the
+  key's facts; a fact the key does not list cannot make a false accept discriminative.
+- 40 cues give a wide interval. The selection is spread over the inputs as they come, not
   balanced between Suite A and the showcase videos.
-- The verifier runs at temperature 0.2: the true-accept rate measures its own consistency,
-  and a single draw per clip is taken.
-- No names are passed to the verifier; the pipeline passes the cast names a line uses.
-- The ablation's two arms differ in when they ran (the with-arm is the Suite A counting run);
-  the remote models may change between the runs.
+- The verifier runs at temperature 0.2. True accept measures its consistency on cues it
+  already passed, from a single draw per clip.
+- No names are passed to the verifier, whereas the pipeline passes the cast names a line uses.
+- The ablation's two arms ran at different times (the with-arm is the Suite A counting run),
+  and the remote models may change in between.

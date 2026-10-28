@@ -162,10 +162,16 @@ def paired_difference(with_pairs, without_pairs, n: int = BOOT_N, seed: int = BO
             "ci95": [float(lo), float(hi)], "videos": len(w)}  # fmt: skip
 
 
-def compare(with_videos: list[dict], without_videos: list[dict]) -> dict:
-    """Every metric for the videos both arms have, paired by video id."""
+def compare(with_videos: list[dict], without_videos: list[dict], expected: int) -> dict:
+    """Every metric over the videos both arms have, paired by video id; Refused unless all
+    `expected` videos are paired (results/ needs all twelve: no headline on fewer)."""
     by = {v["id"]: v for v in with_videos}
     both = [(by[v["id"]], v) for v in without_videos if v["id"] in by]
+    if not (len(both) == len(with_videos) == len(without_videos) == expected):
+        raise Refused(
+            f"{len(both)} of {expected} videos paired (with-arm "
+            f"{len(with_videos)}, without {len(without_videos)}): no comparison"
+        )
     out = {}
     for name, path in METRICS.items():
         pairs = [(pair_of(a, path), pair_of(b, path)) for a, b in both]
@@ -267,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
         "with_arm": {"results": "results/suite_a.json", "date": with_arm.get("date"),
                      "invocation": (with_arm.get("invocation") or {}).get("stamp")},
         "claim_split": {"with": _mean(with_split), "without": _mean(split)},
-        "comparison": compare(with_videos, without), "headline": HEADLINE,
+        "comparison": compare(with_videos, without, expected=len(entries)),
+        "headline": HEADLINE,
         "videos": without,
         "spend_usd": round(A.spend_of(c["budget"].run_ids | judge.paid_by, rows), 6),
     }  # fmt: skip

@@ -112,8 +112,37 @@ def test_event_mismatch_rules_hold_for_random_windows():
             continue
         assert w[0] >= hi + N.AWAY_S - 1e-9 or w[1] <= lo - N.AWAY_S + 1e-9
         assert 0 <= w[0] and w[1] <= 120.0 + 1e-9
-        inside = {e for e, x in EVENTS.items() if x["t_start"] < w[1] and x["t_end"] > w[0]}
-        assert not inside & ids and inside
+        touching = {e for e, x in EVENTS.items() if x["t_start"] < w[1] and x["t_end"] > w[0]}
+        met = {e for e, x in EVENTS.items()
+               if min(x["t_end"], w[1]) - max(x["t_start"], w[0])
+               >= N.MIN_EVENT_OVERLAP_S}  # fmt: skip
+        assert not touching & ids and met
+
+
+def test_an_event_match_needs_half_a_second_and_rows_record_the_overlap():
+    events = {"e1": event("e1", 0, 30), "e2": event("e2", 80.3, 120)}
+    # [72, 80.6] would meet e2 by 0.3 s only; the nearest window with >= 0.5 s starts at 72.5
+    w = N.event_mismatch((30.0, 38.6), {"e1"}, events, 120.0)
+    assert w == pytest.approx((72.5, 81.1))
+    assert N.event_overlap(w, events) == {"e2": pytest.approx(0.8)}
+    assert N.event_overlap((0.0, 10.0), {"e9": event("e9", 50, 60)}) == {}
+
+
+def test_fallback_skips_a_slide_with_the_true_slide_title():
+    mine = run(
+        "a01",
+        [],
+        duration=10.0,
+        slides=[{"index": 1, "start": 0.0, "end": 10.0, "title": "Energy"}],
+    )
+    other = run("a02", [], duration=48.56,
+                slides=[{**SLIDES[0], "title": "Energy"}, {**SLIDES[1], "title": "Other"},
+                        {**SLIDES[2], "title": "Third"}])  # fmt: skip
+    m = N.mismatched("a01", (2.0, 8.0), {"e1"}, [mine, other])
+    assert m["video"] == "a02" and m["slide"] == 2  # slide 1 shares the title "Energy"
+    same = N.slide_mismatch((0.0, 6.0), [{**SLIDES[0], "title": "T"}, {**SLIDES[1], "title": "T"},
+                                         {**SLIDES[2], "title": "U"}])  # fmt: skip
+    assert same is not None and same[0] > SLIDES[2]["start"]
 
 
 def test_mismatch_falls_back_to_another_video():
@@ -143,21 +172,71 @@ def test_outcome_needs_every_claim_supported_and_at_least_one():
         "claims": 2, "supported": 1, "fully_supported": False}  # fmt: skip
 
 
-def test_rates_and_their_intervals():
-    rows = [{"true": N.outcome(claims("supported")), "mismatched": N.outcome(claims("supported"))},
-            {"true": N.outcome(claims("supported", "supported")),
-             "mismatched": N.outcome(claims("not_visible", "supported"))},
-            {"true": N.outcome(claims("not_visible")),
-             "mismatched": N.outcome(claims("contradicted"))},
-            {"true": N.outcome(claims("supported")), "mismatched": N.outcome([])}]  # fmt: skip
+def row(rule, true, mism, disc=None, suite="a"):
+    return {"mismatch": {"rule": rule}, "true": N.outcome(true), "mismatched": N.outcome(mism),
+            "suite_a": suite == "a", "discriminative": disc}  # fmt: skip
+
+
+def test_rates_per_rule_and_the_same_video_headline():
+    rows = [row("another slide", claims("supported"), claims("supported"), disc=True),
+            row("another slide", claims("supported", "supported"),
+                claims("not_visible", "supported"), disc=False),
+            row("other events, 30 s away", claims("not_visible"), claims("contradicted"),
+                suite="showcase"),
+            row("other events, 30 s away", claims("supported"), [], suite="showcase"),
+            row("other video", claims("supported"), claims("supported"), disc=True),
+            row("other video", claims("supported"), claims("supported"))]  # fmt: skip
     m = N.metrics(rows)
-    assert m["false_accept"]["value"] == pytest.approx(1 / 4)
-    assert m["false_accept_claims"]["value"] == pytest.approx(2 / 4)
-    assert m["true_accept"]["value"] == pytest.approx(3 / 4)
+    h = m["headline"]
+    assert h["rows"] == 4 and h["upper_bound"] is True
+    assert h["false_accept"]["value"] == pytest.approx(1 / 4)  # fallback rows never pooled
+    assert h["false_accept_claims"]["value"] == pytest.approx(2 / 4)
+    assert h["true_accept"]["value"] == pytest.approx(3 / 4)
+    # discriminative: Suite A same-video rows only (2), one discriminative false accept
+    assert h["discriminative_false_accept"]["value"] == pytest.approx(1 / 2)
+    assert h["discriminative_false_accept"]["den"] == 2
+    assert m["by_rule"]["other video"]["rows"] == 2
+    assert m["by_rule"]["other video"]["false_accept"]["value"] == 1.0
+    assert m["by_rule"]["another slide"]["rows"] == 2
     for k in ("false_accept", "false_accept_claims", "true_accept"):
-        lo, hi = m[k]["ci95"]
-        assert lo <= m[k]["value"] <= hi
+        lo, hi = h[k]["ci95"]
+        assert lo <= h[k]["value"] <= hi
     assert N.metrics(rows) == m  # fixed seed
+
+
+ENTRY = {
+    "slides": [
+        {"index": 1, "start": 0.0, "end": 12.0, "title": "Energy in Living Things",
+         "bullets": ["Cells need energy", "ATP carries energy"], "chart": None},
+        {"index": 2, "start": 12.0, "end": 24.0, "title": "ATP Yield Comparison",
+         "bullets": ["ATP carries energy"],
+         "chart": {"type": "bar", "title": "ATP Molecules", "x_label": "Type", "y_label": "ATP",
+                   "points": [{"label": "Aerobic", "value": 36.0}]}},
+    ],
+    "visual_facts": [
+        {"id": "f1", "slide": 1, "kind": "title", "anchor": "Energy in Living Things",
+         "value": None},
+        {"id": "f2", "slide": 1, "kind": "bullet", "anchor": "ATP carries energy", "value": None},
+        {"id": "f3", "slide": 2, "kind": "chart_value", "anchor": "Aerobic", "value": 36.0},
+    ],
+}  # fmt: skip
+
+
+def test_discriminative_facts_are_true_slide_facts_absent_from_the_mismatched_slide():
+    # judged: the cue conveys f1 (absent from slide 2) and f2 (also on slide 2)
+    got = N.discriminative_facts("c1", "Slide one.", {1}, ENTRY["slides"][1], ENTRY,
+                                 {"c1": ["f1", "f2"]})  # fmt: skip
+    assert got == ["f1"]
+    assert N.discriminative_facts("c1", "x", {1}, ENTRY["slides"][1], ENTRY, {"c1": ["f2"]}) == []
+    # a fact of a slide the true window does not touch does not count
+    assert N.discriminative_facts("c1", "x", {1}, ENTRY["slides"][1], ENTRY, {"c1": ["f3"]}) == []
+    # no verdicts for the run: exact match of the title or a value with its category
+    assert N.discriminative_facts("c9", "Energy in Living Things.", {1}, ENTRY["slides"][1],
+                                  ENTRY, None) == ["f1"]  # fmt: skip
+    assert N.discriminative_facts("c9", "Aerobic gives 36.", {2}, ENTRY["slides"][0], ENTRY,
+                                  None) == ["f3"]  # fmt: skip
+    assert N.discriminative_facts("c9", "Aerobic gives 36.", {2}, ENTRY["slides"][1], ENTRY,
+                                  None) == []  # fmt: skip
 
 
 # -- the adapter -----------------------------------------------------------------------------------
@@ -181,9 +260,36 @@ def test_the_adapter_is_the_only_caller_of_the_engine_verifier(monkeypatch, tmp_
     lo, hi = VA.clip_window([event("e1", 10.0, 11.0)], 60.0)
     assert (lo, hi) == (V.clip_window(
         [V.VisualEvent(**event("e1", 10.0, 11.0))], 60.0))  # fmt: skip
+
+
+def engine_imports(path):
+    """Every module the file imports (import / from-import / importlib.import_module)."""
+    import ast
+
+    tree = ast.parse(open(path, encoding="utf-8").read())
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            found += [f"{node.module}.{a.name}" for a in node.names]
+            found.append(node.module or "")
+        elif (
+            isinstance(node, ast.Call)
+            and getattr(node.func, "attr", "") == "import_module"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+        ):
+            found.append(str(node.args[0].value))  # fmt: skip
+    return found
+
+
+def test_only_the_adapter_imports_the_engine_verifier_or_media():
     for path in (N.__file__, AB.__file__):
-        text = open(path, encoding="utf-8").read()
-        assert "lull.stages.verify" not in text and "stages import verify" not in text
+        bad = [m for m in engine_imports(path)
+               if m.startswith(("lull.stages", "lull.media")) or m == "lull"]  # fmt: skip
+        assert bad == [], (path, bad)
+    assert any(m.startswith("lull.stages") for m in engine_imports(VA.__file__))
 
 
 def test_verification_switch_is_read_from_the_manifest():
@@ -216,6 +322,24 @@ def test_paired_difference_over_videos():
     lo, hi = d["ci95"]
     assert lo <= 0.2 <= hi and lo > 0  # every video got worse without verification
     assert AB.paired_difference(with_v, without) == d
+
+
+def test_compare_refuses_unless_every_video_is_paired():
+    def v(i, bad):
+        return {"id": i, "hallucination": {"claims": [bad, 10], "cues": [bad, 5]},
+                "supplementary": {"hallucination_voiced_text": [bad, 10],
+                                  "voiced_cues_with_unsupported": [bad, 5]},
+                "recall": {"standard": [3, 10], "with_extended": [5, 10]},
+                "decoys": {"stated": [], "of": 4}}  # fmt: skip
+
+    with_v = [v(f"a{k:02d}", 1) for k in range(1, 13)]
+    without = [v(f"a{k:02d}", 3) for k in range(1, 13)]
+    out = AB.compare(with_v, without, expected=12)
+    assert out["hallucination_voiced_text"]["difference"] == pytest.approx(0.2)
+    with pytest.raises(Refused, match="12"):
+        AB.compare(with_v[:11], without, expected=12)
+    with pytest.raises(Refused, match="paired"):
+        AB.compare(with_v, without[:10], expected=12)
 
 
 def test_ablation_refuses_without_the_switch_or_with_another_engine(monkeypatch):
@@ -289,11 +413,11 @@ class FakeGit:
 def test_controls_pin(monkeypatch):
     monkeypatch.setattr(N, "prereg_digest", lambda: "d00d")
     git = FakeGit()
-    assert N.pin(git)["tag"] == "controls-prereg"
+    assert N.pin(git)["tag"] == "controls-prereg-2"
     diff = next(c for c in git.calls if c[0] == "diff")
     assert "eval/controls/negative.py" in diff and "eval/controls/prereg.json" in diff
     assert "eval/controls/verify_adapter.py" not in diff  # the adapter may follow the engine
-    with pytest.raises(Refused, match="controls-prereg not found"):
+    with pytest.raises(Refused, match="controls-prereg-2 not found"):
         N.pin(FakeGit(**{"rev-parse": (1, "")}))
     with pytest.raises(Refused, match="tagged prereg.sha256"):
         N.pin(FakeGit(**{"show-sha": (0, "beef  controls/prereg.json\n")}))
@@ -304,5 +428,59 @@ def test_prereg_file_states_the_rules():
     neg, abl = rules["negative_control"], rules["ablation"]
     assert neg["max_cues"] == N.MAX_CUES and neg["seed"] == N.SEED and neg["away_s"] == N.AWAY_S
     assert neg["grid_s"] == N.GRID_S
-    assert set(neg) >= {"selection", "true_clip", "mismatch", "metrics", "verifier"}
+    assert set(neg) >= {
+        "selection",
+        "true_clip",
+        "mismatch",
+        "metrics",
+        "verifier",
+        "headline",
+        "discriminative",
+        "true_accept_bias",
+    }
+    assert neg["min_event_overlap_s"] == N.MIN_EVENT_OVERLAP_S
+    assert "upper bound" in neg["headline"].lower()
+    assert set(rules) >= {"changes_since_first_pin"}
     assert set(abl) >= {"runs", "with_arm", "metrics", "headline", "difference"}
+
+
+def test_each_pair_records_its_overlap_and_discriminative_facts():
+    slides = [{**s, "bullets": s.get("bullets", []), "chart": s.get("chart")}
+              for s in ENTRY["slides"]]  # fmt: skip
+    lecture = {**run("a01", [], duration=24.0, slides=slides, events=[event("e1", 0, 12),
+                                                                       event("e2", 12, 24)]),
+               "entry": ENTRY, "covered": {"c1": ["f1"]}}  # fmt: skip
+    by = {"a01": lecture}
+    cue1 = {"id": "c1", "text": "Energy in Living Things.", "event_ids": ["e1"]}
+    mm = {"video": "a01", "window": [14.0, 22.0], "rule": "another slide", "slide": 2}
+    ctx = N.pair_context("a01", cue1, (2.0, 10.0), mm, by)
+    assert ctx["suite_a"] and ctx["true_slides"] == [1] and ctx["discriminative"] is True
+    assert ctx["discriminative_facts"] == ["f1"]
+    assert ctx["event_overlap"] == {"e2": 8.0} and ctx["cue_event_overlap"] == {}
+    film = {**run("ed", [], events=[event("e1", 0, 20), event("e3", 60, 80)])}
+    ctx = N.pair_context("ed", {"id": "c", "text": "t", "event_ids": ["e1"]}, (2.0, 10.0),
+                         {"video": "ed", "window": [60.0, 68.0], "rule": "other events, 30 s away",
+                          "slide": None}, {"ed": film})  # fmt: skip
+    assert ctx["suite_a"] is False and ctx["discriminative"] is None
+    assert ctx["event_overlap"] == {"e3": 8.0}
+
+
+def test_the_report_leads_with_the_same_video_upper_bound():
+    rows = [{**row("another slide", claims("supported"), claims("supported"), disc=True),
+             "video": "a01", "cue_id": "c1", "track": "standard", "text": "T.",
+             "true_window": [0.0, 8.0], "discriminative_facts": ["f1"], "event_overlap": {},
+             "mismatch": {"rule": "another slide", "video": "a01", "window": [20.0, 28.0]}},
+            {**row("other video", claims("supported"), claims("supported")),
+             "video": "a02", "cue_id": "c2", "track": "standard", "text": "U.",
+             "true_window": [0.0, 8.0], "discriminative_facts": [], "event_overlap": {},
+             "mismatch": {"rule": "other video", "video": "a03",
+                          "window": [0.0, 8.0]}}]  # fmt: skip
+    md = N.markdown({"metrics": N.metrics(rows), "rows": rows, "skipped": [], "complete": False,
+                     "preregistration": {"tag": "controls-prereg-2", "commit": "c" * 12,
+                                         "committed": "x"},
+                     "git_commit": "d" * 12, "date": "x", "spend_usd": 0.0,
+                     "verifier": {"model": "vl", "temperature": 0.2}})  # fmt: skip
+    head = md.index("## Headline")
+    assert "UPPER BOUND" in md[head:] and "(1 cues;" in md
+    assert md.index("| other video |") > md.index("## By mismatch rule")
+    assert "discriminative f1" in md
