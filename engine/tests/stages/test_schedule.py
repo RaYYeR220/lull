@@ -222,8 +222,7 @@ def test_no_speech_video_does_not_over_describe():
     variants = [_var("e001", "short", 5), _var("e001", "medium", 10), _var("e001", "long", 18)]
     gaps = [_gap("g001", 0.2, 29.8, 88)]
     for run in (schedule, schedule_greedy):
-        # priority 1: the solver leaves it, the filling pass gives the empty pause its line
-        assert run(events, variants, {"e001": 1}, gaps) == ([_pl("e001", "long", "g001")], [])
+        assert run(events, variants, {"e001": 1}, gaps) == ([], [])  # priority 1: never placed
         placements, extended = run(events, variants, {"e001": 2}, gaps)
         assert placements == [_pl("e001", "long", "g001")]
         assert extended == []
@@ -601,11 +600,10 @@ def test_placement_report_summarises_use_of_the_gaps():
 
 
 def test_standard_placement_needs_priority_two():
-    """The solver never places a priority-1 line; in a pause under 3 s the filling pass
-    does not either."""
+    """A priority-1 line never fills spare room."""
     events = [_ev("e001", 1.0, 9.0, sal=4), _ev("e002", 1.0, 9.0, sal=4)]
     variants = [_var("e001", "short", 3), _var("e002", "short", 3)]
-    gaps = [_gap("g001", 2.0, 4.8, 8)]
+    gaps = [_gap("g001", 2.0, 8.0, 18)]
     for run in (schedule, schedule_greedy):
         placements, extended = run(events, variants, {"e001": 1, "e002": 2}, gaps)
         assert placements == [_pl("e002", "short", "g001")]
@@ -635,45 +633,46 @@ def test_events_the_dialogue_conveys_never_stop_the_video():
     assert placement_report([], [], [said, loud], [])["unplaced_salient"] == ["e002"]
 
 
-# -- fuller long pauses -----------------------------------------------------------------------
+# -- what scheduling may never do to the measures -----------------------------------------------
 
 
-def test_a_half_empty_long_pause_takes_a_lower_priority_visual_inside_it():
-    """A 6 s window holds a 4-word line in 16 words of room: a priority-1 visual inside it
-    is added, up to about 80 % of the room (12 words), still one cue for the window."""
-    events = [_ev("e001", 10.0, 16.0, sal=4), _ev("e002", 12.0, 15.0, sal=2)]
-    variants = [_var("e001", "short", 4), _var("e002", "short", 5), _var("e002", "long", 9)]
+def _voiced(cues):
+    return [c.model_copy(update={"status": "verified", "audio_path": "a.wav", "audio_dur": 2.0})
+            for c in cues]  # fmt: skip
+
+
+def test_a_minor_visual_never_takes_a_pause_an_important_one_left_empty():
+    """An important visual (priority 4) whose only line is too long for its 6 s window leaves
+    the window empty: F113 flags it. No scheduling choice puts a priority-1 line there and
+    makes the flag go while the important visual is still undescribed."""
+    from lull.stages.publish import coverage, f113_flags
+
+    important = _ev("e001", 10.0, 16.0, sal=5)
+    minor = _ev("e002", 11.0, 15.0, sal=2)
+    variants = [_var("e001", "short", 18), _var("e002", "short", 5)]
     gaps = [_gap("g001", 10.0, 16.0, 16)]
+    prio = {"e001": 4, "e002": 1}
     for run in (schedule, schedule_greedy):
-        placements, _ = run(events, variants, {"e001": 4, "e002": 1}, gaps)
-        assert placements == [_pl("e001", "short", "g001"), _pl("e002", "short", "g001")]
-    cues = compose_cues(placements, variants, events, gaps, extended=[])
-    assert [c.gap_id for c in cues] == ["g001"] and cues[0].event_ids == ["e001", "e002"]
+        placements, _ = run([important, minor], variants, prio, gaps)
+        assert placements == []
+        cues = _voiced(compose_cues(placements, variants, [important, minor], gaps, extended=[]))
+        assert len(f113_flags(gaps, cues, [important, minor], priority=prio)) == 1
+        cov = coverage(cues, [], [important, minor], extended_produced=False, priority=prio)
+        assert (cov["important_events"], cov["described"]) == (1, 0)
 
 
-def test_the_filling_pass_respects_short_pauses_full_ones_and_look_aheads():
-    events = [_ev("e001", 10.0, 16.0, sal=4), _ev("e002", 12.0, 15.0, sal=2),
-              _ev("e003", 30.0, 33.0, sal=2), _ev("e004", 20.0, 22.0, sal=2)]  # fmt: skip
-    variants = [_var("e001", "short", 9), _var("e002", "short", 3), _var("e003", "short", 3),
-                _var("e004", "short", 3)]  # fmt: skip
-    gaps = [
-        _gap("g001", 10.0, 16.0, 16),  # 9 of 16 words used: more than half, left alone
-        _gap("g002", 23.0, 28.0, 14),  # e003 starts after it: a look-ahead is never added
-        _gap("g003", 20.5, 23.0, 7),  # under 3 s: never filled
+def test_a_long_stretch_without_speech_is_not_filled_with_minor_visuals():
+    """30 s without speech in 6 s windows, one important visual and nine priority-1 ones: the
+    important one is described, the minor ones are not."""
+    from lull.types import Gap
+
+    events = [_ev("e001", 1.0, 5.0, sal=5)] + [
+        _ev(f"e{i:03d}", 1.0 + 3 * i, 4.0 + 3 * i, sal=2) for i in range(2, 11)
     ]
-    placements, _ = schedule(events, variants, {"e001": 4, "e002": 1, "e003": 1, "e004": 1},
-                             gaps)  # fmt: skip
-    assert placements == [_pl("e001", "short", "g001")]
-
-
-def test_the_filling_pass_upgrades_a_short_line_to_a_longer_variant_first():
-    from lull.stages import schedule as sch
-
-    events = [_ev("e001", 10.0, 16.0, sal=4)]
-    variants = [_var("e001", "short", 4), _var("e001", "long", 11)]
-    gaps = [_gap("g001", 10.0, 16.0, 16)]
-    pool = sch._options(events, variants, {"e001": 4}, gaps, sch.LEAD, sch.AHEAD_WORDS, 2.8,
-                        min_priority=1)  # fmt: skip
-    short = next(o for o in pool if o.length == "short")
-    filled = sch._fill([short], pool)
-    assert [(o.event.id, o.length) for o in filled] == [("e001", "long")]  # 11 <= 12
+    variants = [_var("e001", "short", 6)] + [_var(e.id, "short", 4) for e in events[1:]]
+    big = Gap(id="g001", start=0.0, end=30.2, usable_start=0.2, usable_end=30.0,
+              capacity_words=82)  # fmt: skip
+    gaps = split_gaps([big], max_window=6.0, breath=0.3, wps=2.8)
+    prio = {"e001": 4, **{e.id: 1 for e in events[1:]}}
+    placements, _ = schedule(events, variants, prio, gaps, wps=2.8)
+    assert [p.event_id for p in placements] == ["e001"]
