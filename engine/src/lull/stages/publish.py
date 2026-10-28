@@ -894,10 +894,15 @@ def _commit(staging: Path, run_dir: Path, names: Iterable[str]) -> None:
 
 def _keyframes(
     video: Path, cues: Sequence[Cue], events: Sequence[VisualEvent], run_dir: Path,
-    duration: float,
+    info: media.Probe,
 ) -> dict[str, Path]:  # fmt: skip
+    """One frame per cue, inside the picture: a time past the picture's last frame (the sound
+    may run on after it) is taken at that frame. A shot that gives no frame takes the last
+    frame that decodes; one that still gives none is left out with a warning. A keyframe
+    never stops a publish."""
     by_id = {e.id: e for e in events}
-    last = max(0.0, duration - 0.1)
+    frame = 1.0 / info.fps if info.fps > 0 else 0.04
+    last = info.video_end if info.video_end is not None else max(0.0, info.duration - frame)
     shots = []
     for c in sorted(cues, key=lambda c: (c.start, c.id)):
         ev = by_id.get(c.event_ids[0]) if c.event_ids else None
@@ -906,8 +911,21 @@ def _keyframes(
     if not shots:
         return {}
     (run_dir / KEYFRAMES).mkdir(parents=True, exist_ok=True)
-    media.frames_at(video, shots)
-    return {f"{KEYFRAMES}/{dst.name}": dst for _, dst in shots}
+    try:
+        media.frames_at(video, shots, missing_ok=True)
+    except MediaError as e:
+        log.warning("publish: keyframes could not be taken (%s); trying the last frame", e)
+    out: dict[str, Path] = {}
+    window = max(3.0, info.duration - last + 2.0)  # reaches back into the picture
+    for t, dst in shots:
+        if not dst.exists():
+            try:
+                media.last_frame(video, dst, window=window)
+            except MediaError as e:
+                log.warning("publish: no keyframe for %s at %.3f s: %s", dst.stem, t, e)
+                continue
+        out[f"{KEYFRAMES}/{dst.name}"] = dst
+    return out
 
 
 def _by_time(cues: Iterable[Cue]) -> list[Cue]:
@@ -1099,7 +1117,7 @@ def _stage(
         ext_video, ext_error = None, scrub_paths(_one_line(e))[:300]
     if ext_video is not None:
         out[mixer.EXTENDED_VIDEO] = ext_video
-    out.update(_keyframes(video, everything, events, run_dir, info.duration))
+    out.update(_keyframes(video, everything, events, run_dir, info))
 
     fps, freezes = mixer.freeze_points(
         spoken_ext, info, standard=spoken, speech=speech, words=words or []
