@@ -1,6 +1,6 @@
 import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD } from "next/constants";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEV_API_BASE, assertApiBaseForBuild, resolveApiBase } from "../lib/api-base";
+import { DEV_API_BASE, assertApiBaseForBuild, contentSecurityPolicy, resolveApiBase } from "../lib/api-base";
 import nextConfig from "../next.config";
 
 describe("the API's address", () => {
@@ -23,6 +23,28 @@ describe("the API's address", () => {
     expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: " " })).toThrow(/NEXT_PUBLIC_API_URL/);
     expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: "https://api.lull.example" })).not.toThrow();
   });
+
+  it("must be https, except a local API (and the e2e build's)", () => {
+    expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: "http://api.lull.example" })).toThrow(/https/);
+    expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: "ftp://api.lull.example" })).toThrow(/https/);
+    expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: "not a url" })).toThrow(/https/);
+    expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: "http://localhost:8000" })).not.toThrow();
+    expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: "http://127.0.0.1:8000" })).not.toThrow();
+    expect(() => assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: "http://mock.test:3218", LULL_E2E_BUILD: "1" })).not.toThrow();
+  });
+});
+
+describe("the content security policy", () => {
+  it("lets pages reach only this site, the API and blobs, and be framed by no one", () => {
+    const csp = contentSecurityPolicy("https://api.lull.example/v0");
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("connect-src 'self' https://api.lull.example blob:");
+    expect(csp).toContain("media-src 'self' https://api.lull.example blob:");
+    expect(csp).toContain("img-src 'self' https://api.lull.example data: blob:");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).not.toContain("unsafe-eval");
+  });
 });
 
 describe("next.config", () => {
@@ -33,6 +55,13 @@ describe("next.config", () => {
   it("refuses a production build without the API's address", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "");
     expect(() => nextConfig(PHASE_PRODUCTION_BUILD)).toThrow(/NEXT_PUBLIC_API_URL/);
+  });
+
+  it("a production build sends the policy with every page", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.lull.example");
+    const rules = await nextConfig(PHASE_PRODUCTION_BUILD).headers!();
+    const all = rules.find((r) => r.source === "/:path*")!;
+    expect(all.headers.find((h) => h.key === "Content-Security-Policy")?.value).toContain("connect-src 'self' https://api.lull.example blob:");
   });
 
   it("builds with it, and runs the dev server without it", () => {
