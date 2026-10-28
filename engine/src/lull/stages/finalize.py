@@ -549,7 +549,7 @@ class _Finalise:
         if again is not None:
             bad = [c for c in again if c.verdict != "supported"]
             if not again or bad:
-                self.claims = [c for c in again if c.verdict != "contradicted"]
+                # held with every verdict on the text it keeps, contradictions included
                 why = _claims_note(bad) if bad else "no visual claim left to check"
                 return self.held("not verified as voiced: " + why)
         ahead = (self.cue.ahead or self.prefixed) and count_ahead(self.text) > 0
@@ -667,9 +667,10 @@ class _Finalise:
         return None
 
     def hold_unverified(self, reason: str, bad: list[Claim], *, cut_tried: bool = False) -> Cue:
-        """Held for review. Contradicted claims are cut from the text even so (never kept), and
-        the text is withheld when they cannot be cut. The claims left keep their verdicts for
-        the reviewer, and the findings are those of the text kept."""
+        """Held for review. Contradicted claims are cut from the text even so, and the text is
+        withheld when they cannot be cut. The cut text is checked once more: its claims, each
+        with its verdict (a contradiction found then included, and named in the note), are
+        the ones it is held with; the findings are those of the text kept."""
         wrong = [c for c in bad if c.verdict == "contradicted"]
         if wrong:
             cut = (
@@ -687,7 +688,11 @@ class _Finalise:
             if not self.text:
                 self.claims = []  # nothing is said: no claim is the text's
             elif self.recheck() is not None:
-                self.claims = [c for c in self.claims if c.verdict != "contradicted"]
+                # the claims of the text it is held with, each with its verdict: a new
+                # contradiction stays visible to the reviewer and is named in the note
+                still = [c for c in self.claims if c.verdict == "contradicted"]
+                if still:
+                    reason += "; the text it is held with is contradicted: " + _claims_note(still)
             keep = [k for k in self.keep if _occurs(self.text, k)]
             self.findings = _lint(self.text, keep, self.ctx)
         return self.held(reason)

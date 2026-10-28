@@ -1367,3 +1367,40 @@ def test_a_paraphrased_contradicted_claim_is_never_voiced_as_verified(tmp_path, 
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue("One person waves at the camera."))
     assert out.status == "held" and out.audio_path is None
     assert tf.roles() == ["verify", "remove"]
+
+
+def test_a_held_cue_keeps_a_contradiction_found_when_its_cut_text_is_checked_again(tmp_path, video):
+    """The check of the cut text finds a new contradiction: the held cue keeps that claim
+    with its verdict and says so, so a reviewer never sees the line as merely unconfirmed."""
+    removes = iter(["A person in a red coat opens the door.", "A person in a red coat opens it.",
+                    TEXT, "A person opens a door."])  # fmt: skip
+    tf = FakeTF(
+        verify=_new_failure_each_round(
+            ("a red coat", "contradicted"),
+            ("a door", "not_visible"),
+            then=[_claims(("a person", "supported"), ("opens a door", "contradicted"))],
+        ),  # fmt: skip
+        remove=lambda call: {"text": next(removes)},
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([]))
+    assert out.status == "held" and out.text == "A person opens a door."
+    assert [(c.text, c.verdict) for c in out.claims] == [
+        ("a person", "supported"), ("opens a door", "contradicted")
+    ]  # fmt: skip
+    assert "opens a door (contradicted)" in out.note
+
+
+def test_a_line_that_fails_its_check_as_voiced_keeps_the_contradiction(tmp_path, video):
+    """The look-ahead was added after the line was verified; the check of the prefixed line
+    contradicts a claim: held, and the claim stays with its verdict."""
+    gap = _pause(10.2, 19.0)
+    cue = _cue(CHART_LINE, start=10.2, event_ids=["e009"])
+    tf = FakeTF(verify=[
+        _supported("a bar chart shows sales rising each year"),
+        _claims(("a bar chart", "supported"), ("sales rising each year", "contradicted")),
+    ])  # fmt: skip
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, FakeSpeech([2.7, 3.7]), cue=cue, gap=gap,
+               events={"e009": CHART}, ctx=ctx)  # fmt: skip
+    assert out.status == "held"
+    assert ("sales rising each year", "contradicted") in [(c.text, c.verdict) for c in out.claims]
