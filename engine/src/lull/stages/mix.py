@@ -38,7 +38,7 @@ from typing import NamedTuple
 
 from pydantic import BaseModel
 
-from lull.media import MediaError, Probe, _bin, _run, input_args, probe
+from lull.media import MediaError, Probe, _bin, _run, input_args, probe, wav_input_args
 from lull.timeline import merge_spans
 from lull.types import Cue, Span, Word
 
@@ -247,7 +247,7 @@ def measure_levels(video: Path, info: Probe, cues: Sequence[Cue]) -> Levels:
         labels += "[l0]"
     cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", *input_args(Path(video).resolve())]
     for i, p in enumerate(inputs, start=1):
-        cmd += input_args(p)
+        cmd += wav_input_args(p)
         chains.append(f"[{i}:a:0]{_CUE_IN},ebur128=framelog=verbose[l{i}]")
         labels += f"[l{i}]"
     graph = ";".join(chains) + f";{labels}concat=n={len(chains)}:v=0:a=1[all]"
@@ -363,7 +363,7 @@ def _premix(
     cwd, inputs = _relative([p for _, p, _ in placements])
     cmd = [_bin("ffmpeg"), "-y", "-hide_banner", "-nostats", *input_args(video.resolve())]
     for p in inputs:
-        cmd += input_args(p)
+        cmd += wav_input_args(p)
     cmd += [
         "-/filter_complex", str(graph_file.resolve()),
         "-map", "[out]", "-c:a", "pcm_f32le", str(wav.resolve()),
@@ -428,7 +428,7 @@ def mix(
         title = "Described" if spoken else NO_DESCRIPTION  # never claim what is not there
         cmd = [
             _bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-            *input_args(video.resolve()), *input_args(premix),
+            *input_args(video.resolve()), *wav_input_args(premix),
             "-filter_complex", graph,
             "-map", "[a1]", *_aac(), *_track(0, title, lang), *_disclose(bool(spoken)),
             "-movflags", "+faststart", str(ad_audio),
@@ -656,7 +656,7 @@ def extended_video(
         )
         _run(
             [_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-             *input_args(video.resolve()), *input_args(premix),
+             *input_args(video.resolve()), *wav_input_args(premix),
              "-/filter_complex", str(graph_file),
              "-map", "[v]", "-map", "[a]",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",

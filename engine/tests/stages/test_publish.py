@@ -494,7 +494,8 @@ def fake_media(monkeypatch):
     def fake_levels(video, info, cues):
         return mixer.Levels(programme=-23.0, cues={str(c.audio_path): -20.0 for c in cues})
 
-    monkeypatch.setattr(media, "probe", lambda p: media.Probe(60.0, 640, 360, 25.0, True, "h264"))
+    mp4 = media.Probe(60.0, 640, 360, 25.0, True, "h264", format_name="mov,mp4,m4a,3gp,3g2,mj2")
+    monkeypatch.setattr(media, "probe", lambda p: mp4)
     monkeypatch.setattr(mixer, "measure_levels", fake_levels)
     monkeypatch.setattr(mixer, "mix", fake_mix)
     monkeypatch.setattr(mixer, "extended_video", fake_extended)
@@ -813,6 +814,22 @@ def test_publish_reads_every_input_as_a_local_file(published):
         if "-version" in cmd:
             continue  # the version check reads no file
         assert_locked(cmd)
+        for i, arg in enumerate(cmd):  # a cue's voice (and the premix) is read as WAV only
+            if arg == "-i" and cmd[i + 1].lower().endswith(".wav"):
+                assert cmd[i - 4 : i - 2] == ["-format_whitelist", "wav"], cmd
+
+
+def test_publish_refuses_a_video_that_is_not_mp4_matroska_or_webm(tmp_path, fake_media,
+                                                                   monkeypatch):  # fmt: skip
+    playlist = media.Probe(60.0, 640, 360, 25.0, True, "h264", format_name="hls")
+    monkeypatch.setattr(media, "probe", lambda p: playlist)
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"#EXTM3U")
+    run = tmp_path / "run"
+    with pytest.raises(MediaError):
+        publish(run, video, [], [], [], [], None, _ledger(tmp_path), "r1", RunOptions(),
+                speech=[])  # fmt: skip
+    assert not run.exists() or not any(run.iterdir())
 
 
 def _streams(path: Path) -> tuple[list[dict], float]:

@@ -35,6 +35,15 @@ def test_extract_wav_and_audio_duration(tone_slides: Path, tmp_path: Path):
     assert media.audio_duration(wav) == pytest.approx(12.0, abs=0.1)
 
 
+def test_audio_duration_reads_only_wav(tone_slides: Path, tmp_path: Path):
+    """It measures the voice's WAV files; anything else (here an MP4 named .wav) is refused
+    rather than demuxed."""
+    fake = tmp_path / "voice.wav"
+    fake.write_bytes(tone_slides.read_bytes())
+    with pytest.raises(media.MediaError):
+        media.audio_duration(fake)
+
+
 def test_scene_cuts(tone_slides: Path):
     cuts = media.scene_cuts(tone_slides)
     assert len(cuts) == 1

@@ -199,7 +199,7 @@ def export_showcase(
         src = src if src.is_absolute() else run_dir / src
         if not src.exists():
             raise ShowcaseError(f"the audio of cue {c.id} is missing ({Path(c.audio_path).name})")
-        _ffmpeg(*media.input_args(src), "-vn", "-ac", "1", "-c:a", "aac", "-b:a", CUE_AUDIO,
+        _ffmpeg(*media.wav_input_args(src), "-vn", "-ac", "1", "-c:a", "aac", "-b:a", CUE_AUDIO,
                 str(out_dir / AUDIO_DIR / f"{c.id}.m4a"))  # fmt: skip
 
     data = {

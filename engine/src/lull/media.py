@@ -72,6 +72,12 @@ def input_args(path: Path | str) -> list[str]:
     return ["-protocol_whitelist", SAFE_PROTOCOLS, "-i", str(path)]
 
 
+def wav_input_args(path: Path | str) -> list[str]:
+    """input_args for a WAV the engine wrote (a voiced cue, a premix): read as WAV only, never
+    handed to another demuxer whatever the file holds."""
+    return ["-format_whitelist", "wav", *input_args(path)]
+
+
 def assert_safe_container(info: Probe) -> None:
     """Raise MediaError unless the probed file is MP4/MOV, Matroska or WebM.
 
@@ -162,8 +168,9 @@ def probe(path: Path) -> Probe:
 
 def audio_duration(path: Path) -> float:
     out = _run(
-        [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS, "-v", "error",
-         "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)]
+        [_bin("ffprobe"), "-protocol_whitelist", SAFE_PROTOCOLS, "-format_whitelist", "wav",
+         "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1",
+         str(path)]
     )  # fmt: skip
     try:
         return float(out.stdout.decode().strip())
@@ -217,7 +224,7 @@ def atempo(src: Path, dst: Path, factor: float) -> Path:
     """Audio `src` played `factor` times faster, pitch kept (ffmpeg atempo, 0.5..100)."""
     if not 0.5 <= factor <= 100.0:
         raise MediaError(f"atempo factor {factor} outside 0.5..100")
-    _ffmpeg(*input_args(src), "-filter:a", f"atempo={factor:.3f}", str(dst))
+    _ffmpeg(*wav_input_args(src), "-filter:a", f"atempo={factor:.3f}", str(dst))
     return dst
 
 

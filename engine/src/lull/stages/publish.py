@@ -889,6 +889,7 @@ def publish(
     }
 
     info = media.probe(video)
+    media.assert_safe_container(info)  # never demux a playlist or a concat list (E-sec)
     run_dir.mkdir(parents=True, exist_ok=True)
     with _lock(run_dir):
         _recover(run_dir)
