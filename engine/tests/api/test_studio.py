@@ -686,6 +686,19 @@ def test_edits_of_one_run_are_serialized(app, rd):
     }
 
 
+def test_a_change_waiting_more_than_2_s_for_its_run_is_409_busy(app, rd):
+    assert app.state.studio.lock_wait == 2.0
+    app.state.studio.lock_wait = 0.1
+    log: list = []
+    app.state.studio.finalizer = _slow_finalizer(log, threading.Event(), 0.5)
+    r1, r2 = _async_patch(app, (RID, "c001", NEW_RED), (RID, "c002", "The screen turns blue."))
+    codes = sorted([r1.status_code, r2.status_code])
+    assert codes == [200, 409], (r1.text, r2.text)
+    busy = r1 if r1.status_code == 409 else r2
+    assert busy.json()["error"] == "busy" and "retry-after" in busy.headers
+    assert [e[0] for e in log] == ["start", "end"]  # the second never reached the engine
+
+
 def test_edits_of_different_runs_run_side_by_side(app, rd, template, data):
     place(template, data / "runs", RID2)
     log: list = []

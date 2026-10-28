@@ -16,7 +16,9 @@ The engine runs in a worker thread. Its callback only hands each event to the ev
 (call_soon_threadsafe). On the loop the event gets its sequence number, is appended to
 runs/<id>/events.jsonl and goes to every listener. GET /v1/runs/{id}/events replays that file
 and follows the run if it is still going in this process. Replaying a published run is open to
-anyone; a failed one is replayed to its owner only (the edit token). A stopped run (no
+anyone; a failed one is replayed to its owner only (the edit token). At most MAX_FOLLOWERS
+streams follow one run and MAX_STREAMS are open in all (429 busy past that): a stream holds a
+request slot for as long as the run lasts. A stopped run (no
 manifest, no error.json) is restarted for its owner inside that request: the engine's stage
 cache skips the stages already done, and the run's spend cap counts every attempt.
 
@@ -94,6 +96,9 @@ REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
 WALL_CLOCK_S = 600.0
 SEARCHES_PER_RUN = 3  # web searches a live run may make (the day cap is LULL_TAVILY_DAY)
 NOT_COUNTED = (402, 409, 503)  # refusals that are not the visitor's doing
+MAX_FOLLOWERS = 3  # GET .../events streams following one run
+MAX_STREAMS = 8  # GET .../events streams in all (follows and replays)
+FOLLOW_RETRY_S = 30
 
 EVENTS, REQUEST, ERROR, MANIFEST, INPUT = (
     "events.jsonl",
@@ -606,6 +611,9 @@ class Live:
         self.max_uploads = MAX_UPLOADS
         self.upload_deadline = UPLOAD_DEADLINE_S
         self.uploading = 0  # uploads being received and checked now
+        self.max_followers, self.max_streams = MAX_FOLLOWERS, MAX_STREAMS
+        self.streams = 0  # GET .../events streams open now
+        self.followers: dict[str, int] = {}  # of those, following each run
         self.upload_keys: set[str] = set()  # whose
         self._ledger: Ledger | None = None
 
@@ -665,6 +673,39 @@ class Live:
         run = await self.executor.start(job, self.runner, self.scrubber(job.run_dir), first)
         backlog, q = run.subscribe()
         return backlog, run, q
+
+    def watching(self, run_id: str | None) -> Callable[[], None]:
+        """Count a GET .../events stream (`run_id`: one that follows that run), or 429 busy
+        past the caps. Returns what to call when the stream ends."""
+        follows = self.followers.get(run_id, 0) if run_id is not None else 0
+        if run_id is not None and follows >= self.max_followers:
+            message = (
+                f"{self.max_followers} people are following this description already. Try "
+                "again in a minute, or open it once it has finished."
+            )
+            raise LiveError(429, "busy", message, headers={"Retry-After": str(FOLLOW_RETRY_S)})
+        if self.streams >= self.max_streams:
+            message = "Too many runs are being watched right now. Try again in a minute."
+            raise LiveError(429, "busy", message, headers={"Retry-After": str(FOLLOW_RETRY_S)})
+        self.streams += 1
+        if run_id is not None:
+            self.followers[run_id] = follows + 1
+        ended = False
+
+        def release() -> None:
+            nonlocal ended
+            if ended:
+                return
+            ended = True
+            self.streams -= 1
+            if run_id is not None:
+                left = self.followers.get(run_id, 1) - 1
+                if left > 0:
+                    self.followers[run_id] = left
+                else:
+                    self.followers.pop(run_id, None)
+
+        return release
 
 
 def _live(request: Request) -> Live:
@@ -1019,10 +1060,13 @@ def _sse(
     q: asyncio.Queue[dict | None] | None = None,
     heartbeat: float = HEARTBEAT_S,
     secret: dict | None = None,
+    release: Callable[[], None] | None = None,
 ) -> StreamingResponse:
     def close() -> None:
         if run is not None and q is not None:
             run.unsubscribe(q)
+        if release is not None:
+            release()
 
     return EventStream(_frames(backlog, run, q, heartbeat, secret), close)
 
@@ -1149,8 +1193,9 @@ async def run_events(run_id: str, request: Request, after: int | None = None) ->
 
     active = live.executor.get(run_id) if kind == "live" else None
     if active is not None:
+        release = live.watching(run_id)
         backlog, q = active.subscribe()
-        return _sse(_since(backlog, after), active, q, live.heartbeat)
+        return _sse(_since(backlog, after), active, q, live.heartbeat, release=release)
 
     status = "done" if kind == "showcase" else facts.run_status(run_dir, False)
     if status != "done" and not holds_token(run_dir, request):
@@ -1163,7 +1208,7 @@ async def run_events(run_id: str, request: Request, after: int | None = None) ->
         rest = _since(events, after)
         if not rest:  # seen to its end: 204 tells an EventSource to stop reconnecting
             return Response(status_code=204)
-        return _sse(rest)
+        return _sse(rest, release=live.watching(None))
 
     # stopped: restarted here for its owner, from the stage cache
     job = _resume_job(live, run_id, run_dir)

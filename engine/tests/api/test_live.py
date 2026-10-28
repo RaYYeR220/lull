@@ -1918,3 +1918,54 @@ def test_the_owner_restarts_a_stopped_run_from_its_stage_cache(
     assert ends["listen"] is True and ends["watch"] is True and ends["plan"] is False
     assert lc.get(f"/v1/runs/{run_id}").json()["status"] == "done"
     assert live.ledger.spent(run_id=run_id) >= spent_before > 0
+
+
+# -- how many may watch at once --------------------------------------------------------------------
+
+
+def test_at_most_3_follow_a_run_and_8_streams_in_all(lc, live, data):
+    import contextlib
+
+    assert (live.max_followers, live.max_streams) == (3, 8)
+    gate = threading.Event()
+    live.runner = Script(gate=gate, gate_at=2)
+    with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as p:
+        plines = p.iter_lines()
+        head = lines_until(plines, "event: call")
+        run_id = json.loads(head[2].split(": ", 1)[1])["run_id"]
+        url = f"/v1/runs/{run_id}/events"
+        with contextlib.ExitStack() as stack:
+            follows = [stack.enter_context(lc.stream("GET", url)) for _ in range(3)]
+            assert all(g.status_code == 200 for g in follows)
+            r = lc.get(url)
+            assert r.status_code == 429 and r.json()["error"] == "busy"
+            assert int(r.headers["retry-after"]) > 0 and r.json()["message"]
+            assert lc.get("/v1/health").status_code == 200  # the rest still answers
+        # the three left: room again
+        with lc.stream("GET", url) as g:
+            assert g.status_code == 200
+        gate.set()
+        list(plines)
+    assert live.streams == 0 and not live.followers
+
+
+def test_the_streams_in_all_are_capped_replays_included(lc, live, data):
+    live.max_streams = 2
+    d = data / "showcase" / "demo"
+    d.mkdir(parents=True)
+    (d / "events.jsonl").write_text(json.dumps({"type": "run", "stage": None, "ts": 1.0, "seq": 0}))
+    gate = threading.Event()
+    live.runner = Script(gate=gate, gate_at=2)
+    with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as p:
+        plines = p.iter_lines()
+        head = lines_until(plines, "event: call")
+        run_id = json.loads(head[2].split(": ", 1)[1])["run_id"]
+        with (
+            lc.stream("GET", f"/v1/runs/{run_id}/events"),
+            lc.stream("GET", f"/v1/runs/{run_id}/events"),
+        ):
+            r = lc.get("/v1/runs/demo/events")
+            assert r.status_code == 429 and r.json()["error"] == "busy"
+        assert lc.get("/v1/runs/demo/events").status_code == 200
+        gate.set()
+        list(plines)

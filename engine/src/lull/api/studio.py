@@ -17,10 +17,11 @@ Who may change a run. A live run takes changes only with its owner's edit token 
 Bearer, lull.api.owner), 403 forbidden otherwise; showcase runs are read-only (403) unless
 LULL_SHOWCASE_EDITABLE=1. A run the live executor is describing right now is busy (409); other
 runs can be edited meanwhile. Changes to one run go one at a time (a per-run asyncio.Lock,
-waited on); edits, approvals and holds are rate limited per visitor, publishing and forking have
-limits of their own. Across all runs at most MAX_EDITS edits are re-checked and MAX_PUBLISHES
-runs published at once (503 + Retry-After past that: both keep the CPU busy). Publishing a run
-with no change since it was published does nothing and answers the run.
+waited on for at most LOCK_WAIT_S, then 409 busy); edits, approvals and holds are rate limited
+per visitor, publishing and forking have limits of their own. Across all runs at most MAX_EDITS
+edits are re-checked and MAX_PUBLISHES runs published at once (503 + Retry-After past that:
+both keep the CPU busy). Publishing a run with no change since it was published does nothing
+and answers the run.
 
 Where edits live. cues.json is the Studio's working copy of a run's cues. Every change writes,
 in this order: studio.json (dirty: the run differs from what was published; and the change as an
@@ -55,6 +56,7 @@ records the way lull.pipeline does.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import hashlib
 import json
@@ -63,7 +65,7 @@ import os
 import secrets
 import shutil
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -126,6 +128,7 @@ PUBLISHES_PER_MIN = 4
 PUBLISHES_PER_DAY = 500
 MAX_EDITS, MAX_PUBLISHES = 2, 1  # re-checked / published at once, across all runs
 OVERLOADED_RETRY_S = 10
+LOCK_WAIT_S = 2.0  # a change waits this long for another change to the same run, then 409
 FORKS_PER_HOUR, FORKS_PER_DAY = 5, 100  # each fork copies the run's media: keep them few
 FORK_TTL_S = 24 * 3600.0  # a fork is removed a day after it was made
 FORK_SWEEP_S = 3600.0
@@ -722,6 +725,7 @@ class Studio:
         self.editing = self.publishing = 0  # across all runs, now
         self.fork_ttl, self.fork_sweep_every = FORK_TTL_S, FORK_SWEEP_S
         self.upload_ttl = settings.lull_upload_retention_days * DAY  # uploads and their runs
+        self.lock_wait = LOCK_WAIT_S
         self._locks: dict[str, asyncio.Lock] = {}
         live.executor.after_run.append(self.after_run)
 
@@ -764,6 +768,26 @@ class Studio:
 
     def lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())
+
+    @contextlib.asynccontextmanager
+    async def locked(self, run_id: str) -> AsyncIterator[None]:
+        """The run's lock, waited on for at most `lock_wait` seconds (then 409 busy): a waiter
+        holds a request slot, so nobody waits long."""
+        lock = self.lock(run_id)
+        try:
+            with anyio.fail_after(self.lock_wait):
+                await lock.acquire()
+        except TimeoutError:
+            raise LiveError(
+                409,
+                "busy",
+                "Another change to this run is being made. Try again in a moment.",
+                headers={"Retry-After": "2"},
+            ) from None
+        try:
+            yield
+        finally:
+            lock.release()
 
     def writable(self, run_id: str, request: Request) -> Path:
         """The run folder, when the request may change it: a live run with its owner's edit
@@ -926,7 +950,7 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
     if len(text) > MAX_TEXT:
         raise LiveError(422, "invalid", f"A description takes at most {MAX_TEXT} characters.")
 
-    async with studio.lock(run_id):
+    async with studio.locked(run_id):
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
@@ -982,7 +1006,7 @@ async def approve_cue(run_id: str, cue_id: str, request: Request) -> dict:
     if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
     studio.check_rate(request)
-    async with studio.lock(run_id):
+    async with studio.locked(run_id):
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
@@ -1014,7 +1038,7 @@ async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
     if len(reason) > MAX_REASON:
         raise LiveError(422, "invalid", f"A reason takes at most {MAX_REASON} characters.")
     studio.check_rate(request)
-    async with studio.lock(run_id):
+    async with studio.locked(run_id):
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
@@ -1033,7 +1057,7 @@ async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
 async def publish_run(run_id: str, request: Request) -> dict:
     studio = _studio(request)
     run_dir = studio.writable(run_id, request)
-    async with studio.lock(run_id):
+    async with studio.locked(run_id):
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         if not studio.store.dirty(run_dir):  # nothing changed since it was published
@@ -1229,7 +1253,7 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
     new_id, (token, token_hash) = new_run_id(), new_token()
     client = studio.limiter.client_key(client_ip(request, studio.settings.lull_proxy_hops))
     dst = studio.settings.runs_dir / new_id
-    async with studio.lock(run_id):  # the source holds still while it is copied
+    async with studio.locked(run_id):  # the source holds still while it is copied
         try:
             await anyio.to_thread.run_sync(
                 functools.partial(
