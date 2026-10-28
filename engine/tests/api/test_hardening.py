@@ -80,8 +80,9 @@ def test_a_damaged_manifest_never_breaks_the_list(client, data, make_run):
     w = by_id["weird"]
     assert w["status"] == "done" and w["title"] == "weird"
     assert w["duration"] is None and w["cost_usd"] is None and isinstance(w["created"], str)
-    assert client.get("/v1/runs/junk").status_code == 404
-    assert client.get("/v1/runs/listed").status_code == 404
+    for rid in ("junk", "listed"):  # a run, but no publication: failed, nothing to play
+        j = client.get(f"/v1/runs/{rid}").json()
+        assert j["status"] == "failed" and j["manifest"] is None
     assert client.get("/v1/runs/junk/files/report.html").status_code == 404
     detail = client.get("/v1/runs/weird")
     assert detail.status_code == 200
