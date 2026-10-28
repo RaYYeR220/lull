@@ -29,6 +29,10 @@ export default async function TryPage() {
                   Pick a sample or upload a short clip. Each stage, each model call with its cost, and each line as it passes
                   or fails its check against the frames shows up here as it happens.
                 </p>
+                <p className={styles.howLong} data-how-long="">
+                  A live run takes several minutes, about three for a 45-second clip. Keep this page open while it runs: if you leave, the run
+                  stops, and this browser can resume it from where it stopped.
+                </p>
               </>
             }
           />

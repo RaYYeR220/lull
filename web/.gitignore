@@ -11,3 +11,5 @@ public/player.js
 e2e/fixtures/*
 !e2e/fixtures/benchmarks.sample.json
 !e2e/fixtures/api-samples.json
+
+.vercel
