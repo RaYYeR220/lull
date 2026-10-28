@@ -152,11 +152,15 @@ def export_showcase(
 ) -> Path:  # fmt: skip
     """Write the showcase files for the finished run in `run_dir` into `out_dir` (see the
     module doc) and return the path of showcase.json. Raises ShowcaseError when `run_dir` is
-    not a finished run or `out_dir` is the run folder itself (checked before anything is
-    written or removed), MediaError when its media cannot be read."""
+    not a finished run or `out_dir` is the run folder, inside it or contains it (checked
+    before anything is written or removed), MediaError when its media cannot be read."""
     run_dir, out_dir = Path(run_dir).absolute(), Path(out_dir).absolute()
-    if out_dir.resolve() == run_dir.resolve():  # it would clear the run's own keyframes
-        raise ShowcaseError("the output folder is the run folder itself: export somewhere else")
+    out_r, run_r = out_dir.resolve(), run_dir.resolve()
+    if out_r == run_r or run_r in out_r.parents or out_r in run_r.parents:
+        # inside it, it would land in the run; around it, clearing audio/ could reach in
+        raise ShowcaseError(
+            "the output folder is the run folder, inside it or around it: export somewhere else"
+        )
     manifest = _json(run_dir / "manifest.json")
     published = _json(run_dir / "cues.json")
     listen = _json(run_dir / STAGES_DIR / "listen.json").get("data") or {}

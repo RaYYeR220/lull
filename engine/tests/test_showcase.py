@@ -273,8 +273,9 @@ def test_without_a_draft_that_lost_a_claim_the_first_verified_cue_is_the_example
 
 
 def test_a_folder_that_is_not_a_finished_run_is_refused(tmp_path):
+    (tmp_path / "run").mkdir()
     with pytest.raises(ShowcaseError, match="manifest.json"):
-        export_showcase(tmp_path, tmp_path / "out")
+        export_showcase(tmp_path / "run", tmp_path / "out")
 
 
 def test_export_showcase_command(run_dir, tmp_path):
@@ -337,3 +338,12 @@ def test_exporting_into_the_run_folder_itself_is_refused_before_anything_goes(ru
         with pytest.raises(ShowcaseError, match="run folder"):
             export_showcase(run_dir, out)
     assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*")) == before
+
+
+def test_exporting_inside_the_run_folder_or_around_it_is_refused(run_dir):
+    before = sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*"))
+    for out in (run_dir / "site", run_dir / "keyframes" / "x", run_dir.parent):
+        with pytest.raises(ShowcaseError, match="run folder"):
+            export_showcase(run_dir, out)
+    assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*")) == before
+    assert not (run_dir / "site").exists()
