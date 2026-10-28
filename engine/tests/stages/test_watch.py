@@ -160,7 +160,7 @@ def test_merge_keeps_distinct_events():
 
 
 def test_merge_folds_near_duplicates_within_one_window():
-    """Ruling (Task 16): one shot reported as per-second slices becomes one event."""
+    """One shot reported as per-second slices becomes one event."""
     w = _span(30, 130)
     tag = "#CLIMATECHAMPIONS"
     per_window = [(w, [
@@ -452,7 +452,7 @@ def test_watch_returns_absolute_times(two_window_video: Path, tmp_path: Path):
     assert (out[1].t_start, out[1].t_end) == pytest.approx((103.5, 104.5), abs=0.05)
     assert (out[2].t_start, out[2].t_end) == pytest.approx((114.0, 119.0), abs=0.05)
     assert all(0 <= e.t_start <= e.t_end <= 125.5 for e in out)
-    assert out[2].said_in_dialogue is False  # R1: nobody says "blue field" near 114-119 s
+    assert out[2].said_in_dialogue is False  # nobody says "blue field" near 114-119 s
 
 
 def test_watch_raises_when_a_window_answer_is_all_malformed(two_window_video: Path, tmp_path: Path):
@@ -481,7 +481,7 @@ def test_watch_no_speech_and_proxy_fallback(
     assert "entertainment" in _user_text(fake.calls[1])
 
 
-# -- fix round 1: rulings R1 and R3 ------------------------------------------------------------
+# -- said in dialogue; scene cuts keep look-alikes apart ------------------------------------------
 
 
 def _w(text, start, end=None):
@@ -489,7 +489,7 @@ def _w(text, start, end=None):
 
 
 def test_said_in_dialogue_is_kept_only_when_the_words_are_said_near_it():
-    """R1: the model's flag stands only when at least 30 % of the event's content words are
+    """The model's flag stands only when at least 30 % of the event's content words are
     said within 5 s of it; the code never sets the flag itself."""
     words = [_w("Safe", 0.2), _w("here.", 0.7), _w("Water", 30.0), _w("use", 30.5),
              _w("by", 31.0), _w("sector", 31.5), _w("is", 32.0), _w("high.", 32.5)]  # fmt: skip
@@ -508,12 +508,12 @@ def test_said_in_dialogue_is_kept_only_when_the_words_are_said_near_it():
 
 
 def test_the_fold_never_crosses_a_scene_cut():
-    """R3: a cut between two look-alike events keeps them apart (the pipeline fixture's red
+    """A cut between two look-alike events keeps them apart (the pipeline fixture's red
     and blue screens are a Jaccard-0.5 pair one second apart)."""
     w = _span(0, 12)
     pair = [_ve(0.0, 6.0, "setting", "A plain red screen."),
             _ve(7.0, 12.0, "setting", "A plain blue screen.")]  # fmt: skip
-    assert len(merge_events([(w, pair)])) == 1  # no cut known: ruling B1 folds them
+    assert len(merge_events([(w, pair)])) == 1  # no cut known: they fold
     assert len(merge_events([(w, pair)], cuts=[6.0])) == 2
     slices = [_ve(9.0, 10.0, "on_screen_text", "Tag #A on black", verb="#A"),
               _ve(10.0, 11.0, "on_screen_text", "Tag #A on black", verb="#A")]  # fmt: skip
@@ -521,7 +521,7 @@ def test_the_fold_never_crosses_a_scene_cut():
     assert len(merge_events([(_span(30, 130), slices)], cuts=[40.0])) == 2  # absolute times
 
 
-# -- Task 17 ------------------------------------------------------------------------------------
+# -- words that prove nothing about the dialogue --------------------------------------------------
 
 
 def test_said_in_dialogue_ignores_pronouns_fragments_and_auxiliaries():

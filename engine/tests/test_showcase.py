@@ -333,11 +333,11 @@ def test_export_showcase_command(run_dir, tmp_path):
     assert r.exit_code == 1 and "manifest.json" in r.output
 
 
-# -- fix round 1 -------------------------------------------------------------------------------
+# -- reuse and local files ------------------------------------------------------------------------
 
 
 def test_a_reused_folder_keeps_no_old_cue_audio_or_keyframes(run_dir, tmp_path):
-    """M3: the cue audio and keyframes of an earlier export do not linger."""
+    """The cue audio and keyframes of an earlier export do not linger."""
     out = tmp_path / "site"
     for name in ("audio/c099.m4a", "keyframes/c099.jpg"):
         (out / name).parent.mkdir(parents=True, exist_ok=True)
@@ -349,7 +349,7 @@ def test_a_reused_folder_keeps_no_old_cue_audio_or_keyframes(run_dir, tmp_path):
 
 
 def test_every_showcase_input_is_locked_to_local_files(run_dir, tmp_path, monkeypatch):
-    """M7: the export's probe and ffmpeg calls read local files only, like the pipeline's."""
+    """The export's probe and ffmpeg calls read local files only, like the pipeline's."""
     seen: list[list[str]] = []
     real = media.subprocess.run
 
@@ -371,7 +371,7 @@ def test_the_command_says_what_the_cost_is():
     assert r.exit_code == 0 and "costUsd" in text and "model spend of the attempt" in text
 
 
-# -- Task 17 ------------------------------------------------------------------------------------
+# -- where the export may write -------------------------------------------------------------------
 
 
 def test_exporting_into_the_run_folder_itself_is_refused_before_anything_goes(run_dir):

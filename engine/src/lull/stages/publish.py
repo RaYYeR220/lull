@@ -1,8 +1,9 @@
 """Publish: the files an institution ships, written only when the overlap gate passes.
 
 descriptions.vtt      voiced standard cues (verified, edited or approved), end = start + audio
-extended.vtt          voiced extended cues at their freeze points (speech-free, frame-aligned),
-                      each after a `NOTE extended pause=<seconds>` line
+extended.vtt          voiced extended cues at their freeze points (the first sentence boundary
+                      after the visual, frame-aligned), each after a `NOTE extended
+                      pause=<seconds>` line
 described-audio.m4a   the programme ducked under the descriptions (see lull.stages.mix)
 described.mp4         video + "Described" track 1 + "Original" track 2
 extended.mp4          the extended version, when an extended cue is voiced (a failure to make
@@ -79,8 +80,8 @@ REPORT = "report.html"
 MANIFEST = "manifest.json"
 KEYFRAMES = "keyframes"
 F113_MIN_PAUSE = 2.0  # seconds of usable pause
-MIN_COVERAGE = 0.8  # important events described, for 1.2.5 / 1.2.7 to be met (ruling, Task 16)
-IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is owed (Task 17)
+MIN_COVERAGE = 0.8  # important events described, for 1.2.5 / 1.2.7 to be met
+IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is owed
 MAX_DEMOTED = 0.25  # share of the watch-salient events the plan may judge repetitive
 MET_NOTHING_VISUAL = "met (no visual information beyond the soundtrack)"  # G203
 REVIEWED = ("edited", "approved")  # statuses a person has signed off
@@ -188,7 +189,7 @@ def outside_pauses(gaps: Sequence[Gap], cues: Sequence[Cue]) -> list[Span]:
 
 
 def important(e: VisualEvent, priority: dict[str, int] | None = None) -> bool:
-    """Whether a description is owed for `e` (ruling, Task 17): the plan rates it priority 3
+    """Whether a description is owed for `e`: the plan rates it priority 3
     or more; an event the plan gave no priority counts when the watch rated it salience 4 or
     more. Events the dialogue already conveys (R21) never count."""
     if said_already(e):
@@ -318,7 +319,7 @@ def _missing(cov: dict | None, key: str) -> list[str]:
 
 
 def _planner(cov: dict | None) -> list[str]:
-    """Why the plan's ratings block a pass (ruling, Task 17 fix round): it judged more than
+    """Why the plan's ratings block a pass: it judged more than
     MAX_DEMOTED of the watch-salient events repetitive, or rated nothing important although the
     watch saw salient events."""
     if not cov or cov.get("watch_salient") is None:
@@ -945,7 +946,7 @@ def publish(
     }
 
     info = media.probe(video)
-    media.assert_safe_container(info)  # never demux a playlist or a concat list (E-sec)
+    media.assert_safe_container(info)  # never demux a playlist or a concat list
     run_dir.mkdir(parents=True, exist_ok=True)
     with _lock(run_dir):
         _recover(run_dir)

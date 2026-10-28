@@ -124,7 +124,7 @@ def source_digest(root: Path | Traversable | None = None) -> str:
 @functools.cache
 def engine_fingerprint() -> str:
     """What every stage key includes besides its inputs: the package version and a digest of
-    every source and prompt file (ruling, Task 16), so any change to the engine reruns every
+    every source and prompt file, so any change to the engine reruns every
     stage instead of reusing a result the old code made."""
     return f"{lull.__version__}+{source_digest()[:16]}"
 
@@ -137,7 +137,7 @@ def introduced_before(
 ) -> set[str]:
     """The names (whole words, case-sensitive) a listener has met by `cutoff`: said in a
     transcript word that ends before it, or read in one of the `heard` descriptions (those
-    voiced before it, see heard_before). On-screen text alone introduces nobody (strict I4):
+    voiced before it, see heard_before). On-screen text alone introduces nobody:
     only a description that reads it does."""
     names = {n for n in names if n}
     texts = [" ".join(w.text for w in words if w.end <= cutoff + 1e-9)]  # heard by then
@@ -149,8 +149,9 @@ def cutoff_for(
     cue: Cue, speech: list[Span], words: list[Word] = (), info: media.Probe | None = None,
     standard: Iterable[Cue] = (),
 ) -> float:  # fmt: skip
-    """When a listener reaches `cue`: a standard cue's start; for an extended cue the moment the
-    picture freezes for it, which waits for speech under its visual (mix.speech_free)."""
+    """When a listener reaches `cue`: a standard cue's start; for an extended cue the frame the
+    picture holds on for it (mix.freeze_time: the first sentence boundary after its visual),
+    or with no probed video the moment itself (mix.hold_point)."""
     if cue.gap_id is not None:
         return cue.start
     if info is not None:  # the very frame the extended version holds on
@@ -679,7 +680,7 @@ def run(
     state: _Run | None = None
     try:
         info = media.probe(video)
-        media.assert_safe_container(info)  # before anything else reads it (E-sec)
+        media.assert_safe_container(info)  # before anything else reads it
         sha = sha256 or file_sha256(video)
         run_id = run_id or run_id_for(video, sha)
         if wps is None:

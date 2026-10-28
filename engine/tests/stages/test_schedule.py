@@ -38,7 +38,7 @@ def _pl(eid, length, gid, ahead=False):
 
 
 def _objective(placements, priority):
-    """The brief's objective: sum of priority x weight, minus 1 per ahead placement."""
+    """The objective: sum of priority x weight, minus 1 per ahead placement."""
     return sum(priority[p.event_id] * WEIGHTS[p.variant] - p.ahead for p in placements)
 
 
@@ -97,7 +97,7 @@ def _random_instance(rng: random.Random):
 INSTANCES = [_random_instance(random.Random(1000 + k)) for k in range(30)]
 
 
-# -- the brief's cases ----------------------------------------------------------------
+# -- worked cases ----------------------------------------------------------------
 
 
 def test_compose_joins_one_gap_in_time_order_and_prefixes_ahead():
@@ -217,7 +217,7 @@ def test_ahead_window_is_bounded_by_lead():
 
 
 def test_no_speech_video_does_not_over_describe():
-    """Review Focus 1: one gap over the whole 30 s video, one low-priority event."""
+    """One gap over the whole 30 s video, one low-priority event."""
     events = [_ev("e001", 3.0, 8.0, sal=2)]
     variants = [_var("e001", "short", 5), _var("e001", "medium", 10), _var("e001", "long", 18)]
     gaps = [_gap("g001", 0.2, 29.8, 88)]
@@ -232,7 +232,7 @@ def test_no_speech_video_does_not_over_describe():
 
 
 def test_continuous_speech_leaves_only_extended_candidates():
-    """Review Focus 2: no gaps -> no placements, every salience >= 4 event is a candidate."""
+    """No gaps -> no placements, every salience >= 4 event is a candidate."""
     events = [_ev("e001", 30.0, 32.0, sal=5), _ev("e002", 4.0, 6.0, sal=4),
               _ev("e003", 10.0, 12.0, sal=3)]  # fmt: skip
     variants = [_var(e.id, "short", 4) for e in events]
@@ -596,11 +596,11 @@ def test_placement_report_summarises_use_of_the_gaps():
     assert empty["utilisation"] == 0.0 and empty["placed"] == [] and empty["gaps"] == []
 
 
-# -- what may be placed, what may stop the video (Task 16) ------------------------------------
+# -- what may be placed, what may stop the video ------------------------------------
 
 
 def test_standard_placement_needs_priority_two():
-    """Ruling (Task 16): a priority-1 line never fills spare room."""
+    """A priority-1 line never fills spare room."""
     events = [_ev("e001", 1.0, 9.0, sal=4), _ev("e002", 1.0, 9.0, sal=4)]
     variants = [_var("e001", "short", 3), _var("e002", "short", 3)]
     gaps = [_gap("g001", 2.0, 8.0, 18)]

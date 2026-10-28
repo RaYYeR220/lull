@@ -239,7 +239,7 @@ def test_runs_lists_each_run_with_calls_cost_and_times(tmp_path):
     assert mk(tmp_path / "empty").runs() == []
 
 
-# -- guards (Task 4 minors) ----------------------------------------------------------------------
+# -- guards ----------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("estimate", [float("nan"), float("inf"), -0.01])

@@ -408,7 +408,7 @@ def test_prompt_asks_for_an_item_per_event():
     assert "Leave an event out entirely" not in text
 
 
-# -- near-duplicate items (ruling, Task 16) ---------------------------------------------------
+# -- near-duplicate items ---------------------------------------------------
 
 
 RUNS = [
@@ -459,7 +459,7 @@ def test_near_duplicates_need_similar_short_lines_within_30_s():
 
 
 def test_near_duplicates_never_chain_past_30_s():
-    """M1: a dropped item always points at a kept twin within 30 s. Three alike lines 25 s
+    """A dropped item always points at a kept twin within 30 s. Three alike lines 25 s
     apart with rising priority keep the first and the last; the middle one goes to the last."""
     events = [_ev("e030", 0.0, 1.0, sal=4), _ev("e031", 25.0, 26.0, sal=4),
               _ev("e032", 50.0, 51.0, sal=4)]  # fmt: skip

@@ -617,7 +617,7 @@ def test_on_screen_text_not_read_by_the_cue_does_not_block(tmp_path, video):
     assert out.status == "verified" and tf.roles() == ["verify"]
 
 
-# -- first mention of a cast name (ruling I4) -------------------------------------------------
+# -- first mention of a cast name -------------------------------------------------
 
 
 def test_first_mention_gets_the_descriptor(tmp_path, video):
@@ -686,7 +686,7 @@ def test_introduce_names_leaves_alone():
     assert introduce_names("The proog climbs.", cast, set()) == ("The proog climbs.", set(), [])
 
 
-# -- look-ahead prefixes (I1) ------------------------------------------------------------------
+# -- look-ahead prefixes ------------------------------------------------------------------
 
 CAR = EV.model_copy(update={"id": "e002", "t_start": 6.5, "t_end": 9.0, "text": "A car passes."})
 AHEAD_EVENTS = {"e001": EV, "e002": CAR}
@@ -1068,7 +1068,7 @@ def test_overlap_gate_needs_audio():
         assert_no_overlap([cue], [])
 
 
-# -- Task 13 minors ------------------------------------------------------------------------------
+# -- edge cases ------------------------------------------------------------------------------
 
 
 def test_a_quote_inside_a_longer_word_of_a_cut_claim_is_still_demanded(tmp_path, video):
@@ -1105,7 +1105,7 @@ def test_lost_ahead_follows_the_look_ahead_sentence_words_that_are_its_own():
     )
 
 
-# -- fix round 1: which events a finished line still describes (I3) ---------------------------
+# -- which events a finished line still describes ---------------------------
 
 EV2 = VisualEvent(
     id="e002", t_start=3.0, t_end=6.0, kind="action", text="A cat sleeps on the mat.",
@@ -1142,11 +1142,11 @@ def test_described_events_follow_their_own_words_through_rewrites():
     assert described_events(parts, "") == []
 
 
-# -- fix round 1: ruling R2 ----------------------------------------------------------------------
+# -- verification clips and repeated claims -------------------------------------------------------
 
 
 def test_the_verify_clip_is_at_least_4_s():
-    """R2: a 1.3 s fall gets 4 s of clip around it (padded, kept inside the video), still at
+    """A 1.3 s fall gets 4 s of clip around it (padded, kept inside the video), still at
     most 12 s."""
     assert clip_window([_e(72.0, 73.3)], 90.0) == (70.65, 74.65)
     assert clip_window([_e(0.2, 0.8)], 30.0) == (0.0, 4.0)  # moved inside the video
@@ -1156,7 +1156,7 @@ def test_the_verify_clip_is_at_least_4_s():
 
 
 def test_repeated_claims_are_judged_once():
-    """R2: identical claims (case and spacing aside) count once; a repeat with a worse verdict
+    """Identical claims (case and spacing aside) count once; a repeat with a worse verdict
     makes the kept one worse, never better."""
     same = [{"text": "Winged figures fly past.", "verdict": "supported", "at": 1.0}] * 24
     assert len(parse_claims({"claims": same})) == 1
@@ -1171,7 +1171,7 @@ def test_repeated_claims_are_judged_once():
     ]  # fmt: skip
 
 
-# -- Task 17 ------------------------------------------------------------------------------------
+# -- edits and placement in the pause -------------------------------------------------------------
 
 
 def test_refresh_described_follows_an_edited_text():
@@ -1216,7 +1216,7 @@ def test_a_cue_waits_for_its_visual_within_its_pause(tmp_path, video):
 
 
 def test_a_cue_that_cannot_wait_starts_as_late_as_it_can_with_a_look_ahead(tmp_path, video):
-    """The reviewer's probe: pause 10.2-19.0 s, chart from 18 s. Waiting for the chart would
+    """Pause 10.2-19.0 s, chart from 18 s. Waiting for the chart would
     run into speech, so the line starts earlier, as late as the pause allows, and says so: it
     is voiced again with "In a moment, " and its fit checked again."""
     gap = _pause(10.2, 19.0)

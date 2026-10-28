@@ -96,7 +96,7 @@ def test_loudness_profile(tone_slides: Path, tmp_path: Path):
     assert all(db < -60 for t, db in prof if t >= 5.0)
 
 
-# -- inputs are local files in a known container (E-sec) -----------------------------------------
+# -- inputs are local files in a known container -----------------------------------------
 
 
 @pytest.fixture
@@ -218,7 +218,7 @@ def test_an_hls_playlist_never_reaches_the_network(tmp_path, commands):
         assert_locked(cmd)
 
 
-# -- edge cases (Task 3 minors) ------------------------------------------------------------------
+# -- edge cases ------------------------------------------------------------------
 
 
 def test_probe_reports_the_displayed_size_of_a_rotated_video(tmp_path, noaudio):
@@ -285,11 +285,11 @@ def test_a_variable_frame_rate_video_probes_and_cuts(tmp_path):
     assert media.probe(clip).duration == pytest.approx(2.0, abs=0.2)
 
 
-# -- fix round 1 -------------------------------------------------------------------------------
+# -- lists and playlists --------------------------------------------------------------------------
 
 
 def test_probe_refuses_a_list_before_opening_what_it_names(tone_slides, tmp_path, commands):
-    """I1: ffprobe gets a format whitelist, so a concat list is refused before it is read: a
+    """ffprobe gets a format whitelist, so a concat list is refused before it is read: a
     list naming an existing file and one naming a missing file fail the same way (no oracle
     for which files exist) and the named file is never opened."""
     shutil.copy(tone_slides, tmp_path / "real.mp4")

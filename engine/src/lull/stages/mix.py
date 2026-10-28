@@ -12,9 +12,10 @@ described-audio.m4a  the programme dipped 10 dB around each voiced standard cue 
 described.mp4        the original video stream (copied when MP4 can carry it), the described
                      audio as default track 1 "Described" and the original audio as track 2
                      "Original": a described version (G173) with a selectable track (G78).
-extended.mp4         constant frame rate first. At each freeze point (a speech-free instant at
-                     or before the extended cue's visual, after any standard cue playing there,
-                     on a frame boundary) the frame is held for the cue audio rounded up to
+extended.mp4         constant frame rate first. At each freeze point (the first sentence
+                     boundary FREEZE_LEAD_S or more after the extended cue's visual, after any
+                     standard cue playing there, on a frame boundary: see hold_point and
+                     freeze_points) the frame is held for the cue audio rounded up to
                      whole frames, and the programme pauses in silence for exactly as long, so
                      picture and sound stay in step (G8).
 
@@ -503,11 +504,6 @@ def hold_point(t: float, *, words: Sequence[Word] = (), speech: Sequence[Span] =
         if units[i][1] >= target - _EPS_T and units[i + 1][0] - units[i][1] >= WORD_GAP_S - _EPS_T:
             return units[i][1]
     return sentence if sentence is not None else target
-
-
-def speech_free(t: float, speech: Sequence[Span], words: Sequence[Word] = ()) -> float:
-    """Where the extended version stops for a visual at `t` (see hold_point)."""
-    return hold_point(t, words=words, speech=speech)
 
 
 def freeze_time(

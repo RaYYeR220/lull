@@ -240,10 +240,10 @@ def _cut_between(a: VisualEvent, b: VisualEvent, cuts: list[float]) -> bool:
 
 
 def fold_window(events: list[VisualEvent], cuts: list[float] = ()) -> list[VisualEvent]:
-    """One window's events with near-duplicates folded (ruling, Task 16): an event joins the
+    """One window's events with near-duplicates folded: an event joins the
     last event of its kind when the token Jaccard of their text (or on-screen text) is at least
     MERGE_JACCARD, it starts at most FOLD_GAP_S after that one ends and no scene cut lies
-    between them (ruling R3; `cuts` in the events' time). The model sometimes reports one shot
+    between them (`cuts` in the events' time). The model sometimes reports one shot
     as per-second slices; folded, they span the union and keep the higher salience (see
     _combine)."""
     cuts = sorted(cuts)
@@ -360,7 +360,7 @@ def _combine(a: VisualEvent, b: VisualEvent) -> VisualEvent:
 
 
 def confirm_said(events: list[VisualEvent], words: list[Word]) -> list[VisualEvent]:
-    """Ruling R1: an event keeps the model's said_in_dialogue only when at least SAID_SHARE of
+    """An event keeps the model's said_in_dialogue only when at least SAID_SHARE of
     its content words are said within SAID_AROUND_S of it; otherwise the flag is cleared (an
     undescribed visual is worse than a repeated one). Content words leave out pronouns
     (reflexive ones too), the fragments of contractions and possessives, be/have/do forms,

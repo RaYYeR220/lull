@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 STAGE = "finalize"
 CLIP_PAD_S = 1.0  # context on each side of the cue's events
 CLIP_CAP_S = 12.0  # longest clip sent to the verifier (cost control)
-CLIP_MIN_S = 4.0  # shortest clip (ruling R2): a 1 s event needs context to be seen
+CLIP_MIN_S = 4.0  # shortest clip: a 1 s event needs context to be seen
 CLIP_HEIGHT = 360
 VERIFY_MAX_TOKENS = 1500
 VERIFY_TEMPERATURE = 0.2
@@ -97,7 +97,7 @@ def clip_window(
 ) -> tuple[float, float]:  # fmt: skip
     """[first start - pad, last end + pad] clamped to the video. When that is longer than `cap`
     it is the `cap` seconds centred on the events, and when it is shorter than `least` the
-    `least` seconds centred on them (ruling R2), moved inside the video if they would leave it
+    `least` seconds centred on them, moved inside the video if they would leave it
     (a video shorter than `least` gives all it has)."""
     evs = list(events)
     if not evs:
@@ -165,7 +165,7 @@ _WORST = {"supported": 0, "not_visible": 1, "contradicted": 2}
 
 
 def _distinct(claims: list[Claim]) -> list[Claim]:
-    """Each claim once (ruling R2), compared without case or spacing, in first-seen order; a
+    """Each claim once, compared without case or spacing, in first-seen order; a
     repeat with a worse verdict makes the kept claim worse, never better. Claims without text
     (UNSPECIFIED) all stay."""
     kept: dict[object, Claim] = {}

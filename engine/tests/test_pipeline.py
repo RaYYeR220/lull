@@ -259,7 +259,7 @@ def test_budget_estimate_and_check_before_any_stage(tone_slides, tmp_path):
 @pytest.mark.parametrize("kind", ["concat", "hls"])
 def test_a_crafted_container_stops_the_run_before_any_stage(tone_slides, tmp_path, kind):
     """An upload named .mp4 that is a concat list or an HLS playlist is refused right after the
-    probe: no stage starts, no service is called, nothing is cached (E-sec)."""
+    probe: no stage starts, no service is called, nothing is cached."""
     shutil.copy(tone_slides, tmp_path / "real.mp4")
     evil = tmp_path / "evil.mp4"
     body = (
@@ -615,7 +615,7 @@ def test_cue_context_counts_only_what_a_listener_heard_before_the_cue():
 
 
 def test_on_screen_text_introduces_a_name_only_once_a_description_read_it():
-    """Strict I4: a lower third the listener never heard read introduces nobody."""
+    """A lower third the listener never heard read introduces nobody."""
     events = [_ev("e1", 2.0, 5.0, "Dr Ada Lovelace"), _ev("e2", 6.0, 9.0)]
     names = {"Ada Lovelace"}
     common = _common(named=names, proper_nouns=names, events=events)
@@ -766,7 +766,7 @@ def test_a_new_engine_or_prompt_reruns_every_stage(tone_slides, tmp_path, fast_m
 
 
 def test_source_digest_follows_every_source_and_prompt_file(tmp_path):
-    """Ruling (Task 16): any change to the engine's code, prompts or templates is a new
+    """Any change to the engine's code, prompts or templates is a new
     fingerprint; compiled caches are not part of it."""
     pkg = tmp_path / "lull"
     files = {
@@ -933,7 +933,7 @@ def test_a_compose_error_is_reported_as_the_schedule_stage(
 
 
 def test_source_digest_reads_only_source_files_with_unix_line_ends(tmp_path):
-    """M2: only .py .md .html .json .txt files count, and CRLF reads as LF, so a checkout
+    """Only .py .md .html .json .txt files count, and CRLF reads as LF, so a checkout
     with Windows line ends or a stray editor file never changes the fingerprint."""
     pkg = tmp_path / "lull"
     (pkg / "prompts").mkdir(parents=True)

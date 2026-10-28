@@ -116,7 +116,7 @@ def test_split_gaps_takes_the_window_and_breath():
     assert split_gaps([], wps=3.0) == []
 
 
-# -- boundaries (Task 2 minors) ------------------------------------------------------------------
+# -- boundaries ------------------------------------------------------------------
 
 
 def test_usable_windows_round_inward_and_capacity_follows_the_rounded_window():

@@ -51,7 +51,7 @@ AHEAD_PREFIX = "In a moment, "
 AHEAD_WORDS = 3  # words in AHEAD_PREFIX
 LEAD = 6.0  # seconds a look-ahead may come before its visual starts
 SALIENT = 4  # unplaced events at or above this priority become extended candidates
-MIN_PRIORITY = 2  # a standard placement needs at least this priority (ruling, Task 16)
+MIN_PRIORITY = 2  # a standard placement needs at least this priority
 WPS = UNCALIBRATED_WPS  # voice rate used to time each sentence inside its gap
 TIME_LIMIT_S = 5.0
 NUM_WORKERS = 1  # parallel workers race to different co-optimal answers: not reproducible
@@ -80,7 +80,7 @@ class _Option:
     ahead: bool
     priority: int
     cost: int  # words the gap must hold, look-ahead prefix included
-    value: int  # the brief's objective term: priority x weight, minus the look-ahead penalty
+    value: int  # the objective term: priority x weight, minus the look-ahead penalty
     rank: int  # 0 = the event's best gap (open during it, then closest); breaks ties only
     limit: int  # most words that may come before this sentence in its gap (R2 per sentence)
 
@@ -169,7 +169,7 @@ def _options(
 
 
 def _value(options: list[_Option], chosen: Iterable[int]) -> int:
-    """The brief's objective for a choice of options."""
+    """The objective for a choice of options."""
     return sum(options[i].value for i in chosen)
 
 
@@ -232,7 +232,7 @@ def _solve(options: list[_Option], hint: list[int], time_limit_s: float) -> list
                 model.add(_words(x, options, before) <= o.limit).only_enforce_if(x[o_i])
     weights = [o.value for o in options]
     if TIE_BREAK:
-        # Lexicographic: one unit of the brief's objective outweighs every tie-break unit
+        # Lexicographic: one unit of the objective outweighs every tie-break unit
         # together (at most one option per event is chosen), so its optimum is kept.
         scale = 1 + sum(max(options[i].rank for i in ix) for ix in per_event.values())
         weights = [o.value * scale - o.rank for o in options]

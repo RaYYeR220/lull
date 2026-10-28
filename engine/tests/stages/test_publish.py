@@ -205,7 +205,7 @@ def test_extended_freezes_wait_for_a_standard_cue_and_merge_close_cues():
     ]  # fmt: skip
 
 
-def test_extended_freezes_snap_to_speech_free_frames_and_whole_frame_pauses():
+def test_extended_freezes_wait_for_speech_to_end_on_whole_frames():
     speech = [Span(start=0.0, end=0.83), Span(start=2.013, end=3.0), Span(start=6.0, end=6.5)]
     ext = [
         _cue("x001", 0.5, 0.53, gap=None, status="extended"),  # in speech -> its end
@@ -392,7 +392,7 @@ def _cov(salient: int, described: int, with_ext: int | None = None) -> dict:
 
 
 def test_wcag_met_needs_four_in_five_salient_events_described():
-    """Ruling (Task 16): 1.2.5 and 1.2.7 are met only with salient coverage >= 0.8; 1.2.7
+    """1.2.5 and 1.2.7 are met only with salient coverage >= 0.8; 1.2.7
     counts the extended descriptions too. 1.2.3 does not depend on coverage."""
     rows = _wcag(extended_produced=True, coverage=_cov(10, 7, 8))
     assert rows["1.2.3"]["status"] == "met"
@@ -525,7 +525,7 @@ def test_publish_refuses_on_overlap_and_writes_nothing(tmp_path, fake_media):
 
 
 def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
-    """Continuous speech: no standard cue at all, publish still succeeds (Review Focus 2)."""
+    """Continuous speech: no standard cue at all, publish still succeeds."""
     video = tmp_path / "talk.mp4"
     video.write_bytes(b"video bytes")
     events = [_ev("e1", 10.0, 14.0, kind="slide", salience=5, text="A slide titled Results.")]
@@ -810,7 +810,7 @@ def published(tmp_path_factory):
 
 def test_publish_reads_every_input_as_a_local_file(published):
     """The probe, levels, mix, extended version and keyframes all open their inputs with
-    -protocol_whitelist file,pipe (E-sec)."""
+    -protocol_whitelist file,pipe."""
     ffmpeg = [c for c in published["commands"] if Path(c[0]).stem.lower() == "ffmpeg"]
     assert len(ffmpeg) >= 4  # levels, premix + mix, premix + extended, keyframes
     for cmd in published["commands"]:
@@ -966,7 +966,7 @@ def test_published_files_match_manifest(published):
     assert [p.name for p in run.iterdir() if p.name.startswith(".")] == []  # no temp dirs left
 
 
-# -- Task 14 minors ------------------------------------------------------------------------------
+# -- edge cases ------------------------------------------------------------------------------
 
 
 def test_a_freeze_pulled_back_from_the_end_never_lands_in_speech():
@@ -1026,7 +1026,7 @@ def test_the_reason_the_extended_version_failed_names_no_local_path(
     assert reason == ("ffmpeg failed (exit 1): premix.wav: Invalid data; x001.wav missing; a.mp4")
 
 
-# -- fix round 1: rollback during the move, one publisher at a time ---------------------------
+# -- rollback during the move, one publisher at a time ---------------------------
 
 
 def _tree(root: Path) -> tuple[dict[str, bytes], list[str]]:
@@ -1045,7 +1045,7 @@ def _publish_args(tmp_path: Path):
 def test_a_failure_while_moving_the_outputs_in_rolls_everything_back(
     tmp_path, fake_media, monkeypatch
 ):
-    """I2: the old outputs move to a backup folder, the new ones move in, the backup goes only
+    """The old outputs move to a backup folder, the new ones move in, the backup goes only
     after success. A move that fails at any point puts every old file back in place."""
     from lull.stages import publish as pub
 
@@ -1081,7 +1081,7 @@ def test_a_failure_while_moving_the_outputs_in_rolls_everything_back(
 
 
 def test_publishes_of_one_run_take_turns(tmp_path, fake_media, monkeypatch):
-    """M6: a publish holds run_dir/.publish.lock (created exclusively); another one waits for
+    """A publish holds run_dir/.publish.lock (created exclusively); another one waits for
     it instead of clearing the first one's staging folder."""
     import threading
     import time
@@ -1139,13 +1139,13 @@ def test_a_backup_left_by_a_crash_is_put_back_before_the_next_publish(tmp_path):
     (run / "report.html").write_text("new report", encoding="utf-8")  # already moved in
     pub._recover(run)
     assert (run / "manifest.json").read_text(encoding="utf-8") == "old manifest"
-    # no manifest was in place: the old outputs all come back (Task 17)
+    # no manifest was in place: the old outputs all come back
     assert (run / "report.html").read_text(encoding="utf-8") == "old report"
     assert not (run / ".publish-old-x1").exists()
 
 
 def test_coverage_and_f113_count_only_the_events_a_line_still_describes():
-    """I3: a cue that lost e2's sentence describes e1 only; a free pause during e2 is F113."""
+    """A cue that lost e2's sentence describes e1 only; a free pause during e2 is F113."""
     events = [_ev("e1", 1.0, 3.0, salience=5), _ev("e2", 1.5, 9.0, salience=4)]
     cue = _cue("c001", 1.0, 1.5, ev=["e1", "e2"], described=["e1"])
     cov = coverage([cue], [], events, extended_produced=False)
@@ -1158,7 +1158,7 @@ def test_coverage_and_f113_count_only_the_events_a_line_still_describes():
     assert coverage([legacy], [], events, extended_produced=False)["described"] == 2
 
 
-# -- Task 17: recovery and the lock -------------------------------------------------------------
+# -- recovery and the lock -------------------------------------------------------------
 
 
 def _files(root: Path) -> dict[str, str]:
@@ -1280,7 +1280,7 @@ def test_a_lock_is_broken_only_when_quiet_and_its_holder_is_gone_or_very_old(tmp
     assert not breakable("garbage", 180) and breakable("garbage", 11 * 60)
 
 
-# -- Task 17: the events a description is owed ---------------------------------------------------
+# -- the events a description is owed ---------------------------------------------------
 
 
 IMPORTANT = [
@@ -1295,7 +1295,7 @@ PRIORITY = {"e1": 4, "e2": 2, "e3": 3}
 
 
 def test_coverage_and_f113_count_what_the_plan_rates_important():
-    """Ruling (Task 17): important = plan priority >= 3; without a plan priority, watch
+    """Important = plan priority >= 3; without a plan priority, watch
     salience >= 4. Watch-salient events the plan rated 1-2 are judged repetitive: listed, not
     counted as undescribed and never F113."""
     cues = [_cue("c001", 1.0, 1.5, ev=["e1"])]
@@ -1327,11 +1327,11 @@ def test_the_report_lists_what_the_planner_judged_repetitive(tmp_path, fake_medi
     assert "1 of 3 important events described" in html
 
 
-# -- Task 17 fix round: coverage the planner cannot game ----------------------------------------
+# -- coverage the planner cannot game ----------------------------------------
 
 
 def test_wcag_refuses_a_pass_when_the_planner_demotes_too_many_salient_events():
-    """Ruling: more than 25 % of the watch-salient events judged repetitive blocks 1.2.5 and
+    """More than 25 % of the watch-salient events judged repetitive blocks 1.2.5 and
     1.2.7 (rating everything 1-2 must not buy a pass); 25 % exactly is allowed."""
     many = _cov(5, 5) | {"watch_salient": 8, "repetitive": ["e1", "e2", "e3"]}
     rows = _wcag(extended_produced=True, coverage=many)
@@ -1380,7 +1380,7 @@ def test_the_report_escapes_text_from_the_models(tmp_path, fake_media):
     assert "<script>alert" not in html and "&lt;script&gt;alert(1)&lt;/script&gt;" in html
 
 
-def test_the_report_renders_a_summary_from_before_task_17(tmp_path, fake_media, monkeypatch):
+def test_the_report_renders_a_summary_from_an_older_engine(tmp_path, fake_media, monkeypatch):
     """Older summaries have no `repetitive` and no `important_events`: the template falls back
     instead of failing."""
     from lull.stages import publish as pub
@@ -1409,7 +1409,7 @@ def test_the_report_renders_a_summary_from_before_task_17(tmp_path, fake_media, 
     assert "1 of 1 important events described" in html
 
 
-# -- Task 17 fix round: a lock is touched and released only by its owner ------------------------
+# -- a lock is touched and released only by its owner ------------------------
 
 
 def _other_lock(path: Path, age: float = 0.0, pid: int | None = None) -> str:
@@ -1541,7 +1541,7 @@ def test_alive_tells_a_running_process_from_a_finished_one():
     assert pub._alive(0) is False and pub._alive(-5) is False
 
 
-# -- Task 17 fix round 2 ------------------------------------------------------------------------
+# -- waiters and a live lock ----------------------------------------------------------------------
 
 
 def test_waiters_never_disturb_a_live_lock(tmp_path, monkeypatch, caplog):

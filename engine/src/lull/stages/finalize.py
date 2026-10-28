@@ -23,7 +23,7 @@ This is where a description is refused. Each cue goes through at most MAX_ROUNDS
 A look-ahead ("In a moment, ") is never lost silently: a repair or compression that drops one
 gets one repair to restore it, else the cue is held; a claim cut may drop one only with the
 sentence it introduced. Before round 1, a cast name the programme has not introduced yet gets
-its descriptor at its first mention (ruling I4). Extended cues (no gap) are verified and voiced
+its descriptor at its first mention. Extended cues (no gap) are verified and voiced
 but never fitted or timed.
 """
 

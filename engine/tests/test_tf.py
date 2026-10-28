@@ -230,7 +230,7 @@ def test_model_constants():
     assert ULTRA == "nvidia/Nemotron-3-Ultra-550b-a55b"
 
 
-# -- Task 5 minors -------------------------------------------------------------------------------
+# -- edge cases -------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("error", [httpx.ReadTimeout("slow"), httpx.RemoteProtocolError("cut")])
