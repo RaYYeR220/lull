@@ -34,6 +34,7 @@ type LoadOpts = {
   clip?: Showcase | null;
   clipFiles?: RunFile[];
   audioVersion?: number;
+  filesVersion?: number;
   signal?: AbortSignal;
 };
 
@@ -44,7 +45,7 @@ export async function buildRun(id: string, detail: RunDetail, opts: LoadOpts): P
     "cues.json" in detail.manifest.outputs ? getCueFileTimeline(id, opts.signal) : Promise.resolve({ speech: null, gaps: null }),
     entry ? (opts.clip?.id === entry.id ? Promise.resolve(opts.clip) : fetchShowcase(entry.id, opts.signal)) : Promise.resolve(null),
   ]);
-  return fromApi(id, detail, { timeline, clip, clipFiles: opts.clipFiles, audioVersion: opts.audioVersion });
+  return fromApi(id, detail, { timeline, clip, clipFiles: opts.clipFiles, audioVersion: opts.audioVersion, filesVersion: opts.filesVersion });
 }
 
 /**

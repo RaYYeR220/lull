@@ -283,3 +283,47 @@ test.describe("run screens @screens", () => {
     });
   }
 });
+
+/**
+ * The studio against the scripted API: the copy of the recorded run with a line chosen and the
+ * drawer open (this browser holds its edit key), the live run of an uploaded clip on its held
+ * line, and the recorded run read-only. e2e/__screens__/studio-<state>-<size>(-full).png.
+ */
+test.describe("studio screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 120_000 });
+
+  const shoot = async (page: Page, url: string, file: string, size: (typeof SIZES)[number]) => {
+    await page.goto(url, { waitUntil: "networkidle" });
+    await expect(page.locator("[data-drawer]")).toBeVisible({ timeout: 15_000 });
+    await waitReady(page);
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: path.join(OUT, `${file}-${size.name}.png`) });
+    await page.locator("[data-drawer]").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(OUT, `${file}-drawer-${size.name}.png`) });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(200);
+    await fullPage(page, `${file}-${size.name}-full.png`);
+  };
+
+  for (const size of SIZES) {
+    test(`studio at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await page.addInitScript(() => {
+        localStorage.setItem("lull-edit-token:live-20261028-091500-f0c4e2", "tok-fork-e2e-9876543210");
+        localStorage.setItem("lull-fork:live-20261028-091500-f0c4e2", JSON.stringify({ source: "ed90", made: Date.now() - 3600_000 }));
+        localStorage.setItem("lull-edit-token:live-20261027-214500-a1b2c3", "tok-e2e-0123456789");
+      });
+      await routeApi(page, `studio--screens${size.name}`);
+      await shoot(page, "/studio/live-20261028-091500-f0c4e2?cue=c002", "studio-copy", size);
+      await shoot(page, "/studio/live-20261027-214500-a1b2c3?cue=c003", "studio-live", size);
+      await shoot(page, "/studio/ed90?cue=c005", "studio-recorded", size);
+      await page.goto("/studio", { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(300);
+      await fullPage(page, `studio-front-${size.name}.png`);
+    });
+  }
+});

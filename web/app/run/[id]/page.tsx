@@ -3,7 +3,7 @@ import { Footer } from "@/components/chrome/Footer";
 import { Nav } from "@/components/chrome/Nav";
 import { LiveRun } from "@/components/run/LiveRun";
 import { cx } from "@/lib/cx";
-import { loadIndex } from "@/lib/showcase";
+import { SHOWCASE_INDEX } from "@/lib/showcase-index";
 import { MAIN_ID } from "@/lib/site";
 import styles from "../../watch/watch.module.css";
 
@@ -20,13 +20,12 @@ export const metadata: Metadata = {
  */
 export default async function RunPage({ params }: { params: Promise<Params> }) {
   const { id } = await params;
-  const index = await loadIndex();
   return (
     <>
       <Nav />
       <main id={MAIN_ID} tabIndex={-1} className={cx(styles.main, styles.runMain)}>
         <div className="wrap">
-          <LiveRun id={id} index={index} />
+          <LiveRun id={id} index={SHOWCASE_INDEX} />
         </div>
       </main>
       <Footer />

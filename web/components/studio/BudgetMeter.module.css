@@ -1,0 +1,21 @@
+/* The word budget: the pause drawn as slots, one per word it holds. */
+.meter{display:flex;flex-direction:column;gap:8px}
+
+.slots{display:flex;align-items:center;gap:6px;min-height:14px}
+/* the pause: lamp-edged, like the pauses on the timeline */
+.pause{display:flex;flex-wrap:wrap;gap:2px;padding:3px;border:1px solid rgb(var(--lamp-rgb) / .42);background:rgb(var(--lamp-rgb) / .06)}
+.pause i{width:7px;height:8px;background:var(--night-4)}
+.pause i.on{background:var(--lamp-1)}
+/* words past the pause's edge */
+.spill{display:flex;flex-wrap:wrap;gap:2px;padding:3px 0}
+.spill i{width:7px;height:8px;background:var(--hatch-held)}
+
+.bar{display:flex;align-items:center;gap:4px;height:14px}
+.barPause{position:relative;flex:1;height:8px;border:1px solid rgb(var(--lamp-rgb) / .42);background:var(--night-4)}
+.barPause i{position:absolute;left:0;top:0;bottom:0;background:var(--lamp-1)}
+.barSpill{height:8px;background:var(--hatch-held)}
+
+.words{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;font-size:12.5px;line-height:1.4;color:var(--cream-2)}
+.count{font-weight:600;color:var(--cream-1)}
+.over .count{color:var(--held)}
+.secs{font-variant-numeric:tabular-nums}

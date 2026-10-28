@@ -25,7 +25,7 @@ export type SiteLink = {
 
 export const NAV_LINKS: readonly SiteLink[] = [
   { href: "/try", label: "Try it", live: true },
-  { href: "/studio", label: "Studio", live: false },
+  { href: "/studio", label: "Studio", live: true },
   // the recorded runs, until the library (Plan 4) has its own page
   { href: "/watch", label: "Library", live: true },
   { href: "/developers", label: "Developers", live: false },

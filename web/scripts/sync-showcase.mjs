@@ -13,7 +13,7 @@
  * a fresh folder that then replaces public/showcase/<id>/. The index keeps its order and adds
  * a new showcase at the end; every row is rebuilt from its showcase.json.
  */
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { LAYOUT, SHOWCASE_ID, indexEntry, parseIndex, parseShowcase, requiredFiles } from "../lib/showcase-schema.mjs";
@@ -29,7 +29,17 @@ export class SyncError extends Error {
   }
 }
 
-/** dir/rel when it is a regular file inside dir; null when there is nothing there. Links are refused. */
+/** True when `inner` is `outer` itself or lies under it. */
+const under = (outer, inner) => {
+  const back = path.relative(outer, inner);
+  return !back.startsWith("..") && !path.isAbsolute(back);
+};
+
+/**
+ * dir/rel when it is a regular file inside dir; null when there is nothing there. A link is
+ * refused, and so is a file whose real path leaves dir: a linked folder (a symlink or a
+ * Windows junction) anywhere on the way to it.
+ */
 function fileIn(dir, rel) {
   const full = path.join(dir, ...rel.split("/"));
   const back = path.relative(dir, full);
@@ -41,7 +51,10 @@ function fileIn(dir, rel) {
     return null;
   }
   if (st.isSymbolicLink()) throw new SyncError(`${rel} is a link; put the file itself in the export`);
-  return st.isFile() ? full : null;
+  if (!st.isFile()) return null;
+  if (!under(realpathSync(dir), realpathSync(full)))
+    throw new SyncError(`${rel} resolves outside ${dir} through a linked folder; put the files themselves in the export`);
+  return full;
 }
 
 function readJson(file, what) {

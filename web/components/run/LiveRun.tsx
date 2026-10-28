@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Door, Gate } from "@/components/ui/Gate";
 import { MetaList } from "@/components/ui/MetaList";
@@ -19,6 +19,7 @@ import { formatTimecode } from "@/lib/timecode";
 import page from "@/app/watch/watch.module.css";
 import run from "@/components/watch/Watch.module.css";
 import styles from "./LiveRun.module.css";
+import { RunNotice as Notice } from "./RunNotice";
 
 type State = { kind: "loading" } | { kind: "down"; message: string | null } | Loaded;
 
@@ -28,20 +29,6 @@ function when(iso: string | null): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-/** A run that isn't there to watch: a heading, plain words, and the ways on. */
-function Notice({ title, children, doors }: { title: string; children: ReactNode; doors: ReactNode }) {
-  return (
-    <section className={styles.notice} aria-labelledby="run-state" data-run-notice="">
-      <Eyebrow className={page.eyebrow}>Live run</Eyebrow>
-      <h1 id="run-state" className={cx("t-display-2", styles.noticeTitle)} tabIndex={-1}>
-        {title}
-      </h1>
-      <div className={styles.noticeBody}>{children}</div>
-      <div className={styles.noticeDoors}>{doors}</div>
-    </section>
-  );
 }
 
 function Head({ data }: { data: RunData }) {
@@ -141,7 +128,7 @@ function EditBlock({ data, owner }: { data: RunData; owner: boolean }) {
  * recorded run's page. Until it is published the page says where it stands: still being
  * described (with the way to follow it), stopped (with why), or not there.
  */
-export function LiveRun({ id, index }: { id: string; index: ShowcaseIndexEntry[] }) {
+export function LiveRun({ id, index }: { id: string; index: readonly ShowcaseIndexEntry[] }) {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [owner, setOwner] = useState(false);
   const ctl = useRef<AbortController | null>(null);

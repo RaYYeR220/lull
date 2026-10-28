@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -102,6 +102,20 @@ describe("sync-showcase", () => {
   it("refuses paths that climb out of the export", () => {
     const src = makeExport("climb", (j) => (j.audio.original = "../ed90.mp4"));
     expect(() => syncShowcase({ src, id: "ed90", dest })).toThrow(/audio\.original must be a plain path/);
+  });
+
+  it("refuses a file reached through a linked folder outside the export, leaving the site's copy as it was", () => {
+    syncShowcase({ src: makeExport("first"), id: "ed90", dest });
+    const before = readFileSync(path.join(dest, "ed90", "audio", "c001.m4a"));
+    const src = makeExport("linked");
+    // the export's audio/ is a link (a junction on Windows) to a folder elsewhere on the disk
+    const elsewhere = path.join(work, "elsewhere");
+    cpSync(path.join(src, "audio"), elsewhere, { recursive: true });
+    writeFileSync(path.join(elsewhere, "c001.m4a"), "a file from outside the export");
+    rmSync(path.join(src, "audio"), { recursive: true });
+    symlinkSync(elsewhere, path.join(src, "audio"), "junction");
+    expect(() => syncShowcase({ src, id: "ed90", dest })).toThrow(/audio\/\w+\.m4a resolves outside .*linked through a linked folder/);
+    expect(readFileSync(path.join(dest, "ed90", "audio", "c001.m4a"))).toEqual(before);
   });
 
   it("refuses an interim placeholder", () => {

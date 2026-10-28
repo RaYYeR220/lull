@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { StatusMark } from "@/components/ui/StatusMark";
 import { Timecode } from "@/components/ui/Timecode";
 import { cx } from "@/lib/cx";
@@ -9,9 +9,9 @@ import { countWords } from "@/lib/studio-budget";
 import styles from "./Watch.module.css";
 
 /** The run's evidence frame for a line, or an empty frame when there is none (or it doesn't load). */
-export function EvidenceFrame({ src, className }: { src: string | null; className?: string }) {
+export function EvidenceFrame({ src, className, empty }: { src: string | null; className?: string; /** Said in place of a missing frame. */ empty?: ReactNode }) {
   const [failed, setFailed] = useState<string | null>(null);
-  if (!src || failed === src) return <span className={className} />;
+  if (!src || failed === src) return <span className={className}>{empty}</span>;
   // eslint-disable-next-line @next/next/no-img-element -- the run's own 854x480 still, shown small
   return <img className={className} src={src} alt="" width={854} height={480} loading="lazy" decoding="async" onError={() => setFailed(src)} />;
 }

@@ -7,7 +7,7 @@ import { parseShowcase } from "@/lib/showcase";
 import { numberedCues } from "@/lib/showcase-derive";
 import { formatTimecode } from "@/lib/timecode";
 import { waitReady } from "./player-fixtures";
-import { API, apiDown, routeApi } from "./try-api";
+import { API, MOCK, apiDown, routeApi } from "./try-api";
 
 /**
  * The recorded runs: /watch lists them from public/showcase/index.json, /watch/<id> plays one
@@ -187,6 +187,37 @@ test.describe("a recorded run's page", () => {
     await routeApi(page, "ok");
     await page.getByRole("button", { name: "Check again" }).click();
     await expect(door).toBeEnabled();
+  });
+
+  test("the copy door waits for the first health check, saying so", async ({ page }) => {
+    let answer: () => void = () => {};
+    const held = new Promise<void>((r) => (answer = r));
+    await page.route(`${API}/v1/health`, async (route) => {
+      await held;
+      await route.continue({ url: route.request().url().replace(API, `${MOCK}/ok`) });
+    });
+    await page.goto("/watch/ed90");
+    const door = page.getByRole("button", { name: "Make an editable copy" });
+    await expect(door).toBeDisabled();
+    await expect(door).toHaveAccessibleDescription("Checking that the live service is answering…");
+    answer();
+    await expect(door).toBeEnabled();
+    await expect(page.getByText("A copy is yours to edit for a day, then the live service removes it.")).toBeVisible();
+  });
+
+  test("a copy this browser can't keep the edit key for says so, and opens only to look at", async ({ page }) => {
+    await page.addInitScript(() => {
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key: string, value: string) {
+        if (key.startsWith("lull-edit-token:")) throw new DOMException("blocked", "SecurityError");
+        return set.call(this, key, value);
+      };
+    });
+    await page.goto("/watch/ed90");
+    await page.getByRole("button", { name: "Make an editable copy" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Copy made, but this browser can’t keep the edit key" })).toBeVisible();
+    await expect(page).toHaveURL(/\/watch\/ed90$/);
+    await expect(page.getByRole("link", { name: "Open the copy to look at it" })).toHaveAttribute("href", `/studio/${FORK_ID}`);
   });
 
   test("has no serious or critical axe violations, with a line playing", async ({ page }) => {

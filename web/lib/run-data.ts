@@ -227,7 +227,15 @@ function provenance(summary: ManifestSummary, tts: string | null): Provenance | 
 export function fromApi(
   id: string,
   detail: RunDetail,
-  opts: { timeline?: CueFileTimeline; clip?: Showcase | null; clipFiles?: RunFile[]; audioVersion?: number } = {},
+  opts: {
+    timeline?: CueFileTimeline;
+    clip?: Showcase | null;
+    clipFiles?: RunFile[];
+    /** Bumped after an edit: the cue recordings are fetched afresh. */
+    audioVersion?: number;
+    /** Bumped after a publish: the published files are fetched afresh. */
+    filesVersion?: number;
+  } = {},
 ): RunData {
   const { manifest } = detail;
   const clip = opts.clip ?? null;
@@ -260,16 +268,17 @@ export function fromApi(
 
   const itself = clip !== null && clip.id === id;
   const has = (name: string) => name in manifest.outputs;
+  const published = (name: string) => (has(name) ? runFileUrl(id, name) + (opts.filesVersion ? `?v=${opts.filesVersion}` : "") : undefined);
   let media: RunMedia | null;
   if (itself) media = showcaseMedia(clip);
   else {
-    const src = clip ? showcaseUrl(clip.id, LAYOUT.video) : has("described.mp4") ? runFileUrl(id, "described.mp4") : null;
+    const src = clip ? showcaseUrl(clip.id, LAYOUT.video) : (published("described.mp4") ?? null);
     media = src
       ? {
           src,
-          descriptions: has("descriptions.vtt") ? runFileUrl(id, "descriptions.vtt") : undefined,
-          extended: has("extended.vtt") ? runFileUrl(id, "extended.vtt") : undefined,
-          describedAudio: has("described-audio.m4a") ? runFileUrl(id, "described-audio.m4a") : undefined,
+          descriptions: published("descriptions.vtt"),
+          extended: published("extended.vtt"),
+          describedAudio: published("described-audio.m4a"),
           cueAudioBase: cueAudioPattern(id, opts.audioVersion ?? 0),
           cueAudioExt: "wav",
           crossOrigin: "anonymous",
