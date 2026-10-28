@@ -31,7 +31,9 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
+import cost_accounting as COST
 import report_schema as S
+from suite_a import claims_diagnosis as CD
 from suite_a import score as A
 from suite_a.score import Refused, git_run
 
@@ -529,8 +531,28 @@ def controls_md(inc: dict) -> list[str]:
     return lines
 
 
+def load_supplements(folder: Path, inc: dict) -> dict:
+    """Material added after the scored runs, no new calls: Suite A's claims diagnosis (Refused
+    when it was made from another suite_a.json) and the cost-accounting draft."""
+    out: dict = {}
+    claims = Path(folder) / CD.OUT_JSON
+    if "suite_a" in inc and claims.exists():
+        doc = json.loads(claims.read_text(encoding="utf-8"))
+        have = CD.sha256_file(Path(folder) / "suite_a.json")
+        if (doc.get("source") or {}).get("sha256") != have:
+            raise Refused(f"{CD.OUT_JSON} was made from another suite_a.json (sha256 "
+                          f"{(doc.get('source') or {}).get('sha256')}; now {have}): run "
+                          "`python -m suite_a.claims_diagnosis` again")  # fmt: skip
+        out["suite_a_claims"] = doc
+    cost = Path(folder) / COST.OUT_JSON
+    if cost.exists():
+        out["cost"] = json.loads(cost.read_text(encoding="utf-8"))
+    return out
+
+
 def results_markdown(inc: dict, skipped: dict, failures: list[dict], meta: dict,
-                     run_log: str = "") -> str:  # fmt: skip
+                     run_log: str = "", extra: dict | None = None) -> str:  # fmt: skip
+    extra = extra or {}
     fixture = any("_fixture" in v for v in inc.values())
     lines = ["# Lull: evaluation results", ""]
     if fixture:
@@ -549,6 +571,8 @@ def results_markdown(inc: dict, skipped: dict, failures: list[dict], meta: dict,
                   + ".", ""]  # fmt: skip
     if "suite_a" in inc:
         lines += suite_a_md(inc["suite_a"]) + [""]
+        if "suite_a_claims" in extra:
+            lines += CD.markdown(extra["suite_a_claims"], level=3) + [""]
     if "suite_b" in inc:
         lines += suite_b_md(inc["suite_b"]) + [""]
     if "controls_negative" in inc or "ablation" in inc:
@@ -560,6 +584,8 @@ def results_markdown(inc: dict, skipped: dict, failures: list[dict], meta: dict,
     lines += ["", "## Known failures", ""]
     lines += [f"- **{f['title']}**: {f['detail']}" for f in failures
               if not f["title"].startswith("Deviation")] or ["(none)"]  # fmt: skip
+    if "cost" in extra:
+        lines += ["", *COST.markdown(extra["cost"])]
     body = "\n".join(x for x in run_log.splitlines() if not x.startswith("# ")).strip("\n")
     body = body.splitlines()
     if "\n".join(body).strip():
@@ -598,7 +624,8 @@ def main_text(results: Path = RESULTS, *, git=git_run, readme: str | None = None
             "dirty": bool(A.dirty(git))}  # fmt: skip
     if run_log is None:
         run_log = RUN_LOG.read_text(encoding="utf-8") if RUN_LOG.exists() else ""
-    return results_markdown(inc, skipped, failures, meta, run_log)
+    return results_markdown(inc, skipped, failures, meta, run_log,
+                            load_supplements(results, inc))  # fmt: skip
 
 
 def write_web(results: Path, out: Path, *, git=git_run, readme: str | None = None,

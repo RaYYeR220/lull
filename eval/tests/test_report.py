@@ -394,3 +394,45 @@ def test_main_writes_the_web_file_before_results_md(tmp_path, monkeypatch):
     assert R.main(["--results", str(d), "--out-md", str(md), "--out-web", str(web)],
                   git=FakeGit(), **kw) == 0  # fmt: skip
     assert seen == {"md_existed": False} and md.exists() and web.exists()
+
+
+def supplements(d, *, sha=None):
+    """A claims diagnosis made from this results/suite_a.json (or another one) and a cost
+    snapshot, as their own scripts would write them."""
+    from suite_a import claims_diagnosis as D
+
+    a = json.loads((d / "suite_a.json").read_text(encoding="utf-8"))
+    doc = {"added": "after the scored run; no new model calls",
+           "source": {"file": "suite_a.json", "sha256": sha or D.sha256_file(d / "suite_a.json")},
+           "preregistered": a["aggregate"]["hallucination_claims"],
+           "atomic_only": {"value": 0.5, "num": 1.0, "den": 2.0, "ci95": [0.0, 1.0]},
+           "by_kind": {"atomic": [1, 2], "sentence": [0, 0]},
+           "classes": {k: {"label": v, "count": 0} for k, v in D.CLASSES.items()},
+           "claims": [{"video": "a01", "key": "c001#1", "cue": "c001", "track": "standard",
+                       "kind": "atomic", "class": "c", "group": "", "claim": "SENTINEL CLAIM",
+                       "reason": "r", "note": "n"}]}  # fmt: skip
+    (d / "suite_a_claims.json").write_text(json.dumps(doc), encoding="utf-8")
+    cost = {"as_of": "2026-10-28T13:00:00+00:00", "ledger": "~/.lull/ledger.db", "calls": 0,
+            "first_call": None, "last_call": None, "models": [], "by_day": [],
+            "totals": {}, "prices": []}  # fmt: skip
+    (d / "cost_ledger.json").write_text(json.dumps(cost), encoding="utf-8")
+
+
+def test_supplements_are_rendered_in_place(tmp_path):
+    d = results_dir(tmp_path)
+    supplements(d)
+    md = R.main_text(d, git=FakeGit(), readme=README, manual=MANUAL, suite_a_runs=tmp_path,
+                     now="2026-10-28T07:00:00+00:00", run_log="# Run log\n\nKept.\n")  # fmt: skip
+    sup = md.index("### Supplementary: the unsupported claims")
+    assert md.index("## Suite A") < sup < md.index("## Controls")
+    assert "added after the scored run, no new calls" in md and "SENTINEL CLAIM" in md
+    assert md.index("## Known failures") < md.index("## Cost accounting (draft)") < md.index(
+        "## Run log")  # fmt: skip
+
+
+def test_a_stale_claims_diagnosis_is_refused(tmp_path):
+    d = results_dir(tmp_path)
+    supplements(d, sha="0" * 64)
+    with pytest.raises(Refused, match="suite_a_claims.json"):
+        R.main_text(d, git=FakeGit(), readme=README, manual=MANUAL, suite_a_runs=tmp_path,
+                    now="2026-10-28T07:00:00+00:00")  # fmt: skip

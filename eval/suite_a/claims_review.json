@@ -1,0 +1,116 @@
+{
+  "reviewed": "2026-10-28",
+  "method": "each claim read against the slide on screen at its cue (key.json slide inventory and style text) and the slide image in suite_a/out/<lecture>/slide_<n>.png; done after the scored run, no model calls",
+  "summary": "No unsupported claim is about styling, colours, layout or slide numbers: the key covers those (style text, slide inventory), and the one slide-number claim, a03 x001#6 'marked 1 of 4', was judged supported. One claim is a real error (a03 x002#1, chart values read as times); the rest are paraphrases or split-off fragments of on-screen text, which the pre-registered rule counts as unsupported because quoted on-screen text must match exactly, and whole-sentence claims that repeat them.",
+  "claims": {
+    "a03 x001#5": {
+      "claim": "action-reaction pairs",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "Slide 1 bullet 3 reads 'Action and reaction are always paired': the same content in other words; the pre-registered rule wants on-screen text quoted exactly."
+    },
+    "a03 x001#7": {
+      "claim": "A slide titled Newton's Three Laws lists three laws: inertia, force causes acceleration, action-reaction pairs; marked 1 of 4",
+      "class": "b",
+      "note": "Repeats claims #1 to #6 of the same cue; unsupported only through #5 (the paraphrase)."
+    },
+    "a03 x002#1": {
+      "claim": "A slide titled Velocity Over Time shows a line graph of velocity versus time with data points at 0.5 to 8.5 seconds",
+      "class": "c",
+      "note": "The chart 'Speed vs Time' has its points at t=0s to t=8s; 0.5 to 8.5 are their velocities in m/s, not times (slide_2.png). The title, the line chart and its axes are right."
+    },
+    "a07 c004#1": {
+      "claim": "Temperature",
+      "class": "d",
+      "group": "title fragment",
+      "note": "One word of the slide 2 title 'Temperature and Precipitation', split off by the claim split; the whole title (#3) was judged supported."
+    },
+    "a07 c004#2": {
+      "claim": "Precipitation",
+      "class": "d",
+      "group": "title fragment",
+      "note": "As #1: one word of the slide 2 title; the whole title (#3) was judged supported."
+    },
+    "a07 c006#1": {
+      "claim": "Slide",
+      "class": "d",
+      "group": "framing word",
+      "note": "The framing word of 'Slide: Annual Rainfall by Region', split off as a claim; the rule does not doubt framing words, but the split made it a claim of its own."
+    },
+    "a07 c006#2": {
+      "claim": "Annual Rainfall",
+      "class": "d",
+      "group": "title fragment",
+      "note": "Part of the slide 3 title 'Annual Rainfall by Region' (slide_3.png)."
+    },
+    "a07 c006#3": {
+      "claim": "by Region",
+      "class": "d",
+      "group": "title fragment",
+      "note": "Part of the slide 3 title 'Annual Rainfall by Region'."
+    },
+    "a07 c006#4": {
+      "claim": "Region",
+      "class": "d",
+      "group": "title fragment",
+      "note": "The last word of the slide 3 title 'Annual Rainfall by Region'."
+    },
+    "a07 c006#5": {
+      "claim": "Slide: Annual Rainfall by Region",
+      "class": "b",
+      "note": "Repeats claims #1 to #4 of the same cue: the slide 3 title after the framing word 'Slide:'."
+    },
+    "a10 x002#1": {
+      "claim": "slide lists heart pumps five liters per minute",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "Slide 2 bullet 1 reads 'Heart pumps ~5 liters per minute at rest': the same figure, quoted without '~' and 'at rest' (the qualifier is lost)."
+    },
+    "a10 x002#3": {
+      "claim": "heart rate regulation",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "Slide 2 bullet 4 reads 'Heart rate regulated by autonomic nervous system', shortened."
+    },
+    "a10 x002#4": {
+      "claim": "Slide lists heart pumps five liters per minute, stroke volume, heart rate regulation",
+      "class": "b",
+      "note": "Repeats claims #1 to #3 of the same cue."
+    },
+    "a10 x003#1": {
+      "claim": "Slide lists resting heart rate, exercise increase, age effect, and a line chart",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "Slide 3 bullets 1, 2 and 4 ('Resting heart rate varies by fitness level', 'Exercise increases heart rate significantly', 'Age affects maximum heart rate capacity') shortened; the line chart is right."
+    },
+    "a11 x001#1": {
+      "claim": "Slide titled Global Temperature Rise lists: human activity drives warming, greenhouse gases trap heat, carbon dioxide levels increased, average temperatures rising worldwide",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "The title is exact; the four bullets of slide 1 are shortened ('Human activity drives warming trends', 'Greenhouse gases trap heat in the atmosphere', 'Carbon dioxide levels have increased significantly', 'Average temperatures are rising worldwide')."
+    },
+    "a11 x003#3": {
+      "claim": "sea levels rising steadily",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "Slide 3 reads 'Sea levels are rising steadily'; 'are' dropped."
+    },
+    "a11 x003#4": {
+      "claim": "storm intensity increasing",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "Slide 3 reads 'Storm intensity is increasing'; 'is' dropped."
+    },
+    "a11 x003#5": {
+      "claim": "precipitation patterns shifting",
+      "class": "d",
+      "group": "paraphrase",
+      "note": "Slide 3 reads 'Precipitation patterns are shifting'; 'are' dropped."
+    },
+    "a11 x003#6": {
+      "claim": "Slide titled Extreme Weather Events lists four points: heatwaves becoming more frequent, sea levels rising steadily, storm intensity increasing, precipitation patterns shifting",
+      "class": "b",
+      "note": "Repeats claims #1 to #5 of the same cue; unsupported only through #3 to #5."
+    }
+  }
+}
