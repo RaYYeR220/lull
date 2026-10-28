@@ -1209,7 +1209,8 @@ def test_a_held_lock_is_kept_fresh_by_a_heartbeat(tmp_path, monkeypatch):
     run.mkdir()
     lock = run / ".publish.lock"
     with pub._lock(run):
-        pid, host, _ = lock.read_text(encoding="utf-8").split()
+        pid, host, _, token = lock.read_text(encoding="utf-8").split()
+        assert len(token) == 32  # a random token of its own
         assert int(pid) == os.getpid() and host
         old = time.time() - 1000
         os.utime(lock, (old, old))
@@ -1382,3 +1383,134 @@ def test_the_report_renders_a_summary_from_before_task_17(tmp_path, fake_media, 
     html = real({**old, "summary": summary})
     assert "1 of 1 important events described" in html
 
+
+# -- Task 17 fix round: a lock is touched and released only by its owner ------------------------
+
+
+def _other_lock(path: Path, age: float = 0.0, pid: int | None = None) -> str:
+    import os
+    import socket
+    import time
+
+    text = f"{pid or os.getpid()} {socket.gethostname()} {time.time():.0f} someone-elses-token\n"
+    path.write_text(text, encoding="utf-8")
+    if age:
+        t = time.time() - age
+        os.utime(path, (t, t))
+    return text
+
+
+def test_a_lock_someone_else_took_over_is_neither_touched_nor_released(tmp_path, monkeypatch):
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_HEARTBEAT_S", 0.05)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    with pub._lock(run):
+        theirs = _other_lock(lock, age=1000)  # broken and re-taken by another publisher
+        stamp = lock.stat().st_mtime
+        time.sleep(0.3)  # several heartbeats
+        assert lock.stat().st_mtime == stamp  # not ours: never touched
+    assert lock.read_text(encoding="utf-8") == theirs  # and not released either
+
+
+def test_two_waiters_breaking_one_stale_lock_never_both_win(tmp_path):
+    import subprocess
+    import sys
+    import threading
+
+    from lull.stages import publish as pub
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    lock = tmp_path / ".publish.lock"
+    for _ in range(5):
+        _other_lock(lock, age=300, pid=gone.pid)  # its publisher is gone: breakable
+        start = threading.Barrier(2)
+        won: list[bool] = []
+
+        def breaker(start=start, won=won) -> None:
+            start.wait()
+            won.append(pub._break(lock))
+
+        threads = [threading.Thread(target=breaker) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert sorted(won) == [False, True]
+        assert not lock.exists()
+        assert [p.name for p in tmp_path.iterdir()] == []  # the aside copy is gone too
+
+
+def test_breaking_a_lock_that_turns_out_fresh_puts_it_back(tmp_path):
+    from lull.stages import publish as pub
+
+    lock = tmp_path / ".publish.lock"
+    fresh = _other_lock(lock)  # a live publisher, just written
+    assert pub._break(lock) is False
+    assert lock.read_text(encoding="utf-8") == fresh
+    assert sorted(p.name for p in tmp_path.iterdir()) == [".publish.lock"]
+
+
+def test_a_lock_whose_heartbeat_cannot_start_is_released(tmp_path, monkeypatch):
+    from lull.stages import publish as pub
+
+    class Broken:
+        def __init__(self, *a, **kw):
+            pass
+
+        def start(self):
+            raise RuntimeError("no threads left")
+
+    monkeypatch.setattr(pub.threading, "Thread", Broken)
+    run = tmp_path / "run"
+    run.mkdir()
+    with pytest.raises(RuntimeError, match="no threads"):
+        with pub._lock(run):
+            pass
+    assert not (run / ".publish.lock").exists()
+
+
+def test_a_lock_whose_content_cannot_be_written_is_not_left_behind(tmp_path, monkeypatch):
+    from lull.stages import publish as pub
+
+    real = pub.os.fdopen
+
+    class Full:
+        def __init__(self, f):
+            self.f = f
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.f.close()
+
+        def write(self, text):
+            raise OSError("no space left")
+
+    monkeypatch.setattr(pub.os, "fdopen", lambda fd, *a, **kw: Full(real(fd, *a, **kw)))
+    run = tmp_path / "run"
+    run.mkdir()
+    with pytest.raises(OSError, match="no space"):
+        with pub._lock(run):
+            pass
+    assert not (run / ".publish.lock").exists()
+
+
+def test_alive_tells_a_running_process_from_a_finished_one():
+    import os
+    import subprocess
+    import sys
+
+    from lull.stages import publish as pub
+
+    gone = subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    assert pub._alive(os.getpid()) is True
+    assert pub._alive(gone.pid) is False
+    assert pub._alive(0) is False and pub._alive(-5) is False

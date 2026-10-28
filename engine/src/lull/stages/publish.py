@@ -23,11 +23,13 @@ is written into a staging folder (`.publish-*`) inside the run directory; only o
 manifest is written too do the old outputs move into a backup folder (`.publish-old-*`) and
 the new ones move in, and the backup is deleted only after the last move. A failure at any
 point, moves included, puts the previous outputs back as they were. One publish runs per run
-directory at a time: it holds `.publish.lock` (created exclusively, holding its pid and host)
-and touches it every LOCK_HEARTBEAT_S while it works. Another publish waits for it, and breaks
-it only when it has gone quiet (no heartbeat for LOCK_QUIET_S) and either its publisher no
-longer runs on this host or it is older than LOCK_STALE_S (a publisher that hung, or one on
-another host). Every status in the report is computed here;
+directory at a time: it holds `.publish.lock` (created exclusively, holding its pid, host and
+a random token) and touches it every LOCK_HEARTBEAT_S while it works; the heartbeat and the
+release act only while the file still holds its token. Another publish waits for it, and
+breaks it only when it has gone quiet (no heartbeat for LOCK_QUIET_S) and either its
+publisher no longer runs on this host or it is older than LOCK_STALE_S (a publisher that
+hung, or one on another host); one breaker at a time sets it aside, judges it there and
+removes it (see _break). Every status in the report is computed here;
 "met" is printed only when every published line was reviewed by a person, and reads "met
 (automated checks)" until then.
 """
@@ -39,6 +41,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import socket
 import tempfile
@@ -97,6 +100,7 @@ LOCK_HEARTBEAT_S = 60.0  # a publish touches its lock this often
 LOCK_QUIET_S = 150.0  # no touch for this long: the lock is stale ...
 LOCK_STALE_S = 600.0  # ... and breakable when its publisher is gone, or it is this old
 LOCK_POLL_S = 0.2
+BREAKING_STALE_S = 30.0  # a breaker's marker this old was left by a crash
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
 OUTPUTS = frozenset(
     {
@@ -547,9 +551,62 @@ def _breakable(path: Path) -> bool:
     return host == socket.gethostname() and not _alive(pid)
 
 
-def _take(path: Path) -> bool:
-    """Create the lock file with this process's pid and host; False when it exists. A lock
-    that cannot be written is not left behind."""
+def _owner(path: Path) -> str | None:
+    """The token the lock file at `path` holds (None when it is gone or unreadable)."""
+    try:
+        fields = path.read_text(encoding="utf-8").split()
+    except OSError:
+        return None
+    return fields[3] if len(fields) >= 4 else None
+
+
+def _break(path: Path) -> bool:
+    """Break the lock at `path` if it may be broken, and say whether this call did.
+
+    One waiter breaks at a time: it must first create `<lock>.breaking` exclusively (two
+    renames of one file can both report success on Windows, so the rename alone does not
+    pick a winner; a marker older than BREAKING_STALE_S is a crashed breaker's and goes).
+    The lock is then renamed aside to `<lock>.broken-<token>`, judged there and removed, so
+    what is judged is exactly what is deleted; a lock that turns out fresh is put back unless
+    a new one was taken meanwhile."""
+    marker = path.with_name(path.name + ".breaking")
+    try:
+        os.close(os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        try:
+            if time.time() - marker.stat().st_mtime > BREAKING_STALE_S:
+                marker.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    try:
+        aside = path.with_name(f"{path.name}.broken-{secrets.token_hex(8)}")
+        try:
+            os.rename(path, aside)
+        except OSError:
+            return False  # gone already: released, or broken just before
+        if _breakable(aside):
+            aside.unlink(missing_ok=True)
+            return True
+        try:
+            os.link(aside, path)  # back where it was, never over a lock taken meanwhile
+        except FileExistsError:
+            log.warning("publish: a fresh lock was taken while %s was set aside", path.name)
+        except OSError:
+            try:
+                os.rename(aside, path)
+                return False
+            except OSError:
+                log.warning("publish: could not put the lock %s back", path.name)
+        aside.unlink(missing_ok=True)
+        return False
+    finally:
+        marker.unlink(missing_ok=True)
+
+
+def _take(path: Path, token: str) -> bool:
+    """Create the lock file holding this process's pid and host and `token`; False when it
+    exists. A lock that cannot be written is not left behind."""
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
@@ -562,7 +619,7 @@ def _take(path: Path) -> bool:
         raise
     try:
         with f:
-            f.write(f"{os.getpid()} {socket.gethostname()} {time.time():.0f}\n")
+            f.write(f"{os.getpid()} {socket.gethostname()} {time.time():.0f} {token}\n")
     except BaseException:
         path.unlink(missing_ok=True)
         raise
@@ -572,32 +629,40 @@ def _take(path: Path) -> bool:
 @contextmanager
 def _lock(run_dir: Path) -> Iterator[None]:
     """Hold run_dir/.publish.lock while publishing (see the module doc): wait while another
-    publish holds it, break it only when _breakable says so, and touch it every
-    LOCK_HEARTBEAT_S from a daemon thread while it is held."""
+    publish holds it, break it only when _breakable says so (see _break), and touch it every
+    LOCK_HEARTBEAT_S from a daemon thread while it is held. The lock carries a random token:
+    the heartbeat touches it and the release removes it only while it still holds ours."""
     path = run_dir / LOCK
-    while not _take(path):
-        if path.exists() and _breakable(path):
-            log.warning("publish: breaking a stale lock in %s", run_dir)
-            path.unlink(missing_ok=True)  # another waiter may have broken it first
+    token = secrets.token_hex(16)
+    while not _take(path, token):
+        if path.exists() and _break(path):
+            log.warning("publish: broke a stale lock in %s", run_dir)
             continue
         time.sleep(LOCK_POLL_S)
     stop = threading.Event()
 
     def heartbeat() -> None:
         while not stop.wait(LOCK_HEARTBEAT_S):
+            if _owner(path) != token:
+                log.warning("publish: the lock in %s is no longer ours", run_dir)
+                return
             try:
                 os.utime(path, None)
             except OSError as e:
                 log.warning("publish: could not touch the lock: %s", e)
 
-    beat = threading.Thread(target=heartbeat, name="publish-lock", daemon=True)
-    beat.start()
+    beat, started = None, False
     try:
+        beat = threading.Thread(target=heartbeat, name="publish-lock", daemon=True)
+        beat.start()
+        started = True
         yield
     finally:
         stop.set()
-        beat.join(timeout=5)
-        path.unlink(missing_ok=True)
+        if started:
+            beat.join(timeout=5)
+        if _owner(path) == token:
+            path.unlink(missing_ok=True)
 
 
 def _move(src: Path, dst: Path) -> None:
