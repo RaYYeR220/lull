@@ -15,6 +15,11 @@
       "latency_s": 137.80604930018308
     }
   ],
+  "reextraction": {
+    "run_id": "suite-b-facts-2",
+    "calls": 10,
+    "cost_usd": 0.012032
+  },
   "facts": {
     "elephants_dream": {
       "pfeiffer": {
@@ -32,8 +37,9 @@
     },
     "woodshole": {
       "usgs_ad": {
-        "on_screen_text": 46,
-        "visual": 103
+        "on_screen_text": 50,
+        "visual": 100,
+        "sound": 1
       }
     },
     "aquatic_connectivity": {

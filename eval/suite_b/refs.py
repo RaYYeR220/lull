@@ -37,13 +37,14 @@ from pathlib import Path
 
 import numpy as np
 
-from suite_a.text import STOP, tokens
+from suite_a.text import STOP, norm, tokens
 
 HERE = Path(__file__).resolve().parent
 EVAL_ROOT = HERE.parent
 REPO_ROOT = EVAL_ROOT.parent
 REFS = HERE / "refs"
 ASR_DIR = REFS / "asr"
+CORRECTIONS_PATH = REFS / "asr_corrections.json"
 OUT = HERE / "out"
 DATA_DEFAULT = REPO_ROOT.parent / "lull-data"
 
@@ -649,6 +650,82 @@ def _drift(pairs, a_words, o_words) -> dict:
             "max_s": round(float(max(spreads)), 3)}  # fmt: skip
 
 
+# -- ASR corrections and blocks -------------------------------------------------------------------
+
+
+class CorrectionError(ValueError):
+    """An ASR correction that its evidence does not support."""
+
+
+def load_corrections() -> dict:
+    if not CORRECTIONS_PATH.exists():
+        return {"frames": [], "corrections": [], "unresolved": []}
+    return json.loads(CORRECTIONS_PATH.read_text(encoding="utf-8"))
+
+
+def apply_corrections(video: str, cues: list[dict], spec: dict, original_words: list[dict]):
+    """The lines with the corrections of refs/asr_corrections.json applied (copies; a
+    corrected line keeps its recogniser text in `asr_text` and lists its corrections).
+
+    A correction replaces its `wrong` text, which must be in the line, by `right`, which must
+    be in its evidence: the on-screen text of a frame of the ORIGINAL video as recorded in
+    `frames` (the excerpt cited must be part of that frame's recorded transcription), or the
+    original video's narration (the excerpt must be in its transcript). Text compared with
+    suite_a.text.norm (case and punctuation ignored). Anything else raises CorrectionError."""
+    frames = {(f["video"], float(f["time_s"])): f for f in spec.get("frames", [])}
+    narration = f" {norm(' '.join(w['text'] for w in original_words))} "
+    out = {c["id"]: dict(c) for c in cues}
+    for k in spec.get("corrections", []):
+        if k["video"] != video:
+            continue
+        where = f"{video} {k['ref_line']}"
+        line = out.get(k["ref_line"])
+        if line is None:
+            raise CorrectionError(f"{where}: unknown line")
+        ev = k["evidence"]
+        excerpt = f" {norm(ev['text'])} "
+        if ev.get("type") == "frame":
+            fr = frames.get((video, float(ev["time_s"])))
+            if fr is None:
+                raise CorrectionError(f"{where}: no frame at {ev['time_s']} s in `frames`")
+            if excerpt not in f" {norm(fr['text'])} ":
+                raise CorrectionError(f"{where}: the excerpt is not in the transcription of the "
+                                      f"frame at {ev['time_s']} s")  # fmt: skip
+            label = f"frame {float(ev['time_s']):g} s"
+        elif ev.get("type") == "narration":
+            if excerpt not in narration:
+                raise CorrectionError(f"{where}: the excerpt is not in the original narration")
+            label = "original narration"
+        else:
+            raise CorrectionError(f"{where}: evidence type {ev.get('type')!r} (frame or narration)")
+        if f" {norm(k['right'])} " not in excerpt:
+            raise CorrectionError(f"{where}: the evidence does not say {k['right']!r}")
+        if k["wrong"] not in line["text"]:
+            raise CorrectionError(f"{where}: {k['wrong']!r} is not in {k['ref_line']}")
+        line.setdefault("asr_text", line["text"])
+        line["text"] = line["text"].replace(k["wrong"], k["right"], 1)
+        line.setdefault("corrections", []).append(
+            {"wrong": k["wrong"], "right": k["right"], "evidence": label}
+        )
+    return [out[c["id"]] for c in cues]
+
+
+def mark_blocks(cues: list[dict], by_gap: bool) -> None:
+    """Give every line its block and the block's length in seconds. USGS (by_gap): the
+    consecutive lines voiced in one AD-version gap (same anchor_range), from the first one's
+    start to the last one's end. WebVTT: each cue is its own block."""
+    groups: list[list[dict]] = []
+    for c in cues:
+        if by_gap and groups and groups[-1][-1].get("anchor_range") == c.get("anchor_range"):
+            groups[-1].append(c)
+        else:
+            groups.append([c])
+    for k, g in enumerate(groups, start=1):
+        length = round(float(g[-1]["end"]) - float(g[0]["start"]), 3)
+        for c in g:
+            c["block"], c["block_s"] = f"b{k:03d}", length
+
+
 # -- Elephants Dream ------------------------------------------------------------------------------
 
 
@@ -677,6 +754,7 @@ def elephants(data: Path, refresh: bool) -> dict:
                      "cues": parse_vtt(path.read_text(encoding="utf-8"), src)}  # fmt: skip
         for c in refs[src]["cues"]:
             c.update(anchor_time=c["start"], anchor_end=c["end"], placement="timed")
+        mark_blocks(refs[src]["cues"], by_gap=False)
     wav = data / spec["hunt_audio"]["file"]
     voiced = energy_vad(decode_audio(wav, VAD["rate"]), VAD["rate"])
     hunt_cues = [(c["start"], c["end"]) for c in refs["hunt"]["cues"]]
@@ -733,6 +811,10 @@ def usgs(vid: str, data: Path, refresh: bool) -> dict:
     a_doc = transcript(f"{vid}_AD", a_path, data, refresh)
     o_dur, a_dur = probe_duration(o_path), probe_duration(a_path)
     ref = usgs_reference(vid, o_doc, a_doc, o_dur, a_dur)
+    spec_c = load_corrections()
+    cues = apply_corrections(vid, ref.pop("cues"), spec_c, o_doc["words"])
+    mark_blocks(cues, by_gap=True)
+    unresolved = [u for u in spec_c.get("unresolved", []) if u["video"] == vid]
     return {
         "video": vid,
         "kind": "usgs",
@@ -752,9 +834,14 @@ def usgs(vid: str, data: Path, refresh: bool) -> dict:
                 **USGS_REFERENCE,
                 "url": spec["ad_media"]["url"],
                 "kind": "extended_ad",
-                "cues": ref.pop("cues"),
+                "cues": cues,
             }
         },  # fmt: skip
+        "asr_corrections": {
+            "applied": sum(len(c.get("corrections", [])) for c in cues),
+            "lines": [c["id"] for c in cues if c.get("corrections")],
+            "unresolved": unresolved,
+        },
         "alignment": {
             "method": "difflib.SequenceMatcher on suite_a.text.tokens of both transcripts, "
             f"repairs: short chance matches <= {SHORT_EQUAL} tokens dropped, near-identical "
@@ -793,6 +880,8 @@ def markdown(doc: dict) -> str:
             if c.get("placement") == "before_program":
                 extra = " (before the program)"
             text = c["text"].replace("\n", " / ").replace("|", "\\|")
+            for k in c.get("corrections", []):
+                text += f" *(heard: {k['wrong']}; {k['evidence']})*"
             lines.append(f"| {c['id']} | {_mmss(c['start'])}-{_mmss(c['end'])} | "
                          f"{_mmss(c['anchor_time'])}{extra} | {text} |")  # fmt: skip
         lines.append("")
@@ -804,6 +893,12 @@ def markdown(doc: dict) -> str:
                       "differently by the recogniser)", ""]  # fmt: skip
             lines += [f"- {_mmss(m['original'][0])}: {m['text']}"
                       for m in al["narration_missing_from_ad_version"]]  # fmt: skip
+            lines.append("")
+        unresolved = doc.get("asr_corrections", {}).get("unresolved", [])
+        if unresolved:
+            lines += ["## Suspicious terms left as heard (no evidence to correct them)", ""]
+            lines += [f"- {u['ref_line']}: \"{u['term']}\" (likely {u['likely']}): {u['why']}"
+                      for u in unresolved]  # fmt: skip
             lines.append("")
         if al["dropped_runs"]:
             lines += ["## Left-over runs too short to be lines", ""]

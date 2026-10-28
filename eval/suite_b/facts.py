@@ -31,12 +31,15 @@ RULES_PATH = HERE / "rules.json"
 SHA_PATH = HERE / "facts.sha256"
 CACHE = OUT / "facts_cache"
 RUN_ID = "suite-b-facts"  # ledger run id of the extraction
+RUN_ID_2 = "suite-b-facts-2"  # ... of the re-extraction of ASR-corrected lines (second pin)
+PROBES_PATH = HERE / "probes.json"
 
 CHUNK = 10
 CONTEXT = 3
 MAX_TOKENS = 8000
 ESTIMATE = 0.01  # USD reserved before each call (one chunk costs about $0.003)
 CAP = 0.25  # USD the extraction may spend in all
+CAP_2 = 0.05  # USD the re-extraction of corrected lines may spend
 
 KINDS = {
     "visual": "a person, animal, thing or place, what it looks like, an action, an expression "
@@ -97,6 +100,8 @@ Return JSON with `lines`: one entry per line, each with its `id` and its `facts`
 # Lull output is judged; the scorer fills its placeholders and builds the schema it names.
 RULES = {
     "suite": "B",
+    "preregistration": "second pin (tag suite-b-prereg-2); the first pin is tag suite-b-prereg. "
+    "What changed between them is listed under `changes_since_first_pin`.",
     "question": "How much of what human describers chose to say does Lull also convey, and "
     "how do both sides behave around dialogue, measured with the same tools for both.",
     "scored_kinds": ["visual", "on_screen_text"],
@@ -104,15 +109,31 @@ RULES = {
     "unscored_kinds": ["sound", "not_in_video"],
     "kinds": KINDS,
     "window_s": 15.0,
+    "long_block_s": 30.0,
+    "long_block_window_s": 30.0,
+    "blocks": "A block is the stretch a describer voiced in one go: for USGS the consecutive "
+    "lines voiced in one AD-version gap (same anchor_range), from the first line's start to "
+    "the last line's end; for WebVTT one cue. The facts of a block longer than long_block_s "
+    "get long_block_window_s instead of window_s.",
     "window": "A cue counts for a fact when the judge says it conveys the fact and it plays "
-    "within [anchor_time - window_s, anchor_end + window_s] on the original timeline: a "
+    "within [anchor_time - w, anchor_end + w] on the original timeline (w = window_s, or "
+    "long_block_window_s for a long block): a "
     "standard cue when [start, start + audio_dur] overlaps that window, an extended cue when "
     "its freeze point lies in it. For a WebVTT reference anchor_time and anchor_end are the "
     "cue's start and end; for a USGS line both are the original time at which the AD version "
-    "played or paused it. A fact of a line placed before the program starts (the USGS preface "
+    "played or paused it: for a paused line (nearly all) that is the freeze point, so every "
+    "line of a block shares about the same anchor even when it describes footage the "
+    "original shows a few seconds later. A fact of a line placed before the program starts "
+    "(the USGS preface "
     "of csc_intro) has the whole video as its window.",
     "variants": {
         "primary": ["windowed, standard track", "windowed, standard and extended tracks"],
+        "usgs_equal_weight": "For the USGS references the anywhere variant is reported with "
+        "the same weight as the windowed one (their anchors are freeze points, see window).",
+        "unresolved_terms": "Recall is also reported without the facts that still contain a "
+        "suspicious ASR term listed as unresolved in refs/asr_corrections.json (the facts of "
+        "that line whose text contains the term); with any left, USGS recall over all facts "
+        "is a lower bound.",
         "supplementary": [
             "anywhere in the video (no window), both tracks",
             "interpretation facts, both windows",
@@ -147,6 +168,11 @@ RULES = {
             "max_tokens": 16000,
         },
         "facts_per_call": 40,
+        "probe": "probes.json: synthetic cues for known facts of two videos, positives (a "
+        "paraphrase, the fact with an extra detail) that must be credited and near misses "
+        "(wrong count, colour or value, swapped character, gist only, invented detail) that "
+        "must not; both judges, same prompt, run before the second pin and reported with "
+        "every score (probe_results.json).",
         "content_only": "The judge sees the cue texts in time order without times and the "
         "facts without anchors; timing is applied by the window above, never by the judge.",
         "blind": "Cues are shown under neutral ids (k001, k002, ... in time order) without "
@@ -183,6 +209,9 @@ may name a character or describe them instead (see <characters>). A cue that say
 the fact still conveys it if the fact is part of what it says. A cue that is vaguer than the \
 fact (only the setting, a gist, "someone moves") does not convey it.
 - On-screen text: the cue must give the words (case and punctuation may differ).
+- Counts, numbers, colours, names, written words and who does what to whom must agree with \
+the fact: "five birds" does not convey "four birds", and "the girl follows the boy" does not \
+convey "the boy follows the girl".
 - Timing is checked separately: judge content only.
 - Judge each fact on its own and look at every cue. When in doubt, do not credit the cue.
 - `cue_ids` lists every cue that conveys the fact (empty when none); `reason` is one short \
@@ -220,6 +249,10 @@ Return JSON with `facts`: one entry per listed fact, each with its `id`, `reason
         "missing from the AD version; not comparable to standard-track overlap (see the "
         "README)",
         "report": "seconds overlapping speech and % of description time",
+        "presentation": "The table against the independent reference transcript comes "
+        "first; every Lull overlap against its own speech spans is marked '0 by construction "
+        "against its own speech detection'; Pfeiffer's VTT overlap is marked as display time, "
+        "not voiced.",
     },
     "density": "Description words per minute of the original video (words: runs of letters or "
     "digits, suite_b.refs.word_count) for each side; Lull standard and with extended; USGS "
@@ -227,9 +260,26 @@ Return JSON with `facts`: one entry per listed fact, each with its `id`, `reason
     "aggregation": "Recall = conveyed / scored facts, per reference (also by kind); USGS "
     "pooled over its videos. 95% percentile bootstrap over reference lines (each line with "
     "its facts; 10 000 resamples, seed 20261028).",
-    "results": "results/ is written only when every run passed in was scored, each run covers "
-    "its whole video, the tree is clean and the tag checks pass; anything else goes to "
-    "out/partial/ and is labelled partial.",
+    "results": "results/ is written only when runs of all four videos are passed in, each "
+    "covers its whole video, the tree is clean and the tag checks pass; anything else goes "
+    "to out/partial/ and is labelled partial.",
+    "usgs_ceiling": "USGS has one describer per video: there is no human baseline (no second "
+    "human to compare with) for those videos.",
+    "changes_since_first_pin": [
+        "17 ASR corrections in 15 USGS woodshole lines (refs/asr_corrections.json, each "
+        "backed by on-screen text of an original frame read by Nemotron 3.5 Super VL or by "
+        "the original narration); 15 suspicious terms left unresolved and listed; facts of "
+        "the corrected lines re-extracted with the same pinned prompt, all other facts kept",
+        "blocks and the long-block window (+/-30 s for blocks over 30 s)",
+        "USGS anywhere variant reported with equal weight; recall also without facts holding "
+        "unresolved terms",
+        "the judge probe (probes.json, 14 positives and 19 near misses) and its results",
+        "judge prompt: one rule added (counts, numbers, colours, names, written words and who "
+        "does what to whom must agree with the fact) after the probe with the first prompt: "
+        "Ultra 14/14 positives and 19/19 near misses, Qwen 13/14 and 17/19 (it credited a "
+        "wrong count and a swapped character); with the rule both 14/14 and 19/19",
+        "results need all four videos; overlap presentation rule",
+    ],
 }
 
 
@@ -303,8 +353,64 @@ def facts_of(doc: dict, src: str, cues: list[dict], answers: list[dict]) -> tupl
                 "text": f["text"].strip(), "kind": f["kind"],
                 "anchor_time": c["anchor_time"], "anchor_end": c["anchor_end"],
                 "placement": c.get("placement", "timed"),
+                "block": c.get("block"), "block_s": c.get("block_s"),
             })  # fmt: skip
     return out, problems
+
+
+def base_view(cues: list[dict]) -> list[dict]:
+    """The lines as the recogniser heard them (before ASR corrections): the first
+    pre-registration's chunks, answered from the cache."""
+    return [{**c, "text": c["asr_text"]} if "asr_text" in c else c for c in cues]
+
+
+def corrected_groups(cues: list[dict]) -> list[list[str]]:
+    """Runs of consecutive corrected lines (each run re-extracted as one chunk)."""
+    out: list[list[str]] = []
+    prev = None
+    for i, c in enumerate(cues):
+        if c.get("corrections"):
+            if out and prev == i - 1 and len(out[-1]) < CHUNK:
+                out[-1].append(c["id"])
+            else:
+                out.append([c["id"]])
+            prev = i
+    return out
+
+
+def replace_facts(base: list[dict], new: list[dict], lines: set[str]) -> list[dict]:
+    """`base` with the facts of `lines` replaced by `new`, in line order."""
+    by_line: dict[str, list[dict]] = {}
+    for f in new:
+        by_line.setdefault(f["ref_cue_id"], []).append(f)
+    out, done = [], set()
+    for f in base:
+        line = f["ref_cue_id"]
+        if line not in lines:
+            out.append(f)
+        elif line not in done:
+            out += by_line.get(line, [])
+            done.add(line)
+    return out
+
+
+def ask(tf, ledger, model: str, prompt: str, schema: dict, run_id: str, cap: float):
+    """One extraction request, answered from the cache or the model: (answer, cached, sha)."""
+    digest = request_sha(model, prompt, schema)
+    path = CACHE / f"{digest}.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))["answer"], True, digest
+    if ledger.spent(run_id=run_id) + ESTIMATE > cap:
+        raise SystemExit(f"extraction cap ${cap:.2f} reached ({run_id})")
+    t0 = time.monotonic()
+    answer = tf.json(
+        model, [{"role": "user", "content": prompt}], schema, run_id=run_id,
+        stage="suite_b_facts", role="eval-facts", thinking=False,
+        max_tokens=MAX_TOKENS, temperature=0.0, estimate=ESTIMATE,
+    )  # fmt: skip
+    write_json(path, {"request_sha256": digest, "model": model, "answer": answer,
+                      "seconds": round(time.monotonic() - t0, 2)})  # fmt: skip
+    return answer, False, digest
 
 
 def extract(tf, ledger, model: str) -> list[dict]:
@@ -318,31 +424,33 @@ def extract(tf, ledger, model: str) -> list[dict]:
                   "facts": [], "calls": [], "problems": []}  # fmt: skip
         for src, ref in doc["references"].items():
             cues, answers = ref["cues"], []
+            heard = base_view(cues)
             for i in range(0, len(cues), CHUNK):
-                chunk, context = cues[i : i + CHUNK], cues[max(0, i - CONTEXT) : i]
+                chunk, context = heard[i : i + CHUNK], heard[max(0, i - CONTEXT) : i]
                 prompt, schema = chunk_request(doc, src, chunk, context)
-                digest = request_sha(model, prompt, schema)
-                path = CACHE / f"{digest}.json"
-                if path.exists():
-                    answer, cached = json.loads(path.read_text(encoding="utf-8"))["answer"], True
-                else:
-                    if ledger.spent(run_id=RUN_ID) + ESTIMATE > CAP:
-                        raise SystemExit(f"extraction cap ${CAP:.2f} reached")
-                    t0 = time.monotonic()
-                    answer = tf.json(
-                        model, [{"role": "user", "content": prompt}], schema, run_id=RUN_ID,
-                        stage="suite_b_facts", role="eval-facts", thinking=False,
-                        max_tokens=MAX_TOKENS, temperature=0.0, estimate=ESTIMATE,
-                    )  # fmt: skip
-                    write_json(path, {"request_sha256": digest, "model": model, "answer": answer,
-                                      "seconds": round(time.monotonic() - t0, 2)})  # fmt: skip
-                    cached = False
+                answer, cached, digest = ask(tf, ledger, model, prompt, schema, RUN_ID, CAP)
                 answers.append(answer)
                 result["calls"].append({"source": src, "lines": [c["id"] for c in chunk],
                                         "request_sha256": digest})  # fmt: skip
                 print(f"{vid} {src} lines {chunk[0]['id']}..{chunk[-1]['id']}"
                       f"{' (cached)' if cached else ''}", flush=True)  # fmt: skip
             facts, problems = facts_of(doc, src, cues, answers)
+            # second pin: a line with an ASR correction is split again (consecutive corrected
+            # lines together), with the same prompt and the three lines before it as context
+            index = {c["id"]: i for i, c in enumerate(cues)}
+            for group in corrected_groups(cues):
+                i = index[group[0]]
+                chunk, context = cues[i : i + len(group)], cues[max(0, i - CONTEXT) : i]
+                prompt, schema = chunk_request(doc, src, chunk, context)
+                answer, cached, digest = ask(tf, ledger, model, prompt, schema, RUN_ID_2, CAP_2)
+                new, more = facts_of(doc, src, chunk, [answer])
+                facts = replace_facts(facts, new, set(group))
+                problems += more
+                result.setdefault("reextracted", []).append(
+                    {"source": src, "lines": group, "request_sha256": digest}
+                )
+                print(f"{vid} {src} corrected {','.join(group)}"
+                      f"{' (cached)' if cached else ''}", flush=True)  # fmt: skip
             result["facts"] += facts
             result["problems"] += problems
         docs.append(result)
@@ -352,6 +460,8 @@ def extract(tf, ledger, model: str) -> list[dict]:
 def manifest_lines() -> list[str]:
     paths = sorted(REFS.glob("*.json")) + sorted((REFS / "asr").glob("*.json"))
     paths += sorted(FACTS.glob("*.json")) + [RULES_PATH]
+    if PROBES_PATH.exists():
+        paths.append(PROBES_PATH)
     return [f"{sha256_file(p)}  {p.relative_to(HERE).as_posix()}" for p in paths]
 
 
@@ -409,10 +519,12 @@ def main(argv: list[str] | None = None) -> int:
     for d in docs:
         write_json(FACTS / f"{d['video']}.json", d)
     write_json(RULES_PATH, RULES)
-    calls = ledger.summary(RUN_ID)
+    calls, calls2 = ledger.summary(RUN_ID), ledger.summary(RUN_ID_2)
     write_json(FACTS / "extraction.json", {
         "run_id": RUN_ID, "model": ULTRA, "calls": calls["calls"],
         "cost_usd": round(calls["total_cost_usd"], 6), "by_role_model": calls["by_role_model"],
+        "reextraction": {"run_id": RUN_ID_2, "calls": calls2["calls"],
+                         "cost_usd": round(calls2["total_cost_usd"], 6)},
         "facts": summary(docs),
     })  # fmt: skip
     digest = write_sha()

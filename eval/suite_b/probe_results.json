@@ -1,0 +1,475 @@
+{
+  "date": "2026-10-28T03:54:17+00:00",
+  "prompt_sha256": "78e6e4f632209283febe150df2f41ad9007b6e022a67cca558bf6b595d5257da",
+  "spend_usd": 0.015434,
+  "run_ids": [
+    "suite-b-probe-elephants_dream-20261028T035243Z",
+    "suite-b-probe-woodshole-20261028T035243Z",
+    "suite-b-probe2-elephants_dream-20261028T035243Z",
+    "suite-b-probe2-woodshole-20261028T035243Z"
+  ],
+  "primary": {
+    "model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+    "groups": [
+      {
+        "video": "elephants_dream",
+        "sensitivity": [
+          9,
+          9
+        ],
+        "specificity": [
+          12,
+          12
+        ],
+        "by_type": {
+          "positive_paraphrase": [
+            8,
+            8
+          ],
+          "wrong_count": [
+            2,
+            2
+          ],
+          "swapped_character": [
+            3,
+            3
+          ],
+          "positive_extra": [
+            1,
+            1
+          ],
+          "wrong_colour": [
+            1,
+            1
+          ],
+          "invented_detail": [
+            2,
+            2
+          ],
+          "gist_only": [
+            3,
+            3
+          ],
+          "wrong_value": [
+            1,
+            1
+          ]
+        },
+        "missed": [],
+        "false_credits": [],
+        "cross_credits": [],
+        "verdicts": {
+          "pfeiffer-04.1": {
+            "cue_ids": [
+              "e01"
+            ],
+            "reason": "Cue k016 describes two figures on a narrow little bridge, matching two people on a small bridge; k015 says three people."
+          },
+          "pfeiffer-05.3": {
+            "cue_ids": [
+              "e03"
+            ],
+            "reason": "Cue k020 states the old man (Proog) pushes the young man (Emo) down onto the ground, matching Proog shoves Emo; k005 reverses the roles."
+          },
+          "hunt-23.1": {
+            "cue_ids": [
+              "e08"
+            ],
+            "reason": "Cue k006 describes a lone spotlight on an antique telephone, matching a single light on an old-fashioned telephone; k018 mentions a typewriter."
+          },
+          "hunt-36.2": {
+            "cue_ids": [
+              "e05"
+            ],
+            "reason": "Cue k001 states the old man (Proog) presses a red button, matching the fact; k003 and k021 involve the young man or a green button."
+          },
+          "pfeiffer-39.1": {
+            "cue_ids": [
+              "e15"
+            ],
+            "reason": "Cue k011 says a camera goes off with a flash, directly conveying a camera flashes."
+          },
+          "pfeiffer-50.2": {
+            "cue_ids": [
+              "e10"
+            ],
+            "reason": "Cue k008 describes two enormous hands pushing up out of the floor, matching a pair of massive hands heaving out of the ground; k002 mentions a single hand."
+          },
+          "pfeiffer-51.4": {
+            "cue_ids": [
+              "e20"
+            ],
+            "reason": "Cue k009 states the young man (Emo) circles a finger by his temple, the sign for crazy, matching the fact."
+          },
+          "hunt-54.3": {
+            "cue_ids": [
+              "e13"
+            ],
+            "reason": "Cue k017 says the old man (Proog) hits the young man (Emo) over the head with his stick, matching Proog clubs Emo over the head."
+          },
+          "hunt-57.2": {
+            "cue_ids": [
+              "e17"
+            ],
+            "reason": "Cue k007 gives the credits text 'Director, Bassam Kurdali', matching the on-screen text 'Director - Bassam Kurdali' (punctuation may differ)."
+          }
+        },
+        "problems": []
+      },
+      {
+        "video": "woodshole",
+        "sensitivity": [
+          5,
+          5
+        ],
+        "specificity": [
+          7,
+          7
+        ],
+        "by_type": {
+          "positive_paraphrase": [
+            4,
+            4
+          ],
+          "wrong_count": [
+            2,
+            2
+          ],
+          "wrong_value": [
+            1,
+            1
+          ],
+          "gist_only": [
+            2,
+            2
+          ],
+          "wrong_colour": [
+            1,
+            1
+          ],
+          "positive_extra": [
+            1,
+            1
+          ],
+          "invented_detail": [
+            1,
+            1
+          ]
+        },
+        "missed": [],
+        "false_credits": [],
+        "cross_credits": [],
+        "verdicts": {
+          "usgs-012.1": {
+            "cue_ids": [
+              "w01"
+            ],
+            "reason": "Cue k002 states 'Two men ride in a boat', matching the fact exactly; k005 says four men, which contradicts the count."
+          },
+          "usgs-045.1": {
+            "cue_ids": [
+              "w03"
+            ],
+            "reason": "Cue k011 explicitly mentions the 200-nautical-mile U.S. exclusive economic zone on a world map; k009 gives 300-nautical-mile, and k003 is too vague."
+          },
+          "usgs-046.1": {
+            "cue_ids": [
+              "w06"
+            ],
+            "reason": "Cue k004 describes yellow lines marking the extended continental shelf in the Arctic and Atlantic Oceans and the Bering Sea where sediment thickness data were collected, matching the fact; k006 incorrectly says red lines."
+          },
+          "usgs-073.1": {
+            "cue_ids": [
+              "w11"
+            ],
+            "reason": "Cue k010 states 'Two cars drive along a road', conveying the fact; k008 only mentions traffic near the coast without specifying two cars on a road."
+          },
+          "usgs-076.1": {
+            "cue_ids": [
+              "w08"
+            ],
+            "reason": "Cue k012 describes a man in a USGS cap (hat) beside three men looking through binoculars, matching the fact; k001 has two men, k007 has fishing rods."
+          }
+        },
+        "problems": []
+      }
+    ],
+    "total": {
+      "sensitivity": [
+        14,
+        14
+      ],
+      "specificity": [
+        19,
+        19
+      ],
+      "by_type": {
+        "positive_paraphrase": [
+          12,
+          12
+        ],
+        "wrong_count": [
+          4,
+          4
+        ],
+        "swapped_character": [
+          3,
+          3
+        ],
+        "positive_extra": [
+          2,
+          2
+        ],
+        "wrong_colour": [
+          2,
+          2
+        ],
+        "invented_detail": [
+          3,
+          3
+        ],
+        "gist_only": [
+          5,
+          5
+        ],
+        "wrong_value": [
+          2,
+          2
+        ]
+      },
+      "cross_credits": 0
+    }
+  },
+  "second": {
+    "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+    "groups": [
+      {
+        "video": "elephants_dream",
+        "sensitivity": [
+          9,
+          9
+        ],
+        "specificity": [
+          12,
+          12
+        ],
+        "by_type": {
+          "positive_paraphrase": [
+            8,
+            8
+          ],
+          "wrong_count": [
+            2,
+            2
+          ],
+          "swapped_character": [
+            3,
+            3
+          ],
+          "positive_extra": [
+            1,
+            1
+          ],
+          "wrong_colour": [
+            1,
+            1
+          ],
+          "invented_detail": [
+            2,
+            2
+          ],
+          "gist_only": [
+            3,
+            3
+          ],
+          "wrong_value": [
+            1,
+            1
+          ]
+        },
+        "missed": [],
+        "false_credits": [],
+        "cross_credits": [],
+        "verdicts": {
+          "pfeiffer-04.1": {
+            "cue_ids": [
+              "e01"
+            ],
+            "reason": "Cue k015 states 'Three people stand on a small bridge,' which does not match the fact of two people; k016 states 'Two figures are standing on a narrow little bridge,' which matches the fact."
+          },
+          "pfeiffer-05.3": {
+            "cue_ids": [
+              "e03"
+            ],
+            "reason": "Cue k005 states 'The young man shoves the old man to the ground,' which reverses the roles; k020 states 'The old man pushes the young man down onto the ground,' which matches Proog shoving Emo."
+          },
+          "hunt-23.1": {
+            "cue_ids": [
+              "e08"
+            ],
+            "reason": "Cue k006 mentions a spotlight on an antique telephone, which matches the fact about a light shining on a telephone."
+          },
+          "hunt-36.2": {
+            "cue_ids": [
+              "e05"
+            ],
+            "reason": "Cue k001 states 'The old man presses a red button,' and Proog is the old man, so this conveys the fact."
+          },
+          "pfeiffer-39.1": {
+            "cue_ids": [
+              "e15"
+            ],
+            "reason": "Cue k011 states 'A camera goes off with a flash,' which conveys the camera flash event."
+          },
+          "pfeiffer-50.2": {
+            "cue_ids": [
+              "e10"
+            ],
+            "reason": "Cue k008 states 'Two enormous hands push up out of the floor,' which matches the pair of massive hands heaving out of the ground."
+          },
+          "pfeiffer-51.4": {
+            "cue_ids": [
+              "e20"
+            ],
+            "reason": "Cue k009 states 'The young man circles a finger by his temple, the sign for crazy,' and Emo is the young man, so this conveys the fact."
+          },
+          "hunt-54.3": {
+            "cue_ids": [
+              "e13"
+            ],
+            "reason": "Cue k017 states 'The old man hits the young man over the head with his stick,' and Proog is the old man and Emo the young man, so this conveys Proog clubbing Emo."
+          },
+          "hunt-57.2": {
+            "cue_ids": [
+              "e17"
+            ],
+            "reason": "Cue k007 states 'The credits read: Director, Bassam Kurdali,' which matches the on-screen text exactly."
+          }
+        },
+        "problems": []
+      },
+      {
+        "video": "woodshole",
+        "sensitivity": [
+          5,
+          5
+        ],
+        "specificity": [
+          7,
+          7
+        ],
+        "by_type": {
+          "positive_paraphrase": [
+            4,
+            4
+          ],
+          "wrong_count": [
+            2,
+            2
+          ],
+          "wrong_value": [
+            1,
+            1
+          ],
+          "gist_only": [
+            2,
+            2
+          ],
+          "wrong_colour": [
+            1,
+            1
+          ],
+          "positive_extra": [
+            1,
+            1
+          ],
+          "invented_detail": [
+            1,
+            1
+          ]
+        },
+        "missed": [],
+        "false_credits": [],
+        "cross_credits": [],
+        "verdicts": {
+          "usgs-012.1": {
+            "cue_ids": [
+              "w01"
+            ],
+            "reason": "k002 mentions two men in a boat, which matches the fact."
+          },
+          "usgs-045.1": {
+            "cue_ids": [
+              "w03"
+            ],
+            "reason": "k011 shows a world map highlighting the 200-nautical-mile U.S. exclusive economic zone, which matches the fact."
+          },
+          "usgs-046.1": {
+            "cue_ids": [
+              "w06"
+            ],
+            "reason": "k004 describes yellow lines marking the extended continental shelf in the specified regions with sediment thickness data, matching the fact exactly."
+          },
+          "usgs-073.1": {
+            "cue_ids": [
+              "w11"
+            ],
+            "reason": "k010 describes two cars driving along a road, which conveys the fact."
+          },
+          "usgs-076.1": {
+            "cue_ids": [
+              "w08"
+            ],
+            "reason": "k012 describes a man in a USGS cap standing beside three men looking through binoculars on a beach, which matches the fact; k001 and k007 are incorrect due to mismatched numbers or activities."
+          }
+        },
+        "problems": []
+      }
+    ],
+    "total": {
+      "sensitivity": [
+        14,
+        14
+      ],
+      "specificity": [
+        19,
+        19
+      ],
+      "by_type": {
+        "positive_paraphrase": [
+          12,
+          12
+        ],
+        "wrong_count": [
+          4,
+          4
+        ],
+        "swapped_character": [
+          3,
+          3
+        ],
+        "positive_extra": [
+          2,
+          2
+        ],
+        "wrong_colour": [
+          2,
+          2
+        ],
+        "invented_detail": [
+          3,
+          3
+        ],
+        "gist_only": [
+          5,
+          5
+        ],
+        "wrong_value": [
+          2,
+          2
+        ]
+      },
+      "cross_credits": 0
+    }
+  }
+}

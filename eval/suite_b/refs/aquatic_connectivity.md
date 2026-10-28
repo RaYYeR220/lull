@@ -33,3 +33,8 @@ https://www.usgs.gov/media/videos/importance-aquatic-connectivity-maintaining-co
 | usgs-021 | 5:02.640-5:10.640 | 3:40.240 (paused) | A photo appears of a road stream crossing with an open bottom arch constructed to meet the Massachusetts River and Stream Crossing Standards. |
 | usgs-022 | 5:32.640-5:34.260 | 4:02.760 (paused) | Credits role.org. |
 | usgs-023 | 5:58.400-6:01.920 | 4:25.054 (paused) | The letters USGS and Words Science for a Changing World appear in white. |
+
+## Suspicious terms left as heard (no evidence to correct them)
+
+- usgs-001: "Word Science" (likely words Science): the logo reads 'science for a changing world'; 'words' is the describer's own word
+- usgs-022: "role.org" (likely roll ('Credits roll.')): the credits are on screen but the describer's verb is not text

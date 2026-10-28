@@ -64,10 +64,12 @@ from suite_b.refs import (
     write_json,
 )
 
-PREREG_TAG = "suite-b-prereg"
+PREREG_TAG = "suite-b-prereg-2"  # the second pin; the first was "suite-b-prereg"
+FIRST_TAG = "suite-b-prereg"
 SHA_FILE = "eval/suite_b/facts.sha256"
 PINNED = ("eval/suite_b/refs", "eval/suite_b/facts", "eval/suite_b/facts.sha256",
-          "eval/suite_b/rules.json", "eval/suite_b/refs.py", "eval/suite_b/facts.py")  # fmt: skip
+          "eval/suite_b/rules.json", "eval/suite_b/refs.py", "eval/suite_b/facts.py",
+          "eval/suite_b/evidence.py", "eval/suite_b/probes.json")  # fmt: skip
 JUDGE_CACHE = OUT / "judge"
 PARTIAL = OUT / "partial"
 FULL_TOLERANCE_S = 1.0  # a run whose video is this close to the reference's covers all of it
@@ -97,7 +99,8 @@ def load_reference_set() -> tuple[dict, dict]:
     for v in VIDEOS:
         doc = json.loads((REFS / f"{v}.json").read_text(encoding="utf-8"))
         facts = json.loads((FACTS / f"{v}.json").read_text(encoding="utf-8"))["facts"]
-        refs[v] = {"doc": doc, "facts": facts}
+        unresolved = (doc.get("asr_corrections") or {}).get("unresolved", [])
+        refs[v] = {"doc": doc, "facts": facts, "unresolved": unresolved}
     return rules, refs
 
 
@@ -184,10 +187,26 @@ def in_scope(fact: dict, clip: list[float], full: bool) -> bool:
     return clip[0] - EPS <= fact["anchor_time"] <= clip[1] + EPS
 
 
-def window(fact: dict, window_s: float, duration: float) -> tuple[float, float]:
+def window(fact: dict, rules: dict, duration: float) -> tuple[float, float]:
+    """[anchor - w, anchor end + w]: w is window_s, or long_block_window_s for a fact of a
+    block longer than long_block_s; a preface fact's window is the whole video."""
     if fact.get("placement") == "before_program":
         return 0.0, duration
-    return fact["anchor_time"] - window_s, fact["anchor_end"] + window_s
+    w = float(rules["window_s"])
+    if (fact.get("block_s") or 0.0) > float(rules.get("long_block_s", float("inf"))) + EPS:
+        w = float(rules["long_block_window_s"])
+    return fact["anchor_time"] - w, fact["anchor_end"] + w
+
+
+def flagged(facts: list[dict], video: str, unresolved: list[dict]) -> set[str]:
+    """Facts that still hold a suspicious ASR term: a fact of an unresolved entry's line whose
+    text contains its term (case ignored)."""
+    terms: dict[str, list[str]] = {}
+    for u in unresolved:
+        if u["video"] == video:
+            terms.setdefault(u["ref_line"], []).append(u["term"].lower())
+    return {f["id"] for f in facts
+            if any(t in f["text"].lower() for t in terms.get(f["ref_cue_id"], []))}  # fmt: skip
 
 
 def plays_in(cue: dict, lo: float, hi: float) -> bool:
@@ -258,14 +277,14 @@ def judge_facts(judge: Judge, rules: dict, video: str, doc: dict, facts: list[di
     return out, problems
 
 
-def outcomes(facts: list[dict], verdicts: dict, cues: list[dict], window_s: float,
+def outcomes(facts: list[dict], verdicts: dict, cues: list[dict], rules: dict,
              duration: float) -> list[dict]:  # fmt: skip
     """Per fact: the cues the judge credits, and whether one of them counts within the window
     and anywhere, on the standard track alone and on both tracks."""
     by_id = {c["id"]: c for c in cues}
     out = []
     for f in facts:
-        lo, hi = window(f, window_s, duration)
+        lo, hi = window(f, rules, duration)
         credited = [by_id[i] for i in (verdicts.get(f["id"]) or {}).get("cue_ids", [])
                     if i in by_id]  # fmt: skip
         in_win = [c for c in credited if plays_in(c, lo, hi)]
@@ -417,16 +436,16 @@ def score_video(run: dict, ref: dict, rules: dict, judges: dict, stamp: str,
         by_source.setdefault(f["source"], []).append(f)
     out = {"video": video, "run_id": run["run_id"], "clip": run["clip"], "full": run["full"],
            "references": {}, "baseline": {}, "judge_problems": []}  # fmt: skip
-    w = float(rules["window_s"])
+    flags = flagged(facts, video, ref.get("unresolved", []))
     for src, fs in sorted(by_source.items()):
         entry = {}
         for name, judge in judges.items():
             rid = f"suite-b-{'judge' if name == 'primary' else 'judge2'}-{video}-{stamp}"
             verdicts, problems = judge_facts(judge, rules, video, doc, fs, run["cues"], rid,
                                              f"suite_b_{src}")  # fmt: skip
-            rows = outcomes(fs, verdicts, run["cues"], w, duration)
+            rows = outcomes(fs, verdicts, run["cues"], rules, duration)
             for r in rows:
-                r["video"] = video
+                r["video"], r["flagged"] = video, r["id"] in flags
             entry[name] = {"rows": rows, "problems": problems}
             out["judge_problems"] += [f"{name} {src}: {p}" for p in problems]
         out["references"][src] = entry
@@ -440,9 +459,9 @@ def score_video(run: dict, ref: dict, rules: dict, judges: dict, stamp: str,
                 rid = f"suite-b-{'base' if name == 'primary' else 'base2'}-{video}-{stamp}"
                 verdicts, problems = judge_facts(judge, rules, video, doc, fs, cues, rid,
                                                  f"suite_b_baseline_{cue_src}")  # fmt: skip
-                rows = outcomes(fs, verdicts, cues, w, duration)
+                rows = outcomes(fs, verdicts, cues, rules, duration)
                 for r in rows:
-                    r["video"] = video
+                    r["video"], r["flagged"] = video, r["id"] in flags
                 entry[name] = {"rows": rows, "problems": problems}
                 out["judge_problems"] += [f"{name} baseline {cue_src}: {p}" for p in problems]
             out["baseline"][f"{cue_src}_lines_vs_{fact_src}_facts"] = entry
@@ -472,6 +491,8 @@ def summarize(videos: list[dict], rules: dict) -> dict:
             "recall": recall(rows, scored),
             "by_kind": {k: recall(rows, (k,)) for k in kinds},
             "interpretation": recall(rows, supp),
+            "recall_without_unresolved": recall([r for r in rows if not r.get("flagged")], scored),
+            "flagged_facts": sum(1 for r in rows if r.get("flagged") and r["kind"] in scored),
         }
         if src in pools2:
             rows2 = pools2[src]
@@ -509,6 +530,74 @@ def _kappa(x: dict | None) -> str:
     return f"{x['agreement']:.1%}, kappa {k} (n={x['n']})"
 
 
+def prompt_sha(rules: dict) -> str:
+    import hashlib
+
+    return hashlib.sha256(rules["judge"]["prompt"].encode("utf-8")).hexdigest()
+
+
+def counts_as_results(runs: list[dict], smoke: bool) -> bool:
+    """results/ needs runs of all four videos, each covering its whole video, and no smoke."""
+    return (not smoke and {r["video"] for r in runs} == set(VIDEOS)
+            and all(r["full"] for r in runs))  # fmt: skip
+
+
+OWN = "0 by construction against its own speech detection"
+NOTES = {
+    "pfeiffer_vtt": "display time, not voiced",
+    "hunt_vtt": "display time (his voice: hunt_wav)",
+    "hunt_wav": "voiced",
+}
+
+
+def _share(row: dict) -> str:
+    return "n/a" if row["share"] is None else f"{row['share']:.1%}"
+
+
+def overlap_section(videos: list[dict]) -> list[str]:
+    """The talking-over-speech tables: first against the independent reference transcript,
+    then against the Lull run's own speech detection (Lull marked 0 by construction there)."""
+    head = ["| video | side | description s | over speech s | share | note |",
+            "|---|---|---|---|---|---|"]  # fmt: skip
+    lines = ["", "## Talking over speech", "",
+             "Against the reference transcript of the original (refs/asr: same recogniser, "
+             "words only, independent of the Lull run):", "", *head]  # fmt: skip
+    for v in videos:
+        ref = v["overlap"]["supplementary_against_reference_asr"]
+        for side, row in ref.items():
+            if isinstance(row, dict):
+                lines.append(f"| {v['video']} | {side} | {row['description_s']:.1f} | "
+                             f"{row['overlap_s']:.1f} | {_share(row)} | "
+                             f"{NOTES.get(side, '')} |")  # fmt: skip
+        fz = ref.get("lull_extended_freeze_points_in_speech") or []
+        lines.append(f"| {v['video']} | lull_extended freeze points inside speech | | {len(fz)} "
+                     f"| | |")  # fmt: skip
+    lines += ["", "Against the Lull run's own speech detection (its listen output, diarized "
+              "turns included; the same spans for every side):", "", *head]  # fmt: skip
+    for v in videos:
+        ov = v["overlap"]
+        for side, row in ov.items():
+            if isinstance(row, dict) and "description_s" in row and side != "usgs_ad_own_timeline":
+                note = OWN if side.startswith("lull") else NOTES.get(side, "")
+                lines.append(f"| {v['video']} | {side} | {row['description_s']:.1f} | "
+                             f"{row['overlap_s']:.1f} | {_share(row)} | {note} |")  # fmt: skip
+        fz = ov["lull_extended_freeze_points_in_speech"]
+        lines.append(f"| {v['video']} | lull_extended freeze points inside speech | | {len(fz)} "
+                     f"| | {OWN} |")  # fmt: skip
+        own = ov.get("usgs_ad_own_timeline")
+        if own:
+            lines.append(f"| {v['video']} | USGS AD on its own timeline | "
+                         f"{own['description_s']:.1f} | {own['overlap_s']:.1f} | {_share(own)} | "
+                         f"not comparable (see below); original narration missing from the AD "
+                         f"version {own['narration_missing_from_ad_version_s']:.1f} s "
+                         f"|")  # fmt: skip
+    lines += ["", "USGS AD lives in pauses the AD version inserts; its own-timeline overlap "
+              "compares two parts of one transcript and cannot show simultaneous speech, so it "
+              "is not comparable to a standard track, which has to fit the original's own "
+              "pauses (see the README)."]  # fmt: skip
+    return lines
+
+
 def markdown(result: dict) -> str:
     pre, s = result["preregistration"], result["summary"]
     title = "results" if result["complete"] else "PARTIAL RUN (not results)"
@@ -521,7 +610,8 @@ def markdown(result: dict) -> str:
         f"(commit `{pre['commit'][:12]}`, {pre['committed']}); scorer commit "
         f"`{result['git_commit'][:12]}`{' (dirty tree)' if result['git_dirty'] else ''}; "
         f"{result['date']}. Primary judge `{result['judge_model']}`; second judge "
-        f"`{result['second_judge_model']}`. Window +/-{result['window_s']:g} s. Spend over the "
+        f"`{result['second_judge_model']}`. Window +/-{result['window_s']:g} s "
+        f"(+/-{result.get('long_block_window_s', 30):g} s for blocks over 30 s). Spend over the "
         f"referenced run ids: ${result['spend_usd']:.4f}.",
         "",
     ]
@@ -537,14 +627,27 @@ def markdown(result: dict) -> str:
     if result["not_scored"]:
         lines += ["", f"Reference videos not scored: {', '.join(result['not_scored'])}."]
     lines += ["", "## What Lull conveys of what the describers said", "",
-              "Scored facts: visual and on-screen text. Primary: within the window. "
-              "Supplementary: anywhere in the video.", "",
+              "Scored facts: visual and on-screen text. Elephants Dream: the window is primary, "
+              "anywhere supplementary. USGS: window and anywhere carry equal weight (a USGS "
+              "anchor is the freeze point of the AD version, shared by every line of a block); "
+              "USGS has one describer per video, so there is no human ceiling for it.", "",
               "| reference | facts (lines) | window, standard | window, with extended | "
-              "anywhere, with extended (supp.) |", "|---|---|---|---|---|"]  # fmt: skip
+              "anywhere, standard | anywhere, with extended |",
+              "|---|---|---|---|---|---|"]  # fmt: skip
     for src, e in s["references"].items():
         r = e["recall"]
         lines.append(f"| {src} | {r['facts']} ({r['lines']}) | {_pct(r['standard_window'])} | "
-                     f"{_pct(r['both_window'])} | {_pct(r['both_anywhere'])} |")  # fmt: skip
+                     f"{_pct(r['both_window'])} | {_pct(r['standard_anywhere'])} | "
+                     f"{_pct(r['both_anywhere'])} |")  # fmt: skip
+    if any(e.get("flagged_facts") for e in s["references"].values()):
+        lines += ["", "Without the facts that still hold an unresolved ASR term "
+                  "(refs/asr_corrections.json); with any left, the all-facts USGS recall is a "
+                  "lower bound:", ""]  # fmt: skip
+        for src, e in s["references"].items():
+            r = e["recall_without_unresolved"]
+            lines.append(f"- {src}: {e['flagged_facts']} facts set aside; window, with extended "
+                         f"{_pct(r['both_window'])}; anywhere, with extended "
+                         f"{_pct(r['both_anywhere'])}")  # fmt: skip
     lines += ["", "By kind (window, with extended):", ""]
     for src, e in s["references"].items():
         kinds = "; ".join(f"{k} {_pct(x['both_window'])}" for k, x in e["by_kind"].items())
@@ -565,42 +668,8 @@ def markdown(result: dict) -> str:
                              f"agreement with the primary judge: window "
                              f"{_kappa(sj['agreement_window'])}; anywhere "
                              f"{_kappa(sj['agreement_anywhere'])}")  # fmt: skip
-    lines += [
-        "",
-        "## Talking over speech (every side against the same speech spans)",
-        "",
-        "| video | side | description s | over speech s | share |",
-        "|---|---|---|---|---|",
-    ]
-    for v in result["videos"]:
-        ov = v["overlap"]
-        for side, row in ov.items():
-            if isinstance(row, dict) and "description_s" in row and side != "usgs_ad_own_timeline":
-                share = "n/a" if row["share"] is None else f"{row['share']:.1%}"
-                lines.append(f"| {v['video']} | {side} | {row['description_s']:.1f} | "
-                             f"{row['overlap_s']:.1f} | {share} |")  # fmt: skip
-        fz = ov["lull_extended_freeze_points_in_speech"]
-        lines.append(f"| {v['video']} | lull_extended (freeze points inside speech) | | "
-                     f"{len(fz)} | |")  # fmt: skip
-        own = ov.get("usgs_ad_own_timeline")
-        if own:
-            share = "n/a" if own["share"] is None else f"{own['share']:.1%}"
-            lines.append(
-                f"| {v['video']} | USGS AD, own timeline (not comparable) | "
-                f"{own['description_s']:.1f} | {own['overlap_s']:.1f} | {share} |"
-            )
-    lines += ["", "Supplementary: the same sides against the reference transcript of the "
-              "original (refs/asr, same recogniser, no diarization), not the run's own spans:",
-              "", "| video | side | over speech s | share |", "|---|---|---|---|"]  # fmt: skip
-    for v in result["videos"]:
-        for side, row in v["overlap"]["supplementary_against_reference_asr"].items():
-            if isinstance(row, dict):
-                share = "n/a" if row["share"] is None else f"{row['share']:.1%}"
-                lines.append(f"| {v['video']} | {side} | {row['overlap_s']:.1f} | {share} |")
-    lines += ["", "Speech spans: the Lull run's listen output. USGS AD lives in pauses the AD "
-              "version inserts; its own-timeline overlap compares two parts of one transcript "
-              "and cannot show simultaneous speech, so it is not comparable to a standard "
-              "track, which has to fit the original's own pauses (see the README).", "",
+    lines += overlap_section(result["videos"])
+    lines += ["",
               "## Description density (words per minute of video)", "",
               "| video | minutes | side | words | per min |", "|---|---|---|---|---|"]  # fmt: skip
     for v in result["videos"]:
@@ -609,6 +678,17 @@ def markdown(result: dict) -> str:
             if isinstance(row, dict):
                 lines.append(f"| {v['video']} | {d['minutes']:.2f} | {side} | {row['words']} | "
                              f"{row['per_min']} |")  # fmt: skip
+    probe = result.get("judge_probe")
+    if probe:
+        lines += ["", "## Judge probe (probes.json; synthetic cues whose answer is known)", ""]
+        for name, r in probe.items():
+            t = r["total"]
+            types = ", ".join(f"{k} {a}/{b}" for k, (a, b) in sorted(t["by_type"].items()))
+            lines.append(
+                f"- {name} `{r['model']}`: positives credited {t['sensitivity'][0]}/"
+                f"{t['sensitivity'][1]}, near misses rejected {t['specificity'][0]}/"
+                f"{t['specificity'][1]}, cross-credits {t['cross_credits']} ({types})"
+            )
     problems = [f"{v['video']}: {p}" for v in result["videos"] for p in v["judge_problems"]]
     if problems:
         lines += ["", "Judge problems:", ""] + [f"- {p}" for p in problems]
@@ -638,6 +718,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-second-judge", action="store_true")
     ap.add_argument("--no-baseline", action="store_true", help="skip the human baseline")
     ap.add_argument("--smoke", action="store_true", help="label the report a smoke")
+    ap.add_argument("--no-probe", action="store_true", help="skip the judge probe")
     ap.add_argument("--data", type=Path, default=DATA_DEFAULT, help="lull-data (ASR fallback)")
     args = ap.parse_args(argv)
 
@@ -657,7 +738,7 @@ def main(argv: list[str] | None = None) -> int:
             run["speech"] = listen_speech(video, args.data)
             run["speech_source"] = "engine listen stage on the original video (fallback)"
         runs.append(run)
-    complete = all(r["full"] for r in runs) and not args.smoke
+    complete = counts_as_results(runs, args.smoke)
     folder = RESULTS if complete else PARTIAL
     guard_results_write(folder)  # before spending anything
 
@@ -673,6 +754,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{run['video']}: judging {run['run_id']} ...", flush=True)
         videos.append(score_video(run, refs[run["video"]], rules, judges, stamp,
                                   baseline=not args.no_baseline))  # fmt: skip
+    probe = None
+    if not args.no_probe:
+        from suite_b.probe import run_probe
+
+        probe = run_probe(judges, rules, refs, stamp)
     rows = [r for r in c["ledger"].runs() if r["run_id"].startswith("suite-b-")]
     referenced = set().union(*(j.paid_by for j in judges.values()))
     first_ts = [r["first_ts"] for r in rows if r["run_id"] in referenced and r.get("first_ts")]
@@ -680,7 +766,8 @@ def main(argv: list[str] | None = None) -> int:
     note = None
     if not complete:
         note = ("smoke on a clip: partial, not Suite B results" if args.smoke
-                else "partial run (a clip or a subset): not Suite B results")  # fmt: skip
+                else "partial run (a clip, or not all four videos): not Suite B "
+                "results")  # fmt: skip
     result = {
         "suite": "B",
         "complete": complete,
@@ -695,9 +782,13 @@ def main(argv: list[str] | None = None) -> int:
         "judge_model": ULTRA,
         "second_judge_model": None if args.no_second_judge else SECOND_JUDGE,
         "window_s": float(rules["window_s"]),
+        "long_block_window_s": float(rules["long_block_window_s"]),
+        "judge_prompt_sha256": prompt_sha(rules),
+        "first_preregistration_tag": FIRST_TAG,
         "runs": runs,
         "not_scored": [v for v in VIDEOS if v not in paths],
         "summary": summarize(videos, rules),
+        "judge_probe": probe,
         "videos": videos,
         "spend_usd": round(A.spend_of(referenced, rows), 6),
         "referenced_run_ids": sorted(referenced),

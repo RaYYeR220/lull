@@ -29,7 +29,9 @@
           "text": "The orange open movie project presents",
           "anchor_time": 0.0,
           "anchor_end": 5.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b001",
+          "block_s": 5.0
         },
         {
           "id": "pfeiffer-02",
@@ -39,7 +41,9 @@
           "text": "Introductory titles are showing on the background of a water pool with fishes swimming and mechanical objects lying on a stone floor.",
           "anchor_time": 5.01,
           "anchor_end": 12.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b002",
+          "block_s": 6.99
         },
         {
           "id": "pfeiffer-03",
@@ -49,7 +53,9 @@
           "text": "elephants dream",
           "anchor_time": 12.01,
           "anchor_end": 14.8,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b003",
+          "block_s": 2.79
         },
         {
           "id": "pfeiffer-04",
@@ -59,7 +65,9 @@
           "text": "Two people stand on a small bridge.",
           "anchor_time": 26.1,
           "anchor_end": 28.206,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b004",
+          "block_s": 2.106
         },
         {
           "id": "pfeiffer-05",
@@ -69,7 +77,9 @@
           "text": "The old man, Proog, shoves the younger and less experienced Emo on the ground to save him from being mowed down by a barrage of jack plugs that whir back and forth between the two massive switch-board-like walls.",
           "anchor_time": 30.01,
           "anchor_end": 40.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b005",
+          "block_s": 9.99
         },
         {
           "id": "pfeiffer-06",
@@ -79,7 +89,9 @@
           "text": "The plugs are oblivious of the two, endlessly channeling streams of bizarre sounds and data.",
           "anchor_time": 40.0,
           "anchor_end": 47.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b006",
+          "block_s": 7.0
         },
         {
           "id": "pfeiffer-07",
@@ -89,7 +101,9 @@
           "text": "Emo sits on the bridge and checks his limbs.",
           "anchor_time": 48.494,
           "anchor_end": 51.994,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b007",
+          "block_s": 3.5
         },
         {
           "id": "pfeiffer-08",
@@ -99,7 +113,9 @@
           "text": "After the squealing plugs move on, Proog makes sure that Emo is unharmed and urges him onwards through a crack in one of the plug-walls.",
           "anchor_time": 69.15,
           "anchor_end": 76.03,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b008",
+          "block_s": 6.88
         },
         {
           "id": "pfeiffer-09",
@@ -109,7 +125,9 @@
           "text": "They walk through the narrow hall into a massive room that fades away into blackness on all sides.",
           "anchor_time": 78.05,
           "anchor_end": 84.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b009",
+          "block_s": 5.95
         },
         {
           "id": "pfeiffer-10",
@@ -119,7 +137,9 @@
           "text": "Only one path is visible, suspended in mid-air that runs between thousands of dangling electric cables on which sit crowds of robin-like robotic birds.",
           "anchor_time": 84.05,
           "anchor_end": 94.2,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b010",
+          "block_s": 10.15
         },
         {
           "id": "pfeiffer-11",
@@ -129,7 +149,9 @@
           "text": "As Proog and Emo enter the room, the birds begin to wake up and notice them.",
           "anchor_time": 96.0,
           "anchor_end": 100.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b011",
+          "block_s": 4.0
         },
         {
           "id": "pfeiffer-12",
@@ -139,7 +161,9 @@
           "text": "Realizing the danger, Proog grabs Emo by the arm.",
           "anchor_time": 102.0,
           "anchor_end": 110.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b012",
+          "block_s": 8.0
         },
         {
           "id": "pfeiffer-13",
@@ -149,7 +173,9 @@
           "text": "They run along the increasingly bizarre path as the birds begin to swarm.",
           "anchor_time": 110.05,
           "anchor_end": 120.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b013",
+          "block_s": 9.95
         },
         {
           "id": "pfeiffer-14",
@@ -159,7 +185,9 @@
           "text": "All sound is blocked out by the birds which are making the same noises as the jack-plugs, garbled screaming and obscure sentences and static.",
           "anchor_time": 120.05,
           "anchor_end": 131.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b014",
+          "block_s": 10.95
         },
         {
           "id": "pfeiffer-15",
@@ -169,7 +197,9 @@
           "text": "The path dead-ends, stopping in the middle of no-where above the infinite drop.",
           "anchor_time": 132.6,
           "anchor_end": 137.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b015",
+          "block_s": 4.4
         },
         {
           "id": "pfeiffer-16",
@@ -179,7 +209,9 @@
           "text": "Proog turns around as the birds reach them and begin to dive-bomb at them.",
           "anchor_time": 137.6,
           "anchor_end": 142.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b016",
+          "block_s": 4.4
         },
         {
           "id": "pfeiffer-17",
@@ -189,7 +221,9 @@
           "text": "At the last moment, Proog takes out an old candlestick phone and the birds dive into the speaker piece.",
           "anchor_time": 142.6,
           "anchor_end": 148.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b017",
+          "block_s": 5.4
         },
         {
           "id": "pfeiffer-18",
@@ -199,7 +233,9 @@
           "text": "The screen cuts to black.",
           "anchor_time": 148.6,
           "anchor_end": 151.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b018",
+          "block_s": 2.4
         },
         {
           "id": "pfeiffer-19",
@@ -209,7 +245,9 @@
           "text": "In the next scene, Proog stands at one end of a room, suspiciously watching what is probably the same candlestick phone, which is ringing.",
           "anchor_time": 151.6,
           "anchor_end": 158.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b019",
+          "block_s": 6.4
         },
         {
           "id": "pfeiffer-20",
@@ -219,7 +257,9 @@
           "text": "Emo watches from the other side of the room.",
           "anchor_time": 158.5,
           "anchor_end": 161.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b020",
+          "block_s": 2.5
         },
         {
           "id": "pfeiffer-21",
@@ -229,7 +269,9 @@
           "text": "The phone continues to ring.",
           "anchor_time": 161.5,
           "anchor_end": 163.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b021",
+          "block_s": 1.5
         },
         {
           "id": "pfeiffer-22",
@@ -239,7 +281,9 @@
           "text": "After a while Emo approaches it to answer it, but Proog slaps his hand away.",
           "anchor_time": 163.5,
           "anchor_end": 168.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b022",
+          "block_s": 4.5
         },
         {
           "id": "pfeiffer-23",
@@ -249,7 +293,9 @@
           "text": "Proog takes the ear-piece off the hook.",
           "anchor_time": 177.972,
           "anchor_end": 179.1,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b023",
+          "block_s": 1.128
         },
         {
           "id": "pfeiffer-24",
@@ -259,7 +305,9 @@
           "text": "The phone speaker revealed a mass of clawed, fleshy polyps which scream and gibber obscenely.",
           "anchor_time": 193.5,
           "anchor_end": 198.054,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b024",
+          "block_s": 4.554
         },
         {
           "id": "pfeiffer-25",
@@ -269,7 +317,9 @@
           "text": "There is a solemn silence as Emo looks around the room and the technical objects therein.",
           "anchor_time": 205.0,
           "anchor_end": 213.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b025",
+          "block_s": 8.0
         },
         {
           "id": "pfeiffer-26",
@@ -279,7 +329,9 @@
           "text": "Emo laughs disbelievingly and Proog walks away.",
           "anchor_time": 218.0,
           "anchor_end": 224.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b026",
+          "block_s": 6.0
         },
         {
           "id": "pfeiffer-27",
@@ -289,7 +341,9 @@
           "text": "In the next scene, the two enter another massive black room.",
           "anchor_time": 226.0,
           "anchor_end": 234.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b027",
+          "block_s": 8.0
         },
         {
           "id": "pfeiffer-28",
@@ -299,7 +353,9 @@
           "text": "There is no path, the entry platform is the only structure that seems to be there except for another exit, lit distantly at the far side.",
           "anchor_time": 234.5,
           "anchor_end": 244.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b028",
+          "block_s": 9.5
         },
         {
           "id": "pfeiffer-29",
@@ -309,7 +365,9 @@
           "text": "Proog takes a step forward into the void, and his feet are suddenly caught by giant typewriter arms that rocket up out of the blackness to catch his feet as he dances across mid-air.",
           "anchor_time": 244.5,
           "anchor_end": 254.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b029",
+          "block_s": 9.5
         },
         {
           "id": "pfeiffer-30",
@@ -319,7 +377,9 @@
           "text": "Emo follows Proog with somewhat less enthusiasm as the older man leads the way.",
           "anchor_time": 254.5,
           "anchor_end": 262.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b030",
+          "block_s": 7.5
         },
         {
           "id": "pfeiffer-31",
@@ -329,7 +389,9 @@
           "text": "They reach the end of the room and go through a hall into a small compartment.",
           "anchor_time": 292.0,
           "anchor_end": 298.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b031",
+          "block_s": 6.0
         },
         {
           "id": "pfeiffer-32",
@@ -339,7 +401,9 @@
           "text": "Proog presses a button, and the door shuts.",
           "anchor_time": 302.0,
           "anchor_end": 306.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b032",
+          "block_s": 4.0
         },
         {
           "id": "pfeiffer-33",
@@ -349,7 +413,9 @@
           "text": "It is an elevator.",
           "anchor_time": 306.5,
           "anchor_end": 309.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b033",
+          "block_s": 2.5
         },
         {
           "id": "pfeiffer-34",
@@ -359,7 +425,9 @@
           "text": "The elevator lurches suddenly as it is grabbed by a giant mechanical arm and thrown upwards, rushing up through an ever-widening tunnel.",
           "anchor_time": 309.5,
           "anchor_end": 324.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b034",
+          "block_s": 14.5
         },
         {
           "id": "pfeiffer-35",
@@ -369,7 +437,9 @@
           "text": "When it begins to slow down, another arm grabs the capsule and throws it even further up.",
           "anchor_time": 326.5,
           "anchor_end": 332.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b035",
+          "block_s": 5.5
         },
         {
           "id": "pfeiffer-36",
@@ -379,7 +449,9 @@
           "text": "As it moves up, the walls unlock and fall away, leaving only the floor with the two on it, rushing higher and higher.",
           "anchor_time": 332.5,
           "anchor_end": 340.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b036",
+          "block_s": 7.5
         },
         {
           "id": "pfeiffer-37",
@@ -389,7 +461,9 @@
           "text": "They exit the tunnel into a black sky and the platform reaches the peak of its arc.",
           "anchor_time": 354.5,
           "anchor_end": 359.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b037",
+          "block_s": 4.5
         },
         {
           "id": "pfeiffer-38",
@@ -399,7 +473,9 @@
           "text": "The elevator begins to drop down another shaft, coming to rest as it slams into the floor of another room and bringing the two to a level stop.",
           "anchor_time": 379.5,
           "anchor_end": 386.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b038",
+          "block_s": 6.5
         },
         {
           "id": "pfeiffer-39",
@@ -409,7 +485,9 @@
           "text": "A camera flashes.",
           "anchor_time": 386.5,
           "anchor_end": 388.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b039",
+          "block_s": 1.5
         },
         {
           "id": "pfeiffer-40",
@@ -419,7 +497,9 @@
           "text": "They are in a large, dingy room filled with strange, generator-like devices and dotted with boxy holographic projectors.",
           "anchor_time": 388.01,
           "anchor_end": 394.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b040",
+          "block_s": 5.99
         },
         {
           "id": "pfeiffer-41",
@@ -429,7 +509,9 @@
           "text": "One of them is projecting a portion of wall with a door in it right beside them.",
           "anchor_time": 394.5,
           "anchor_end": 398.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b041",
+          "block_s": 3.5
         },
         {
           "id": "pfeiffer-42",
@@ -439,7 +521,9 @@
           "text": "The door seems harmless enough.",
           "anchor_time": 398.5,
           "anchor_end": 400.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b042",
+          "block_s": 1.5
         },
         {
           "id": "pfeiffer-43",
@@ -449,7 +533,9 @@
           "text": "From behind the door comes light music.",
           "anchor_time": 402.8,
           "anchor_end": 405.1,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b043",
+          "block_s": 2.3
         },
         {
           "id": "pfeiffer-44",
@@ -459,7 +545,9 @@
           "text": "Proog presses a button on his cane, which changes the holograph to another wall.",
           "anchor_time": 416.0,
           "anchor_end": 420.1,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b044",
+          "block_s": 4.1
         },
         {
           "id": "pfeiffer-45",
@@ -469,7 +557,9 @@
           "text": "Proog finishes the wall, and boxes them into a Safe Room, out of the view of anything outside.",
           "anchor_time": 425.1,
           "anchor_end": 431.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b045",
+          "block_s": 5.9
         },
         {
           "id": "pfeiffer-46",
@@ -479,7 +569,9 @@
           "text": "Proog slaps him, trying to bring him to his senses.",
           "anchor_time": 459.0,
           "anchor_end": 462.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b046",
+          "block_s": 3.5
         },
         {
           "id": "pfeiffer-47",
@@ -489,7 +581,9 @@
           "text": "Emo storms away down the length of the room towards a wall he apparently cannot see and the wall begins to move, extending the length of the room.",
           "anchor_time": 465.0,
           "anchor_end": 472.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b047",
+          "block_s": 7.0
         },
         {
           "id": "pfeiffer-48",
@@ -499,7 +593,9 @@
           "text": "The walls begin to discolour and mechanical roots start tearing through the walls to his left.",
           "anchor_time": 480.0,
           "anchor_end": 487.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b048",
+          "block_s": 7.0
         },
         {
           "id": "pfeiffer-49",
@@ -509,7 +605,9 @@
           "text": "The roots move forwards toward Proog.",
           "anchor_time": 487.01,
           "anchor_end": 489.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b049",
+          "block_s": 1.99
         },
         {
           "id": "pfeiffer-50",
@@ -519,7 +617,9 @@
           "text": "The rest of the safety wall crumples away as a pair of massive hands heave out of the ground and begin to attack.",
           "anchor_time": 502.0,
           "anchor_end": 511.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b050",
+          "block_s": 9.0
         },
         {
           "id": "pfeiffer-51",
@@ -529,7 +629,9 @@
           "text": "Proog is knocked down by the shockwave, while Emo turns and begins to walk away, waving his finger around his temple in the 'crazy' sign.",
           "anchor_time": 511.01,
           "anchor_end": 517.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b051",
+          "block_s": 5.99
         },
         {
           "id": "pfeiffer-52",
@@ -539,7 +641,9 @@
           "text": "In a last effort, Proog extricates himself from the tentacle roots, and cracks Emo over the back of the head with his cane.",
           "anchor_time": 517.01,
           "anchor_end": 524.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b052",
+          "block_s": 6.99
         },
         {
           "id": "pfeiffer-53",
@@ -549,7 +653,9 @@
           "text": "As Emo collapses, everything falls away, and Proog and Emo are left in one tiny patch of light in the middle of blackness.",
           "anchor_time": 524.5,
           "anchor_end": 531.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b053",
+          "block_s": 6.5
         },
         {
           "id": "pfeiffer-54",
@@ -559,7 +665,9 @@
           "text": "The scene fades to black while panning over a pile of tentacle roots lying on the ground.",
           "anchor_time": 540.0,
           "anchor_end": 560.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b054",
+          "block_s": 20.0
         },
         {
           "id": "pfeiffer-55",
@@ -569,7 +677,9 @@
           "text": "Credits begin:",
           "anchor_time": 566.0,
           "anchor_end": 568.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b055",
+          "block_s": 2.0
         },
         {
           "id": "pfeiffer-56",
@@ -579,7 +689,9 @@
           "text": "Orange Open Movie Team\nDirector: Bassum Kurdali\nArt Director: Andreas Goralczyk",
           "anchor_time": 568.5,
           "anchor_end": 575.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b056",
+          "block_s": 6.5
         },
         {
           "id": "pfeiffer-57",
@@ -589,7 +701,9 @@
           "text": "Music and Sound Design: Jan Morgenstern",
           "anchor_time": 575.5,
           "anchor_end": 579.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b057",
+          "block_s": 3.5
         },
         {
           "id": "pfeiffer-58",
@@ -599,7 +713,9 @@
           "text": "Emo: Cas Jansen\nProog: Tygo Gernandt",
           "anchor_time": 579.5,
           "anchor_end": 584.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b058",
+          "block_s": 4.5
         },
         {
           "id": "pfeiffer-59",
@@ -609,7 +725,9 @@
           "text": "Screenplay: Pepijn Zwanenberg\nOriginal Concept & Scenario: Andreas Goralczyk, Bassam Kurdali, Ton Roosendaal",
           "anchor_time": 584.5,
           "anchor_end": 590.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b059",
+          "block_s": 5.5
         },
         {
           "id": "pfeiffer-60",
@@ -619,7 +737,9 @@
           "text": "More people for\nAdditional Artwork and Animation\nTexture Photography\nSoftware Development\n3D Modelling, Animation, Rendering, Compiling Software\nSpecial Thanks to Open Source Projects\nRendering Services Provided\nHardware  Sponsored\nCasting\nSound FX, Foley, Dialogue Editing, Audio Mix and Post\nVoice Recording\nHDCam conversion\nNetherlands Media Art Institute Staff\nBlender Foundation Staff",
           "anchor_time": 590.5,
           "anchor_end": 624.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b060",
+          "block_s": 33.5
         },
         {
           "id": "pfeiffer-61",
@@ -629,7 +749,9 @@
           "text": "Many Thanks to our Donation and DVD sponsors",
           "anchor_time": 624.5,
           "anchor_end": 630.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b061",
+          "block_s": 5.5
         },
         {
           "id": "pfeiffer-62",
@@ -639,7 +761,9 @@
           "text": "Elephants Dream has been realised with financial support from\nThe Netherlands Film Fund\nMondriaan Foundation\nVSBfonds\nUni-Verse / EU Sixth Framework Programme",
           "anchor_time": 630.5,
           "anchor_end": 647.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b062",
+          "block_s": 16.5
         },
         {
           "id": "pfeiffer-63",
@@ -649,7 +773,9 @@
           "text": "Produced By\nTon Roosendaal\nCopyright 2006\nNetherlands Media Art Institute / Montevideo\nBlender Foundation",
           "anchor_time": 647.5,
           "anchor_end": 653.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b063",
+          "block_s": 5.5
         }
       ]
     },
@@ -669,7 +795,9 @@
           "text": "Titles appear under the rippling water\nthat floods a grungy tile floor:",
           "anchor_time": 0.5,
           "anchor_end": 5.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b001",
+          "block_s": 4.5
         },
         {
           "id": "hunt-02",
@@ -679,7 +807,9 @@
           "text": "\"the orange open movie project presents\"",
           "anchor_time": 5.75,
           "anchor_end": 8.25,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b002",
+          "block_s": 2.5
         },
         {
           "id": "hunt-03",
@@ -689,7 +819,9 @@
           "text": "\"elephants dream\"",
           "anchor_time": 9.75,
           "anchor_end": 11.25,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b003",
+          "block_s": 1.5
         },
         {
           "id": "hunt-04",
@@ -699,7 +831,9 @@
           "text": "An old man’s face is reflected in the water.",
           "anchor_time": 11.5,
           "anchor_end": 14.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b004",
+          "block_s": 2.5
         },
         {
           "id": "hunt-05",
@@ -709,7 +843,9 @@
           "text": "He looks up.",
           "anchor_time": 26.75,
           "anchor_end": 28.75,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b005",
+          "block_s": 2.0
         },
         {
           "id": "hunt-06",
@@ -719,7 +855,9 @@
           "text": "The old man shoves young Emo to the floor of a bridge\nas a flurry of thick black cables zips by.",
           "anchor_time": 30.0,
           "anchor_end": 36.75,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b006",
+          "block_s": 6.75
         },
         {
           "id": "hunt-07",
@@ -729,7 +867,9 @@
           "text": "The cables plug themselves into banks of sockets\nthat line the walls of a steel chasm.",
           "anchor_time": 37.0,
           "anchor_end": 43.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b007",
+          "block_s": 6.0
         },
         {
           "id": "hunt-08",
@@ -739,7 +879,9 @@
           "text": "The ever-changing web of cables moves on.",
           "anchor_time": 43.25,
           "anchor_end": 46.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b008",
+          "block_s": 2.75
         },
         {
           "id": "hunt-09",
@@ -749,7 +891,9 @@
           "text": "Dirty and gaunt, Emo considers.",
           "anchor_time": 48.0,
           "anchor_end": 51.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b009",
+          "block_s": 3.0
         },
         {
           "id": "hunt-10",
@@ -759,7 +903,9 @@
           "text": "Balding and stooped with sideburns and a beak-like nose,\nthe old man, Proog, leads them off the bridge.",
           "anchor_time": 69.0,
           "anchor_end": 75.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b010",
+          "block_s": 6.5
         },
         {
           "id": "hunt-11",
@@ -769,7 +915,9 @@
           "text": "He pulls Emo through a slit in the wall.",
           "anchor_time": 78.0,
           "anchor_end": 80.75,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b011",
+          "block_s": 2.75
         },
         {
           "id": "hunt-12",
@@ -779,7 +927,9 @@
           "text": "They enter a dark, cavernous space\nfilled with cables transmitting bolts of light.",
           "anchor_time": 81.25,
           "anchor_end": 87.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b012",
+          "block_s": 5.75
         },
         {
           "id": "hunt-13",
@@ -789,7 +939,9 @@
           "text": "A suspended path of rectangular panels\ncrosses the immense room.",
           "anchor_time": 89.0,
           "anchor_end": 93.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b013",
+          "block_s": 4.5
         },
         {
           "id": "hunt-14",
@@ -799,7 +951,9 @@
           "text": "They run along the winding path.",
           "anchor_time": 96.0,
           "anchor_end": 98.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b014",
+          "block_s": 2.5
         },
         {
           "id": "hunt-15",
@@ -809,7 +963,9 @@
           "text": "On the overhead wires, small robotic birds\ntake notice and begin to fly about.",
           "anchor_time": 101.0,
           "anchor_end": 106.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b015",
+          "block_s": 5.0
         },
         {
           "id": "hunt-16",
@@ -819,7 +975,9 @@
           "text": "One of the panels flips when Proog steps on it,\nforcing him to run on the underside of the path!",
           "anchor_time": 108.0,
           "anchor_end": 113.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b016",
+          "block_s": 5.5
         },
         {
           "id": "hunt-17",
@@ -829,7 +987,9 @@
           "text": "Emo continues along the top with Proog defying gravity beneath him.",
           "anchor_time": 114.0,
           "anchor_end": 118.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b017",
+          "block_s": 4.0
         },
         {
           "id": "hunt-18",
@@ -839,7 +999,9 @@
           "text": "More panels flip, but the pair keeps running\nwhether right-side up or upside down.",
           "anchor_time": 121.0,
           "anchor_end": 126.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b018",
+          "block_s": 5.0
         },
         {
           "id": "hunt-19",
@@ -849,7 +1011,9 @@
           "text": "The path abruptly ends and the two men slide to a stop.",
           "anchor_time": 132.0,
           "anchor_end": 136.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b019",
+          "block_s": 4.0
         },
         {
           "id": "hunt-20",
@@ -859,7 +1023,9 @@
           "text": "Several birds lift off of their wires,\nand swoop down on them!",
           "anchor_time": 143.0,
           "anchor_end": 147.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b020",
+          "block_s": 4.0
         },
         {
           "id": "hunt-21",
@@ -869,7 +1035,9 @@
           "text": "Everything turns black.",
           "anchor_time": 150.0,
           "anchor_end": 152.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b021",
+          "block_s": 2.0
         },
         {
           "id": "hunt-22",
@@ -879,7 +1047,9 @@
           "text": "A red carpet lies on the floor of a small, dark room.",
           "anchor_time": 156.0,
           "anchor_end": 159.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b022",
+          "block_s": 3.5
         },
         {
           "id": "hunt-23",
@@ -889,7 +1059,9 @@
           "text": "Above it, a single light shines down on an old-fashioned telephone.",
           "anchor_time": 159.75,
           "anchor_end": 164.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b023",
+          "block_s": 4.25
         },
         {
           "id": "hunt-24",
@@ -899,7 +1071,9 @@
           "text": "When Emo reaches out to answer it, Proog slaps his hand.",
           "anchor_time": 164.25,
           "anchor_end": 168.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b024",
+          "block_s": 3.75
         },
         {
           "id": "hunt-25",
@@ -909,7 +1083,9 @@
           "text": "The earpiece is full of carnivorous plants!",
           "anchor_time": 177.0,
           "anchor_end": 180.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b025",
+          "block_s": 3.0
         },
         {
           "id": "hunt-26",
@@ -919,7 +1095,9 @@
           "text": "The projection of a rotary telephone ticks away like a wall clock.",
           "anchor_time": 200.0,
           "anchor_end": 204.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b026",
+          "block_s": 4.0
         },
         {
           "id": "hunt-27",
@@ -929,7 +1107,9 @@
           "text": "In the corner, a typewriter robot taps at its keypad.",
           "anchor_time": 216.5,
           "anchor_end": 221.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b027",
+          "block_s": 5.0
         },
         {
           "id": "hunt-28",
@@ -939,7 +1119,9 @@
           "text": "Proog picks up a sharp walking stick, and leads Emo out of the room.",
           "anchor_time": 221.75,
           "anchor_end": 225.25,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b028",
+          "block_s": 3.5
         },
         {
           "id": "hunt-29",
@@ -949,7 +1131,9 @@
           "text": "Emerging from a drainpipe, a small duck-like robot swims through the air.",
           "anchor_time": 226.0,
           "anchor_end": 232.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b029",
+          "block_s": 6.0
         },
         {
           "id": "hunt-30",
@@ -959,7 +1143,9 @@
           "text": "The two men proceed along a short plank\nthat extends into a vast, dark space.",
           "anchor_time": 233.0,
           "anchor_end": 239.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b030",
+          "block_s": 6.0
         },
         {
           "id": "hunt-31",
@@ -969,7 +1155,9 @@
           "text": "Tossing his walking stick...",
           "anchor_time": 243.0,
           "anchor_end": 245.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b031",
+          "block_s": 2.0
         },
         {
           "id": "hunt-32",
@@ -979,7 +1167,9 @@
           "text": "...Proog steps off the plank!\nRobotic arms rise up to meet his feet!\nThe two men cross the void using the robotic arms like intuitive stepping stones.\nProog dances, kicking his legs and waving his arms.",
           "anchor_time": 247.0,
           "anchor_end": 261.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b032",
+          "block_s": 14.0
         },
         {
           "id": "hunt-33",
@@ -989,7 +1179,9 @@
           "text": "Emo walks calmly behind him.",
           "anchor_time": 263.0,
           "anchor_end": 265.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b033",
+          "block_s": 2.0
         },
         {
           "id": "hunt-34",
@@ -999,7 +1191,9 @@
           "text": "An arm whacks the duck-like robot.",
           "anchor_time": 280.0,
           "anchor_end": 282.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b034",
+          "block_s": 2.0
         },
         {
           "id": "hunt-35",
@@ -1009,7 +1203,9 @@
           "text": "Reaching the other side,\nthey step into a small room\nwith walls resembling mottled marble.",
           "anchor_time": 293.0,
           "anchor_end": 299.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b035",
+          "block_s": 6.0
         },
         {
           "id": "hunt-36",
@@ -1019,7 +1215,9 @@
           "text": "The doors slide shut, and Proog presses a red button.\nThe room lurches - they’re inside an elevator capsule!\nA giant metal arm hurls the capsule up a massive shaft\npast jagged steel doors that shut behind them like mechanical sphincters.",
           "anchor_time": 304.0,
           "anchor_end": 319.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b036",
+          "block_s": 15.0
         },
         {
           "id": "hunt-37",
@@ -1029,7 +1227,9 @@
           "text": "Up above, a robotic bird pecks at a scrap of metal.\nThe capsule whips by into the grip of another giant arm.",
           "anchor_time": 321.0,
           "anchor_end": 329.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b037",
+          "block_s": 8.0
         },
         {
           "id": "hunt-38",
@@ -1039,7 +1239,9 @@
           "text": "They’re launched further up the shaft.\nThe capsule breaks apart leaving Proog and Emo on a fast-moving platform.",
           "anchor_time": 333.0,
           "anchor_end": 340.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b038",
+          "block_s": 7.0
         },
         {
           "id": "hunt-39",
@@ -1049,7 +1251,9 @@
           "text": "Proog watches the walls of the shaft whip by.",
           "anchor_time": 347.0,
           "anchor_end": 349.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b039",
+          "block_s": 2.5
         },
         {
           "id": "hunt-40",
@@ -1059,7 +1263,9 @@
           "text": "The platform rises into a concave land dotted with steel towers.",
           "anchor_time": 354.0,
           "anchor_end": 359.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b040",
+          "block_s": 5.0
         },
         {
           "id": "hunt-41",
@@ -1069,7 +1275,9 @@
           "text": "They descend down another shaft.",
           "anchor_time": 380.0,
           "anchor_end": 382.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b041",
+          "block_s": 2.0
         },
         {
           "id": "hunt-42",
@@ -1079,7 +1287,9 @@
           "text": "The platform lands on a narrow bridge.\nWires tumble in glass drums beneath their feet,\nwhile movie projectors with legs lumber along beside them.\nProog finds his walking stick, and a door is projected onto the wall.",
           "anchor_time": 385.0,
           "anchor_end": 399.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b042",
+          "block_s": 14.0
         },
         {
           "id": "hunt-43",
@@ -1089,7 +1299,9 @@
           "text": "He presses a button on his walking stick.",
           "anchor_time": 415.0,
           "anchor_end": 417.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b043",
+          "block_s": 2.0
         },
         {
           "id": "hunt-44",
@@ -1099,7 +1311,9 @@
           "text": "The space changes!",
           "anchor_time": 420.0,
           "anchor_end": 421.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b044",
+          "block_s": 1.0
         },
         {
           "id": "hunt-45",
@@ -1109,7 +1323,9 @@
           "text": "They stand in a small, tiled room.",
           "anchor_time": 425.0,
           "anchor_end": 427.5,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b045",
+          "block_s": 2.5
         },
         {
           "id": "hunt-46",
@@ -1119,7 +1335,9 @@
           "text": "Gritting his teeth...",
           "anchor_time": 459.0,
           "anchor_end": 460.25,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b046",
+          "block_s": 1.25
         },
         {
           "id": "hunt-47",
@@ -1129,7 +1347,9 @@
           "text": "...Proog slaps him!",
           "anchor_time": 461.0,
           "anchor_end": 463.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b047",
+          "block_s": 2.0
         },
         {
           "id": "hunt-48",
@@ -1139,7 +1359,9 @@
           "text": "When Emo strides off the room extends to allow it.",
           "anchor_time": 469.0,
           "anchor_end": 472.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b048",
+          "block_s": 3.0
         },
         {
           "id": "hunt-49",
@@ -1149,7 +1371,9 @@
           "text": "Giant metal worms appear!",
           "anchor_time": 483.0,
           "anchor_end": 485.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b049",
+          "block_s": 2.0
         },
         {
           "id": "hunt-50",
@@ -1159,7 +1383,9 @@
           "text": "They break down the walls!",
           "anchor_time": 487.0,
           "anchor_end": 489.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b050",
+          "block_s": 2.0
         },
         {
           "id": "hunt-51",
@@ -1169,7 +1395,9 @@
           "text": "Proog covers his face.",
           "anchor_time": 502.0,
           "anchor_end": 504.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b051",
+          "block_s": 2.0
         },
         {
           "id": "hunt-52",
@@ -1179,7 +1407,9 @@
           "text": "Giant hands rise up behind him!",
           "anchor_time": 506.0,
           "anchor_end": 509.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b052",
+          "block_s": 3.0
         },
         {
           "id": "hunt-53",
@@ -1189,7 +1419,9 @@
           "text": "He dives to the ground, avoiding their grip.\nEmo shrugs, and turns to leave.",
           "anchor_time": 511.0,
           "anchor_end": 517.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b053",
+          "block_s": 6.0
         },
         {
           "id": "hunt-54",
@@ -1199,7 +1431,9 @@
           "text": "Grabbing his walking stick, Proog leaps up, and clubs him over the head!\nWhen Emo collapses, the hands and worms wither and fall.",
           "anchor_time": 519.0,
           "anchor_end": 529.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b054",
+          "block_s": 10.0
         },
         {
           "id": "hunt-55",
@@ -1209,7 +1443,9 @@
           "text": "Kneeling beside Emo’s body, Proog hangs his head.",
           "anchor_time": 540.0,
           "anchor_end": 544.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b055",
+          "block_s": 4.0
         },
         {
           "id": "hunt-56",
@@ -1219,7 +1455,9 @@
           "text": "Emo’s hand lies motionless atop the tangle of lifeless metal worms.",
           "anchor_time": 546.0,
           "anchor_end": 551.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b056",
+          "block_s": 5.0
         },
         {
           "id": "hunt-57",
@@ -1229,7 +1467,9 @@
           "text": "Orange Open Movie Team:\nDirector - Bassam Kurdali,\nArt Director - Andreas Goralczyk,\nLead Artists - Matt Ebb, Bastian Salmela, Lee Salvemini,\nTechnical Director - Toni Alatalo.",
           "anchor_time": 566.0,
           "anchor_end": 584.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b057",
+          "block_s": 18.0
         },
         {
           "id": "hunt-58",
@@ -1239,7 +1479,9 @@
           "text": "Audio Description:\nJJ Hunt,\nMusic and Sound Design:\nJan Morgenstern.",
           "anchor_time": 584.5,
           "anchor_end": 591.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b058",
+          "block_s": 6.5
         },
         {
           "id": "hunt-59",
@@ -1249,7 +1491,9 @@
           "text": "Emo:\nCas Jansen,\nProog:\nTygo Gernandt.",
           "anchor_time": 591.5,
           "anchor_end": 597.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b059",
+          "block_s": 5.5
         },
         {
           "id": "hunt-60",
@@ -1259,7 +1503,9 @@
           "text": "Screenplay:\nPepijn Zwanenberg,\nOriginal Concept & Scenario:\nAndreas Goralczyk,\nBassam Kurdali,\nTon Roosendaal.",
           "anchor_time": 599.0,
           "anchor_end": 610.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b060",
+          "block_s": 11.0
         },
         {
           "id": "hunt-61",
@@ -1269,7 +1515,9 @@
           "text": "Elephants Dream has been realized with financial support from:\nThe Netherlands Film Fund,\nMondriaan Foundation,\nVSBfonds,\nUni-Verse / EU Sixth Framework Programme",
           "anchor_time": 610.5,
           "anchor_end": 623.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b061",
+          "block_s": 12.5
         },
         {
           "id": "hunt-62",
@@ -1279,7 +1527,9 @@
           "text": "Produced By Ton Roosendaal.\nCopyright 2006,\nNetherlands Media Art Institute / Montevideo,\nBlender Foundation",
           "anchor_time": 623.5,
           "anchor_end": 633.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b062",
+          "block_s": 9.5
         },
         {
           "id": "hunt-63",
@@ -1289,7 +1539,9 @@
           "text": "This audio description track is published\nunder a Creative Commons License.\nFor details see www.jjhunt.com",
           "anchor_time": 633.5,
           "anchor_end": 643.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b063",
+          "block_s": 9.5
         },
         {
           "id": "hunt-64",
@@ -1299,7 +1551,9 @@
           "text": "This movie is published\nunder a Creative Commons License.\nFor details see www.elephantsdream.org",
           "anchor_time": 644.0,
           "anchor_end": 653.0,
-          "placement": "timed"
+          "placement": "timed",
+          "block": "b064",
+          "block_s": 9.0
         }
       ]
     }

@@ -239,7 +239,7 @@ def test_facts_inherit_their_line_and_problems_are_listed():
     out, problems = facts_mod.facts_of({}, "p", cues, answers)
     assert out == [{"id": "p-01.1", "ref_cue_id": "p-01", "source": "p", "text": "A man sits.",
                     "kind": "visual", "anchor_time": 3.0, "anchor_end": 5.0,
-                    "placement": "timed"}]  # fmt: skip
+                    "placement": "timed", "block": None, "block_s": None}]  # fmt: skip
     assert problems == ["p-01: answered twice (first kept)", "p-02: no answer", "p-02: no facts"]
 
 

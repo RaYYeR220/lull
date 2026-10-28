@@ -6,7 +6,7 @@
   "max_tokens": 8000,
   "chunk": 10,
   "context": 3,
-  "refs_sha256": "940a47ea0e845297ab2d8f7e4d29eec58cb962dfb895554c18736f78ad4af221",
+  "refs_sha256": "3e5832cae0f1cddbb311a66e9e940ff6941e3290666129db870bea7a8f1b98bd",
   "prompt_template_sha256": "510f3e87d48d1174825ab0da21b431326f16ec85afe707822612d63a3cdf03ca",
   "facts": [
     {
@@ -17,27 +17,33 @@
       "kind": "on_screen_text",
       "anchor_time": 0.88,
       "anchor_end": 0.88,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b001",
+      "block_s": 3.84
     },
     {
       "id": "usgs-002.1",
       "ref_cue_id": "usgs-002",
       "source": "usgs_ad",
-      "text": "Video shows the Woodshole Coastal and Marine Science Center main building.",
+      "text": "Video shows the Woods Hole Coastal and Marine Science Center main building.",
       "kind": "visual",
       "anchor_time": 8.08,
       "anchor_end": 8.08,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b002",
+      "block_s": 5.92
     },
     {
       "id": "usgs-003.1",
       "ref_cue_id": "usgs-003",
       "source": "usgs_ad",
-      "text": "Text reads the U.S. Geological Survey, which hold Coastal Marine Science Center.",
+      "text": "Text reads the U.S. Geological Survey, Woods Hole Coastal and Marine Science Center.",
       "kind": "on_screen_text",
       "anchor_time": 8.08,
       "anchor_end": 8.08,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b002",
+      "block_s": 5.92
     },
     {
       "id": "usgs-004.1",
@@ -47,7 +53,9 @@
       "kind": "visual",
       "anchor_time": 12.16,
       "anchor_end": 12.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b003",
+      "block_s": 4.16
     },
     {
       "id": "usgs-005.1",
@@ -57,7 +65,9 @@
       "kind": "visual",
       "anchor_time": 12.32,
       "anchor_end": 12.32,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b003",
+      "block_s": 4.16
     },
     {
       "id": "usgs-006.1",
@@ -67,7 +77,9 @@
       "kind": "on_screen_text",
       "anchor_time": 14.48,
       "anchor_end": 14.48,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b004",
+      "block_s": 3.6
     },
     {
       "id": "usgs-007.1",
@@ -77,7 +89,9 @@
       "kind": "visual",
       "anchor_time": 17.44,
       "anchor_end": 17.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b005",
+      "block_s": 2.16
     },
     {
       "id": "usgs-008.1",
@@ -87,7 +101,9 @@
       "kind": "visual",
       "anchor_time": 18.48,
       "anchor_end": 18.48,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b006",
+      "block_s": 2.64
     },
     {
       "id": "usgs-009.1",
@@ -97,17 +113,33 @@
       "kind": "visual",
       "anchor_time": 22.48,
       "anchor_end": 22.48,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b007",
+      "block_s": 1.92
     },
     {
       "id": "usgs-010.1",
       "ref_cue_id": "usgs-010",
       "source": "usgs_ad",
-      "text": "Map of Cape Cod with arrow pointing to the Woodhole Coastal and Marine Science Center.",
+      "text": "A map of Cape Cod is shown.",
       "kind": "visual",
       "anchor_time": 26.48,
       "anchor_end": 26.48,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b008",
+      "block_s": 2.96
+    },
+    {
+      "id": "usgs-010.2",
+      "ref_cue_id": "usgs-010",
+      "source": "usgs_ad",
+      "text": "An arrow points to the Woods Hole Coastal and Marine Science Center.",
+      "kind": "visual",
+      "anchor_time": 26.48,
+      "anchor_end": 26.48,
+      "placement": "timed",
+      "block": "b008",
+      "block_s": 2.96
     },
     {
       "id": "usgs-011.1",
@@ -117,7 +149,9 @@
       "kind": "visual",
       "anchor_time": 30.32,
       "anchor_end": 30.32,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-011.2",
@@ -127,7 +161,9 @@
       "kind": "visual",
       "anchor_time": 30.32,
       "anchor_end": 30.32,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-012.1",
@@ -137,7 +173,9 @@
       "kind": "visual",
       "anchor_time": 32.56,
       "anchor_end": 32.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-012.2",
@@ -147,7 +185,9 @@
       "kind": "visual",
       "anchor_time": 32.56,
       "anchor_end": 32.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-012.3",
@@ -157,7 +197,9 @@
       "kind": "visual",
       "anchor_time": 32.56,
       "anchor_end": 32.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-013.1",
@@ -167,7 +209,9 @@
       "kind": "visual",
       "anchor_time": 33.84,
       "anchor_end": 33.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-013.2",
@@ -177,7 +221,9 @@
       "kind": "visual",
       "anchor_time": 33.84,
       "anchor_end": 33.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-013.3",
@@ -187,7 +233,9 @@
       "kind": "visual",
       "anchor_time": 33.84,
       "anchor_end": 33.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b009",
+      "block_s": 9.36
     },
     {
       "id": "usgs-014.1",
@@ -197,37 +245,45 @@
       "kind": "visual",
       "anchor_time": 37.84,
       "anchor_end": 37.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b010",
+      "block_s": 5.6
     },
     {
       "id": "usgs-015.1",
       "ref_cue_id": "usgs-015",
       "source": "usgs_ad",
-      "text": "A sign reads 'Woodshole Oceanographic Institution'.",
+      "text": "A sign reads Woods Hole Oceanographic Institution.",
       "kind": "on_screen_text",
       "anchor_time": 37.84,
       "anchor_end": 37.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b010",
+      "block_s": 5.6
     },
     {
       "id": "usgs-016.1",
       "ref_cue_id": "usgs-016",
       "source": "usgs_ad",
-      "text": "Quesset campus is shown.",
-      "kind": "visual",
+      "text": "A sign reads Quissett Campus.",
+      "kind": "on_screen_text",
       "anchor_time": 37.84,
       "anchor_end": 37.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b010",
+      "block_s": 5.6
     },
     {
       "id": "usgs-016.2",
       "ref_cue_id": "usgs-016",
       "source": "usgs_ad",
-      "text": "The address is 360 Woods Hole Road.",
+      "text": "A sign reads 360 Woods Hole Road.",
       "kind": "on_screen_text",
       "anchor_time": 37.84,
       "anchor_end": 37.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b010",
+      "block_s": 5.6
     },
     {
       "id": "usgs-017.1",
@@ -237,7 +293,9 @@
       "kind": "visual",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-017.2",
@@ -247,7 +305,9 @@
       "kind": "visual",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-017.3",
@@ -257,7 +317,9 @@
       "kind": "on_screen_text",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-018.1",
@@ -267,7 +329,9 @@
       "kind": "visual",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-019.1",
@@ -277,7 +341,9 @@
       "kind": "visual",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-019.2",
@@ -287,7 +353,9 @@
       "kind": "visual",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-019.3",
@@ -297,7 +365,9 @@
       "kind": "visual",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-019.4",
@@ -307,7 +377,9 @@
       "kind": "visual",
       "anchor_time": 45.76,
       "anchor_end": 45.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b011",
+      "block_s": 8.56
     },
     {
       "id": "usgs-020.1",
@@ -317,7 +389,9 @@
       "kind": "visual",
       "anchor_time": 49.76,
       "anchor_end": 49.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b012",
+      "block_s": 3.28
     },
     {
       "id": "usgs-020.2",
@@ -327,7 +401,9 @@
       "kind": "visual",
       "anchor_time": 49.76,
       "anchor_end": 49.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b012",
+      "block_s": 3.28
     },
     {
       "id": "usgs-020.3",
@@ -337,7 +413,9 @@
       "kind": "visual",
       "anchor_time": 49.76,
       "anchor_end": 49.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b012",
+      "block_s": 3.28
     },
     {
       "id": "usgs-021.1",
@@ -347,7 +425,9 @@
       "kind": "visual",
       "anchor_time": 50.48,
       "anchor_end": 50.48,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b013",
+      "block_s": 1.52
     },
     {
       "id": "usgs-022.1",
@@ -357,7 +437,9 @@
       "kind": "visual",
       "anchor_time": 59.6,
       "anchor_end": 59.6,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b014",
+      "block_s": 1.36
     },
     {
       "id": "usgs-023.1",
@@ -367,7 +449,9 @@
       "kind": "visual",
       "anchor_time": 66.8,
       "anchor_end": 66.8,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b015",
+      "block_s": 2.08
     },
     {
       "id": "usgs-024.1",
@@ -377,7 +461,9 @@
       "kind": "visual",
       "anchor_time": 73.04,
       "anchor_end": 73.04,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b016",
+      "block_s": 6.08
     },
     {
       "id": "usgs-024.2",
@@ -387,7 +473,9 @@
       "kind": "visual",
       "anchor_time": 73.04,
       "anchor_end": 73.04,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b016",
+      "block_s": 6.08
     },
     {
       "id": "usgs-025.1",
@@ -397,7 +485,9 @@
       "kind": "visual",
       "anchor_time": 75.76,
       "anchor_end": 75.76,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b016",
+      "block_s": 6.08
     },
     {
       "id": "usgs-026.1",
@@ -407,7 +497,9 @@
       "kind": "visual",
       "anchor_time": 76.48,
       "anchor_end": 76.48,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b017",
+      "block_s": 1.92
     },
     {
       "id": "usgs-026.2",
@@ -417,7 +509,9 @@
       "kind": "visual",
       "anchor_time": 76.48,
       "anchor_end": 76.48,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b017",
+      "block_s": 1.92
     },
     {
       "id": "usgs-027.1",
@@ -427,7 +521,9 @@
       "kind": "visual",
       "anchor_time": 77.84,
       "anchor_end": 77.84,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b018",
+      "block_s": 2.16
     },
     {
       "id": "usgs-028.1",
@@ -437,7 +533,9 @@
       "kind": "visual",
       "anchor_time": 82.8,
       "anchor_end": 82.8,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b019",
+      "block_s": 4.0
     },
     {
       "id": "usgs-028.2",
@@ -447,7 +545,9 @@
       "kind": "visual",
       "anchor_time": 82.8,
       "anchor_end": 82.8,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b019",
+      "block_s": 4.0
     },
     {
       "id": "usgs-029.1",
@@ -457,7 +557,9 @@
       "kind": "visual",
       "anchor_time": 82.8,
       "anchor_end": 82.8,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b019",
+      "block_s": 4.0
     },
     {
       "id": "usgs-030.1",
@@ -467,7 +569,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-031.1",
@@ -477,7 +581,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-031.2",
@@ -487,7 +593,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-032.1",
@@ -497,7 +605,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-032.2",
@@ -507,7 +617,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-032.3",
@@ -517,27 +629,33 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-033.1",
       "ref_cue_id": "usgs-033",
       "source": "usgs_ad",
-      "text": "Toolbar text reads DSOS V5 toolbar.",
+      "text": "Toolbar text reads DSAS v5 Toolbar.",
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-034.1",
       "ref_cue_id": "usgs-034",
       "source": "usgs_ad",
-      "text": "Transsex layer selection is shown.",
+      "text": "Transect layer selection.",
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-035.1",
@@ -547,7 +665,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-035.2",
@@ -557,7 +677,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-035.3",
@@ -567,7 +689,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-035.4",
@@ -577,7 +701,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-036.1",
@@ -587,7 +713,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-036.2",
@@ -597,7 +725,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-037.1",
@@ -607,7 +737,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-037.2",
@@ -617,7 +749,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-037.3",
@@ -627,7 +761,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-037.4",
@@ -637,7 +773,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-037.5",
@@ -647,7 +785,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-037.6",
@@ -657,7 +797,9 @@
       "kind": "on_screen_text",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-038.1",
@@ -667,7 +809,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-038.2",
@@ -677,7 +821,9 @@
       "kind": "visual",
       "anchor_time": 86.56,
       "anchor_end": 86.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b020",
+      "block_s": 33.6
     },
     {
       "id": "usgs-039.1",
@@ -687,7 +833,9 @@
       "kind": "visual",
       "anchor_time": 96.24,
       "anchor_end": 96.24,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b021",
+      "block_s": 3.12
     },
     {
       "id": "usgs-040.1",
@@ -697,7 +845,9 @@
       "kind": "visual",
       "anchor_time": 96.24,
       "anchor_end": 96.24,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b021",
+      "block_s": 3.12
     },
     {
       "id": "usgs-041.1",
@@ -707,17 +857,21 @@
       "kind": "visual",
       "anchor_time": 97.2,
       "anchor_end": 97.2,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b022",
+      "block_s": 2.56
     },
     {
       "id": "usgs-042.1",
       "ref_cue_id": "usgs-042",
       "source": "usgs_ad",
-      "text": "U.S. Coastal Wetland Synthesis Geo narrative.",
+      "text": "U.S. Coastal Wetland Synthesis geonarrative appears on screen.",
       "kind": "on_screen_text",
       "anchor_time": 102.32,
       "anchor_end": 102.32,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b023",
+      "block_s": 9.36
     },
     {
       "id": "usgs-043.1",
@@ -727,17 +881,33 @@
       "kind": "on_screen_text",
       "anchor_time": 102.32,
       "anchor_end": 102.32,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b023",
+      "block_s": 9.36
     },
     {
       "id": "usgs-044.1",
       "ref_cue_id": "usgs-044",
       "source": "usgs_ad",
-      "text": "Open tab is National UV VR showing salt marsh vulnerability in Jamaica Bay.",
-      "kind": "visual",
+      "text": "Open tab is National UVVR.",
+      "kind": "on_screen_text",
       "anchor_time": 102.32,
       "anchor_end": 102.32,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b023",
+      "block_s": 9.36
+    },
+    {
+      "id": "usgs-044.2",
+      "ref_cue_id": "usgs-044",
+      "source": "usgs_ad",
+      "text": "National UVVR showing salt marsh vulnerability in Jamaica Bay.",
+      "kind": "on_screen_text",
+      "anchor_time": 102.32,
+      "anchor_end": 102.32,
+      "placement": "timed",
+      "block": "b023",
+      "block_s": 9.36
     },
     {
       "id": "usgs-045.1",
@@ -747,7 +917,9 @@
       "kind": "visual",
       "anchor_time": 106.8,
       "anchor_end": 106.8,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b024",
+      "block_s": 8.32
     },
     {
       "id": "usgs-046.1",
@@ -757,7 +929,9 @@
       "kind": "visual",
       "anchor_time": 106.8,
       "anchor_end": 106.8,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b024",
+      "block_s": 8.32
     },
     {
       "id": "usgs-047.1",
@@ -767,7 +941,9 @@
       "kind": "visual",
       "anchor_time": 111.52,
       "anchor_end": 111.52,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b025",
+      "block_s": 11.76
     },
     {
       "id": "usgs-048.1",
@@ -777,7 +953,9 @@
       "kind": "visual",
       "anchor_time": 111.52,
       "anchor_end": 111.52,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b025",
+      "block_s": 11.76
     },
     {
       "id": "usgs-049.1",
@@ -787,7 +965,9 @@
       "kind": "visual",
       "anchor_time": 111.52,
       "anchor_end": 111.52,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b025",
+      "block_s": 11.76
     },
     {
       "id": "usgs-050.1",
@@ -797,7 +977,9 @@
       "kind": "visual",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-051.1",
@@ -807,7 +989,9 @@
       "kind": "visual",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-051.2",
@@ -817,7 +1001,9 @@
       "kind": "on_screen_text",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-052.1",
@@ -827,7 +1013,9 @@
       "kind": "visual",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-053.1",
@@ -837,7 +1025,9 @@
       "kind": "visual",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-053.2",
@@ -847,7 +1037,9 @@
       "kind": "on_screen_text",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-054.1",
@@ -857,7 +1049,9 @@
       "kind": "visual",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-054.2",
@@ -867,7 +1061,9 @@
       "kind": "on_screen_text",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-055.1",
@@ -877,7 +1073,9 @@
       "kind": "visual",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-055.2",
@@ -887,7 +1085,9 @@
       "kind": "on_screen_text",
       "anchor_time": 116.56,
       "anchor_end": 116.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b026",
+      "block_s": 13.76
     },
     {
       "id": "usgs-056.1",
@@ -897,7 +1097,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-057.1",
@@ -907,7 +1109,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-057.2",
@@ -917,7 +1121,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-057.3",
@@ -927,7 +1133,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-057.4",
@@ -937,47 +1145,57 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-058.1",
       "ref_cue_id": "usgs-058",
       "source": "usgs_ad",
-      "text": "Text reads: this data set contains information on the probabilities of erosion on sandy beaches along the US Gulf and Atlantic Coast string generalized category one through five hurricane conditions.",
+      "text": "Text reads: this data set contains information on the probabilities of erosion on sandy beaches along the US Gulf and Atlantic coasts during generalized category one through five hurricane conditions.",
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-059.1",
       "ref_cue_id": "usgs-059",
       "source": "usgs_ad",
-      "text": "Hurricane induced water levels due to surge in waves are compared to beach and dune elevations.",
-      "kind": "visual",
+      "text": "Hurricane induced water levels due to surge and waves are compared to beach and dune elevations.",
+      "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-059.2",
       "ref_cue_id": "usgs-059",
       "source": "usgs_ad",
-      "text": "Comparison determines the probabilities of collision, overwash, and inundation.",
-      "kind": "visual",
+      "text": "The comparison determines the probabilities of collision, overwash, and inundation.",
+      "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-060.1",
       "ref_cue_id": "usgs-060",
       "source": "usgs_ad",
-      "text": "Related morphologic and hydrogenamic data are also included.",
-      "kind": "visual",
+      "text": "Related morphologic and hydrodynamic data are also included.",
+      "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-061.1",
@@ -987,7 +1205,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-062.1",
@@ -997,7 +1217,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-062.2",
@@ -1007,7 +1229,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-062.3",
@@ -1017,7 +1241,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-062.4",
@@ -1027,7 +1253,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-063.1",
@@ -1037,37 +1265,45 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-063.2",
       "ref_cue_id": "usgs-063",
       "source": "usgs_ad",
-      "text": "Tabs below read New England LAT rates.",
+      "text": "Tabs below read New England LT rates.",
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-063.3",
       "ref_cue_id": "usgs-063",
       "source": "usgs_ad",
-      "text": "Tabs below read Massachusetts statewide LAT rates.",
+      "text": "Tabs below read Massachusetts state-wide LT rates.",
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-063.4",
       "ref_cue_id": "usgs-063",
       "source": "usgs_ad",
-      "text": "Tabs below read mid-Altantic LT rates.",
+      "text": "Tabs below read Mid-Atlantic LT rates.",
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-064.1",
@@ -1077,7 +1313,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-065.1",
@@ -1087,7 +1325,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-066.1",
@@ -1097,17 +1337,21 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-067.1",
       "ref_cue_id": "usgs-067",
       "source": "usgs_ad",
-      "text": "These data provide a preliminary overview at a national scale of the relative susceptibility of the nation's coast to sea level rise through the use of a coastal vulnerability in text, C VI.",
-      "kind": "on_screen_text",
+      "text": "These data provide a preliminary overview at a national scale of the relative susceptibility of the nation's coast to sea level rise through the use of a coastal vulnerability index (CVI).",
+      "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-068.1",
@@ -1117,7 +1361,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-069.1",
@@ -1127,7 +1373,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-069.2",
@@ -1137,7 +1385,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-069.3",
@@ -1147,7 +1397,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-069.4",
@@ -1157,7 +1409,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-069.5",
@@ -1167,7 +1421,9 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-069.6",
@@ -1177,17 +1433,21 @@
       "kind": "on_screen_text",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-070.1",
       "ref_cue_id": "usgs-070",
       "source": "usgs_ad",
-      "text": "The combination of these variables in the association and the rest is cut off.",
-      "kind": "on_screen_text",
+      "text": "The combination of these variables and the association is cut off.",
+      "kind": "sound",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-071.1",
@@ -1197,7 +1457,9 @@
       "kind": "visual",
       "anchor_time": 125.44,
       "anchor_end": 125.44,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b027",
+      "block_s": 60.4
     },
     {
       "id": "usgs-072.1",
@@ -1207,7 +1469,9 @@
       "kind": "visual",
       "anchor_time": 130.16,
       "anchor_end": 130.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b028",
+      "block_s": 3.92
     },
     {
       "id": "usgs-073.1",
@@ -1217,7 +1481,9 @@
       "kind": "visual",
       "anchor_time": 135.12,
       "anchor_end": 135.12,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b029",
+      "block_s": 4.48
     },
     {
       "id": "usgs-074.1",
@@ -1227,7 +1493,9 @@
       "kind": "visual",
       "anchor_time": 135.12,
       "anchor_end": 135.12,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b029",
+      "block_s": 4.48
     },
     {
       "id": "usgs-074.2",
@@ -1237,7 +1505,9 @@
       "kind": "visual",
       "anchor_time": 135.12,
       "anchor_end": 135.12,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b029",
+      "block_s": 4.48
     },
     {
       "id": "usgs-075.1",
@@ -1247,7 +1517,9 @@
       "kind": "visual",
       "anchor_time": 135.12,
       "anchor_end": 135.12,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b029",
+      "block_s": 4.48
     },
     {
       "id": "usgs-076.1",
@@ -1257,7 +1529,9 @@
       "kind": "visual",
       "anchor_time": 139.28,
       "anchor_end": 139.28,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b030",
+      "block_s": 6.0
     },
     {
       "id": "usgs-077.1",
@@ -1267,7 +1541,9 @@
       "kind": "visual",
       "anchor_time": 139.28,
       "anchor_end": 139.28,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b030",
+      "block_s": 6.0
     },
     {
       "id": "usgs-077.2",
@@ -1277,7 +1553,9 @@
       "kind": "visual",
       "anchor_time": 139.28,
       "anchor_end": 139.28,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b030",
+      "block_s": 6.0
     },
     {
       "id": "usgs-078.1",
@@ -1287,7 +1565,9 @@
       "kind": "visual",
       "anchor_time": 141.12,
       "anchor_end": 141.12,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b031",
+      "block_s": 2.48
     },
     {
       "id": "usgs-079.1",
@@ -1297,7 +1577,9 @@
       "kind": "visual",
       "anchor_time": 142.64,
       "anchor_end": 142.64,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b032",
+      "block_s": 1.76
     },
     {
       "id": "usgs-080.1",
@@ -1307,7 +1589,9 @@
       "kind": "visual",
       "anchor_time": 145.2,
       "anchor_end": 145.2,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b033",
+      "block_s": 3.76
     },
     {
       "id": "usgs-080.2",
@@ -1317,7 +1601,9 @@
       "kind": "visual",
       "anchor_time": 145.2,
       "anchor_end": 145.2,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b033",
+      "block_s": 3.76
     },
     {
       "id": "usgs-081.1",
@@ -1327,7 +1613,9 @@
       "kind": "visual",
       "anchor_time": 152.08,
       "anchor_end": 152.08,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b034",
+      "block_s": 2.16
     },
     {
       "id": "usgs-082.1",
@@ -1337,7 +1625,9 @@
       "kind": "visual",
       "anchor_time": 158.16,
       "anchor_end": 158.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b035",
+      "block_s": 4.08
     },
     {
       "id": "usgs-082.2",
@@ -1347,7 +1637,9 @@
       "kind": "visual",
       "anchor_time": 158.16,
       "anchor_end": 158.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b035",
+      "block_s": 4.08
     },
     {
       "id": "usgs-082.3",
@@ -1357,7 +1649,9 @@
       "kind": "visual",
       "anchor_time": 158.16,
       "anchor_end": 158.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b035",
+      "block_s": 4.08
     },
     {
       "id": "usgs-083.1",
@@ -1367,7 +1661,9 @@
       "kind": "visual",
       "anchor_time": 158.16,
       "anchor_end": 158.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b035",
+      "block_s": 4.08
     },
     {
       "id": "usgs-084.1",
@@ -1377,7 +1673,9 @@
       "kind": "visual",
       "anchor_time": 160.56,
       "anchor_end": 160.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-084.2",
@@ -1387,7 +1685,9 @@
       "kind": "visual",
       "anchor_time": 160.56,
       "anchor_end": 160.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-084.3",
@@ -1397,7 +1697,9 @@
       "kind": "visual",
       "anchor_time": 160.56,
       "anchor_end": 160.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-084.4",
@@ -1407,7 +1709,9 @@
       "kind": "visual",
       "anchor_time": 160.56,
       "anchor_end": 160.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-085.1",
@@ -1417,7 +1721,9 @@
       "kind": "visual",
       "anchor_time": 168.16,
       "anchor_end": 168.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-085.2",
@@ -1427,7 +1733,9 @@
       "kind": "visual",
       "anchor_time": 168.16,
       "anchor_end": 168.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-085.3",
@@ -1437,7 +1745,9 @@
       "kind": "visual",
       "anchor_time": 168.16,
       "anchor_end": 168.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-085.4",
@@ -1447,7 +1757,9 @@
       "kind": "visual",
       "anchor_time": 168.16,
       "anchor_end": 168.16,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-086.1",
@@ -1457,7 +1769,9 @@
       "kind": "on_screen_text",
       "anchor_time": 170.56,
       "anchor_end": 170.56,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-087.1",
@@ -1467,7 +1781,9 @@
       "kind": "on_screen_text",
       "anchor_time": 173.311,
       "anchor_end": 173.311,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-088.1",
@@ -1477,7 +1793,9 @@
       "kind": "on_screen_text",
       "anchor_time": 173.311,
       "anchor_end": 173.311,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-089.1",
@@ -1487,7 +1805,9 @@
       "kind": "on_screen_text",
       "anchor_time": 173.311,
       "anchor_end": 173.311,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     },
     {
       "id": "usgs-090.1",
@@ -1497,7 +1817,9 @@
       "kind": "on_screen_text",
       "anchor_time": 173.311,
       "anchor_end": 173.311,
-      "placement": "timed"
+      "placement": "timed",
+      "block": "b036",
+      "block_s": 26.96
     }
   ],
   "calls": [
@@ -1646,5 +1968,82 @@
       "request_sha256": "db9a2bb300efb56c73381ad59bd4471a9d2e52810ec6cecc18198e3658b02095"
     }
   ],
-  "problems": []
+  "problems": [],
+  "reextracted": [
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-002",
+        "usgs-003"
+      ],
+      "request_sha256": "294566a3eb98cdf7a369db66e5b084b0c2149194147e34d06b4b9151e0b278e6"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-010"
+      ],
+      "request_sha256": "b04e987280abfbe7714b941d1f081cd2b5a7a4302fbaf0d7dc2e9c0f5bd76a07"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-015",
+        "usgs-016"
+      ],
+      "request_sha256": "4cdda35ef79620c4cc74a345cbaa63032d2fdc00480ad26fe47ba45d75b33228"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-033",
+        "usgs-034"
+      ],
+      "request_sha256": "9da6b0a06f659e5791c61c75bf477ae835aad9d49f6f569d2f292f2cd4ea2a0e"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-042"
+      ],
+      "request_sha256": "ffd0fffd483cb7392cd64d77b533396f6704dc5e29c29f7cb22c42df618fb306"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-044"
+      ],
+      "request_sha256": "2634e84b76ec972d044e17a233e298bf9a88c9a809fec9ccd6361d2a6c4099fa"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-058",
+        "usgs-059",
+        "usgs-060"
+      ],
+      "request_sha256": "8c0a6e9bbc88a8ea59f750617d1f8ab90e3ed29e8f1b2467fd09b406427b9130"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-063"
+      ],
+      "request_sha256": "b58921e9891e9230dc32fa74723d6ffa6c0505b5598f1696b6b41b13e3e177a3"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-067"
+      ],
+      "request_sha256": "c0f516547c330fd27bef68250e4a0a8566e6de597bc482a2e9135ddab6d2a802"
+    },
+    {
+      "source": "usgs_ad",
+      "lines": [
+        "usgs-070"
+      ],
+      "request_sha256": "1bb76d5e559979e9a84f4499905fd360f5f4d5ec5884d0ce8ab113aed2b363fd"
+    }
+  ]
 }

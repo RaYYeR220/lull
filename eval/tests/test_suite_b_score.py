@@ -39,8 +39,8 @@ def check(git):
 
 def test_pin_checks_the_suite_b_tag_and_its_files():
     git = FakeGit()
-    assert check(git)["tag"] == "suite-b-prereg"
-    assert ("show", "suite-b-prereg:eval/suite_b/facts.sha256") in git.calls
+    assert check(git)["tag"] == "suite-b-prereg-2"
+    assert ("show", "suite-b-prereg-2:eval/suite_b/facts.sha256") in git.calls
     diff = next(c for c in git.calls if c[0] == "diff")
     assert "eval/suite_b/facts" in diff and "eval/suite_b/rules.json" in diff
 
@@ -48,7 +48,7 @@ def test_pin_checks_the_suite_b_tag_and_its_files():
 @pytest.mark.parametrize(
     "override, words",
     [
-        ({"rev-parse": (1, "")}, "suite-b-prereg not found"),
+        ({"rev-parse": (1, "")}, "suite-b-prereg-2 not found"),
         ({"merge-base": (1, "")}, "not an ancestor"),
         ({"show-sha": (0, "fff  suite_b reference set\n")}, "tagged facts.sha256"),
         ({"diff": (0, "eval/suite_b/rules.json\n")}, "rules.json"),
@@ -69,6 +69,9 @@ def test_the_committed_reference_set_passes_its_own_check():
 # -- windows and scope ----------------------------------------------------------------------------
 
 
+W = {"window_s": 15.0, "long_block_s": 30.0, "long_block_window_s": 30.0}
+
+
 def fact(fid, t, end=None, kind="visual", placement="timed", src="pfeiffer"):
     return {"id": fid, "ref_cue_id": fid.split(".")[0], "source": src, "kind": kind,
             "text": f"fact {fid}", "anchor_time": t, "anchor_end": t if end is None else end,
@@ -76,9 +79,9 @@ def fact(fid, t, end=None, kind="visual", placement="timed", src="pfeiffer"):
 
 
 def test_window_spans_the_line_and_a_preface_spans_the_video():
-    assert B.window(fact("p-01.1", 30.0, 40.0), 15.0, 600) == (15.0, 55.0)
-    assert B.window(fact("u-001.1", 12.0), 15.0, 600) == (-3.0, 27.0)
-    assert B.window(fact("u-002.1", 0.0, placement="before_program"), 15.0, 44.9) == (0.0, 44.9)
+    assert B.window(fact("p-01.1", 30.0, 40.0), W, 600) == (15.0, 55.0)
+    assert B.window(fact("u-001.1", 12.0), W, 600) == (-3.0, 27.0)
+    assert B.window(fact("u-002.1", 0.0, placement="before_program"), W, 44.9) == (0.0, 44.9)
 
 
 def test_plays_in_for_intervals_and_freeze_points():
@@ -194,7 +197,7 @@ def test_outcomes_apply_the_window_per_track():
     facts = [fact("p-01.1", 20.0), fact("p-02.1", 95.0), fact("p-03.1", 300.0)]
     verdicts = {"p-01.1": {"cue_ids": ["c1", "x1"]}, "p-02.1": {"cue_ids": ["x1"]},
                 "p-03.1": {"cue_ids": ["c1"]}}  # fmt: skip
-    rows = {r["id"]: r for r in B.outcomes(facts, verdicts, cues, 15.0, 400.0)}
+    rows = {r["id"]: r for r in B.outcomes(facts, verdicts, cues, W, 400.0)}
     assert rows["p-01.1"]["standard_window"] and rows["p-01.1"]["both_window"]
     assert not rows["p-02.1"]["standard_window"] and rows["p-02.1"]["both_window"]
     assert not rows["p-02.1"]["standard_anywhere"] and rows["p-02.1"]["both_anywhere"]

@@ -50,14 +50,16 @@
           "pause_s": 0.08,
           "paused": false,
           "placement": "timed",
-          "anchor_end": 0.88
+          "anchor_end": 0.88,
+          "block": "b001",
+          "block_s": 3.84
         },
         {
           "id": "usgs-002",
           "source": "usgs_ad",
           "start": 8.0,
           "end": 10.72,
-          "text": "Video shows the Woodshole Coastal and Marine Science Center main building.",
+          "text": "Video shows the Woods Hole Coastal and Marine Science Center main building.",
           "ad_words": [
             17,
             27
@@ -70,14 +72,24 @@
           "pause_s": 5.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 8.08
+          "anchor_end": 8.08,
+          "asr_text": "Video shows the Woodshole Coastal and Marine Science Center main building.",
+          "corrections": [
+            {
+              "wrong": "Woodshole Coastal",
+              "right": "Woods Hole Coastal",
+              "evidence": "original narration"
+            }
+          ],
+          "block": "b002",
+          "block_s": 5.92
         },
         {
           "id": "usgs-003",
           "source": "usgs_ad",
           "start": 10.72,
           "end": 13.92,
-          "text": "Text reads the U.S. Geological Survey, which hold Coastal Marine Science Center.",
+          "text": "Text reads the U.S. Geological Survey, Woods Hole Coastal and Marine Science Center.",
           "ad_words": [
             28,
             39
@@ -90,7 +102,17 @@
           "pause_s": 5.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 8.08
+          "anchor_end": 8.08,
+          "asr_text": "Text reads the U.S. Geological Survey, which hold Coastal Marine Science Center.",
+          "corrections": [
+            {
+              "wrong": "which hold Coastal Marine Science Center",
+              "right": "Woods Hole Coastal and Marine Science Center",
+              "evidence": "frame 5.5 s"
+            }
+          ],
+          "block": "b002",
+          "block_s": 5.92
         },
         {
           "id": "usgs-004",
@@ -110,7 +132,9 @@
           "pause_s": 4.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 12.16
+          "anchor_end": 12.16,
+          "block": "b003",
+          "block_s": 4.16
         },
         {
           "id": "usgs-005",
@@ -130,7 +154,9 @@
           "pause_s": 4.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 12.32
+          "anchor_end": 12.32,
+          "block": "b003",
+          "block_s": 4.16
         },
         {
           "id": "usgs-006",
@@ -150,7 +176,9 @@
           "pause_s": 3.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 14.48
+          "anchor_end": 14.48,
+          "block": "b004",
+          "block_s": 3.6
         },
         {
           "id": "usgs-007",
@@ -170,7 +198,9 @@
           "pause_s": 2.16,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 17.44
+          "anchor_end": 17.44,
+          "block": "b005",
+          "block_s": 2.16
         },
         {
           "id": "usgs-008",
@@ -190,7 +220,9 @@
           "pause_s": 2.64,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 18.48
+          "anchor_end": 18.48,
+          "block": "b006",
+          "block_s": 2.64
         },
         {
           "id": "usgs-009",
@@ -210,14 +242,16 @@
           "pause_s": 1.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 22.48
+          "anchor_end": 22.48,
+          "block": "b007",
+          "block_s": 1.92
         },
         {
           "id": "usgs-010",
           "source": "usgs_ad",
           "start": 44.4,
           "end": 47.36,
-          "text": "Map of Cape Cod with arrow pointing to the Woodhole Coastal and Marine Science Center.",
+          "text": "Map of Cape Cod with arrow pointing to the Woods Hole Coastal and Marine Science Center.",
           "ad_words": [
             139,
             153
@@ -230,7 +264,17 @@
           "pause_s": 2.96,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 26.48
+          "anchor_end": 26.48,
+          "asr_text": "Map of Cape Cod with arrow pointing to the Woodhole Coastal and Marine Science Center.",
+          "corrections": [
+            {
+              "wrong": "Woodhole Coastal",
+              "right": "Woods Hole Coastal",
+              "evidence": "original narration"
+            }
+          ],
+          "block": "b008",
+          "block_s": 2.96
         },
         {
           "id": "usgs-011",
@@ -250,7 +294,9 @@
           "pause_s": 5.84,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 30.32
+          "anchor_end": 30.32,
+          "block": "b009",
+          "block_s": 9.36
         },
         {
           "id": "usgs-012",
@@ -270,7 +316,9 @@
           "pause_s": 5.84,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 32.56
+          "anchor_end": 32.56,
+          "block": "b009",
+          "block_s": 9.36
         },
         {
           "id": "usgs-013",
@@ -290,7 +338,9 @@
           "pause_s": 5.84,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 33.84
+          "anchor_end": 33.84,
+          "block": "b009",
+          "block_s": 9.36
         },
         {
           "id": "usgs-014",
@@ -310,14 +360,16 @@
           "pause_s": 5.68,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 37.84
+          "anchor_end": 37.84,
+          "block": "b010",
+          "block_s": 5.6
         },
         {
           "id": "usgs-015",
           "source": "usgs_ad",
           "start": 66.4,
           "end": 68.24,
-          "text": "Sign reading Woodshole Oceanographic Institution.",
+          "text": "Sign reading Woods Hole Oceanographic Institution.",
           "ad_words": [
             214,
             218
@@ -330,14 +382,24 @@
           "pause_s": 5.68,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 37.84
+          "anchor_end": 37.84,
+          "asr_text": "Sign reading Woodshole Oceanographic Institution.",
+          "corrections": [
+            {
+              "wrong": "Woodshole Oceanographic Institution",
+              "right": "Woods Hole Oceanographic Institution",
+              "evidence": "frame 36.5 s"
+            }
+          ],
+          "block": "b010",
+          "block_s": 5.6
         },
         {
           "id": "usgs-016",
           "source": "usgs_ad",
           "start": 68.24,
           "end": 70.0,
-          "text": "Quesset campus, 360 Woods Hole Road.",
+          "text": "Quissett Campus, 360 Woods Hole Road.",
           "ad_words": [
             219,
             224
@@ -350,7 +412,17 @@
           "pause_s": 5.68,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 37.84
+          "anchor_end": 37.84,
+          "asr_text": "Quesset campus, 360 Woods Hole Road.",
+          "corrections": [
+            {
+              "wrong": "Quesset campus",
+              "right": "Quissett Campus",
+              "evidence": "frame 37.5 s"
+            }
+          ],
+          "block": "b010",
+          "block_s": 5.6
         },
         {
           "id": "usgs-017",
@@ -370,7 +442,9 @@
           "pause_s": 8.56,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 45.76
+          "anchor_end": 45.76,
+          "block": "b011",
+          "block_s": 8.56
         },
         {
           "id": "usgs-018",
@@ -390,7 +464,9 @@
           "pause_s": 8.56,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 45.76
+          "anchor_end": 45.76,
+          "block": "b011",
+          "block_s": 8.56
         },
         {
           "id": "usgs-019",
@@ -410,7 +486,9 @@
           "pause_s": 8.56,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 45.76
+          "anchor_end": 45.76,
+          "block": "b011",
+          "block_s": 8.56
         },
         {
           "id": "usgs-020",
@@ -430,7 +508,9 @@
           "pause_s": 3.28,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 49.76
+          "anchor_end": 49.76,
+          "block": "b012",
+          "block_s": 3.28
         },
         {
           "id": "usgs-021",
@@ -450,7 +530,9 @@
           "pause_s": 1.52,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 50.48
+          "anchor_end": 50.48,
+          "block": "b013",
+          "block_s": 1.52
         },
         {
           "id": "usgs-022",
@@ -470,7 +552,9 @@
           "pause_s": 1.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 59.6
+          "anchor_end": 59.6,
+          "block": "b014",
+          "block_s": 1.36
         },
         {
           "id": "usgs-023",
@@ -490,7 +574,9 @@
           "pause_s": 2.08,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 66.8
+          "anchor_end": 66.8,
+          "block": "b015",
+          "block_s": 2.08
         },
         {
           "id": "usgs-024",
@@ -510,7 +596,9 @@
           "pause_s": 3.36,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 73.04
+          "anchor_end": 73.04,
+          "block": "b016",
+          "block_s": 6.08
         },
         {
           "id": "usgs-025",
@@ -530,7 +618,9 @@
           "pause_s": 3.36,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 75.76
+          "anchor_end": 75.76,
+          "block": "b016",
+          "block_s": 6.08
         },
         {
           "id": "usgs-026",
@@ -550,7 +640,9 @@
           "pause_s": 1.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 76.48
+          "anchor_end": 76.48,
+          "block": "b017",
+          "block_s": 1.92
         },
         {
           "id": "usgs-027",
@@ -570,7 +662,9 @@
           "pause_s": 2.16,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 77.84
+          "anchor_end": 77.84,
+          "block": "b018",
+          "block_s": 2.16
         },
         {
           "id": "usgs-028",
@@ -590,7 +684,9 @@
           "pause_s": 4.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 82.8
+          "anchor_end": 82.8,
+          "block": "b019",
+          "block_s": 4.0
         },
         {
           "id": "usgs-029",
@@ -610,7 +706,9 @@
           "pause_s": 4.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 82.8
+          "anchor_end": 82.8,
+          "block": "b019",
+          "block_s": 4.0
         },
         {
           "id": "usgs-030",
@@ -630,7 +728,9 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-031",
@@ -650,7 +750,9 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-032",
@@ -670,14 +772,16 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-033",
           "source": "usgs_ad",
           "start": 152.8,
           "end": 154.72,
-          "text": "Toolbar text reads DSOS V5 toolbar.",
+          "text": "Toolbar text reads DSAS v5 Toolbar.",
           "ad_words": [
             459,
             464
@@ -690,14 +794,24 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "asr_text": "Toolbar text reads DSOS V5 toolbar.",
+          "corrections": [
+            {
+              "wrong": "DSOS V5 toolbar",
+              "right": "DSAS v5 Toolbar",
+              "evidence": "frame 83.5 s"
+            }
+          ],
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-034",
           "source": "usgs_ad",
           "start": 154.72,
           "end": 155.68,
-          "text": "Transsex layer selection.",
+          "text": "Transect layer selection.",
           "ad_words": [
             465,
             467
@@ -710,7 +824,17 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "asr_text": "Transsex layer selection.",
+          "corrections": [
+            {
+              "wrong": "Transsex layer selection",
+              "right": "Transect layer selection",
+              "evidence": "frame 83.5 s"
+            }
+          ],
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-035",
@@ -730,7 +854,9 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-036",
@@ -750,7 +876,9 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-037",
@@ -770,7 +898,9 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-038",
@@ -790,7 +920,9 @@
           "pause_s": 33.6,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 86.56
+          "anchor_end": 86.56,
+          "block": "b020",
+          "block_s": 33.6
         },
         {
           "id": "usgs-039",
@@ -810,7 +942,9 @@
           "pause_s": 3.12,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 96.24
+          "anchor_end": 96.24,
+          "block": "b021",
+          "block_s": 3.12
         },
         {
           "id": "usgs-040",
@@ -830,7 +964,9 @@
           "pause_s": 3.12,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 96.24
+          "anchor_end": 96.24,
+          "block": "b021",
+          "block_s": 3.12
         },
         {
           "id": "usgs-041",
@@ -850,14 +986,16 @@
           "pause_s": 2.8,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 97.2
+          "anchor_end": 97.2,
+          "block": "b022",
+          "block_s": 2.56
         },
         {
           "id": "usgs-042",
           "source": "usgs_ad",
           "start": 197.92,
           "end": 199.52,
-          "text": "U.S. Coastal Wetland Synthesis Geo narrative.",
+          "text": "U.S. Coastal Wetland Synthesis geonarrative.",
           "ad_words": [
             582,
             587
@@ -870,7 +1008,17 @@
           "pause_s": 9.36,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 102.32
+          "anchor_end": 102.32,
+          "asr_text": "U.S. Coastal Wetland Synthesis Geo narrative.",
+          "corrections": [
+            {
+              "wrong": "Geo narrative",
+              "right": "geonarrative",
+              "evidence": "frame 100 s"
+            }
+          ],
+          "block": "b023",
+          "block_s": 9.36
         },
         {
           "id": "usgs-043",
@@ -890,14 +1038,16 @@
           "pause_s": 9.36,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 102.32
+          "anchor_end": 102.32,
+          "block": "b023",
+          "block_s": 9.36
         },
         {
           "id": "usgs-044",
           "source": "usgs_ad",
           "start": 204.32,
           "end": 207.28,
-          "text": "Open tab is National UV VR showing salt marsh vulnerability in Jamaica Bay.",
+          "text": "Open tab is National UVVR showing salt marsh vulnerability in Jamaica Bay.",
           "ad_words": [
             602,
             614
@@ -910,7 +1060,17 @@
           "pause_s": 9.36,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 102.32
+          "anchor_end": 102.32,
+          "asr_text": "Open tab is National UV VR showing salt marsh vulnerability in Jamaica Bay.",
+          "corrections": [
+            {
+              "wrong": "National UV VR",
+              "right": "National UVVR",
+              "evidence": "frame 100 s"
+            }
+          ],
+          "block": "b023",
+          "block_s": 9.36
         },
         {
           "id": "usgs-045",
@@ -930,7 +1090,9 @@
           "pause_s": 8.32,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 106.8
+          "anchor_end": 106.8,
+          "block": "b024",
+          "block_s": 8.32
         },
         {
           "id": "usgs-046",
@@ -950,7 +1112,9 @@
           "pause_s": 8.32,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 106.8
+          "anchor_end": 106.8,
+          "block": "b024",
+          "block_s": 8.32
         },
         {
           "id": "usgs-047",
@@ -970,7 +1134,9 @@
           "pause_s": 11.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 111.52
+          "anchor_end": 111.52,
+          "block": "b025",
+          "block_s": 11.76
         },
         {
           "id": "usgs-048",
@@ -990,7 +1156,9 @@
           "pause_s": 11.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 111.52
+          "anchor_end": 111.52,
+          "block": "b025",
+          "block_s": 11.76
         },
         {
           "id": "usgs-049",
@@ -1010,7 +1178,9 @@
           "pause_s": 11.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 111.52
+          "anchor_end": 111.52,
+          "block": "b025",
+          "block_s": 11.76
         },
         {
           "id": "usgs-050",
@@ -1030,7 +1200,9 @@
           "pause_s": 13.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 116.56
+          "anchor_end": 116.56,
+          "block": "b026",
+          "block_s": 13.76
         },
         {
           "id": "usgs-051",
@@ -1050,7 +1222,9 @@
           "pause_s": 13.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 116.56
+          "anchor_end": 116.56,
+          "block": "b026",
+          "block_s": 13.76
         },
         {
           "id": "usgs-052",
@@ -1070,7 +1244,9 @@
           "pause_s": 13.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 116.56
+          "anchor_end": 116.56,
+          "block": "b026",
+          "block_s": 13.76
         },
         {
           "id": "usgs-053",
@@ -1090,7 +1266,9 @@
           "pause_s": 13.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 116.56
+          "anchor_end": 116.56,
+          "block": "b026",
+          "block_s": 13.76
         },
         {
           "id": "usgs-054",
@@ -1110,7 +1288,9 @@
           "pause_s": 13.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 116.56
+          "anchor_end": 116.56,
+          "block": "b026",
+          "block_s": 13.76
         },
         {
           "id": "usgs-055",
@@ -1130,7 +1310,9 @@
           "pause_s": 13.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 116.56
+          "anchor_end": 116.56,
+          "block": "b026",
+          "block_s": 13.76
         },
         {
           "id": "usgs-056",
@@ -1150,7 +1332,9 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-057",
@@ -1170,14 +1354,16 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-058",
           "source": "usgs_ad",
           "start": 266.56,
           "end": 273.28,
-          "text": "Text reads: this data set contains information on the probabilities of erosion on sandy beaches along the US Gulf and Atlantic Coast string generalized category one through five hurricane conditions.",
+          "text": "Text reads: this data set contains information on the probabilities of erosion on sandy beaches along the US Gulf and Atlantic coasts during generalized category one through five hurricane conditions.",
           "ad_words": [
             818,
             847
@@ -1190,14 +1376,24 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "asr_text": "Text reads: this data set contains information on the probabilities of erosion on sandy beaches along the US Gulf and Atlantic Coast string generalized category one through five hurricane conditions.",
+          "corrections": [
+            {
+              "wrong": "Coast string generalized",
+              "right": "coasts during generalized",
+              "evidence": "frame 122 s"
+            }
+          ],
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-059",
           "source": "usgs_ad",
           "start": 273.28,
           "end": 278.72,
-          "text": "Hurricane induced water levels due to surge in waves are compared to beach and dune elevations to determine the probabilities of collision, overwash, and inundation.",
+          "text": "Hurricane induced water levels due to surge and waves are compared to beach and dune elevations to determine the probabilities of collision, overwash, and inundation.",
           "ad_words": [
             848,
             872
@@ -1210,14 +1406,24 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "asr_text": "Hurricane induced water levels due to surge in waves are compared to beach and dune elevations to determine the probabilities of collision, overwash, and inundation.",
+          "corrections": [
+            {
+              "wrong": "surge in waves",
+              "right": "surge and waves",
+              "evidence": "frame 122 s"
+            }
+          ],
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-060",
           "source": "usgs_ad",
           "start": 278.72,
           "end": 281.52,
-          "text": "Related morphologic and hydrogenamic data are also included.",
+          "text": "Related morphologic and hydrodynamic data are also included.",
           "ad_words": [
             873,
             880
@@ -1230,7 +1436,17 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "asr_text": "Related morphologic and hydrogenamic data are also included.",
+          "corrections": [
+            {
+              "wrong": "hydrogenamic",
+              "right": "hydrodynamic",
+              "evidence": "frame 122 s"
+            }
+          ],
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-061",
@@ -1250,7 +1466,9 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-062",
@@ -1270,14 +1488,16 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-063",
           "source": "usgs_ad",
           "start": 290.32,
           "end": 295.52,
-          "text": "Tabs below read Explore Contents, New England LAT rates, Massachusetts statewide LAT rates, and mid-Altantic LT rates.",
+          "text": "Tabs below read Explore Contents, New England LT rates, Massachusetts state-wide LT rates, and Mid-Atlantic LT rates.",
           "ad_words": [
             918,
             934
@@ -1290,7 +1510,27 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "asr_text": "Tabs below read Explore Contents, New England LAT rates, Massachusetts statewide LAT rates, and mid-Altantic LT rates.",
+          "corrections": [
+            {
+              "wrong": "New England LAT rates",
+              "right": "New England LT rates",
+              "evidence": "frame 122 s"
+            },
+            {
+              "wrong": "Massachusetts statewide LAT rates",
+              "right": "Massachusetts state-wide LT rates",
+              "evidence": "frame 122 s"
+            },
+            {
+              "wrong": "mid-Altantic LT rates",
+              "right": "Mid-Atlantic LT rates",
+              "evidence": "frame 122 s"
+            }
+          ],
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-064",
@@ -1310,7 +1550,9 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-065",
@@ -1330,7 +1572,9 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-066",
@@ -1350,14 +1594,16 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-067",
           "source": "usgs_ad",
           "start": 301.36,
           "end": 308.0,
-          "text": "These data provide a preliminary overview at a national scale of the relative susceptibility of the nation's coast to sea level rise through the use of a coastal vulnerability in text, C VI.",
+          "text": "These data provide a preliminary overview at a national scale of the relative susceptibility of the nation's coast to sea level rise through the use of a coastal vulnerability index (CVI).",
           "ad_words": [
             959,
             991
@@ -1370,7 +1616,17 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "asr_text": "These data provide a preliminary overview at a national scale of the relative susceptibility of the nation's coast to sea level rise through the use of a coastal vulnerability in text, C VI.",
+          "corrections": [
+            {
+              "wrong": "coastal vulnerability in text, C VI",
+              "right": "coastal vulnerability index (CVI)",
+              "evidence": "frame 124.5 s"
+            }
+          ],
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-068",
@@ -1390,7 +1646,9 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-069",
@@ -1410,14 +1668,16 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-070",
           "source": "usgs_ad",
           "start": 315.2,
           "end": 318.56,
-          "text": "The combination of these variables in the association and the rest is cut off.",
+          "text": "The combination of these variables and the association and the rest is cut off.",
           "ad_words": [
             1018,
             1031
@@ -1430,7 +1690,17 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "asr_text": "The combination of these variables in the association and the rest is cut off.",
+          "corrections": [
+            {
+              "wrong": "variables in the association",
+              "right": "variables and the association",
+              "evidence": "frame 124.5 s"
+            }
+          ],
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-071",
@@ -1450,7 +1720,9 @@
           "pause_s": 60.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 125.44
+          "anchor_end": 125.44,
+          "block": "b027",
+          "block_s": 60.4
         },
         {
           "id": "usgs-072",
@@ -1470,7 +1742,9 @@
           "pause_s": 3.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 130.16
+          "anchor_end": 130.16,
+          "block": "b028",
+          "block_s": 3.92
         },
         {
           "id": "usgs-073",
@@ -1490,7 +1764,9 @@
           "pause_s": 4.48,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 135.12
+          "anchor_end": 135.12,
+          "block": "b029",
+          "block_s": 4.48
         },
         {
           "id": "usgs-074",
@@ -1510,7 +1786,9 @@
           "pause_s": 4.48,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 135.12
+          "anchor_end": 135.12,
+          "block": "b029",
+          "block_s": 4.48
         },
         {
           "id": "usgs-075",
@@ -1530,7 +1808,9 @@
           "pause_s": 4.48,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 135.12
+          "anchor_end": 135.12,
+          "block": "b029",
+          "block_s": 4.48
         },
         {
           "id": "usgs-076",
@@ -1550,7 +1830,9 @@
           "pause_s": 6.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 139.28
+          "anchor_end": 139.28,
+          "block": "b030",
+          "block_s": 6.0
         },
         {
           "id": "usgs-077",
@@ -1570,7 +1852,9 @@
           "pause_s": 6.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 139.28
+          "anchor_end": 139.28,
+          "block": "b030",
+          "block_s": 6.0
         },
         {
           "id": "usgs-078",
@@ -1590,7 +1874,9 @@
           "pause_s": 2.48,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 141.12
+          "anchor_end": 141.12,
+          "block": "b031",
+          "block_s": 2.48
         },
         {
           "id": "usgs-079",
@@ -1610,7 +1896,9 @@
           "pause_s": 1.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 142.64
+          "anchor_end": 142.64,
+          "block": "b032",
+          "block_s": 1.76
         },
         {
           "id": "usgs-080",
@@ -1630,7 +1918,9 @@
           "pause_s": 3.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 145.2
+          "anchor_end": 145.2,
+          "block": "b033",
+          "block_s": 3.76
         },
         {
           "id": "usgs-081",
@@ -1650,7 +1940,9 @@
           "pause_s": 2.16,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 152.08
+          "anchor_end": 152.08,
+          "block": "b034",
+          "block_s": 2.16
         },
         {
           "id": "usgs-082",
@@ -1670,7 +1962,9 @@
           "pause_s": 4.08,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 158.16
+          "anchor_end": 158.16,
+          "block": "b035",
+          "block_s": 4.08
         },
         {
           "id": "usgs-083",
@@ -1690,7 +1984,9 @@
           "pause_s": 4.08,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 158.16
+          "anchor_end": 158.16,
+          "block": "b035",
+          "block_s": 4.08
         },
         {
           "id": "usgs-084",
@@ -1710,7 +2006,9 @@
           "pause_s": 14.262,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 160.56
+          "anchor_end": 160.56,
+          "block": "b036",
+          "block_s": 26.96
         },
         {
           "id": "usgs-085",
@@ -1730,7 +2028,9 @@
           "pause_s": 14.262,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 168.16
+          "anchor_end": 168.16,
+          "block": "b036",
+          "block_s": 26.96
         },
         {
           "id": "usgs-086",
@@ -1750,7 +2050,9 @@
           "pause_s": 14.262,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 170.56
+          "anchor_end": 170.56,
+          "block": "b036",
+          "block_s": 26.96
         },
         {
           "id": "usgs-087",
@@ -1770,7 +2072,9 @@
           "pause_s": 14.262,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 173.311
+          "anchor_end": 173.311,
+          "block": "b036",
+          "block_s": 26.96
         },
         {
           "id": "usgs-088",
@@ -1790,7 +2094,9 @@
           "pause_s": 14.262,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 173.311
+          "anchor_end": 173.311,
+          "block": "b036",
+          "block_s": 26.96
         },
         {
           "id": "usgs-089",
@@ -1810,7 +2116,9 @@
           "pause_s": 14.262,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 173.311
+          "anchor_end": 173.311,
+          "block": "b036",
+          "block_s": 26.96
         },
         {
           "id": "usgs-090",
@@ -1830,10 +2138,125 @@
           "pause_s": 14.262,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 173.311
+          "anchor_end": 173.311,
+          "block": "b036",
+          "block_s": 26.96
         }
       ]
     }
+  },
+  "asr_corrections": {
+    "applied": 17,
+    "lines": [
+      "usgs-002",
+      "usgs-003",
+      "usgs-010",
+      "usgs-015",
+      "usgs-016",
+      "usgs-033",
+      "usgs-034",
+      "usgs-042",
+      "usgs-044",
+      "usgs-058",
+      "usgs-059",
+      "usgs-060",
+      "usgs-063",
+      "usgs-067",
+      "usgs-070"
+    ],
+    "unresolved": [
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-006",
+        "term": "Signed",
+        "likely": "Sign",
+        "why": "the frame shows the sign itself; neither on-screen text nor narration has the word"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-009",
+        "term": "clover",
+        "likely": "plover (piping plover)",
+        "why": "the frame shows the chicks without a caption; the narration does not name the bird"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-029",
+        "term": "Athymmetry",
+        "likely": "Bathymetry",
+        "why": "the map frame (82-83 s) has no title, only a colour scale; the narration says 'detailed maps'"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-041",
+        "term": "crashed down",
+        "likely": "crouched down",
+        "why": "a posture, not text; no on-screen text in 95-97 s"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-041",
+        "term": "Title Creek",
+        "likely": "tidal creek",
+        "why": "no on-screen text in 95-97 s; the narration does not name the creek"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-049",
+        "term": "Aeros",
+        "likely": "Arrows",
+        "why": "the arrows are drawn, not written; the frame at 110 s has no legend text"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-049",
+        "term": "pescals",
+        "likely": "pascals",
+        "why": "the frame at 110 s shows no pressure unit; the same line also says 'Pascals'"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-053",
+        "term": "Start",
+        "likely": "Star",
+        "why": "the map at 116 s shows a star symbol (not text) next to '1918 M7.2(?) earthquake epicenter?'"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-072",
+        "term": "anti flux",
+        "likely": "eddy flux",
+        "why": "no on-screen text in 126-130 s; the narration does not name the instrument"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-072",
+        "term": "unpounded",
+        "likely": "impounded",
+        "why": "no on-screen text in 126-130 s"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-072",
+        "term": "Well Fleet",
+        "likely": "Wellfleet",
+        "why": "no on-screen text in 126-130 s"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-075",
+        "term": "clover",
+        "likely": "plover (piping plover)",
+        "why": "the frame (135-137 s) shows the bird without a caption"
+      },
+      {
+        "video": "woodshole",
+        "ref_line": "usgs-081",
+        "term": "entries",
+        "likely": "unclear",
+        "why": "no on-screen text; the intended word cannot be recovered"
+      }
+    ]
   },
   "alignment": {
     "method": "difflib.SequenceMatcher on suite_a.text.tokens of both transcripts, repairs: short chance matches <= 2 tokens dropped, near-identical tokens/runs (ratio >= 0.75) matched, describer runs slid along repeats (<= 8 tokens) to sentence edges; describer runs under 2 tokens dropped; paused = AD gap >= original gap + 1.0 s",

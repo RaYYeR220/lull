@@ -50,7 +50,9 @@
           "pause_s": 19.2,
           "paused": true,
           "placement": "before_program",
-          "anchor_end": 0.0
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
         },
         {
           "id": "usgs-002",
@@ -70,7 +72,9 @@
           "pause_s": 19.2,
           "paused": true,
           "placement": "before_program",
-          "anchor_end": 0.0
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
         },
         {
           "id": "usgs-003",
@@ -90,7 +94,9 @@
           "pause_s": 19.2,
           "paused": true,
           "placement": "before_program",
-          "anchor_end": 0.0
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
         },
         {
           "id": "usgs-004",
@@ -110,10 +116,17 @@
           "pause_s": 19.2,
           "paused": true,
           "placement": "before_program",
-          "anchor_end": 0.0
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 19.2
         }
       ]
     }
+  },
+  "asr_corrections": {
+    "applied": 0,
+    "lines": [],
+    "unresolved": []
   },
   "alignment": {
     "method": "difflib.SequenceMatcher on suite_a.text.tokens of both transcripts, repairs: short chance matches <= 2 tokens dropped, near-identical tokens/runs (ratio >= 0.75) matched, describer runs slid along repeats (<= 8 tokens) to sentence edges; describer runs under 2 tokens dropped; paused = AD gap >= original gap + 1.0 s",

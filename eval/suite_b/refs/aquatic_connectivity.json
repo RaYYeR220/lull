@@ -50,7 +50,9 @@
           "pause_s": 16.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 0.0
+          "anchor_end": 0.0,
+          "block": "b001",
+          "block_s": 28.72
         },
         {
           "id": "usgs-002",
@@ -70,7 +72,9 @@
           "pause_s": 16.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 4.8
+          "anchor_end": 4.8,
+          "block": "b001",
+          "block_s": 28.72
         },
         {
           "id": "usgs-003",
@@ -90,7 +94,9 @@
           "pause_s": 16.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 12.72
+          "anchor_end": 12.72,
+          "block": "b001",
+          "block_s": 28.72
         },
         {
           "id": "usgs-004",
@@ -110,7 +116,9 @@
           "pause_s": 16.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 12.72
+          "anchor_end": 12.72,
+          "block": "b001",
+          "block_s": 28.72
         },
         {
           "id": "usgs-005",
@@ -130,7 +138,9 @@
           "pause_s": 5.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 28.16
+          "anchor_end": 28.16,
+          "block": "b002",
+          "block_s": 5.92
         },
         {
           "id": "usgs-006",
@@ -150,7 +160,9 @@
           "pause_s": 3.44,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 42.56
+          "anchor_end": 42.56,
+          "block": "b003",
+          "block_s": 3.44
         },
         {
           "id": "usgs-007",
@@ -170,7 +182,9 @@
           "pause_s": 10.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 49.76
+          "anchor_end": 49.76,
+          "block": "b004",
+          "block_s": 10.4
         },
         {
           "id": "usgs-008",
@@ -190,7 +204,9 @@
           "pause_s": 10.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 49.76
+          "anchor_end": 49.76,
+          "block": "b004",
+          "block_s": 10.4
         },
         {
           "id": "usgs-009",
@@ -210,7 +226,9 @@
           "pause_s": 10.4,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 49.76
+          "anchor_end": 49.76,
+          "block": "b004",
+          "block_s": 10.4
         },
         {
           "id": "usgs-010",
@@ -230,7 +248,9 @@
           "pause_s": 13.44,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 97.44
+          "anchor_end": 97.44,
+          "block": "b005",
+          "block_s": 13.44
         },
         {
           "id": "usgs-011",
@@ -250,7 +270,9 @@
           "pause_s": 13.44,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 97.44
+          "anchor_end": 97.44,
+          "block": "b005",
+          "block_s": 13.44
         },
         {
           "id": "usgs-012",
@@ -270,7 +292,9 @@
           "pause_s": 13.44,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 97.44
+          "anchor_end": 97.44,
+          "block": "b005",
+          "block_s": 13.44
         },
         {
           "id": "usgs-013",
@@ -290,7 +314,9 @@
           "pause_s": 6.32,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 112.08
+          "anchor_end": 112.08,
+          "block": "b006",
+          "block_s": 6.32
         },
         {
           "id": "usgs-014",
@@ -310,7 +336,9 @@
           "pause_s": 3.76,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 119.12
+          "anchor_end": 119.12,
+          "block": "b007",
+          "block_s": 3.76
         },
         {
           "id": "usgs-015",
@@ -330,7 +358,9 @@
           "pause_s": 8.56,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 128.72
+          "anchor_end": 128.72,
+          "block": "b008",
+          "block_s": 8.56
         },
         {
           "id": "usgs-016",
@@ -350,7 +380,9 @@
           "pause_s": 8.56,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 128.72
+          "anchor_end": 128.72,
+          "block": "b008",
+          "block_s": 8.56
         },
         {
           "id": "usgs-017",
@@ -370,7 +402,9 @@
           "pause_s": 5.12,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 165.68
+          "anchor_end": 165.68,
+          "block": "b009",
+          "block_s": 5.12
         },
         {
           "id": "usgs-018",
@@ -390,7 +424,9 @@
           "pause_s": 9.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 184.56
+          "anchor_end": 184.56,
+          "block": "b010",
+          "block_s": 8.96
         },
         {
           "id": "usgs-019",
@@ -410,7 +446,9 @@
           "pause_s": 9.92,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 184.56
+          "anchor_end": 184.56,
+          "block": "b010",
+          "block_s": 8.96
         },
         {
           "id": "usgs-020",
@@ -430,7 +468,9 @@
           "pause_s": 4.8,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 193.76
+          "anchor_end": 193.76,
+          "block": "b011",
+          "block_s": 4.8
         },
         {
           "id": "usgs-021",
@@ -450,7 +490,9 @@
           "pause_s": 8.0,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 220.24
+          "anchor_end": 220.24,
+          "block": "b012",
+          "block_s": 8.0
         },
         {
           "id": "usgs-022",
@@ -470,7 +512,9 @@
           "pause_s": 7.061,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 242.76
+          "anchor_end": 242.76,
+          "block": "b013",
+          "block_s": 29.28
         },
         {
           "id": "usgs-023",
@@ -490,10 +534,32 @@
           "pause_s": 7.061,
           "paused": true,
           "placement": "timed",
-          "anchor_end": 265.054
+          "anchor_end": 265.054,
+          "block": "b013",
+          "block_s": 29.28
         }
       ]
     }
+  },
+  "asr_corrections": {
+    "applied": 0,
+    "lines": [],
+    "unresolved": [
+      {
+        "video": "aquatic_connectivity",
+        "ref_line": "usgs-001",
+        "term": "Word Science",
+        "likely": "words Science",
+        "why": "the logo reads 'science for a changing world'; 'words' is the describer's own word"
+      },
+      {
+        "video": "aquatic_connectivity",
+        "ref_line": "usgs-022",
+        "term": "role.org",
+        "likely": "roll ('Credits roll.')",
+        "why": "the credits are on screen but the describer's verb is not text"
+      }
+    ]
   },
   "alignment": {
     "method": "difflib.SequenceMatcher on suite_a.text.tokens of both transcripts, repairs: short chance matches <= 2 tokens dropped, near-identical tokens/runs (ratio >= 0.75) matched, describer runs slid along repeats (<= 8 tokens) to sentence edges; describer runs under 2 tokens dropped; paused = AD gap >= original gap + 1.0 s",

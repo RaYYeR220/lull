@@ -1,0 +1,358 @@
+{
+  "about": "ASR corrections of the USGS describer lines. A term is corrected only when the on-screen text of a frame of the ORIGINAL video (extracted with ffmpeg, read by Nemotron 3.5 Super VL, python -m suite_b.evidence) or the original video's narration transcript gives the right words; refs.py refuses a correction whose evidence does not contain its right text. Suspicious terms without such evidence stay as heard and are listed under `unresolved`; the scorer also reports recall without the facts that still contain them.",
+  "frames_extracted_with": "ffmpeg version 8.1.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers; ffmpeg -ss T -i FILE -frames:v 1 -q:v 2 (JPEG)",
+  "frames": [
+    {
+      "video": "woodshole",
+      "file": "usgs/woodshole.mp4",
+      "time_s": 5.5,
+      "frame_sha256": "46ed97e6d619a35a9933515abd0c95fdd4a44a76dc65869d6c0d87ca8656a6ee",
+      "reader": "nvidia/Nemotron-3.5-Super-VL",
+      "text": "The U.S. Geological Survey\nWoods Hole Coastal and\nMarine Science Center\nUSGS\nAt the Woods Hole Coastal and Marine\nScience Center,\nUSGS\nMAIN\nENTRANCE"
+    },
+    {
+      "video": "woodshole",
+      "file": "usgs/woodshole.mp4",
+      "time_s": 36.5,
+      "frame_sha256": "0e79916a4c959c959975d0d389317689ff8bc05115f8ecd2d3052e181b7c77be",
+      "reader": "nvidia/Nemotron-3.5-Super-VL",
+      "text": "WOODS HOLE OCEANOGRAPHIC INSTITUTION\nQUISSSETT CAMPUS - 360 Woods Hole Road\nWe have a long history of collaboration\nwith local institutions, as well as other"
+    },
+    {
+      "video": "woodshole",
+      "file": "usgs/woodshole.mp4",
+      "time_s": 37.5,
+      "frame_sha256": "4677d5828c0fe7e8af8d0febe31bfc6336150dee703e46339709312d72aef0c3",
+      "reader": "nvidia/Nemotron-3.5-Super-VL",
+      "text": "WOODS HOLE OCEANOGRAPHIC INSTITUT\nQUISSETT CAMPUS - 360 Woods Ho\nUSGS\nWe have a long history of collaboration\nwith local institutions, as well as other"
+    },
+    {
+      "video": "woodshole",
+      "file": "usgs/woodshole.mp4",
+      "time_s": 83.5,
+      "frame_sha256": "0d7ad30b733a46d49d42eeaf251424292ad77053d95f3cb3dc4802a473f12efe",
+      "reader": "nvidia/Nemotron-3.5-Super-VL",
+      "text": "Table Of Contents\nLayers\nDelmarvaS_SVA_shorelines\nYear_\n1852\n1871\n1911\n1919\n1024\nbasemap\nWorld Imagery\nUSGS\nDSAS\nDIGITAL SHORELINE\nANALYSIS SYSTEM\ndetailed maps, models, tools, forecasts,\nUSGS\nscience for a changing world\n1:113,672\nDSAS v5 Toolbar\nTransect layer selection\nTransects"
+    },
+    {
+      "video": "woodshole",
+      "file": "usgs/woodshole.mp4",
+      "time_s": 100.0,
+      "frame_sha256": "78e4516265cf284b95e89582b1c96e4da0f94e88a0801e85bbd2d3840d841ae1",
+      "reader": "nvidia/Nemotron-3.5-Super-VL",
+      "text": "USGS\nscience for a changing world\nU.S. Coastal Wetland Synthesis\nA geonarrative by USGS\nMotivation\nGeospatial Synthesis\nInteractive Map\nSynthesis Sites\nNational UVVR\nResources and Credits\nFind address or place\nLegend\nUnvegetated to Vegetated Ratio in coastal wetlands along the U.S. Atlantic Coast\n<= 0.001\n0.001 - 0.025\n0.025 - 0.050\n0.050 - 0.100\n0.100 - 0.250\n0.250 - 0.500\n0.500 - 1.000\n1.000 - 1.500\n1mi\n-73.809 40.611 Degrees\nesri A Story Map\nDOI Privacy Policy Legal Accessibility Site Map Contact USGS\nU.S. Department of the Interior USGS Inspector General White House E-Gov No Fear Act FOIA\nnational salt marsh vulnerability;\ndefine the limits of the U.S."
+    },
+    {
+      "video": "woodshole",
+      "file": "usgs/woodshole.mp4",
+      "time_s": 122.0,
+      "frame_sha256": "38ecfed19d3f947dbe5e67dfb012d037cfa7d9aaadd8d370e2f45807961a139b",
+      "reader": "nvidia/Nemotron-3.5-Super-VL",
+      "text": "USGS\nscience for a changing world\nCoastal Change Hazards Portal\nAll\nSearch...\nExtreme Storms\nhome / Coastal change forecasts /\nShoreline Change\nHurricane scenarios\nThis dataset contains information on the probabilities\nof erosion on sandy beaches along the U.S. Gulf and\nAtlantic coasts during generalized category 1-5\nhurricane conditions. Hurricane-induced water levels,\ndue to both surge and waves, are compared to beach\nand dune elevations to determine the probabilities of\ncollision, overwash, and inundation. Related\nmorphologic and hydrodynamic data are also included.\nExplore Contents\nMore Info\nZoom to\nAdd to Bucket\nMore Info\nZoom to\nAdd to Bucket\nNew England LT rates\nExplore Contents\nMassachusetts state-wide LT rates\nCategory 1\nMid-Atlantic LT rates\nCategory 2\nUSGS\nm/yr\n0 to 2\n<2\n10 to 25\n2 to 10\n25 to 50\n-2 to -1\n50 to 75\n-1 to 2\n75 to 90\n2 to 75\n> 90\n> 75\nSTATES\nKansas City\nToronto\nSt. Louis\nIndiana\nCincinnati\nVermont\nWest Virginia\nWashington\nYarmouth\nHamilton\nMissouri\nRochester\nNew York\nKentucky\nBuffalo\nLondon\nNashville\nKnoxville\nGreenville\nNorfolk\nOklahoma City\nMemphis\nTennessee\nNorth Carolina\nRaleigh\nArkansas\nGreenville\nTallahassee\nNorth Carolina\nBirmingham\nAtlanta\nDonna\nSouth Carolina\nDallas\nPennsylvania\nAlabama\nNew Jersey\nGeorgetown\nPittsburgh\nHarrisburg\nTrenton\nAustin\nHouston\nLouisiana\nNew Orleans\nPhiladelphia\nJacksonville\nSan Antonio\nMaryland\nDover\nFlorida\nOrlando\nWest Virginia\nWashington\nAnnapolis\nCharleston\nTampa\nMiami\nVirginia\nRichmond\nGulf of\nMexico\n200 mi\n100 mi"
+    },
+    {
+      "video": "woodshole",
+      "file": "usgs/woodshole.mp4",
+      "time_s": 124.5,
+      "frame_sha256": "d7b0b9d809bd856bd769a28b9d3e0753c21fbf98b189e20aa6dcde494caf88fc",
+      "reader": "nvidia/Nemotron-3.5-Super-VL",
+      "text": "USGS\nscience for a changing world\nCoastal Change Hazards Portal\nAll\nSearch...\nExtreme Storms\nShoreline Change\nSea-level Rise\nhome / ↑\nCoastal Vulnerability Index\nThese data provide a preliminary overview, at a\nNational scale, of the relative susceptibility of the\nNation's coast to sea- level rise through the use of a\ncoastal vulnerability index (CVI). This classification is\nbased upon the following variables: geomorphology,\nregional coastal slope, tide range, wave height, relative\nsea-level rise and shoreline erosion and accretion rates.\nThe combination of these variables and the association\nCoastal Vulnerability\nIndex\nLow\nModerate\nHigh\nVery High\nWisconsin\nHuron\nToronto\nLake Ontario\nNew York\nBuffalo\nRochester\nMilwaukee\nMichigan\nGrand Rapids\nDetroit\nCleveland\nAlbany\nBoston\nPr. Idence\nIowa\nChicago\nPennsylvania\nOhio\nColumbus\nPhiladelphia\nIllinois\nIndianapolis\nWest Virginia\nPittsburgh\nD STATES\nKansas City\nSt Louis\nIndiana\nCincinnati\nLouisiana\nMissouri\nKentucky\nVirginia\nRichmond\nNorfolk\nNashville\nTennessee\nKnoxville\nGreensboro\nRaleigh\nNorth Carolina\nOklahoma City\nMemphis\nArkansas\nGreenville\nCharlotte\nSouth Carolina\nOklahoma\nDallas\nMississippi\nBirmingham\nAtlanta\nGeorgia\nAlabama\n200 km\n100 mi\nAustin\nHouston\nLouisiana\nN\nJacksonville\nUSGS\nchronic erosion, and sea level rise;"
+    }
+  ],
+  "corrections": [
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-002",
+      "wrong": "Woodshole Coastal",
+      "right": "Woods Hole Coastal",
+      "evidence": {
+        "type": "narration",
+        "transcript": "refs/asr/woodshole.json",
+        "text": "At the Woods Hole Coastal and Marine Science Center"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-003",
+      "wrong": "which hold Coastal Marine Science Center",
+      "right": "Woods Hole Coastal and Marine Science Center",
+      "evidence": {
+        "type": "frame",
+        "time_s": 5.5,
+        "text": "Woods Hole Coastal and\nMarine Science Center"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-010",
+      "wrong": "Woodhole Coastal",
+      "right": "Woods Hole Coastal",
+      "evidence": {
+        "type": "narration",
+        "transcript": "refs/asr/woodshole.json",
+        "text": "At the Woods Hole Coastal and Marine Science Center"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-015",
+      "wrong": "Woodshole Oceanographic Institution",
+      "right": "Woods Hole Oceanographic Institution",
+      "evidence": {
+        "type": "frame",
+        "time_s": 36.5,
+        "text": "WOODS HOLE OCEANOGRAPHIC INSTITUTION"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-016",
+      "wrong": "Quesset campus",
+      "right": "Quissett Campus",
+      "evidence": {
+        "type": "frame",
+        "time_s": 37.5,
+        "text": "QUISSETT CAMPUS"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-033",
+      "wrong": "DSOS V5 toolbar",
+      "right": "DSAS v5 Toolbar",
+      "evidence": {
+        "type": "frame",
+        "time_s": 83.5,
+        "text": "DSAS v5 Toolbar"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-034",
+      "wrong": "Transsex layer selection",
+      "right": "Transect layer selection",
+      "evidence": {
+        "type": "frame",
+        "time_s": 83.5,
+        "text": "Transect layer selection"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-042",
+      "wrong": "Geo narrative",
+      "right": "geonarrative",
+      "evidence": {
+        "type": "frame",
+        "time_s": 100.0,
+        "text": "A geonarrative by USGS"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-044",
+      "wrong": "National UV VR",
+      "right": "National UVVR",
+      "evidence": {
+        "type": "frame",
+        "time_s": 100.0,
+        "text": "National UVVR"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-058",
+      "wrong": "Coast string generalized",
+      "right": "coasts during generalized",
+      "evidence": {
+        "type": "frame",
+        "time_s": 122.0,
+        "text": "Atlantic coasts during generalized category 1-5"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-059",
+      "wrong": "surge in waves",
+      "right": "surge and waves",
+      "evidence": {
+        "type": "frame",
+        "time_s": 122.0,
+        "text": "due to both surge and waves"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-060",
+      "wrong": "hydrogenamic",
+      "right": "hydrodynamic",
+      "evidence": {
+        "type": "frame",
+        "time_s": 122.0,
+        "text": "morphologic and hydrodynamic data are also included"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-063",
+      "wrong": "New England LAT rates",
+      "right": "New England LT rates",
+      "evidence": {
+        "type": "frame",
+        "time_s": 122.0,
+        "text": "New England LT rates"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-063",
+      "wrong": "Massachusetts statewide LAT rates",
+      "right": "Massachusetts state-wide LT rates",
+      "evidence": {
+        "type": "frame",
+        "time_s": 122.0,
+        "text": "Massachusetts state-wide LT rates"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-063",
+      "wrong": "mid-Altantic LT rates",
+      "right": "Mid-Atlantic LT rates",
+      "evidence": {
+        "type": "frame",
+        "time_s": 122.0,
+        "text": "Mid-Atlantic LT rates"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-067",
+      "wrong": "coastal vulnerability in text, C VI",
+      "right": "coastal vulnerability index (CVI)",
+      "evidence": {
+        "type": "frame",
+        "time_s": 124.5,
+        "text": "coastal vulnerability index (CVI)"
+      }
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-070",
+      "wrong": "variables in the association",
+      "right": "variables and the association",
+      "evidence": {
+        "type": "frame",
+        "time_s": 124.5,
+        "text": "The combination of these variables and the association"
+      }
+    }
+  ],
+  "unresolved": [
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-006",
+      "term": "Signed",
+      "likely": "Sign",
+      "why": "the frame shows the sign itself; neither on-screen text nor narration has the word"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-009",
+      "term": "clover",
+      "likely": "plover (piping plover)",
+      "why": "the frame shows the chicks without a caption; the narration does not name the bird"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-029",
+      "term": "Athymmetry",
+      "likely": "Bathymetry",
+      "why": "the map frame (82-83 s) has no title, only a colour scale; the narration says 'detailed maps'"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-041",
+      "term": "crashed down",
+      "likely": "crouched down",
+      "why": "a posture, not text; no on-screen text in 95-97 s"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-041",
+      "term": "Title Creek",
+      "likely": "tidal creek",
+      "why": "no on-screen text in 95-97 s; the narration does not name the creek"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-049",
+      "term": "Aeros",
+      "likely": "Arrows",
+      "why": "the arrows are drawn, not written; the frame at 110 s has no legend text"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-049",
+      "term": "pescals",
+      "likely": "pascals",
+      "why": "the frame at 110 s shows no pressure unit; the same line also says 'Pascals'"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-053",
+      "term": "Start",
+      "likely": "Star",
+      "why": "the map at 116 s shows a star symbol (not text) next to '1918 M7.2(?) earthquake epicenter?'"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-072",
+      "term": "anti flux",
+      "likely": "eddy flux",
+      "why": "no on-screen text in 126-130 s; the narration does not name the instrument"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-072",
+      "term": "unpounded",
+      "likely": "impounded",
+      "why": "no on-screen text in 126-130 s"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-072",
+      "term": "Well Fleet",
+      "likely": "Wellfleet",
+      "why": "no on-screen text in 126-130 s"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-075",
+      "term": "clover",
+      "likely": "plover (piping plover)",
+      "why": "the frame (135-137 s) shows the bird without a caption"
+    },
+    {
+      "video": "woodshole",
+      "ref_line": "usgs-081",
+      "term": "entries",
+      "likely": "unclear",
+      "why": "no on-screen text; the intended word cannot be recovered"
+    },
+    {
+      "video": "aquatic_connectivity",
+      "ref_line": "usgs-001",
+      "term": "Word Science",
+      "likely": "words Science",
+      "why": "the logo reads 'science for a changing world'; 'words' is the describer's own word"
+    },
+    {
+      "video": "aquatic_connectivity",
+      "ref_line": "usgs-022",
+      "term": "role.org",
+      "likely": "roll ('Credits roll.')",
+      "why": "the credits are on screen but the describer's verb is not text"
+    }
+  ]
+}
