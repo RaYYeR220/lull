@@ -68,15 +68,15 @@ Against the Lull run's own speech detection (its listen output, diarized turns i
 | elephants_dream | pfeiffer_vtt | 405.7 | 15.6 | 3.9% | display time, not voiced |
 | elephants_dream | hunt_vtt | 328.8 | 5.2 | 1.6% | display time (his voice: hunt_wav) |
 | elephants_dream | hunt_wav | 265.0 | 3.4 | 1.3% | voiced |
-| elephants_dream | lull_extended freeze points inside speech | | 7 | | 0 by construction against its own speech detection |
+| elephants_dream | lull_extended freeze points inside speech | | 7 | | |
 | woodshole | lull_standard | 0.0 | 0.0 | n/a | 0 by construction against its own speech detection |
-| woodshole | lull_extended freeze points inside speech | | 22 | | 0 by construction against its own speech detection |
+| woodshole | lull_extended freeze points inside speech | | 22 | | |
 | woodshole | USGS AD on its own timeline | 257.0 | 0.0 | 0.0% | not comparable (see below); original narration missing from the AD version 13.4 s |
 | aquatic_connectivity | lull_standard | 10.2 | 0.0 | 0.0% | 0 by construction against its own speech detection |
-| aquatic_connectivity | lull_extended freeze points inside speech | | 14 | | 0 by construction against its own speech detection |
+| aquatic_connectivity | lull_extended freeze points inside speech | | 14 | | |
 | aquatic_connectivity | USGS AD on its own timeline | 112.6 | 0.0 | 0.0% | not comparable (see below); original narration missing from the AD version 0.0 s |
 | csc_intro | lull_standard | 4.8 | 0.0 | 0.0% | 0 by construction against its own speech detection |
-| csc_intro | lull_extended freeze points inside speech | | 1 | | 0 by construction against its own speech detection |
+| csc_intro | lull_extended freeze points inside speech | | 1 | | |
 | csc_intro | USGS AD on its own timeline | 19.2 | 0.0 | 0.0% | not comparable (see below); original narration missing from the AD version 0.0 s |
 
 USGS AD lives in pauses the AD version inserts; its own-timeline overlap compares two parts of one transcript and cannot show simultaneous speech, so it is not comparable to a standard track, which has to fit the original's own pauses (see the README).

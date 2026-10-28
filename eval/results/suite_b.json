@@ -22,7 +22,7 @@
   "runs": [
     {
       "video": "elephants_dream",
-      "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\ed2",
+      "path": "ed2",
       "run_id": "final-ed2",
       "offset_s": 0.0,
       "clip": [
@@ -753,7 +753,7 @@
     },
     {
       "video": "woodshole",
-      "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\woodshole",
+      "path": "woodshole",
       "run_id": "final-woodshole",
       "offset_s": 0.0,
       "clip": [
@@ -959,7 +959,7 @@
     },
     {
       "video": "aquatic_connectivity",
-      "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\aquatic_connectivity",
+      "path": "aquatic_connectivity",
       "run_id": "final-aquatic_connectivity",
       "offset_s": 0.0,
       "clip": [
@@ -1141,7 +1141,7 @@
     },
     {
       "video": "csc_intro",
-      "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\csc_intro",
+      "path": "csc_intro",
       "run_id": "final-csc_intro",
       "offset_s": 0.0,
       "clip": [

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -32,6 +33,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import cost_accounting as COST
+import public_paths as P
 import report_schema as S
 from suite_a import claims_diagnosis as CD
 from suite_a import score as A
@@ -43,6 +45,10 @@ README = EVAL_ROOT / "README.md"
 MANUAL = EVAL_ROOT / "known_failures.md"
 RUN_LOG = EVAL_ROOT / "run_log.md"  # kept by hand while the scored runs happen
 OUT_MD = EVAL_ROOT / "RESULTS.md"
+# Suite B's runs live outside the repository; results name them by folder (public_paths)
+SUITE_B_RUNS = Path(
+    os.environ.get("LULL_SUITE_B_RUNS") or EVAL_ROOT.parent.parent / "lull-runs" / "final"
+)
 SOURCES = {"suite_a": "suite_a.json", "suite_b": "suite_b.json",
            "controls_negative": "controls_negative.json", "ablation": "ablation.json"}  # fmt: skip
 SUITE_NAMES = {"suite_a": "Suite A", "suite_b": "Suite B", "controls": "Controls"}
@@ -202,8 +208,15 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
+def _run_folder(path: str, root: Path) -> Path:
+    """A run folder as a result names it: a local path, or a folder name under `root`."""
+    p = Path(path)
+    return p if p.is_absolute() else Path(root) / p
+
+
 def known_failures(inc: dict, readme_text: str, manual_text: str,
-                   suite_a_runs: Path = A.RUNS) -> list[dict]:  # fmt: skip
+                   suite_a_runs: Path = A.RUNS,
+                   suite_b_runs: Path = SUITE_B_RUNS) -> list[dict]:  # fmt: skip
     out: list[dict] = []
     held: list[tuple[str, list[Path]]] = []
     if "suite_a" in inc:
@@ -227,7 +240,7 @@ def known_failures(inc: dict, readme_text: str, manual_text: str,
                 out.append({"title": f"Suite B {v['video']}: "
                                      f"{_plural(len(probs), 'judge problem')}",
                             "detail": "; ".join(probs[:5]) + "."})  # fmt: skip
-        held.append(("Suite B", [Path(r["path"]) / "manifest.json"
+        held.append(("Suite B", [_run_folder(r["path"], suite_b_runs) / "manifest.json"
                                  for r in inc["suite_b"].get("runs", [])]))  # fmt: skip
     for suite, manifests in held:
         counts, found, missing = _held(manifests)
@@ -298,7 +311,7 @@ def benchmarks(inc: dict, failures: list[dict], git_commit: str, generated_at: s
            "known_failures": failures}  # fmt: skip
     if any("_fixture" in v for v in inc.values()):
         out = {"fixture": True, **out}
-    return out
+    return P.public(out)
 
 
 # -- RESULTS.md ------------------------------------------------------------------------------------
@@ -361,10 +374,16 @@ def suite_a_md(a: dict) -> list[str]:
         "| metric | value |", "|---|---|",
         f"| overlap with narration, standard cues (s) | {g['overlap_s_total']:.3f} |",
         f"| extended freeze points inside narration | {g.get('extended_freeze_in_speech')} |",
-        f"| standard cues outside their pause | {g.get('capacity_violations')} |",
+        f"| capacity violations (standard cues outside their pause) | "
+        f"{g.get('capacity_violations')} |",
         f"| visual-fact recall, standard | {pct(g['recall_standard'])} |",
         f"| visual-fact recall, with extended | {pct(g['recall_with_extended'])} |",
         f"| timely recall, with extended | {pct(g.get('timely_recall_with_extended'))} |",
+        f"| exact title match, standard / with extended | "
+        f"{pct(g.get('exact_title_standard'))} / {pct(g.get('exact_title_with_extended'))} |",
+        f"| exact chart-value match, standard / with extended | "
+        f"{pct(g.get('exact_chart_value_standard'))} / "
+        f"{pct(g.get('exact_chart_value_with_extended'))} |",
         f"| hallucination, claims | {pct(g['hallucination_claims'])} |",
         f"| hallucination, cues with an unsupported claim | {pct(g.get('hallucination_cues'))} |",
         f"| absent decoys stated (judge) | {g['decoys_stated']}/{g['decoys_total']} |",
@@ -375,6 +394,9 @@ def suite_a_md(a: dict) -> list[str]:
         f"{_num(cost.get('model_usd_per_min'))}{_ci(cost.get('per_min_ci95'))} |",
         f"| processing seconds per minute | {_num(proc.get('s_per_min'), '{:.1f}')}"
         f"{_ci(proc.get('s_per_min_ci95'), '{:.1f}')} |",
+        "", "Recall by kind of fact, standard / with extended (pre-registered):", "",
+        *[f"- {kind}: {pct(r.get('standard'))} / {pct(r.get('with_extended'))}"
+          for kind, r in sorted((g.get("recall_by_kind") or {}).items())],
         "", "Supplementary (added after the pre-registration):", "",
         "| metric | value |", "|---|---|",
         f"| hallucination, voiced text | {pct(g.get('hallucination_voiced_text'))} |",
@@ -465,6 +487,7 @@ def suite_b_md(b: dict) -> list[str]:
                              f"; agreement {kappa(sj.get('agreement_window'))}")  # fmt: skip
     lines += [x.replace("## ", "### ", 1) if x.startswith("## ") else x
               for x in B.overlap_section(b.get("videos", []))]  # fmt: skip
+    lines += freeze_in_speech(b)
     lines += ["", "### Description density (words per minute of video)", "",
               "| video | side | words | per min |", "|---|---|---|---|"]  # fmt: skip
     for v in b.get("videos", []):
@@ -477,6 +500,50 @@ def suite_b_md(b: dict) -> list[str]:
                      f"{frac(t['sensitivity'])}, near misses rejected {frac(t['specificity'])}, "
                      f"cross-credits {t['cross_credits']}.")  # fmt: skip
     return lines
+
+
+def ablation_reading(comparison: dict) -> str:
+    """One sentence on what changed with verification off: recall with the extended track and
+    whether any hallucination difference's interval excludes 0."""
+
+    def ci_excludes_zero(d: dict) -> bool:
+        lo, hi = d.get("ci95") or [None, None]
+        return lo is not None and (lo > 0 or hi < 0)
+
+    rec = comparison.get("recall_with_extended") or {}
+    hall = {k: d for k, d in comparison.items() if k.startswith(("hallucination", "voiced"))}
+    moved = [k for k, d in hall.items() if ci_excludes_zero(d)]
+    first = "n/a"
+    if rec.get("with") is not None and rec.get("without") is not None:
+        first = (f"With verification off, recall with the extended track went from "
+                 f"{rec['with']:.1%} to {rec['without']:.1%} (the interval of the difference "
+                 f"{'excludes' if ci_excludes_zero(rec) else 'includes'} 0)")  # fmt: skip
+    second = (
+        "unsupported statements did not change significantly (every hallucination "
+        "difference's interval includes 0)"
+        if not moved
+        else "the hallucination differences whose interval excludes 0: " + ", ".join(moved)
+    )
+    return f"{first}, and {second}."
+
+
+def freeze_in_speech(b: dict) -> list[str]:
+    """Extended freeze points inside speech per video (against the reference transcript), next
+    to Suite A's pre-registered bar of 0."""
+    ext = {r["video"]: sum(c["track"] == "extended" for c in r.get("cues", []))
+           for r in b.get("runs", [])}  # fmt: skip
+    parts = []
+    for v in b.get("videos", []):
+        ref = (v.get("overlap") or {}).get("supplementary_against_reference_asr") or {}
+        fz = ref.get("lull_extended_freeze_points_in_speech") or []
+        parts.append(f"{v['video']} {len(fz)} of {ext.get(v['video'], 0)}")
+    if not parts:
+        return []
+    return ["", "Extended freeze points inside speech (against the reference transcript; "
+            "extended cues): " + ", ".join(parts) + ". Suite A pre-registers 0 for its lectures; "
+            "these videos miss that bar. In continuous narration the extended track pauses the "
+            "picture between words, inside a sentence: the narration is paused, not talked over, "
+            "but the sentence is interrupted."]  # fmt: skip
 
 
 def controls_md(inc: dict) -> list[str]:
@@ -524,6 +591,7 @@ def controls_md(inc: dict) -> list[str]:
             o = "n/a" if d["without"] is None else f"{d['without']:.1%}"
             mark = " (headline)" if name == abl.get("headline") else ""
             lines.append(f"| {name}{mark} | {w} | {o} | {diff} |")
+        lines += ["", ablation_reading(abl["comparison"])]
         cs = abl.get("claim_split") or {}
         lines += ["", f"Share of cues carrying the verifier's claim split: with {cs.get('with')}, "
                   f"without {cs.get('without')} (without it, the claims metric is judged per "
@@ -559,8 +627,12 @@ def results_markdown(inc: dict, skipped: dict, failures: list[dict], meta: dict,
         lines += ["**FIXTURE DATA: this page was rendered from test fixtures, not results.**", ""]
     lines += [f"Generated {meta['now']} from commit `{meta['git_commit'][:12]}`"
               f"{' (dirty tree)' if meta['dirty'] else ''} by `eval/report.py` from the complete "
-              "results in `eval/results/`. Method: `eval/README.md`. Every number comes from a "
-              "scorer that checked its pre-registration first; intervals are 95 % percentile "
+              "results in `eval/results/`. Method: `eval/README.md`. Every suite's numbers "
+              "come from a scorer that checked its pre-registration first; the supplementary "
+              "claims breakdown and the cost-accounting draft were added after the scored runs, "
+              "without model calls. The order of pre-registration and runs rests on commit "
+              "ancestry and commit times (each tag names its pinned commit; a tag object's "
+              "own creation time is not the evidence). Intervals are 95 % percentile "
               "bootstraps (10 000 resamples, seed 20261028).", ""]  # fmt: skip
     if not inc:
         lines += ["No complete results yet.", ""]
@@ -612,14 +684,15 @@ def _now(now: str | None) -> str:
 
 def main_text(results: Path = RESULTS, *, git=git_run, readme: str | None = None,
               manual: str | None = None, suite_a_runs: Path = A.RUNS,
-              now: str | None = None, run_log: str | None = None) -> str:  # fmt: skip
+              suite_b_runs: Path = SUITE_B_RUNS, now: str | None = None,
+              run_log: str | None = None) -> str:  # fmt: skip
     """RESULTS.md for the complete results (their pins checked first), with run_log.md
     (kept by hand during the scored runs) at the end."""
     inc, skipped = load_results(results)
     if inc:
         verify_pins(inc, git)
     readme_text, manual_text = _texts(readme, manual)
-    failures = known_failures(inc, readme_text, manual_text, suite_a_runs)
+    failures = known_failures(inc, readme_text, manual_text, suite_a_runs, suite_b_runs)
     meta = {"now": _now(now), "git_commit": git("rev-parse", "HEAD")[1].strip(),
             "dirty": bool(A.dirty(git))}  # fmt: skip
     if run_log is None:
@@ -630,6 +703,7 @@ def main_text(results: Path = RESULTS, *, git=git_run, readme: str | None = None
 
 def write_web(results: Path, out: Path, *, git=git_run, readme: str | None = None,
               manual: str | None = None, suite_a_runs: Path = A.RUNS,
+              suite_b_runs: Path = SUITE_B_RUNS,
               now: str | None = None) -> dict:  # fmt: skip
     """benchmarks.json for the site, or Refused (nothing complete, a dirty tree, a failed pin,
     a file the site's validator would reject)."""
@@ -641,7 +715,7 @@ def write_web(results: Path, out: Path, *, git=git_run, readme: str | None = Non
                       + "; ".join(changes[:8]))  # fmt: skip
     verify_pins(inc, git)
     readme_text, manual_text = _texts(readme, manual)
-    failures = known_failures(inc, readme_text, manual_text, suite_a_runs)
+    failures = known_failures(inc, readme_text, manual_text, suite_a_runs, suite_b_runs)
     doc = benchmarks(inc, failures, git("rev-parse", "HEAD")[1].strip(), _now(now))
     try:
         S.parse_benchmarks(doc)
@@ -663,6 +737,8 @@ def main(argv: list[str] | None = None, *, git=git_run, **kw) -> int:
     ap.add_argument("--out-md", type=Path, default=OUT_MD)
     ap.add_argument("--out-web", type=Path, help="also write the site's benchmarks.json here")
     args = ap.parse_args(argv)
+    for name in P.scrub_folder(args.results):
+        print(f"made the local paths in {name} public")
     if args.out_web:
         doc = write_web(args.results, args.out_web, git=git, **kw)
         print(f"wrote {args.out_web} ({', '.join(doc['suites'])}; "

@@ -27,7 +27,7 @@ ENGINE_SOURCE = "engine/src/lull/ledger.py `PRICES` (unchanged since the ledger'
 JUDGE_SOURCE = ("eval/suite_a/score.py `SECOND_JUDGE_PRICE` (Token Factory "
                 "`/v1/models?verbose=true`, read 2026-10-28)")  # fmt: skip
 NOTES_SOURCE = (
-    "research notes, research-models.md (2026-10-27), condensed from the Token Factory "
+    "the project's research notes on models (2026-10-27), condensed from the Token Factory "
     "model catalog (tokenfactory.nebius.com/api/public/models_info)"
 )
 # USD per 1M tokens (input, cached input, output) as the research notes record the provider's
@@ -106,7 +106,7 @@ def snapshot(db_path: Path, *, now: str) -> dict:
     for t in totals.values():
         t["cost_ledger"] = round(t["cost_ledger"], 6)
     return {
-        "as_of": now, "ledger": "~/.lull/ledger.db", "calls": n,
+        "as_of": now, "ledger": "the engine's model ledger", "calls": n,
         "first_call": _iso(first), "last_call": _iso(last),
         "models": models, "totals": totals,
         "by_day": [{"day": d, **row(*x)} for d, *x in per_day],
@@ -129,9 +129,10 @@ def markdown(doc: dict) -> list[str]:
     lines = [
         "## Cost accounting (draft)", "",
         f"A draft for comparison with the provider's billing, not yet checked against it. "
-        f"Model ledger `{doc['ledger']}` as of {doc['as_of']}: {doc['calls']} calls from "
-        f"{doc.get('first_call') or 'n/a'} to {doc.get('last_call') or 'n/a'} (UTC), every run "
-        "on this machine (engine development, the eval and its judges). `tokens in` is the "
+        f"{doc['ledger'][:1].upper() + doc['ledger'][1:]} as of {doc['as_of']}: {doc['calls']} "
+        f"calls from {doc.get('first_call') or 'n/a'} to {doc.get('last_call') or 'n/a'} (UTC), "
+        "every run on the evaluation machine (engine development, the evaluation and its "
+        "judges). `tokens in` is the "
         "whole prompt as the provider reported it (`usage.prompt_tokens`), cached part "
         "included; `tokens out` is `usage.completion_tokens`. Token Factory total in the "
         f"ledger: {_usd(tf.get('cost_ledger'))}.", "",

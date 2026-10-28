@@ -248,6 +248,7 @@ def test_load_run_maps_a_clip_onto_the_video(tmp_path):
     assert run["speech"] == [(64.0, 66.0), (69.0, 70.0)]
     full = B.load_run("csc_intro", write_run(tmp_path / "f"), 0.0, 30.4)
     assert full["full"]
+    assert run["path"] == "r" and full["path"] == "f"  # outside the repository: folder name
     with pytest.raises(Refused, match="no cues.json"):
         B.load_run("csc_intro", tmp_path / "missing", 0.0, 30.0)
 
