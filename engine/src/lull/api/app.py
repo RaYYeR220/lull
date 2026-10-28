@@ -10,7 +10,7 @@ import mimetypes
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -41,6 +41,14 @@ CONTENT_TYPES = {
 REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:"
 CORS_METHODS = ["GET", "HEAD", "OPTIONS", "POST", "PATCH"]
 CORS_HEADERS = ["Authorization", "Content-Type", "Last-Event-ID"]
+
+
+def no_run() -> LiveError:
+    return LiveError(404, "not_found", "There is no run with that id.")
+
+
+def no_file() -> LiveError:
+    return LiveError(404, "not_found", "There is no such file in this run.")
 
 
 def file_response(target) -> FileResponse:
@@ -108,7 +116,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     def get_run(run_id: str, request: Request):
         found = store.find(run_id)
         if found is None:
-            raise HTTPException(404, "run not found")
+            raise no_run()
         return store.detail(found[1], owner=holds_token(found[1], request))
 
     @app.api_route("/v1/runs/{run_id}/original", methods=["GET", "HEAD"])
@@ -116,7 +124,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         found = store.find(run_id)
         target = store.original(found[1]) if found else None
         if target is None:
-            raise HTTPException(404, "not found")
+            raise no_file()
         return file_response(target)
 
     @app.api_route("/v1/runs/{run_id}/files/{path:path}", methods=["GET", "HEAD"])
@@ -124,7 +132,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         found = store.find(run_id)
         target = store.servable(found[1], path) if found else None
         if target is None:
-            raise HTTPException(404, "not found")
+            raise no_file()
         return file_response(target)
 
     @app.api_route("/v1/runs/{run_id}/cues/{cue_id}/audio", methods=["GET", "HEAD"])
@@ -132,7 +140,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         found = store.find(run_id)
         target = store.cue_audio(found[1], cue_id) if found else None
         if target is None:
-            raise HTTPException(404, "not found")
+            raise no_file()
         return file_response(target)
 
     return app

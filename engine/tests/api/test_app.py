@@ -147,3 +147,21 @@ def test_files_rejected(client, data, path, make_run):
 
 def test_files_unknown_run(client):
     assert client.get("/v1/runs/zzz/files/report.html").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/runs/nope",
+        "/v1/runs/nope/files/report.html",
+        "/v1/runs/r1/files/secret.txt",
+        "/v1/runs/nope/cues/c001/audio",
+        "/v1/runs/r1/cues/c999/audio",
+        "/v1/runs/nope/original",
+    ],
+)
+def test_not_found_has_the_error_shape(client, data, make_run, path):
+    make_run(data / "runs", "r1")
+    r = client.get(path)
+    assert r.status_code == 404
+    assert r.json()["error"] == "not_found" and set(r.json()) == {"error", "message"}
