@@ -1,36 +1,26 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { StatusMark } from "@/components/ui/StatusMark";
 import { Timecode } from "@/components/ui/Timecode";
 import { cx } from "@/lib/cx";
-import type { CueStatus } from "@/lib/showcase";
+import { fitWords, type RunCue } from "@/lib/run-data";
+import { countWords } from "@/lib/studio-budget";
 import styles from "./Watch.module.css";
 
-/** One line of the script, as the page shows it. */
-export type ScriptCue = {
-  id: string;
-  start: number;
-  text: string;
-  status: CueStatus;
-  /** "Cue 3" or "Extended 1". */
-  label: string;
-  /** How it fits: "11 of 13 words", or how long the video waits for an extended line. */
-  fit: string;
-  /** The evidence frame behind the line. */
-  frame: string | null;
-};
+/** The run's evidence frame for a line, or an empty frame when there is none (or it doesn't load). */
+export function EvidenceFrame({ src, className }: { src: string | null; className?: string }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  if (!src || failed === src) return <span className={className} />;
+  // eslint-disable-next-line @next/next/no-img-element -- the run's own 854x480 still, shown small
+  return <img className={className} src={src} alt="" width={854} height={480} loading="lazy" decoding="async" onError={() => setFailed(src)} />;
+}
 
-const Row = memo(function Row({ cue, current, onSeek }: { cue: ScriptCue; current: boolean; onSeek: (cue: ScriptCue) => void }) {
+const Row = memo(function Row({ cue, current, onSeek }: { cue: RunCue; current: boolean; onSeek: (cue: RunCue) => void }) {
   return (
     <li className={cx(styles.line, current && styles.current)} data-line={cue.id} data-status={cue.status}>
       <button type="button" className={styles.lineBtn} aria-current={current ? "true" : undefined} onClick={() => onSeek(cue)}>
-        {cue.frame ? (
-          // eslint-disable-next-line @next/next/no-img-element -- the run's own 854x480 still, shown small
-          <img className={styles.frame} src={cue.frame} alt="" width={854} height={480} loading="lazy" decoding="async" />
-        ) : (
-          <span className={styles.frame} />
-        )}
+        <EvidenceFrame src={cue.frame} className={styles.frame} />
         <span className={styles.when}>
           <Timecode seconds={cue.start} className={styles.tc} />
           <span className={styles.label}>{cue.label}</span>
@@ -38,7 +28,7 @@ const Row = memo(function Row({ cue, current, onSeek }: { cue: ScriptCue; curren
         <span className={styles.said}>{cue.text}</span>
         <span className={styles.verdict}>
           <StatusMark status={cue.status} />
-          <span className={styles.fit}>{cue.fit}</span>
+          <span className={styles.fit}>{fitWords(cue, countWords)}</span>
         </span>
       </button>
     </li>
@@ -55,9 +45,9 @@ export const CueScript = memo(function CueScript({
   onSeek,
   className,
 }: {
-  cues: ScriptCue[];
+  cues: RunCue[];
   active: string | null;
-  onSeek: (cue: ScriptCue) => void;
+  onSeek: (cue: RunCue) => void;
   className?: string;
 }) {
   return (

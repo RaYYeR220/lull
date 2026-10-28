@@ -2,7 +2,7 @@ import type { Ref } from "react";
 import { Door, Gate } from "@/components/ui/Gate";
 import { Glyph } from "@/components/ui/Glyph";
 import { reportUrl, type CueStatus, type RunSummary } from "@/lib/api";
-import { studioHref, watchHref } from "@/lib/routes";
+import { runHref, studioHref } from "@/lib/routes";
 import { clock, usd } from "@/lib/run-format";
 import type { CueView } from "@/lib/run-state";
 import shared from "./shared.module.css";
@@ -90,7 +90,7 @@ export function RunResult({ runId, summary, elapsed, cost, cues, onAgain, ref }:
 
       <div className={styles.actions}>
         <Gate label="Open the result" className={styles.gate}>
-          <Door tone="lit" href={watchHref(runId)} icon={<Glyph name="play" size={11} />}>
+          <Door tone="lit" href={runHref(runId)} icon={<Glyph name="play" size={11} />}>
             Watch it described
           </Door>
           <Door tone="dark" href={studioHref(runId)}>

@@ -40,6 +40,8 @@ export type PlayerProps = {
   label?: string;
   /** Set when the media is on another origin that sends CORS headers. */
   crossOrigin?: "anonymous" | "use-credentials";
+  /** "described": the video's own sound already carries the descriptions, so only mixed audio is offered. */
+  sound?: "described";
   className?: string;
   style?: CSSProperties;
   onModeChange?: (detail: ModeEventDetail) => void;
@@ -60,6 +62,7 @@ type LullPlayerAttributes = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLE
   mode?: string;
   label?: string;
   crossorigin?: string;
+  sound?: string;
 };
 
 declare module "react" {
@@ -87,6 +90,7 @@ export function Player({
   mode,
   label,
   crossOrigin,
+  sound,
   className,
   style,
   onModeChange,
@@ -141,6 +145,7 @@ export function Player({
       mode={mode}
       label={label}
       crossorigin={crossOrigin}
+      sound={sound}
     />
   );
 }

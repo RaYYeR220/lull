@@ -1,51 +1,79 @@
-import type { Showcase } from "@/lib/showcase";
-import { linesInsidePauses, numberedCues, plural, REVIEWED, spend, speechOverlap, voicedCues } from "@/lib/showcase-derive";
+import { REVIEWED, voicedLines, type RunData } from "@/lib/run-data";
+import { plural, spend } from "@/lib/showcase-derive";
 import styles from "./Watch.module.css";
 
 type Check = { name: string; value: string; detail: string; tone?: "good" | "warn" };
 
+/** Seconds of voiced standard lines over speech, worked out from the run's speech spans. */
+function overSpeech(run: RunData): { cues: number; seconds: number } | null {
+  if (!run.speech) return null;
+  let cues = 0;
+  let seconds = 0;
+  for (const c of voicedLines(run)) {
+    if (c.end === null) continue;
+    let mine = 0;
+    for (const [a, b] of run.speech) mine += Math.max(0, Math.min(b, c.end) - Math.max(a, c.start));
+    if (mine > 0) cues += 1;
+    seconds += mine;
+  }
+  return { cues, seconds };
+}
+
 /**
  * What was checked on this run, read from the run itself: timing against speech and the
- * pauses, the frame check, the extended lines, review by a person, and the spend.
+ * pauses, the frame check, the extended lines, review by a person, and the spend. A check the
+ * run's data can't answer is left out.
  */
-export function RunChecks({ showcase: s }: { showcase: Showcase }) {
-  const voiced = voicedCues(s);
-  const all = numberedCues(s);
+export function RunChecks({ run }: { run: RunData }) {
+  const voiced = voicedLines(run);
+  const all = run.cues;
   const extended = all.filter((c) => c.kind === "extended");
   const held = all.filter((c) => c.status === "held").length;
   const passed = all.length - held;
-  const overlap = speechOverlap(s);
-  const inside = linesInsidePauses(s);
-  const used = new Set(voiced.map((c) => c.gap.id)).size;
   const reviewed = all.filter((c) => REVIEWED.has(c.status)).length;
-  const waits = extended.reduce((t, c) => t + (c.end - c.start), 0);
+  const waits = extended.reduce((t, c) => t + (c.end !== null ? c.end - c.start : 0), 0);
 
-  const checks: Check[] = [
-    {
+  const checks: Check[] = [];
+  // the API's own measure when it has one; otherwise the run's speech spans
+  const measured = run.summary?.overlap?.speech ?? null;
+  const computed = overSpeech(run);
+  if (measured !== null || computed) {
+    const seconds = measured ?? computed!.seconds;
+    checks.push({
       name: "Over speech",
-      value: `${overlap.seconds.toFixed(2)} s`,
-      detail: overlap.cues ? `${plural(overlap.cues, "line")} runs into someone speaking.` : "No line is voiced over anyone speaking.",
-      tone: overlap.seconds > 0 ? "warn" : "good",
-    },
-    {
-      name: "Inside its pause",
-      value: `${inside.inside} of ${inside.of}`,
+      value: `${seconds.toFixed(2)} s`,
       detail:
-        (inside.inside === inside.of
+        seconds > 0
+          ? computed && computed.cues
+            ? `${plural(computed.cues, "line")} ${computed.cues === 1 ? "runs" : "run"} into someone speaking.`
+            : "Some of the voiced lines run into someone speaking."
+          : "No line is voiced over anyone speaking.",
+      tone: seconds > 0 ? "warn" : "good",
+    });
+  }
+  const placed = voiced.filter((c) => c.gap && c.end !== null);
+  if (run.gaps && voiced.length && placed.length === voiced.length) {
+    const inside = placed.filter((c) => c.end! <= c.gap!.end + 1e-3).length;
+    const used = new Set(placed.map((c) => c.gap!.id)).size;
+    checks.push({
+      name: "Inside its pause",
+      value: `${inside} of ${voiced.length}`,
+      detail:
+        (inside === voiced.length
           ? "Each voiced line starts and ends inside the pause it was placed in"
-          : `${plural(inside.of - inside.inside, "line")} ${inside.of - inside.inside === 1 ? "runs" : "run"} past the end of its pause`) +
-        `; ${used} of ${s.gaps.length} pauses carry a line, the rest stay quiet.`,
-      tone: inside.inside === inside.of ? "good" : "warn",
-    },
-    {
-      name: "Against the frames",
-      value: `${passed} of ${all.length}`,
-      detail: held
-        ? `${plural(held, "line")} failed the check and ${held === 1 ? "is" : "are"} held for a person, not voiced.`
-        : "Every line was checked claim by claim against the frames it describes before it was voiced.",
-      tone: held ? "warn" : "good",
-    },
-  ];
+          : `${plural(voiced.length - inside, "line")} ${voiced.length - inside === 1 ? "runs" : "run"} past the end of its pause`) +
+        `; ${used} of ${run.gaps.length} pauses carry a line, the rest stay quiet.`,
+      tone: inside === voiced.length ? "good" : "warn",
+    });
+  }
+  checks.push({
+    name: "Passed the frame check",
+    value: `${passed} of ${all.length}`,
+    detail: held
+      ? `${plural(held, "line")} failed the check or ${held === 1 ? "was" : "were"} held for a person, and ${held === 1 ? "is" : "are"} not voiced.`
+      : "Every line was checked claim by claim against the frames it describes before it was voiced.",
+    tone: held ? "warn" : "good",
+  });
   if (extended.length) {
     checks.push({
       name: "Extended",
@@ -60,8 +88,8 @@ export function RunChecks({ showcase: s }: { showcase: Showcase }) {
       ? "Lines a person approved or rewrote in the studio."
       : "The lines are checked by the engine and wait for a person’s review. They are voiced with synthetic speech.",
   });
-  if (s.costUsd !== undefined) {
-    const cost = spend(s.costUsd);
+  if (run.costUsd !== null) {
+    const cost = spend(run.costUsd);
     checks.push({ name: "Model spend", value: cost.figure, detail: "For the full run: every model call made for it, not only its last pass." });
   }
 

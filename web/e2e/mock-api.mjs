@@ -14,17 +14,18 @@
 //     402 409 413 422-format 422-too_long 422-unreadable 429 503
 //     408 429-one_upload                                         the API's JSON refusals
 //   GET /v1/runs/<id>/events: replays the whole run (the drop and reload cases)
+//     resume: the run stopped before it finished, so only its owner may follow it: the edit
+//     token as a Bearer, 403 forbidden without it
 //   POST /v1/runs/<id>/fork: 201 {run_id, edit_token} for ed90 (FORK_ID); 404 for any other id;
 //     fork429: the API's rate-limit refusal
+//   the published runs, their files and the studio's writes: e2e/mock-runs.mjs
 //
 // Run: node e2e/mock-api.mjs [port]   (MOCK_API_PORT also works; default 3218)
 
 import { createServer } from "node:http";
+import { FORK_ID, FORK_TOKEN, RUN_ID, RUN_TOKEN, runRoutes } from "./mock-runs.mjs";
 
 const PORT = Number(process.argv[2] ?? process.env.MOCK_API_PORT ?? 3218);
-const RUN_ID = "live-20261027-214500-a1b2c3";
-const FORK_ID = "live-20261028-091500-f0c4e2";
-const FORK_TOKEN = "tok-fork-e2e-9876543210";
 const STEP_MS = Number(process.env.MOCK_STEP_MS ?? 25);
 
 const PRICES = {
@@ -50,7 +51,7 @@ function script() {
   ];
   const held = { id: "c003", status: "held", text: "A metal door swings open onto a bright white room.", start: 71.24, audio_dur: null, note: "says a door opens; the frames show no door", cached: false };
   const events = [
-    [0, "run", null, { run_id: RUN_ID, duration: 90, options: { mode: "standard", voice: "Sofia" }, edit_token: "tok-e2e-0123456789" }],
+    [0, "run", null, { run_id: RUN_ID, duration: 90, options: { mode: "standard", voice: "Sofia" }, edit_token: RUN_TOKEN }],
     [0.1, "stage_start", "listen", {}],
     [6.5, "stage_end", "listen", { seconds: 6.412, cached: false, words: 187, speakers: 2, speech_s: 41.2, gaps: 5, windows: 4, capacity_words: 140, clamped: 0, has_audio: true }],
     [6.6, "stage_start", "watch", {}],
@@ -192,7 +193,12 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://mock");
   const m = url.pathname.match(/^\/([\w-]+)(\/v1\/.*)$/);
   if (req.method === "OPTIONS") {
-    res.writeHead(204, { ...CORS, "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "*" });
+    // as the API's CORS middleware: Authorization has to be named, a wildcard doesn't cover it
+    res.writeHead(204, {
+      ...CORS,
+      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS, POST, PATCH",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, Last-Event-ID",
+    });
     return res.end();
   }
   if (!m) return json(res, 404, { detail: "Not Found" });
@@ -224,9 +230,19 @@ const server = createServer(async (req, res) => {
     return json(res, 201, { run_id: FORK_ID, edit_token: FORK_TOKEN });
   }
 
+  const send = (status, body, headers = {}) => {
+    json(res, status, body, headers);
+    return true;
+  };
+  const streamRun = (opts) => stream(req, res, opts);
+  if (await runRoutes({ req, res, scenario, route, cors: CORS, send, streamRun })) return;
+
   const follow = route.match(/^\/v1\/runs\/([\w.-]+)\/events$/);
   if (req.method === "GET" && follow) {
     if (follow[1] !== RUN_ID) return json(res, 404, { error: "not_found", message: "There is no run with that id." });
+    // a run that stopped before it finished: following it resumes it, which only its owner may
+    if (scenario.split("--")[0] === "resume" && req.headers.authorization !== `Bearer ${RUN_TOKEN}`)
+      return json(res, 403, { error: "forbidden", message: "Only the person who started this run can resume it." });
     const after = Number(url.searchParams.get("after") ?? req.headers["last-event-id"] ?? -1);
     if (after >= frames(0).length - 1) {
       res.writeHead(204, CORS);

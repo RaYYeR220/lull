@@ -8,6 +8,8 @@
 .runMain{padding-top:calc(var(--head-h) + var(--s-5))}
 /* the lamp hangs over the run's name, beside the picture */
 .runMain::before{background:radial-gradient(34% 48% at 82% 26%,rgb(var(--lamp-rgb) / .10),rgb(var(--lamp-rgb) / .03) 55%,transparent 80%)}
+/* a run with nothing to play (live runs): the lamp hangs over the notice's heading instead */
+.runMain:has([data-run-notice])::before{background:radial-gradient(40% 55% at 22% 32%,rgb(var(--lamp-rgb) / .10),rgb(var(--lamp-rgb) / .03) 55%,transparent 80%)}
 .runHead{min-width:0}
 .runTitle{font-size:clamp(38px,3.4vw,52px)}
 .runLede{margin-top:var(--s-4);font-size:var(--fs-body-s);line-height:var(--lh-body-s)}

@@ -105,10 +105,10 @@ export type RunSummary = {
   extendedProduced: boolean | null;
 };
 
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+export type Obj = Record<string, unknown>;
+export const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+export const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const KNOWN_EVENTS: ReadonlySet<string> = new Set(["run", "stage_start", "stage_end", "call", "cue", "warning", "error", "done"]);
 const META_KEYS = new Set(["type", "stage", "ts", "seq", "seconds", "cached"]);
 
@@ -257,6 +257,18 @@ export type RefusalCode =
   | "invalid"
   | "sample"
   | "not_found"
+  | "forbidden"
+  | "read_only"
+  | "not_ready"
+  | "not_editable"
+  | "lint"
+  | "invalid_transition"
+  | "overlap"
+  | "not_voiced"
+  | "overloaded"
+  | "engine"
+  | "publish_failed"
+  | "fork_failed"
   | "unreachable"
   | "unavailable"
   | "server";
@@ -275,6 +287,19 @@ const API_CODES: ReadonlySet<string> = new Set([
   "invalid",
   "sample",
   "not_found",
+  // the studio's (engine/src/lull/api/studio.py)
+  "forbidden",
+  "read_only",
+  "not_ready",
+  "not_editable",
+  "lint",
+  "invalid_transition",
+  "overlap",
+  "not_voiced",
+  "overloaded",
+  "engine",
+  "publish_failed",
+  "fork_failed",
 ]);
 
 const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
@@ -291,9 +316,35 @@ const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
   invalid: "The request was not accepted.",
   sample: "There is no sample with that id.",
   not_found: "There is no run with that id.",
+  forbidden: "Only the person who started this run can change it. Fork it to edit a copy.",
+  read_only: "Recorded runs are read-only. Fork one to edit a copy of your own.",
+  not_ready: "This run has not been published yet, so there is nothing to edit.",
+  not_editable: "This run cannot be edited.",
+  lint: "This description breaks a writing rule. Fix it and save again.",
+  invalid_transition: "This line can’t be approved as it is. Edit it so it is checked again.",
+  overlap: "Nothing was published: some descriptions would overlap speech, the edge of their pause or each other.",
+  not_voiced: "Nothing was published: some lines have lost their audio. Edit them again.",
+  overloaded: "The studio is busy with other changes. Try again in a few seconds.",
+  engine: "The edit could not be checked.",
+  publish_failed: "Publishing failed.",
+  fork_failed: "The run could not be copied.",
   unreachable: "The live service is not answering.",
   unavailable: "The live service is not available right now.",
   server: "The live service could not complete the request.",
+};
+
+/** A writing-rule finding (the engine's lint): an error stops a save, a warning is advice. */
+export type LintFinding = { rule: string; message: string; span: [number, number] | null; severity: "error" | "warning" };
+
+/** What some refusals carry besides their words. */
+export type RefusalDetail = {
+  /** overlap, not_voiced: the cues that stopped publishing. */
+  cueIds?: string[];
+  /** lint: every finding on the text, and the text as the API checked it (after its autofix). */
+  findings?: LintFinding[];
+  text?: string;
+  /** invalid_transition: the status the cue has. */
+  cueStatus?: string;
 };
 
 export class ApiError extends Error {
@@ -303,15 +354,44 @@ export class ApiError extends Error {
   readonly retryAfter: number | null;
   /** For a budget refusal: which cap ("run", "day", "total", "provider"). */
   readonly scope: string | null;
+  readonly detail: RefusalDetail;
 
-  constructor(init: { status: number; code: RefusalCode; message?: string | null; retryAfter?: number | null; scope?: string | null }) {
+  constructor(init: {
+    status: number;
+    code: RefusalCode;
+    message?: string | null;
+    retryAfter?: number | null;
+    scope?: string | null;
+    detail?: RefusalDetail;
+  }) {
     super(init.message || FALLBACK_MESSAGE[init.code]);
     this.name = "ApiError";
     this.status = init.status;
     this.code = init.code;
     this.retryAfter = init.retryAfter ?? null;
     this.scope = init.scope ?? null;
+    this.detail = init.detail ?? {};
   }
+}
+
+/** The engine's findings, checked: anything that isn't a finding is left out. */
+export function readFindings(raw: unknown): LintFinding[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isObj).flatMap((f) => {
+    const rule = str(f.rule);
+    if (!rule) return [];
+    const span = Array.isArray(f.span) && f.span.length === 2 && f.span.every((n) => Number.isInteger(n)) ? (f.span as [number, number]) : null;
+    return [{ rule, message: str(f.message) ?? "", span, severity: f.severity === "warning" ? ("warning" as const) : ("error" as const) }];
+  });
+}
+
+function readDetail(b: Obj): RefusalDetail {
+  const detail: RefusalDetail = {};
+  if (Array.isArray(b.cue_ids)) detail.cueIds = b.cue_ids.filter((i): i is string => typeof i === "string");
+  if (Array.isArray(b.findings)) detail.findings = readFindings(b.findings);
+  if (typeof b.text === "string") detail.text = b.text;
+  if (typeof b.cue_status === "string") detail.cueStatus = b.cue_status;
+  return detail;
 }
 
 function codeForStatus(status: number): RefusalCode {
@@ -321,6 +401,8 @@ function codeForStatus(status: number): RefusalCode {
       return "invalid";
     case 402:
       return "budget";
+    case 403:
+      return "forbidden";
     case 404:
       return "not_found";
     case 408:
@@ -367,6 +449,7 @@ export async function toApiError(res: Response): Promise<ApiError> {
     message,
     retryAfter: parseRetryAfter(res.headers.get("retry-after")),
     scope: str(b.scope),
+    detail: readDetail(b),
   });
 }
 
@@ -378,7 +461,8 @@ function abortError(signal?: AbortSignal): unknown {
   return signal?.reason ?? new DOMException("The operation was aborted.", "AbortError");
 }
 
-async function request(url: string, init: RequestInit): Promise<Response> {
+/** fetch, with "nothing answered" as an ApiError (code "unreachable"); an abort is rethrown as is. */
+export async function request(url: string, init: RequestInit): Promise<Response> {
   try {
     return await fetch(url, init);
   } catch (e) {
@@ -521,13 +605,56 @@ export async function startRun(
   return readStream(res.body, new Tracker(onEvent), signal);
 }
 
-async function fetchFollow(url: string, tracker: Tracker, signal?: AbortSignal): Promise<StreamEnd> {
+async function fetchFollow(url: string, tracker: Tracker, signal?: AbortSignal, token?: string | null): Promise<StreamEnd> {
   const after = tracker.lastSeq >= 0 ? `?after=${tracker.lastSeq}` : "";
-  const res = await request(url + after, { signal, headers: { Accept: "text/event-stream" }, cache: "no-store" });
+  const headers: Record<string, string> = { Accept: "text/event-stream" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await request(url + after, { signal, headers, cache: "no-store" });
   if (res.status === 204) return tracker.result(tracker.terminal ?? "closed"); // nothing after what was seen
   if (!res.ok) throw await toApiError(res);
   if (!res.body) throw new ApiError({ status: res.status, code: "server" });
   return readStream(res.body, tracker, signal);
+}
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(abortError(signal));
+    const id = setTimeout(() => {
+      signal?.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+    const stop = () => {
+      clearTimeout(id);
+      reject(abortError(signal));
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+  });
+
+/** Between reconnects of a followed stream read with fetch. */
+const RECONNECT_MS = 1000;
+
+/**
+ * Follows with fetch, sending the owner's edit token: the API resumes a run that stopped
+ * before it finished only for its owner, and EventSource can't send an Authorization header.
+ * A cut-off stream is read again from the last event seen (?after=), up to MAX_RECONNECTS
+ * times in a row without progress.
+ */
+async function followWithToken(url: string, tracker: Tracker, token: string, signal?: AbortSignal): Promise<StreamEnd> {
+  let failures = 0;
+  for (;;) {
+    const seen = tracker.lastSeq;
+    let end: StreamEnd;
+    try {
+      end = await fetchFollow(url, tracker, signal, token);
+    } catch (e) {
+      if (!(e instanceof ApiError) || e.code !== "unreachable") throw e;
+      end = tracker.result("dropped");
+    }
+    if (end.end !== "dropped") return end;
+    failures = tracker.lastSeq > seen ? 1 : failures + 1;
+    if (failures >= MAX_RECONNECTS) return end;
+    await sleep(RECONNECT_MS, signal);
+  }
 }
 
 const STREAM_TYPES = ["run", "stage_start", "stage_end", "call", "cue", "warning", "done", "message"] as const;
@@ -540,10 +667,20 @@ const MAX_RECONNECTS = 3;
  * left off (repeats are dropped). When the stream closes for good without a last event, or
  * reconnecting keeps failing, the same URL is fetched once to learn why (a 404, 409 or 402
  * is thrown as an ApiError) or to read whatever is left.
+ *
+ * With the run's edit token (`opts.token`, the owner's), the stream is read with fetch and
+ * the token sent as a Bearer: a run that stopped before it finished is resumed only for its
+ * owner (403 otherwise). A finished run's replay and a run still going are open to anyone.
  */
-export function followRun(id: string, onEvent: (ev: RunEvent) => void, signal?: AbortSignal): Promise<StreamEnd> {
+export function followRun(
+  id: string,
+  onEvent: (ev: RunEvent) => void,
+  signal?: AbortSignal,
+  opts: { token?: string | null } = {},
+): Promise<StreamEnd> {
   const url = `${API_BASE}/v1/runs/${encodeURIComponent(id)}/events`;
   const tracker = new Tracker(onEvent);
+  if (opts.token) return followWithToken(url, tracker, opts.token, signal);
   const ES = typeof EventSource === "function" ? EventSource : null;
   if (!ES) return fetchFollow(url, tracker, signal);
 
@@ -606,12 +743,17 @@ export async function forkRun(runId: string, signal?: AbortSignal): Promise<Fork
 
 const TOKEN_PREFIX = "lull-edit-token:";
 
-/** Keeps a live run's edit token for the Studio, keyed by run id. Storage may be unavailable. */
-export function saveEditToken(runId: string, token: string): void {
+/**
+ * Keeps a live run's edit token for the Studio, keyed by run id. Storage may be unavailable
+ * (private mode, blocked): then it returns false, and the run can be watched but not edited
+ * from this browser.
+ */
+export function saveEditToken(runId: string, token: string): boolean {
   try {
     window.localStorage.setItem(TOKEN_PREFIX + runId, token);
+    return window.localStorage.getItem(TOKEN_PREFIX + runId) === token;
   } catch {
-    // private mode or storage blocked: the run can still be watched, only not edited
+    return false;
   }
 }
 
@@ -622,3 +764,46 @@ export function readEditToken(runId: string): string | null {
     return null;
   }
 }
+
+/** The run ids this browser holds an edit token for. */
+export function editTokenRuns(): string[] {
+  try {
+    const out: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key?.startsWith(TOKEN_PREFIX)) out.push(key.slice(TOKEN_PREFIX.length));
+    }
+    return out.sort();
+  } catch {
+    return [];
+  }
+}
+
+const FORK_PREFIX = "lull-fork:";
+
+/** What this browser remembers about a copy it made: the run it was copied from, and when. */
+export type ForkRecord = { source: string; made: number };
+
+/** Notes a fork, so the studio can say which run it copies and when the API will remove it. */
+export function saveForkRecord(runId: string, record: ForkRecord): void {
+  try {
+    window.localStorage.setItem(FORK_PREFIX + runId, JSON.stringify(record));
+  } catch {
+    // storage blocked: the studio then says copies expire without a time
+  }
+}
+
+export function readForkRecord(runId: string): ForkRecord | null {
+  try {
+    const raw: unknown = JSON.parse(window.localStorage.getItem(FORK_PREFIX + runId) ?? "null");
+    if (isObj(raw) && typeof raw.source === "string" && typeof raw.made === "number" && Number.isFinite(raw.made)) {
+      return { source: raw.source, made: raw.made };
+    }
+  } catch {
+    // unreadable: treated as unknown
+  }
+  return null;
+}
+
+/** The API removes a fork a day after it was made (studio.FORK_TTL_S). */
+export const FORK_TTL_MS = 24 * 3600 * 1000;

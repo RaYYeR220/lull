@@ -2,17 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Player, type PlayerElement } from "@/components/player/Player";
-import { CueScript, type ScriptCue } from "./CueScript";
+import type { RunCue, RunMedia } from "@/lib/run-data";
+import { CueScript } from "./CueScript";
 import styles from "./Watch.module.css";
-
-export type WatchMedia = {
-  src: string;
-  descriptions: string;
-  extended: string;
-  describedAudio?: string;
-  cueAudioBase?: string;
-  cueAudioExt: string;
-};
 
 /** How often the script checks which line the player is on. */
 const FOLLOW_MS = 250;
@@ -31,9 +23,9 @@ export function WatchRun({
   files,
   checks,
 }: {
-  media: WatchMedia;
+  media: RunMedia | null;
   label: string;
-  cues: ScriptCue[];
+  cues: RunCue[];
   head: ReactNode;
   edit: ReactNode;
   files: ReactNode;
@@ -57,7 +49,7 @@ export function WatchRun({
     return () => window.clearInterval(id);
   }, []);
 
-  const seek = useCallback((cue: ScriptCue) => {
+  const seek = useCallback((cue: RunCue) => {
     const el = player.current;
     if (!el?.seek) return;
     el.seek(cue.start);
@@ -73,16 +65,22 @@ export function WatchRun({
     <div className={styles.run}>
       <div className={styles.head}>{head}</div>
       <div className={styles.screen}>
-        <Player
-          ref={player}
-          src={media.src}
-          descriptions={media.descriptions}
-          extended={media.extended}
-          describedAudio={media.describedAudio}
-          cueAudioBase={media.cueAudioBase}
-          cueAudioExt={media.cueAudioExt}
-          label={label}
-        />
+        {media ? (
+          <Player
+            ref={player}
+            src={media.src}
+            descriptions={media.descriptions}
+            extended={media.extended}
+            describedAudio={media.describedAudio}
+            cueAudioBase={media.cueAudioBase}
+            cueAudioExt={media.cueAudioExt}
+            crossOrigin={media.crossOrigin}
+            sound={media.sound}
+            label={label}
+          />
+        ) : (
+          <p className={styles.noMedia}>This run’s files don’t include a video to play. Its script and files are below.</p>
+        )}
       </div>
       <div className={styles.edit}>{edit}</div>
       <CueScript className={styles.scriptArea} cues={cues} active={active} onSeek={seek} />

@@ -279,10 +279,82 @@ describe("followRun", () => {
     await expect(done).rejects.toMatchObject({ code: "not_found", message: "This run stopped before it finished and cannot resume." });
   });
 
+  it("with the owner's token, reads with fetch and sends it as a Bearer, even where EventSource exists", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    FakeEventSource.last = null;
+    const fetchMock = vi.fn(async () =>
+      sse([frame({ type: "run", run_id: "live-4", seq: 0, resumed: true }), frame({ type: "done", run_id: "live-4", seq: 1, summary: null })]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const seen: string[] = [];
+    await expect(followRun("live-4", (e) => seen.push(e.type), undefined, { token: "tok-owner" })).resolves.toEqual({ end: "done", runId: "live-4", lastSeq: 1 });
+    expect(seen).toEqual(["run", "done"]);
+    expect(FakeEventSource.last).toBeNull();
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`${API_BASE}/v1/runs/live-4/events`);
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok-owner");
+  });
+
+  it("with the token, a cut-off stream is read again from the last event seen", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(sse([frame({ type: "run", run_id: "live-5", seq: 0 }), frame({ type: "stage_start", stage: "listen", seq: 1 })], { breakAfter: true }))
+        .mockResolvedValueOnce(sse([frame({ type: "stage_start", stage: "listen", seq: 1 }), frame({ type: "done", run_id: "live-5", seq: 2, summary: null })]));
+      vi.stubGlobal("fetch", fetchMock);
+      const seen: number[] = [];
+      const done = followRun("live-5", (e) => seen.push(e.seq ?? -1), undefined, { token: "tok" });
+      await vi.runAllTimersAsync();
+      await expect(done).resolves.toEqual({ end: "done", runId: "live-5", lastSeq: 2 });
+      expect(seen).toEqual([0, 1, 2]);
+      expect((fetchMock.mock.calls[1] as unknown as [string])[0]).toBe(`${API_BASE}/v1/runs/live-5/events?after=1`);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("with the token, the API's refusal to resume is thrown in its words", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(403, { error: "forbidden", message: "Only the person who started this run can resume it." })));
+    await expect(followRun("live-6", () => {}, undefined, { token: "wrong" })).rejects.toMatchObject({
+      code: "forbidden",
+      message: "Only the person who started this run can resume it.",
+    });
+  });
+
   it("without EventSource, reads the same URL with fetch (204: nothing left)", async () => {
     vi.stubGlobal("EventSource", undefined);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
     await expect(followRun("live-3", () => {})).resolves.toEqual({ end: "closed", runId: null, lastSeq: -1 });
+  });
+});
+
+describe("studio refusals", () => {
+  it("keeps what a refusal carries: the lint findings and checked text, the cues that stopped a publish", async () => {
+    const lint = await toApiError(
+      json(422, {
+        error: "lint",
+        text: "We see a door.",
+        findings: [
+          { rule: "R7-person", message: "first/second person 'We'; describe in third person", span: [0, 2], severity: "error" },
+          { rule: "R14-gender", message: "gendered word", span: null, severity: "warning" },
+          { message: "no rule: dropped" },
+        ],
+        message: "This description breaks R7-person. Fix it and save again.",
+      }),
+    );
+    expect(lint.code).toBe("lint");
+    expect(lint.detail.text).toBe("We see a door.");
+    expect(lint.detail.findings).toEqual([
+      { rule: "R7-person", message: "first/second person 'We'; describe in third person", span: [0, 2], severity: "error" },
+      { rule: "R14-gender", message: "gendered word", span: null, severity: "warning" },
+    ]);
+    const overlap = await toApiError(json(409, { error: "overlap", cue_ids: ["c002", "c005"], message: "Nothing was published: …" }));
+    expect(overlap).toMatchObject({ code: "overlap", detail: { cueIds: ["c002", "c005"] } });
+    const move = await toApiError(json(409, { error: "invalid_transition", cue_status: "held", message: "A held cue cannot be approved." }));
+    expect(move.detail.cueStatus).toBe("held");
+    // a 403 without the API's body is still a refusal to change the run
+    expect((await toApiError(new Response("nope", { status: 403 }))).code).toBe("forbidden");
   });
 });
 

@@ -8,6 +8,7 @@ import {
   followRun,
   health,
   isAbort,
+  readEditToken,
   saveEditToken,
   samples,
   startRun,
@@ -129,7 +130,8 @@ export function TryApp({ intro, recorded }: Props) {
     async (runId: string, signal: AbortSignal) => {
       dispatch({ type: "follow", runId, at: Date.now() });
       try {
-        const end = await followRun(runId, handleEvent, signal);
+        // the owner's token lets the API resume a run that stopped before it finished
+        const end = await followRun(runId, handleEvent, signal, { token: readEditToken(runId) });
         if (end.end === "closed" || end.end === "dropped") {
           dispatch({ type: "lost", error: null });
           announcer.current?.now("The connection to this run was lost.");

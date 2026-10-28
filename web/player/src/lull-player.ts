@@ -91,7 +91,9 @@ const LATE_HOLD = 2;
 const HOLD_CAP_MS = 8000;
 const PREFETCH_AHEAD = 20;
 
-const ATTRS = ["src", "descriptions", "described-audio", "extended", "cue-audio-base", "cue-audio-ext", "captions", "poster", "mode", "label", "crossorigin"] as const;
+const ATTRS = ["src", "descriptions", "described-audio", "extended", "cue-audio-base", "cue-audio-ext", "captions", "poster", "mode", "label", "crossorigin", "sound"] as const;
+/** Why the other modes stand down when the video's own sound already carries the descriptions. */
+const DESCRIBED_SOUND = "This video’s own sound already has the descriptions in it.";
 
 const isMode = (v: unknown): v is PlayerMode => typeof v === "string" && (MODES as readonly string[]).includes(v);
 const speaks = (m: PlayerMode | null) => m === "spoken" || m === "extended";
@@ -424,6 +426,10 @@ export class LullPlayer extends Base {
       case "label":
         this.els.player.setAttribute("aria-label", value?.trim() || "Described video");
         break;
+      case "sound":
+        this.resolveMode();
+        this.renderAll();
+        break;
       case "crossorigin": {
         if (_old === value) break;
         const v = value === null ? null : value === "use-credentials" ? "use-credentials" : "anonymous";
@@ -631,6 +637,8 @@ export class LullPlayer extends Base {
       if (this.mixedState === "error") return "The described soundtrack could not be loaded.";
       return null;
     }
+    // spoken lines or the screen reader over a soundtrack that already says them would double them
+    if (this.getAttribute("sound") === "described") return DESCRIBED_SOUND;
     if (m === "extended") {
       const why = track(this.ext, "extended descriptions");
       if (why) return why;

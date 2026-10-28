@@ -94,7 +94,7 @@ test.describe("try it", () => {
     await expect(figure(result, "of description over speech")).toHaveText("0.00 s");
     await expect(figure(result, "of key moments described (5 of 6)")).toHaveText("83%");
     await expect(result).toContainText("WCAG 1.2.5 (AA) Needs review: 1 description held for review.");
-    await expect(result.getByRole("link", { name: "Watch it described" })).toHaveAttribute("href", `/watch/${RUN_ID}`);
+    await expect(result.getByRole("link", { name: "Watch it described" })).toHaveAttribute("href", `/run/${RUN_ID}`);
     await expect(result.getByRole("link", { name: "Review in the studio" })).toHaveAttribute("href", `/studio/${RUN_ID}`);
     await expect(result.getByRole("link", { name: "Read the report" })).toHaveAttribute("href", `${API}/v1/runs/${RUN_ID}/files/report.html`);
 

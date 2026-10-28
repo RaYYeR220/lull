@@ -1,20 +1,19 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
 import type { Metadata } from "next";
 import { Footer } from "@/components/chrome/Footer";
 import { Nav } from "@/components/chrome/Nav";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { Door } from "@/components/ui/Gate";
 import { MetaList } from "@/components/ui/MetaList";
-import type { ScriptCue } from "@/components/watch/CueScript";
 import { ForkDoor } from "@/components/watch/ForkDoor";
 import { RunChecks } from "@/components/watch/RunChecks";
 import { RunFiles } from "@/components/watch/RunFiles";
 import { WatchRun } from "@/components/watch/WatchRun";
 import { cx } from "@/lib/cx";
 import { studioHref } from "@/lib/routes";
-import { keyframeUrl, loadIndex, loadShowcase, showcaseMedia, type Showcase } from "@/lib/showcase";
-import { creditParts, numberedCues, plural, voicedCues, wordCount } from "@/lib/showcase-derive";
+import { voicedLines } from "@/lib/run-data";
+import { loadIndex, loadShowcase } from "@/lib/showcase";
+import { creditParts, plural, voicedCues } from "@/lib/showcase-derive";
+import { loadShowcaseRun } from "@/lib/showcase-run";
 import { MAIN_ID } from "@/lib/site";
 import { formatTimecode } from "@/lib/timecode";
 import run from "@/components/watch/Watch.module.css";
@@ -38,35 +37,12 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   };
 }
 
-/** The script's rows: every cue with its name, fit and evidence frame. */
-function scriptCues(s: Showcase): ScriptCue[] {
-  return numberedCues(s).map((c) => {
-    const frame = keyframeUrl(s.id, c.id);
-    return {
-      id: c.id,
-      start: c.start,
-      text: c.text,
-      status: c.status,
-      label: c.label,
-      fit:
-        c.kind === "extended"
-          ? `video holds ${(c.end - c.start).toFixed(2)} s`
-          : c.gap
-            ? `${wordCount(c.text)} of ${c.gap.capacity} words`
-            : plural(wordCount(c.text), "word"),
-      frame: existsSync(path.join(process.cwd(), "public", ...frame.split("/").filter(Boolean))) ? frame : null,
-    };
-  });
-}
-
 export default async function WatchPage({ params }: { params: Promise<Params> }) {
   const { id } = await params;
-  const s = await loadShowcase(id);
-  const media = showcaseMedia(s);
-  const cues = numberedCues(s);
-  const voiced = voicedCues(s).length;
-  const extended = cues.filter((c) => c.kind === "extended").length;
-  const credit = creditParts(s.credit);
+  const s = await loadShowcaseRun(id);
+  const voiced = voicedLines(s).length;
+  const extended = s.cues.filter((c) => c.kind === "extended").length;
+  const credit = creditParts(s.credit ?? "");
 
   return (
     <>
@@ -74,14 +50,7 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
       <main id={MAIN_ID} tabIndex={-1} className={cx(styles.main, styles.runMain)}>
         <div className="wrap">
           <WatchRun
-            media={{
-              src: media.video,
-              descriptions: media.descriptions,
-              extended: media.extended,
-              describedAudio: media.describedAudio,
-              cueAudioBase: media.cueAudioBase,
-              cueAudioExt: media.cueAudioExt,
-            }}
+            media={s.media}
             head={
               <header className={styles.runHead}>
                 <Eyebrow className={styles.eyebrow}>Recorded run</Eyebrow>
@@ -121,7 +90,7 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
               </header>
             }
             label={`${s.title}, described`}
-            cues={scriptCues(s)}
+            cues={s.cues}
             edit={
               <section aria-labelledby="edit-title" className={run.editBlock}>
                 <h2 id="edit-title" className={run.h2}>
@@ -138,8 +107,8 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
                 </ForkDoor>
               </section>
             }
-            files={<RunFiles showcase={s} />}
-            checks={<RunChecks showcase={s} />}
+            files={<RunFiles files={s.files} />}
+            checks={<RunChecks run={s} />}
           />
         </div>
       </main>

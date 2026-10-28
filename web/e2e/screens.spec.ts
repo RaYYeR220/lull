@@ -247,3 +247,39 @@ test.describe("watch screens @screens", () => {
     });
   }
 });
+
+/**
+ * A finished live run's page, loaded from the scripted API: the uploaded clip's run at rest
+ * (full page too), and a run that stopped. e2e/__screens__/run-<state>-<size>(-full).png.
+ */
+test.describe("run screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 90_000 });
+
+  for (const size of SIZES) {
+    test(`run at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await routeApi(page, "run");
+      await page.goto("/run/live-20261027-214500-a1b2c3", { waitUntil: "networkidle" });
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("corridor-walk.mp4");
+      await waitReady(page);
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: path.join(OUT, `run-rest-${size.name}.png`) });
+      const height = await page.evaluate(() => document.documentElement.scrollHeight);
+      for (let y = 0; y < height; y += size.viewport.height / 2) {
+        await page.evaluate((top) => window.scrollTo(0, top), y);
+        await page.waitForTimeout(100);
+      }
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(300);
+      await fullPage(page, `run-rest-${size.name}-full.png`);
+
+      await page.goto("/run/live-20261028-100000-de4d00", { waitUntil: "networkidle" });
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("This run stopped before it finished.");
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `run-failed-${size.name}.png`) });
+    });
+  }
+});
