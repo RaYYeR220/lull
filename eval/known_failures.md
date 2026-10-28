@@ -47,4 +47,4 @@ s), because the engine bounds keyframe times by the container's duration rather 
 stream's. ffmpeg returned no frame and the run stopped without publishing. Counted as a pipeline
 failure. The bug was then fixed in the engine (main 0b83117, keyframes kept inside the video
 stream) and the full film was run once more (final-ed2); the site's full-film showcase comes
-from that run, and Suite B is to be scored on it (see the run log).
+from that run, and so does Suite B (see the Suite B deviations).

@@ -11,12 +11,12 @@ task. LULL_CAP_DAY=10. Nothing below was run twice to get a better number.
 | 1. Suite A scored run (`suite_a.score --all --cap 2.00`) | 11:50:29 | 12:17:05 | 26.6 min | $0.9146 (scorer: $1.0470 over the referenced run ids, cached probe answers included) | invocation 20261028T115030Z, 12/12 published, none failed; results committed (1ee9ece) |
 | 2. recorded runs (`lull describe --mode extended`, fresh run ids final-*) | 12:18:06 | 12:37:58 (stopped) | 20 min | $0.3648 | STOPPED: Token Factory answered 402 `credit_balance_exhausted` ("You have exhausted your budget. Please add funds") at 12:34; an infrastructure failure, not a pipeline result |
 | 2, resumed once from cache after the top-up (the one infrastructure retry) | 13:36:47 | 14:21:20 | 44.6 min | $0.5052 | 6 of 7 published; `ed` FAILED in publish (a pipeline failure, below); site exports ed90, bbb120, tos180 |
-| 3. Suite B | | | | $0 | NOT RUN: its results need runs of all four videos and `ed` failed (no cues.json, so the scorer refuses it); not started as a partial invocation |
+| 3. Suite B | 20:14:12 | 20:41:40 | three invocations (below) | $1.0147 | not run at first (`ed` failed); after the full-film re-run on 0b83117: two invocations stopped without results, the third completed (results/suite_b.json, SUITE_B.md) |
 | 4a. negative control (`controls.negative --suite-a --showcase ed90,bbb120,tos180 --cap 0.50`) | 14:21:59 | 14:33:25 | 11.4 min | $0.0825 | results/controls_negative.json, CONTROLS.md (the Suite A runs and three site runs; `ed` failed). An invocation at 14:21:50 stopped in 1 s before any call: the run paths were given in a form Windows Python could not open; no spend |
 | 4b. ablation (`LULL_NO_VERIFY=1 controls.ablation --all --cap 2.00`) | 14:33:47 | 14:52:56 | 19.2 min | $0.7873 | results/ablation.json, ABLATION.md; 12/12 runs, same engine fingerprint as Suite A (0.2.0+980454e1b9cd77d0) |
-| 5. Report | | | | $0 | RESULTS.md and results/benchmarks.json from the complete results (Suite A, negative control, ablation); Suite B missing |
+| 5. Report | | | | $0 | RESULTS.md and results/benchmarks.json from the complete results (Suite A, Suite B, negative control, ablation) |
 
-Task spend: ledger $2.0125 before the task, $4.6670 after step 4: **$2.6545** of the $8 budget.
+Task spend: ledger $2.0125 before the task, $4.6670 after step 4 ($2.6545), $5.9754 after the full-film re-run and Suite B: **$3.9629** of the $8 budget (the re-run and Suite B: $1.3084 of their $2.00).
 
 Step 2 in detail (inputs in lull-runs/final/inputs/: ed90.mp4 copied from the existing ed90
 excerpt, ED 60-150 s, sha256 0daa75ac9328b0c0...; bbb120.mp4 = Big Buck Bunny 0:00-2:00 and
@@ -113,3 +113,10 @@ runs are not exported (music licences).
   Spend $0.1498.
 - Suite B spend so far $0.6562. This step (the re-run and Suite B) $0.9499 of its $2.00;
   ledger $5.6169. Stopped here for a decision; Suite B has no results.
+- **20:33:44** third invocation, with the scorer's batch splitting on cut-off answers (466867d;
+  LULL_CAP_RUN=0.60; `--cap 1.05`, what was left of the step's $2.00): completed in 476 s,
+  results/suite_b.json and SUITE_B.md. The Elephants Dream baseline batch that was cut off in
+  the second invocation was answered within its limit this time, so no batch was split and no
+  cut-off was recorded. Spend $0.3585. The scorer reports $0.8649, the run ids whose answers it
+  used (this invocation and the first); the second invocation's $0.1498 is not among them.
+  Suite B in all: $1.0147; ledger $5.9754.
