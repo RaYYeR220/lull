@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { RUN_ID, own, routeApi } from "./try-api";
 
 const ROUTES = [
   { path: "/", h1: "Audio description that waits for the silence." },
@@ -7,6 +8,27 @@ const ROUTES = [
 ] as const;
 
 const PHONE = { width: 390, height: 844 };
+
+/** The page's width against the viewport's, and any text or control outside it. */
+function spillOf() {
+  const root = document.documentElement;
+  // text and controls must sit inside the viewport too, not merely be clipped by body;
+  // the only exception is content inside a deliberate sideways scroller (the horizon, the studio timeline)
+  const inScroller = (el: Element) => {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowX;
+      if (o === "auto" || o === "scroll") return true;
+    }
+    return false;
+  };
+  const spill = [...document.querySelectorAll("main a, main button, main h1, main h2, main h3, main p, main li, footer a, footer p, header a")]
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && (r.right > root.clientWidth + 1 || r.left < -1) && !inScroller(el);
+    })
+    .map((el) => `${el.tagName.toLowerCase()}: ${(el.textContent ?? "").trim().slice(0, 40)}`);
+  return { scrollWidth: root.scrollWidth, clientWidth: root.clientWidth, spill };
+}
 
 function collectErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -16,6 +38,28 @@ function collectErrors(page: Page): string[] {
   });
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
   return errors;
+}
+
+/**
+ * Reflow (WCAG 1.4.10): at 320 CSS px, which is 1280 px at 400 % zoom, and at a phone's 390,
+ * no page scrolls sideways and no text or control sits outside the viewport (content inside a
+ * deliberate sideways scroller excepted).
+ */
+const REFLOW = ["/", "/try", "/watch", "/watch/ed90", "/watch/ed90/report", "/studio", "/studio/ed90", "/developers", "/benchmarks", `/run/${RUN_ID}`, `/run/${RUN_ID}/report`];
+
+for (const width of [320, 390]) {
+  test(`no page scrolls sideways at ${width}px`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await routeApi(page, own());
+    await page.setViewportSize({ width, height: 800 });
+    for (const path of REFLOW) {
+      await page.goto(path, { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+      const { scrollWidth, clientWidth, spill } = await page.evaluate(spillOf);
+      expect(scrollWidth, `${path} at ${width}px`).toBeLessThanOrEqual(clientWidth);
+      expect(spill, `${path} at ${width}px`).toEqual([]);
+    }
+  });
 }
 
 for (const route of ROUTES) {
@@ -50,25 +94,7 @@ for (const route of ROUTES) {
       await page.setViewportSize(PHONE);
       await page.goto(route.path, { waitUntil: "networkidle" });
       await page.evaluate(() => document.fonts.ready);
-      const { scrollWidth, clientWidth, spill } = await page.evaluate(() => {
-        const root = document.documentElement;
-        // text and controls must sit inside the viewport too, not merely be clipped by body;
-        // the only exception is content inside a deliberate sideways scroller (the horizon, the studio timeline)
-        const inScroller = (el: Element) => {
-          for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
-            const o = getComputedStyle(p).overflowX;
-            if (o === "auto" || o === "scroll") return true;
-          }
-          return false;
-        };
-        const spill = [...document.querySelectorAll("main a, main button, main h1, main h2, main h3, main p, main li, footer a, footer p, header a")]
-          .filter((el) => {
-            const r = el.getBoundingClientRect();
-            return r.width > 0 && (r.right > root.clientWidth + 1 || r.left < -1) && !inScroller(el);
-          })
-          .map((el) => `${el.tagName.toLowerCase()}: ${(el.textContent ?? "").trim().slice(0, 40)}`);
-        return { scrollWidth: root.scrollWidth, clientWidth: root.clientWidth, spill };
-      });
+      const { scrollWidth, clientWidth, spill } = await page.evaluate(spillOf);
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
       expect(spill).toEqual([]);
     });

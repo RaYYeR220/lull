@@ -10,5 +10,9 @@
 
 @media (max-width:760px){
   .bar{height:auto;padding-top:18px;flex-direction:column;align-items:flex-start;gap:6px}
-  .nav ul{gap:18px}
+  /* five items don't fit 320 px (400 % zoom of 1280): they wrap rather than scroll the page */
+  .nav ul{flex-wrap:wrap;column-gap:18px;row-gap:0}
+}
+@media (max-width:359px){
+  .nav ul{column-gap:14px}
 }
