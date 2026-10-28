@@ -273,6 +273,11 @@ def test_score_video_end_to_end_with_fake_judges(tmp_path):
     assert ov["lull_standard"]["overlap_s"] == 1.0  # 62-65 against speech 64-66
     assert ov["lull_extended_freeze_points_in_speech"] == ["x001"]  # 69.5 inside 69-70
     assert set(ov) >= {"pfeiffer_vtt", "hunt_vtt", "hunt_wav"}
+    # supplementary: the same sides against the committed transcript of the film, clipped
+    sup = ov["supplementary_against_reference_asr"]
+    assert set(sup) >= {"lull_standard", "pfeiffer_vtt", "hunt_vtt", "hunt_wav"}
+    film = B.reference_speech(refs["elephants_dream"]["doc"])
+    assert sup["speech_s"] == round(sum(b - a for a, b in B.clip_spans(film, [60.0, 90.0])), 3)
     assert v["density"]["lull_standard"]["words"] == 6
     summary = B.summarize([v], rules)
     md = B.markdown({

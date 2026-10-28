@@ -52,7 +52,17 @@ from suite_a.score import (
 )
 from suite_b.facts import FACTS, RULES_PATH
 from suite_b.facts import check as check_reference_set
-from suite_b.refs import DATA_DEFAULT, OUT, REFS, VIDEOS, word_count, write_json
+from suite_b.refs import (
+    DATA_DEFAULT,
+    OUT,
+    REFS,
+    SPAN_JOIN_S,
+    VIDEOS,
+    clamped,
+    merge_spans,
+    word_count,
+    write_json,
+)
 
 PREREG_TAG = "suite-b-prereg"
 SHA_FILE = "eval/suite_b/facts.sha256"
@@ -363,7 +373,34 @@ def overlap_and_density(run: dict, ref: dict) -> dict:
             ov["usgs_ad_own_timeline"] = own
             dens["usgs_ad_per_ad_version_min"] = density([c["text"] for c in lines],
                                                          a_dur / 60)  # fmt: skip
+    ov["supplementary_against_reference_asr"] = against_reference_asr(ov, run, doc)
     return {"overlap": ov, "density": dens}
+
+
+def reference_speech(doc: dict) -> list[tuple[float, float]]:
+    """Speech spans independent of the run: the committed transcript of the original video
+    (refs/asr/, same recogniser, no diarization), words clamped as the engine does and joined
+    across gaps under SPAN_JOIN_S."""
+    data = json.loads((REFS / "asr" / f"{doc['video']}.json").read_text(encoding="utf-8"))
+    words = clamped(data["words"])
+    return merge_spans(((w["start"], w["end"]) for w in words), join=SPAN_JOIN_S)
+
+
+def against_reference_asr(ov: dict, run: dict, doc: dict) -> dict:
+    """Supplementary: the same sides against reference_speech instead of the run's spans, so
+    Lull is not measured only against what its own listen stage heard."""
+    speech, clip, cues = reference_speech(doc), run["clip"], run["cues"]
+    std = [(c["start"], c["end"]) for c in cues if c["track"] == "standard"]
+    out = {"speech_s": round(sum(b - a for a, b in clip_spans(speech, clip)), 3),
+           "lull_standard": overlap_row(std, speech, clip),
+           "lull_extended_freeze_points_in_speech": freeze_in_speech(cues, speech)}  # fmt: skip
+    if doc["kind"] == "vtt":
+        for src, r in doc["references"].items():
+            out[f"{src}_vtt"] = overlap_row([(c["start"], c["end"]) for c in r["cues"]], speech,
+                                            clip)  # fmt: skip
+        out["hunt_wav"] = overlap_row([tuple(x) for x in doc["hunt_audio"]["vad"]["intervals"]],
+                                      speech, clip)  # fmt: skip
+    return out
 
 
 # -- one video ------------------------------------------------------------------------------------
@@ -552,6 +589,14 @@ def markdown(result: dict) -> str:
                 f"| {v['video']} | USGS AD, own timeline (not comparable) | "
                 f"{own['description_s']:.1f} | {own['overlap_s']:.1f} | {share} |"
             )
+    lines += ["", "Supplementary: the same sides against the reference transcript of the "
+              "original (refs/asr, same recogniser, no diarization), not the run's own spans:",
+              "", "| video | side | over speech s | share |", "|---|---|---|---|"]  # fmt: skip
+    for v in result["videos"]:
+        for side, row in v["overlap"]["supplementary_against_reference_asr"].items():
+            if isinstance(row, dict):
+                share = "n/a" if row["share"] is None else f"{row['share']:.1%}"
+                lines.append(f"| {v['video']} | {side} | {row['overlap_s']:.1f} | {share} |")
     lines += ["", "Speech spans: the Lull run's listen output. USGS AD lives in pauses the AD "
               "version inserts; its own-timeline overlap compares two parts of one transcript "
               "and cannot show simultaneous speech, so it is not comparable to a standard "
