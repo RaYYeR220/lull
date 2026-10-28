@@ -12,6 +12,12 @@ compose_cues writes them), so a sentence starts after the words before it, at `w
 second; it must start before its visual ends. Long gaps should first be cut into windows with
 `lull.timeline.split_gaps` so one cue cannot describe a visual long before it appears.
 
+A filling pass then gives long pauses more to say (see _fill): a window of FILL_MIN_PAUSE_S or
+more that the answer leaves at least half empty gets a longer variant of a line it holds, or a
+priority-1 or 2 visual inside it, up to FILL_TO of its room. It never adds a look-ahead, never
+crosses the window's room (so never a guard or a protected sound), and adds no second cue: a
+window voices one line.
+
 Same input, same answer: inputs are sorted by id, equal-value answers are broken towards the
 gap closest to each visual, and the solver runs one worker with a fixed seed (parallel workers
 return different co-optimal answers from run to run). An instance solved to optimality is
@@ -51,7 +57,11 @@ AHEAD_PREFIX = "In a moment, "
 AHEAD_WORDS = 3  # words in AHEAD_PREFIX
 LEAD = 6.0  # seconds a look-ahead may come before its visual starts
 SALIENT = 4  # unplaced events at or above this priority become extended candidates
-MIN_PRIORITY = 2  # a standard placement needs at least this priority
+MIN_PRIORITY = 2  # a standard placement needs at least this priority (the solver's)
+FILL_MIN_PAUSE_S = 3.0  # the filling pass leaves shorter windows alone
+FILL_FROM = 0.5  # ... and windows already more than half full
+FILL_TO = 0.8  # ... and fills up to this share of a window's room
+FILL_PRIORITY = 2  # the visuals it adds are rated at most this (higher ones were offered)
 WPS = UNCALIBRATED_WPS  # voice rate used to time each sentence inside its gap
 TIME_LIMIT_S = 5.0
 NUM_WORKERS = 1  # parallel workers race to different co-optimal answers: not reproducible
@@ -134,11 +144,12 @@ def _in_time(group: Iterable[_Option]) -> bool:
 
 def _options(
     events: Sequence[VisualEvent], variants: Sequence[Variant], priority: dict[str, int],
-    gaps: Sequence[Gap], lead: float, ahead_words: int, wps: float,
+    gaps: Sequence[Gap], lead: float, ahead_words: int, wps: float, *,
+    min_priority: int = MIN_PRIORITY,
 ) -> list[_Option]:  # fmt: skip
     """Every (event, variant, gap) triple that is eligible, fits the gap on its own and would
-    start in time if voiced first in it. Events under MIN_PRIORITY get none: a priority-1 line
-    never fills spare room."""
+    start in time if voiced first in it. Events under `min_priority` get none: the solver
+    never places a priority-1 line (only the filling pass may, see _fill)."""
     table = _variant_table(variants)
     gaps = sorted(gaps, key=lambda g: g.id)
     out: list[_Option] = []
@@ -147,7 +158,7 @@ def _options(
         if not mine:
             continue
         p = max(1, int(priority.get(e.id, e.salience)))  # plan sets one per event it answers
-        if p < MIN_PRIORITY:
+        if p < min_priority:
             continue
         eligible = [g for g in gaps if _eligible(e, g, lead)]
         # closest first, gaps open during the visual before look-aheads (as the objective has it)
@@ -166,6 +177,57 @@ def _options(
 
 
 # -- placing -----------------------------------------------------------------------------
+
+
+def _fill(chosen: list[_Option], pool: list[_Option]) -> list[_Option]:
+    """Long pauses say more: each window of FILL_MIN_PAUSE_S or more whose chosen lines use at
+    most FILL_FROM of its room first upgrades a line it holds to a longer variant, then adds
+    visuals rated FILL_PRIORITY or less that are on screen during it (never a look-ahead), each
+    in its longest variant that fits, while the window stays within FILL_TO of its room and
+    every sentence still starts in time. `pool` holds the options of every priority."""
+    out = list(chosen)
+    placed = {o.event.id for o in out}
+    table = {(o.event.id, o.length, o.gap.id): o for o in pool}
+    gaps = {o.gap.id: o.gap for o in [*pool, *out]}
+    for gid in sorted(gaps, key=lambda gid: (gaps[gid].usable_start, gid)):
+        g = gaps[gid]
+        if g.usable_end - g.usable_start < FILL_MIN_PAUSE_S - _EPS or g.capacity_words <= 0:
+            continue
+        held = [o for o in out if o.gap.id == gid]
+        used = sum(o.cost for o in held)
+        if used > FILL_FROM * g.capacity_words + _EPS:
+            continue
+        room = math.floor(FILL_TO * g.capacity_words + _EPS)
+        for o in sorted(held, key=lambda o: (-o.priority, _order(o.event))):
+            if o.ahead:
+                continue
+            for length in reversed(LENGTHS[LENGTHS.index(o.length) + 1 :]):
+                up = table.get((o.event.id, length, gid))
+                rest = [h for h in held if h is not o]
+                if up and used - o.cost + up.cost <= room and _in_time([*rest, up]):
+                    held = [*rest, up]
+                    out = [up if x is o else x for x in out]
+                    used += up.cost - o.cost
+                    break
+        extra = sorted(
+            {o.event.id: o for o in pool
+             if o.gap.id == gid and not o.ahead and o.event.id not in placed
+             and o.priority <= FILL_PRIORITY}.values(),
+            key=lambda o: (-o.priority, _order(o.event)),
+        )  # fmt: skip
+        for first in extra:
+            eid = first.event.id
+            for length in reversed(LENGTHS):
+                add = table.get((eid, length, gid))
+                if add and used + add.cost <= room and _in_time([*held, add]):
+                    held.append(add)
+                    out.append(add)
+                    placed.add(eid)
+                    used += add.cost
+                    log.info("schedule: %s fills %s (%d of %d words)", eid, gid, used,
+                             g.capacity_words)  # fmt: skip
+                    break
+    return out
 
 
 def _value(options: list[_Option], chosen: Iterable[int]) -> int:
@@ -279,12 +341,10 @@ def extended_candidates(
 
 
 def _result(
-    options: list[_Option], chosen: list[int], events: Sequence[VisualEvent],
-    priority: dict[str, int],
+    picked: list[_Option], events: Sequence[VisualEvent], priority: dict[str, int],
 ) -> tuple[list[Placement], list[str]]:  # fmt: skip
     picked = sorted(
-        (options[i] for i in chosen),
-        key=lambda o: (o.gap.usable_start, o.gap.id, o.event.t_start, o.event.id),
+        picked, key=lambda o: (o.gap.usable_start, o.gap.id, o.event.t_start, o.event.id)
     )
     placements = [
         Placement(event_id=o.event.id, variant=o.length, gap_id=o.gap.id, ahead=o.ahead)
@@ -313,12 +373,14 @@ def schedule(
     be at most floor((t_end - usable_start) x wps) - 1. The model maximises
     sum(priority x weight) - 1 per look-ahead, weights short 60, medium 85, long 100. An event
     missing from `priority` counts with its salience; one under MIN_PRIORITY (2) is never
-    placed.
+    placed by the solver. The filling pass (_fill) then gives long, half-empty windows more.
     """
     options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
     greedy = _greedy(options)
     chosen = _solve(options, greedy, time_limit_s) if options else []
-    return _result(options, greedy if chosen is None else chosen, events, priority)
+    picked = [options[i] for i in (greedy if chosen is None else chosen)]
+    pool = _options(events, variants, priority, gaps, lead, ahead_words, wps, min_priority=1)
+    return _result(_fill(picked, pool), events, priority)
 
 
 def schedule_greedy(
@@ -333,7 +395,8 @@ def schedule_greedy(
 ) -> tuple[list[Placement], list[str]]:
     """The fallback `schedule` uses without a solver answer: same rules, greedy choice."""
     options = _options(events, variants, priority, gaps, lead, ahead_words, wps)
-    return _result(options, _greedy(options), events, priority)
+    pool = _options(events, variants, priority, gaps, lead, ahead_words, wps, min_priority=1)
+    return _result(_fill([options[i] for i in _greedy(options)], pool), events, priority)
 
 
 # -- cue text ----------------------------------------------------------------------------
