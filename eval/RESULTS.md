@@ -1,6 +1,6 @@
 # Lull: evaluation results
 
-Generated 2026-10-28T17:40:23+00:00 from commit `6cdd3e2691af` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
+Generated 2026-10-28T20:28:30+00:00 from commit `10a2316c1521` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
 
 Not included: Suite B (missing).
 
@@ -169,7 +169,7 @@ Share of cues carrying the verifier's claim split: with 1.0, without 0.0 (withou
 - **Sparse descriptions compared with human audio description**: Lull says less than a human describer. In the Suite B smoke on Elephants Dream 60-150 s it voiced 55 words per minute (83 with the extended track) against 120 (Silvia Pfeiffer) and 95 (JJ Hunt), and the primary judge credited none of the describers' 46 facts in that clip to its cues. Lull holds or cuts a description it cannot verify against the frames and fits the standard track into the programme's own pauses, which leaves room for far fewer words than a describer who writes for every scene.
 - **Lecture pauses swallowed before the speech-span fix**: Before the engine's fix round the listen stage widened narration spans by 0.2-0.6 s and merged sentences across planned pauses of about 1.9 s, so a Suite A lecture had only 4-5 speech-free windows and the standard track voiced little more than slide titles; extended cues froze the picture before their slide appeared. Found in the Suite A smoke (a01, a02, pre-fix engine) and fixed in the engine; the scored run is on the fixed engine and the smoke numbers are not results.
 - **TTS nondeterminism**: Magpie TTS returns slightly different audio for the same sentence from one call to the next (seed and temperature parameters did not change that in our checks): a01 re-rendered from an empty cache came out 48.56 s instead of 48.40 s. Suite A's lectures are rendered once and cached (the render tarball reproduces them bit for bit), and Lull's own cue durations vary slightly between runs.
-- **Elephants Dream (full film) failed in publish**: The scored recorded run of the full film (final-ed) finished its descriptions (43 verified, 21 held, 43 extended) and then failed while saving keyframes: a cue's keyframe time, 656.3 s, lies after the last video frame of this file (the video stream ends at 653.8 s, the audio at 658.1 s), because the engine bounds keyframe times by the container's duration rather than the video stream's. ffmpeg returned no frame and the run stopped without publishing. A pipeline failure, not re-run: there is no full-film showcase, and Suite B, whose results need all four videos, has no results.
+- **Elephants Dream (full film) failed in publish**: The scored recorded run of the full film (final-ed) finished its descriptions (43 verified, 21 held, 43 extended) and then failed while saving keyframes: a cue's keyframe time, 656.3 s, lies after the last video frame of this file (the video stream ends at 653.8 s, the audio at 658.1 s), because the engine bounds keyframe times by the container's duration rather than the video stream's. ffmpeg returned no frame and the run stopped without publishing. Counted as a pipeline failure. The bug was then fixed in the engine (main 0b83117, keyframes kept inside the video stream) and the full film was run once more (final-ed2); the site's full-film showcase comes from that run, and Suite B is to be scored on it (see the run log).
 
 ## Cost accounting (draft)
 
@@ -303,3 +303,25 @@ runs are not exported (music licences).
 - Spend so far: $0.2666 (403 Token Factory calls) and 5 searches; ledger $4.9335.
 - To resume when the server is back: the same command with the same `--out` and `--run-id`,
   from the stage cache. That counts as the same single re-run.
+
+### The full-film re-run resumed after the pause; Suite B attempts
+
+- **20:07:16** `final-ed2` resumed from its stage cache once the speech server was back (same
+  command and run id): listen, watch, research, plan, schedule and the 70 finalize cues
+  reused. It published 294 s later: 36 verified, 28 held, 31 extended. This attempt $0.0272;
+  `final-ed2` in all $0.2937 (481 Token Factory calls) and 5 searches.
+- Exported as the site's `ed` into lull-runs/showcase-final/ed ("Elephants Dream", CC BY 2.5
+  credit). Its showcase.json `costUsd` is the publishing attempt's spend ($0.0272); the full
+  run's $0.2937 is in `summary.spend.model_usd_all_runs`.
+- **20:14:12** Suite B, first invocation (`--cap 1.20`, the deviation notes committed before
+  it): stopped after 604 s, nothing written. The ledger's per-run-id cap of $0.30, which
+  Suite B takes from Suite A's client setup unless LULL_CAP_RUN is set, stopped the Elephants
+  Dream human-baseline judge at $0.2686 (6 Ultra calls). Spend $0.5064 (Lull judged: 8 Ultra
+  and 8 Qwen calls; baseline: 6 Ultra and 4 Qwen); every answer is kept in the judge cache.
+- **20:25:23** second invocation (LULL_CAP_RUN=0.60; `--cap 0.70`, so Suite B in all stays
+  within the $1.20; the cached answers were reused at no cost): stopped after 130 s, nothing
+  written. The next baseline batch's Ultra answer was cut off at its token limit twice
+  (16,000, then 32,000 output tokens; `TFUnusable`), an error the scorer does not catch.
+  Spend $0.1498.
+- Suite B spend so far $0.6562. This step (the re-run and Suite B) $0.9499 of its $2.00;
+  ledger $5.6169. Stopped here for a decision; Suite B has no results.
