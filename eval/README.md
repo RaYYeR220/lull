@@ -265,3 +265,172 @@ supplementary calls.
   share at least a quarter of their words with the slide's narration, and the 19 spoken facts
   the narration says in other words rather than as a phrase.
 - Twelve videos give wide intervals; the bootstrap is over videos, not facts.
+
+## Suite B: Lull against human audio description on real video
+
+Real films and documentaries described by people, and the same videos described by Lull. The
+question: how much of what the human describers chose to say does Lull also convey, and how
+do both sides behave around dialogue, measured with the same tools for both. Human describers
+choose differently from each other by design, so recall against one of them is not a score
+out of 100; the suite also measures one human against the other.
+
+### References and their licences
+
+| video | reference | licence |
+|---|---|---|
+| Elephants Dream (2006), (c) Orange Open Movie Team / Blender Foundation, [Wikimedia Commons 480p transcode](https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm), 658.1 s | | CC BY 2.5 |
+| | Silvia Pfeiffer, [text description track](http://html5videoguide.net/presentations/LCA_MM_Miniconf2013/elephant.audiodescriptions.vtt) (WebVTT, 63 cues) | CC BY 4.0 |
+| | JJ Hunt, [text description track and its voiced recording](https://github.com/OwenEdwards/ElephantsDreamAudioDescription) (WebVTT, 64 cues; WAV, 653.9 s) | CC BY-SA 4.0 |
+| USGS Woods Hole Coastal and Marine Science Center, 173.3 s | USGS extended audio-described version (409.3 s), human-voiced | public domain (USGS); music used with permission |
+| USGS The importance of aquatic connectivity for maintaining cold water species, 265.1 s | USGS extended audio-described version (362.0 s) | public domain (USGS); some materials used with permission |
+| USGS Climate Science Champions: introduction, 44.9 s | USGS extended audio-described version (63.9 s) | public domain (USGS); music used with permission |
+
+Source URLs, file sizes and the licence statements as found are in the data folder's
+`MANIFEST.md`; the media are not in this repository. The committed reference files derived
+from the description tracks (`suite_b/refs/`, `suite_b/facts/`) carry the describers' words:
+what comes from Hunt's track is shared under CC BY-SA 4.0 and what comes from Pfeiffer's under
+CC BY 4.0, with the attributions above; the USGS transcripts are public domain.
+
+### How the references were made (`suite_b/refs.py`, no language model)
+
+- **Elephants Dream**: every WebVTT cue is a reference line timed by its own start and end
+  (markup stripped). Hunt's voiced track is digital silence between descriptions, so an
+  energy VAD finds his voiced intervals: 20 ms frames, voiced above -45 dBFS RMS, gaps under
+  0.3 s bridged, runs under 0.1 s dropped (265.0 s voiced in 133 intervals; 99.9 % of it
+  within 0.5 s of one of his cues, so the recording is on his cue timeline). Both tracks fit
+  this 480p cut of the film: shifted from -5 to +5 s against the film's dialogue (the
+  committed transcript), each overlaps it least within 0.3 s of no shift (Hunt's voice:
+  2.7 s at 0, 6.1 s at +1 s, 10.9 s at -1 s).
+- **USGS**: the original and the AD version are transcribed by the local speech server
+  (Parakeet TDT 0.6B v3, word timestamps, the request the engine's speech client makes;
+  answers committed in `refs/asr/`). difflib aligns the two token streams; then a chance
+  match of at most two tokens inside the describer's words is dropped, near-identical tokens
+  or runs ("woods hall" / "woodshole", "an" / "and") count as the same narration, and a
+  describer's run beside a repeated phrase slides to its sentence edges. AD-version words
+  left over are the describer's, cut into sentences ("U.S." does not end one; runs under two
+  tokens are dropped and listed). Matched narration words map AD-version time to original
+  time; a line's anchor is the original time reached when it starts, assuming the video ran
+  on until then, kept inside the original gap it falls in (`anchor_range` gives the gap). A
+  line whose AD-version gap is at least 1 s longer than the original's was voiced over a
+  pause. csc_intro's four lines come before the program starts (a 19 s preface summarising
+  the whole video): their window is the whole video. Narration of the original that the AD
+  version's transcript lacks is listed (woodshole: four phrases, 35 of 356 tokens, cut,
+  talked over or misheard; the other two: none). `python -m suite_b.refs --spot-check`
+  prints random lines with the words around them on both timelines.
+
+Lines: Pfeiffer 63, Hunt 64, woodshole 90, aquatic_connectivity 23, csc_intro 4.
+
+### Facts and the pre-registration (`suite_b/facts.py`)
+
+Nemotron 3 Ultra (temperature 0, thinking off, strict JSON schema; chunks of 10 lines, the
+three before them shown for pronouns) split every line into atomic facts in the describer's
+own words, each with a kind: visual, on-screen text, sound, interpretation (an inference
+about what is not shown) or not in the video (the description's own credit and licence).
+Scored: visual and on-screen text. 498 facts: Pfeiffer 172 (152 scored), Hunt 128 (124),
+woodshole 149 (149), aquatic_connectivity 35 (34), csc_intro 14 (14). Extraction spend
+$0.2228 (ledger run `suite-b-facts`; the prompt was revised twice for finer splits before the
+facts were committed, all before any Lull output was scored).
+
+`rules.json`, committed with the facts, fixes what the scorer does: the window, the scored
+kinds, both judges and their settings, the judge prompt and schema, the character legend,
+the overlap and density definitions, the aggregation and when results may be written.
+`facts.sha256` pins the set: its first line is the sha256 of the list below it, the sha256
+of every `refs/*.json`, `refs/asr/*.json`, `facts/*.json` and `rules.json`.
+
+- Annotated tag **`suite-b-prereg`** -> commit `5d628cb2099d23adbbb9faabba9801b9af9d942e`
+  ("eval: suite B reference facts", 2026-10-28 03:07:27 UTC), reference set sha256
+  `4c6aca38039735da83e340c0cbd9c87095ee1474c9aad6feb64dc02e0cb10b66`. The scorer was first
+  committed afterwards (`09d0178`); its first judge call is in the ledger at 03:14 UTC.
+- The scorer refuses to run unless `facts.sha256` matches the files, the tag exists and is
+  an ancestor of HEAD, the tagged `facts.sha256` has the same first line, and `refs/`,
+  `facts/`, `facts.sha256`, `rules.json`, `refs.py` and `facts.py` are unchanged since the
+  tag; it refuses to write `results/` while `eval/` or `engine/` has uncommitted changes
+  (Suite A's checks, reused).
+
+### What is measured (`suite_b/score.py`, from `rules.json`)
+
+| metric | how |
+|---|---|
+| recall (primary) | per scored fact, the judge names the cues that convey it; it counts when one of them plays within [anchor - 15 s, anchor end + 15 s] (standard cue: its voiced interval meets the window; extended cue: its freeze point lies in it). Standard track alone and with extended; per reference, USGS pooled; also by kind |
+| recall anywhere (supplementary) | the same verdicts without the window |
+| human baseline (supplementary) | Elephants Dream: Hunt's lines as the cues against Pfeiffer's facts, and the reverse; same judge, prompt and window |
+| second judge (supplementary) | Qwen3 235B A22B Instruct 2507 makes the same calls; its recall, and raw agreement and Cohen's kappa with Ultra per fact (window and anywhere) |
+| talking over speech | for every side, seconds of description inside speech and % of description time, against the same speech spans: those of the Lull run's listen output. Lull: voiced intervals of published standard cues; extended cues as freeze points inside speech. Pfeiffer and Hunt: WebVTT cue start to end. Hunt's recording: its VAD intervals. Supplementary: the same against the committed transcript of the original (words only), so Lull is not measured only against what its own listen stage heard |
+| USGS AD on its own timeline | the describer's lines against the narration words of the AD version (one transcript), plus the original narration the AD version lacks; not comparable to standard-track overlap (below) |
+| density | description words per minute of video, each side (USGS also per minute of the AD version) |
+
+**The judge** is Suite A's (Nemotron 3 Ultra, temperature 0, reasoning on; answers cached by
+their exact request in `suite_b/out/judge/`). It sees the cue texts in time order under
+neutral ids (k001, k002 ...) without times or tracks, so it judges content only and cannot
+tell Lull's cues from a describer's; the window applies timing afterwards. Character names
+are mapped by a legend in `rules.json` ("the old man" is Proog), so a cue need not know the
+names. Recall is pooled over facts with a 95 % percentile bootstrap over reference lines
+(each line with its facts; 10 000 resamples, seed 20261028).
+
+**Why USGS overlap is not comparable.** The USGS describer speaks while the video is paused
+(89 of 90 woodshole lines, every line of the other two), so the program cannot be talked
+over in those stretches by construction; and the AD version is one mixed soundtrack, so a
+single transcript cannot show two voices at once (where the describer did talk over the
+narrator, the narration goes missing from the transcript, which is why those phrases are
+reported). Lull's standard track has to fit the original's own pauses; its extended track is
+the like-for-like comparison (freeze points inside speech).
+
+Results are written to `results/suite_b.json` and `results/SUITE_B.md` only when every run
+passed in covers its whole video, from a clean tree; a clip or a smoke goes to
+`suite_b/out/partial/` and is labelled so. Reference videos not passed in are listed.
+
+### Smoke (not results)
+
+On 2026-10-28, on the existing `ed90` run: a 90 s clip of Elephants Dream from 60.0 s to
+150.0 s (located by audio cross-correlation, 0.998 at 60.000 s; not the film's first 90 s),
+run id `ed90-final-b` on the pre-merge engine, facts anchored in 60-150 s (46 scored: 26
+Pfeiffer, 20 Hunt). Ultra credited none of the facts to any of Lull's ten published cues
+(0/26, 0/20; window and anywhere alike); Qwen credited 4/26 and 4/20 (agreement 85 % and
+80 %, kappa 0 since Ultra credited nothing). Human baseline: Hunt's lines convey 8/26 of
+Pfeiffer's facts and Pfeiffer's 4/20 of Hunt's (Qwen: 18/26, 11/20). Over speech: Lull 0.0
+of 28.6 s; Pfeiffer's cues 8.0 of 71.5 s, Hunt's 4.9 of 49.5 s, Hunt's voice 4.3 of 44.2 s,
+all against the run's spans, which include diarized turns over the birds' garbled noise;
+against the transcript's words the human tracks overlap 0.2, 0.1 and 0.0 s. Density: Lull 55
+words per minute (83 with extended), Pfeiffer 120, Hunt 95. In this clip Lull described a
+tilting, breaking walkway and falling figures where both describers saw panels flipping and
+robotic birds attacking. Spend $0.0640.
+
+### Reproduce
+
+```sh
+uv run --directory eval python -m suite_b.facts --check      # the reference set is as pinned
+uv run --directory eval python -m suite_b.refs --spot-check  # random USGS lines in context
+uv run --directory eval python -m suite_b.score --run elephants_dream=RUN_DIR \
+    --run woodshole=RUN_DIR --run aquatic_connectivity=RUN_DIR --run csc_intro=RUN_DIR
+```
+
+`python -m suite_b.refs` rebuilds the references from the data folder (`--data`, default
+`../lull-data` next to the repository) and the committed transcripts (`--transcribe` asks
+the speech server again; the recogniser need not return the same words twice).
+`python -m suite_b.facts` rebuilds the facts from its answer cache; the provider does not
+promise the same answer twice, so the committed facts are the reference. `--offset VIDEO=S`
+scores a run made on a clip that starts S seconds into the video; `--cap` limits the spend
+(default $0.50).
+
+### Known limitations
+
+- Human references describe different things by design: two experts describing the same
+  90 s conveyed 20-31 % of each other's facts in the smoke. Read Lull's recall next to that.
+- The judges are models: Ultra is strict and is also the engine's planner; Qwen is lenient
+  (in the smoke it credited 8 facts Ultra did not, several on loose paraphrase). Neither was
+  probed with known positives and near misses here, unlike Suite A.
+- The USGS extraction is automatic: recogniser errors stay in the lines ("Piping clover" for
+  plover, "Athymmetry map" for bathymetry), anchors inside paused gaps are estimates (the gap
+  is in `anchor_range`), and four woodshole narration phrases are missing from the AD
+  version's transcript. The spot-check reads lines in context; nobody listened.
+- Fact granularity varies: most lines split cleanly, but some telegraphic USGS lines and a
+  few ED lines stayed one compound fact ("Large waves and sign reading danger, no
+  swimming."), which a cue then has to convey whole; pfeiffer-05 kept two naming facts ("The
+  old man is Proog.") despite the rule against them. The kinds are the model's.
+- WebVTT cue ends are display times, not voiced durations; Hunt's recording gives his real
+  voiced intervals; Pfeiffer's track was never voiced.
+- The speech spans are Lull's own (diarized turns included), so Lull's standard-track overlap
+  is near 0 by construction and the human tracks are measured against what Lull heard; the
+  supplementary rows against the transcript's words show how much that choice moves them.
+- The window (+/-15 s) is generous for a fast film and can credit a cue a few lines away;
+  the anywhere variant shows how much timing matters.
