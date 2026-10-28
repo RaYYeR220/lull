@@ -968,6 +968,23 @@ def publish(
     return PublishResult(files=files, manifest=run_dir / MANIFEST)
 
 
+def _cached_spend(run_dir: Path, run_id: str) -> dict | None:
+    """The spend, calls and models of the publish whose manifest is in `run_dir`, when it was
+    for `run_id` (None otherwise, or when it cannot be read)."""
+    try:
+        old = json.loads((run_dir / MANIFEST).read_bytes().decode("utf-8"))
+        summary = old["summary"]
+        if old.get("run_id") != run_id or not isinstance(summary.get("spend"), dict):
+            return None
+        return {
+            "spend": summary["spend"],
+            "calls": {"by_role_model": list(summary.get("calls_by_role_model") or [])},
+            "models": list((old.get("versions") or {}).get("models") or []),
+        }
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
 def _continuous_note(c: Cue, words: list[Word], speech: list[Span]) -> Cue:
     """`c` with a note when its picture holds at a word boundary in continuous speech (no
     sentence end or gap between words within reach: see mix.hold)."""
@@ -1058,6 +1075,11 @@ def _stage(
         ),
         "model_usd_all_runs": round(ledger.spent(run_id=run_id), 6),
     }  # fmt: skip
+    models = sorted({c.model for c in ledger.calls(run_id)
+                     if since is None or c.ts >= since})  # fmt: skip
+    prior = _cached_spend(final, run_id) if since is not None and not models else None
+    if prior is not None:  # every stage came from the cache: keep what made these outputs
+        spend, calls, models = prior["spend"], prior["calls"], prior["models"]
     cost = spend["model_usd_this_run"]
     minutes = info.duration / 60
     per_min = round(cost / minutes, 6) if minutes > 0 else None
@@ -1086,6 +1108,8 @@ def _stage(
         "cost_usd": cost,  # model spend of this run
         "cost_per_min": per_min,
         "spend": spend,
+        "spend_from_cache": prior is not None,  # this attempt made no call: the spend that
+        # made these outputs, from the manifest of the publish before
         "calls_by_role_model": calls["by_role_model"],
         "wcag": wcag,
         "reviewed": signed_off,
@@ -1132,8 +1156,6 @@ def _stage(
     }  # fmt: skip
     out[REPORT] = _write(run_dir / REPORT, _render_report(context))
 
-    models = sorted({c.model for c in ledger.calls(run_id)
-                     if since is None or c.ts >= since})  # fmt: skip
     manifest = {
         "run_id": run_id,
         "created": created,

@@ -1880,3 +1880,27 @@ def test_wordless_speech_also_holds_a_freeze_back():
     ext = [_cue("x001", 4.0, 1.0, gap=None, status="extended")]
     [(frame, _, _)] = _freezes(ext, words=words, speech=speech)
     assert frame / 25 == pytest.approx(8.0, abs=0.04)
+
+
+def test_a_publish_from_the_cache_keeps_the_spend_and_models_of_the_run(tmp_path, fake_media):
+    """A rerun whose every stage came from the cache makes no model call: its publish keeps
+    the spend, the calls and the models of the publish that made the outputs, read from that
+    manifest, instead of reporting $0 and no model."""
+    led = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
+    led.record(CallRecord(run_id="r1", stage="s", role="watch", provider="tokenfactory",
+                          model=SUPER, tokens_in=10, tokens_cached=0, tokens_out=5,
+                          latency_s=1.0, cost_usd=0.02, ts=100.0))  # fmt: skip
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    run = tmp_path / "run"
+    args = (run, video, [], [], [], [], None, led, "r1", RunOptions())
+    first = json.loads(publish(*args, speech=[], since=50.0).manifest.read_text(encoding="utf-8"))
+    again = json.loads(publish(*args, speech=[], since=500.0).manifest.read_text(encoding="utf-8"))
+    assert again["versions"]["models"] == first["versions"]["models"] == [SUPER]
+    assert again["summary"]["spend"] == first["summary"]["spend"]
+    assert again["summary"]["cost_usd"] == 0.02
+    assert again["summary"]["calls_by_role_model"] == first["summary"]["calls_by_role_model"]
+    assert again["summary"]["spend_from_cache"] is True
+    assert first["summary"]["spend_from_cache"] is False
+    html = " ".join((run / "report.html").read_text(encoding="utf-8").split())
+    assert "Every stage of this attempt came from the cache" in html
