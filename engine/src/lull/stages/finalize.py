@@ -46,7 +46,6 @@ from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
     clip_window,
-    is_extra,
     remove_claims,
     rewrite,
     tagged,
@@ -431,6 +430,25 @@ def _same(a: str, b: str) -> bool:
     return " ".join(a.split()) == " ".join(b.split())
 
 
+_RANK = {"supported": 0, "not_visible": 1, "contradicted": 2}
+
+
+def _plain(s: str) -> str:
+    """Words only, lower-cased: punctuation, case and spacing aside."""
+    return " ".join(re.findall(r"[a-z0-9\u2019']+", s.lower()))
+
+
+def _unchanged(a: str, b: str) -> bool:
+    """Whether a rewrite changed nothing but punctuation, case or spacing (after autofix)."""
+    return _plain(autofix(a)) == _plain(autofix(b))
+
+
+def _still_said(text: str, claims: Iterable[Claim]) -> list[str]:
+    """The spans of `claims` whose words are still in `text`, in order."""
+    plain = f" {_plain(text)} "
+    return [c.span for c in claims if c.span and _plain(c.span) and f" {_plain(c.span)} " in plain]
+
+
 @dataclass
 class _Finalise:
     """The state of one cue while it goes round; `run` returns the finished cue."""
@@ -455,7 +473,7 @@ class _Finalise:
     words_before: int | None = None  # word count before the first compression
     dropped: list[str] = field(default_factory=list)  # events whose sentence went to fit
     repairs: int = 0  # claim cuts made
-    rechecked: bool = False  # the unchanged line was judged afresh once
+    failed: dict[str, str] = field(default_factory=dict)  # failed claims' words -> verdict
     splits: dict = field(default_factory=dict)  # claim splits by text (verify.split_claims)
     extras: list[Claim] = field(default_factory=list)  # supported claims the line never made
     checks: list[Check] = field(default_factory=list)  # every verification round
@@ -651,6 +669,12 @@ class _Finalise:
         names = names_in(self.text, self.names)
         claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset,
                         cache=self.splits, dropped=self.extras)  # fmt: skip
+        claims = self.carry_forward(claims)
+        for c in claims:
+            if c.verdict != "supported" and c.span:
+                words = _plain(c.span)
+                if _RANK[c.verdict] > _RANK.get(self.failed.get(words, "supported"), 0):
+                    self.failed[words] = c.verdict
         self.checks.append(Check(text=self.text, claims=claims))
         return claims
 
@@ -661,7 +685,9 @@ class _Finalise:
     def cut(self, bad: list[Claim], last: bool) -> Cue | None:
         """Cut the claims the frames do not support; the held cue, or None to go round. A cut
         that drops a sentence the claims were not about is asked for once more with a note;
-        doing it again holds the cue with the line as it was."""
+        doing it again holds the cue with the line as it was. A cut that leaves the words of a
+        failed claim in the line, or changes nothing but punctuation, case or spacing, removed
+        nothing: it is asked for once more, naming those words, and then the cue is held."""
         gone = {_key(c) for c in self.removed}
         again = [c for c in bad if _key(c) in gone]
         if again:
@@ -676,53 +702,55 @@ class _Finalise:
         before = self.text
         new = remove_claims(before, bad, self.tf, run_id=self.run_id)
         lost = dropped_sentences(before, new, bad)
-        if lost and not _same(new, before):
+        if lost and not _unchanged(new, before):
             note = (
                 f'Your previous answer "{new}" dropped "{lost[0]}", which none of the listed '
                 "claims is about. Remove only the listed claims and keep every other sentence."
             )
             new = remove_claims(before, bad, self.tf, run_id=self.run_id, note=note)
             lost = dropped_sentences(before, new, bad)
-            if lost and not _same(new, before):
+            if lost and not _unchanged(new, before):
                 reason = f'the claim cut dropped "{lost[0]}" twice: ' + _claims_note(bad)
                 return self.hold_unverified(reason, bad, cut_tried=True)
+        left = _still_said(new, bad)
+        if left or _unchanged(new, before):
+            words = left or [c.span or c.text for c in bad]
+            note = (
+                f'Your previous answer "{new}" still says '
+                + ", ".join(f'"{w}"' for w in words)
+                + ". Remove those words, or rewrite the clause that holds them without them."
+            )
+            new = remove_claims(before, bad, self.tf, run_id=self.run_id, note=note)
         if not _content(_AHEAD.sub(" ", new)):
             new = ""  # nothing but a look-ahead prefix and punctuation is left
-        if _same(new, before):
-            fresh = self.fresh_check(bad, last)
-            if fresh is not False:
-                return fresh
+        if new and (_still_said(new, bad) or _unchanged(new, before)):
             reason = "the rewrite removed nothing: " + _claims_note(bad)
             return self.hold_unverified(reason, bad, cut_tried=True)
         self.repairs += 1
-        self._removed_add(bad)
+        self._removed_add(bad)  # every failed claim's words have left the line
         self.claims = []  # they judged the old text; the next round verifies the new one
         self.text = new
         if not new:
             return self.held("nothing left once the unverified claims were removed")
         if count_ahead(new) < count_ahead(before) and _lost_ahead(before, new):
             return self.held('a claim cut dropped "In a moment, " from a sentence it kept')
-        said = " ".join(c.text.lower() for c in bad)
+        said = " ".join((c.span or c.text).lower() for c in bad)
         self.keep = [k for k in self.keep if not _occurs(said, k.lower())]  # cut quotes only
         return None
 
-    def fresh_check(self, bad: list[Claim], last: bool) -> Cue | None | bool:
-        """The repair removed nothing. Only when every failed claim is one the line does not
-        make (is_extra, decided without a model) is the unchanged line judged once more: a
-        claim the line makes and that failed is never given a second chance, however a second
-        look would word, flip or drop it. False when there is no second look, or when the same
-        failed claim comes back: the caller holds the cue. Otherwise the new verdicts decide:
-        all supported, the line goes on to be voiced; a new failure is cut as any other."""
-        if self.rechecked or not all(is_extra(c, self.text) for c in bad):
-            return False
-        self.rechecked = True
-        self.claims = self.check_frames()
-        failed = [c for c in self.claims if c.verdict != "supported"]
-        if {_key(c) for c in failed} & {_key(c) for c in bad}:
-            return False
-        if not self.claims:
-            return self.held("the verifier found no visual claim to check")
-        return self.cut(failed, last) if failed else self.speak(last)
+    def carry_forward(self, claims: list[Claim]) -> list[Claim]:
+        """`claims` with the verdict of words that failed before: a claim whose span holds the
+        words of a claim that failed in an earlier check keeps the worse verdict, however the
+        new check answered."""
+        out = []
+        for c in claims:
+            span = _plain(c.span or "")
+            worst = c.verdict
+            for words, verdict in self.failed.items():
+                if span and f" {words} " in f" {span} " and _RANK[verdict] > _RANK[worst]:
+                    worst = verdict
+            out.append(c if worst == c.verdict else c.model_copy(update={"verdict": worst}))
+        return out
 
     def hold_unverified(self, reason: str, bad: list[Claim], *, cut_tried: bool = False) -> Cue:
         """Held for review. Contradicted claims are cut from the text even so, and the text is
@@ -736,7 +764,7 @@ class _Finalise:
                 if cut_tried
                 else remove_claims(self.text, wrong, self.tf, run_id=self.run_id)
             )
-            if _same(cut, self.text):
+            if _unchanged(cut, self.text) or _still_said(cut, wrong):
                 self.text = ""
                 reason += "; text withheld: a contradicted claim could not be cut"
             else:
