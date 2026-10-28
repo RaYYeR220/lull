@@ -124,8 +124,9 @@ def run_dir(tmp_path_factory) -> Path:
         "speech": [{"start": 0.0, "end": 0.3}, {"start": 1.7, "end": 2.0}],
     }  # fmt: skip
     (root / "cues.json").write_text(json.dumps(cues), encoding="utf-8")
+    models = ["vl-model", "text-model", "tavily-search"]  # the ledger lists the web search too
     manifest = {"run_id": "talk-1234abcd", "video": {"name": "talk.mp4", "duration": DURATION},
-                "summary": SUMMARY, "versions": {"models": ["vl-model", "text-model"]}}  # fmt: skip
+                "summary": SUMMARY, "versions": {"models": models}}  # fmt: skip
     (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     stages = root / "stages"
     (stages / "finalize").mkdir(parents=True)

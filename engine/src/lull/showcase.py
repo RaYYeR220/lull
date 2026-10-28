@@ -23,7 +23,8 @@ verifyExample {cueId, cue, claims [{text, verdict}]}, costUsd, summary}.
 summary is what the report says about the run: counts (cues by status), coverage
 {importantEvents, described, ratio, describedWithExtended, ratioWithExtended, undescribed},
 repetitive [{id, text}] (salient events the plan judged repetitive), f113 [{gapId, start,
-end, eventIds}], overlapSeconds, wcag [{criterion, level, name, status, blockers}], models,
+end, eventIds}], overlapSeconds, wcag [{criterion, level, name, status, blockers}], models (the
+model ids, web search left out),
 spend {modelUsdThisRun, webSearchesThisRun, webSearchListUsdThisRun (notional, not charged),
 modelUsdAllRunsOfRunId}. A run published before these were recorded gives empty values.
 
@@ -127,7 +128,11 @@ def run_summary(manifest: dict) -> dict:
             }
             for w in s.get("wcag") or []
         ],  # fmt: skip
-        "models": list((manifest.get("versions") or {}).get("models") or []),
+        "models": [
+            m
+            for m in (manifest.get("versions") or {}).get("models") or []
+            if not str(m).startswith("tavily")
+        ],  # the web search is not a model
         "spend": {
             "modelUsdThisRun": spend.get("model_usd_this_run", s.get("cost_usd")),
             "webSearchesThisRun": spend.get("tavily_searches_this_run"),
