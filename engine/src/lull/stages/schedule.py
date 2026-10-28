@@ -348,7 +348,7 @@ def _sentence(text: str) -> str:
     return text + "."
 
 
-def _lower_first(text: str, proper_nouns: set[str]) -> str:
+def lower_first(text: str, proper_nouns: set[str]) -> str:
     """First letter lower-cased to follow AHEAD_PREFIX, unless the first word is "I" or one of
     its contractions, an all-caps word of two or more letters ("NASA's", "U.S.", "TV") or a
     known proper noun. Text that starts with a quote is left alone."""
@@ -424,7 +424,7 @@ def compose_cues(
     for g, e, p, v in _resolve(placements, variants, events, gaps):
         text = _sentence(v.text)
         if p.ahead:
-            text = AHEAD_PREFIX + _lower_first(text, names)
+            text = AHEAD_PREFIX + lower_first(text, names)
         groups[g.id].append((e, text, p.ahead))
         gap_of[g.id] = g
     cues = [

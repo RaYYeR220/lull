@@ -1173,3 +1173,50 @@ def test_refresh_described_follows_an_edited_text():
     assert fresh.described == ["e002"] and edited.described == ["e001", "e002"]
     assert fresh.model_copy(update={"described": edited.described}) == edited  # nothing else
     assert refresh_described(_cue("Anything.", parts={})).described is None  # no parts
+
+
+# -- where in its pause a cue starts ----------------------------------------------------------
+
+CHART = VisualEvent(
+    id="e009", t_start=18.0, t_end=25.0, kind="chart",
+    text="A bar chart shows sales rising each year.", verbatim_text=None, salience=5,
+    said_in_dialogue=False,
+)  # fmt: skip
+CHART_LINE = "A bar chart shows sales rising each year."
+
+
+def _pause(us: float, ue: float) -> Gap:
+    return Gap(id="g001", start=us - 0.2, end=ue + 0.2, usable_start=us, usable_end=ue,
+               capacity_words=40)  # fmt: skip
+
+
+def test_a_cue_waits_for_its_visual_within_its_pause(tmp_path, video):
+    """A pause that opens 7.8 s before the chart: the line starts 0.3 s before the chart,
+    not at the start of the pause."""
+    gap = _pause(10.2, 25.0)
+    cue = _cue(CHART_LINE, start=10.2, event_ids=["e009"])
+    tf = FakeTF(verify=[_supported("a bar chart shows sales rising each year")])
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, FakeSpeech([2.7]), cue=cue, gap=gap,
+               events={"e009": CHART}, ctx=ctx)  # fmt: skip
+    assert out.status == "verified" and out.ahead is False and out.text == CHART_LINE
+    assert out.start == pytest.approx(17.7) and out.end == pytest.approx(20.4)
+
+
+def test_a_cue_that_cannot_wait_starts_as_late_as_it_can_with_a_look_ahead(tmp_path, video):
+    """The reviewer's probe: pause 10.2-19.0 s, chart from 18 s. Waiting for the chart would
+    run into speech, so the line starts earlier, as late as the pause allows, and says so: it
+    is voiced again with "In a moment, " and its fit checked again."""
+    gap = _pause(10.2, 19.0)
+    cue = _cue(CHART_LINE, start=10.2, event_ids=["e009"])
+    tf = FakeTF(verify=[_supported("a bar chart shows sales rising each year")])
+    speech = FakeSpeech([2.7, 3.7])
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, speech, cue=cue, gap=gap, events={"e009": CHART}, ctx=ctx)
+    assert [c["text"] for c in speech.calls] == [
+        CHART_LINE, "In a moment, a bar chart shows sales rising each year."
+    ]  # fmt: skip
+    assert out.status == "verified" and out.ahead is True
+    assert out.text == "In a moment, a bar chart shows sales rising each year."
+    assert out.start == pytest.approx(15.3) and out.end == pytest.approx(19.0)
+    assert "look-ahead" in out.note

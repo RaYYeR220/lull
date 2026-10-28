@@ -10,11 +10,15 @@ This is where a description is refused. Each cue goes through at most MAX_ROUNDS
    was already cut, or when the cut changes nothing; on the last round it is held as well.
    A held cue still loses its contradicted claims (never kept); not-visible ones stay for the
    reviewer to judge.
-3. voice. The line is spoken and its duration measured. It fits when it ends by the gap's
-   usable end; up to 10 % over, it is sped up with atempo; beyond that Lightning compresses it
-   towards floor(words x usable / duration x 0.95) words and the next round starts at step 1.
-   A line that fits is also timed sentence by sentence from the measured audio: a sentence
-   that would start at or after its visual ends sends the line back for compression too.
+3. voice. The line is spoken and its duration measured. It fits when it fits the gap's
+   usable window; up to 10 % over, it is sped up with atempo; beyond that Lightning compresses
+   it towards floor(words x usable / duration x 0.95) words and the next round starts at
+   step 1. A line that fits starts LEAD_IN_S before its first visual, or at the window's start
+   if that is later. When it could not then finish before the window ends it starts as late as
+   the window allows; if that is before its visual it is voiced again with "In a moment, "
+   (and fitted again), so a listener never hears a description early without being told. It
+   is also timed sentence by sentence from the measured audio: a sentence that would start at
+   or after its visual ends sends the line back for compression too.
 
 A look-ahead ("In a moment, ") is never lost silently: a repair or compression that drops one
 gets one repair to restore it, else the cue is held; a claim cut may drop one only with the
@@ -38,6 +42,7 @@ from lull.media import audio_duration, cut_clip, probe
 from lull.speech import SpeechClient
 from lull.stages.lint import Finding, autofix, lint, quoted_spans
 from lull.stages.plan import count_words
+from lull.stages.schedule import AHEAD_PREFIX, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
     clip_window,
@@ -54,6 +59,7 @@ from lull.types import Check, Claim, Cue, Gap, RunOptions, Span, VisualEvent
 log = logging.getLogger(__name__)
 
 MAX_ROUNDS = 4
+LEAD_IN_S = 0.3  # a line starts this long before its first visual when its pause allows
 COMPRESS_MARGIN = 0.95
 GATED = ("verified", "edited", "approved")  # statuses the overlap gate checks
 OVERLAP_EPS = 1e-6
@@ -431,10 +437,26 @@ class _Finalise:
     words_before: int | None = None  # word count before the first compression
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
+    at: float | None = None  # where in its window the voiced line starts
+    prefixed: bool = False  # "In a moment, " added because the line starts before its visual
 
     @property
     def start(self) -> float:
-        return self.gap.usable_start if self.gap is not None else self.cue.start
+        if self.gap is None:
+            return self.cue.start
+        return self.at if self.at is not None else self.gap.usable_start
+
+    def place(self, dur: float) -> tuple[float, bool]:
+        """Where a line of `dur` seconds starts in its window, and whether that is before its
+        first visual: LEAD_IN_S before the visual (not before the window opens) when it can
+        still finish in the window, else as late as the window allows."""
+        us, ue = self.gap.usable_start, self.gap.usable_end
+        first = min(e.t_start for e in self.events)
+        want = max(us, math.ceil(round((first - LEAD_IN_S) * 1000, 6)) / 1000)
+        if want + dur <= ue + _FIT_EPS:
+            return want, False
+        start = max(us, math.floor(round((ue - dur) * 1000, 6)) / 1000)
+        return start, start < first - LEAD_IN_S - _FIT_EPS
 
     def run(self) -> Cue:
         ctx = self.ctx
@@ -500,8 +522,10 @@ class _Finalise:
         return self._result("held", reason, None, None, 1.0, self.cue.ahead, [])
 
     def done(self, audio: Path, dur: float, tempo: float) -> Cue:
-        ahead = self.cue.ahead and count_ahead(self.text) > 0
+        ahead = (self.cue.ahead or self.prefixed) and count_ahead(self.text) > 0
         extra = ["look-ahead sentence removed"] if self.cue.ahead and not ahead else []
+        if self.prefixed and ahead:
+            extra.append("look-ahead added: the line starts before its visual")
         status = "verified" if self.gap is not None else self.cue.status
         return self._result(status, None, audio, dur, tempo, ahead, extra)
 
@@ -710,7 +734,8 @@ class _Finalise:
         fast_path = audio_dir / f"{self.cue.id}.t.wav"
         if self.gap is None:
             return self.done(audio, dur, 1.0)
-        usable = self.gap.usable_end - self.start
+        self.at = None
+        usable = self.gap.usable_end - self.gap.usable_start
         tempo = 1.0
         if usable + _FIT_EPS < dur <= usable * MAX_TEMPO + _FIT_EPS:
             factor = min(MAX_TEMPO, math.ceil(dur / usable * 1000 - 1e-6) / 1000)
@@ -726,6 +751,15 @@ class _Finalise:
             return self.shorten(target, f"does not fit: {fit}")
         if tempo == 1.0:
             fast_path.unlink(missing_ok=True)
+        start, early = self.place(dur)
+        if early and count_ahead(self.text) == 0:
+            names = set(self.ctx.proper_nouns) | set(self.ctx.cast)
+            self.text = AHEAD_PREFIX + lower_first(self.text, names)
+            self.prefixed = True
+            log.info("finalize: %s starts before its visual; voiced again as a look-ahead",
+                     self.cue.id)  # fmt: skip
+            return self.speak(last)  # the longer line is fitted and placed again
+        self.at = start
         late = self.late(dur)
         if not late:
             return self.done(audio, dur, tempo)
