@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteOrigin } from "@/components/ui/SiteOrigin";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { cx } from "@/lib/cx";
 import { MCP_AVAILABLE } from "@/lib/features";
@@ -50,7 +51,11 @@ const TABS: DevTab[] = [
           <span className={styles.note}>{"<!-- one script, one tag -->"}</span>
           {"\n<"}
           <span className={styles.cmd}>script</span> <span className={styles.flag}>type</span>=<span className={styles.str}>&quot;module&quot;</span>{" "}
-          <span className={styles.flag}>src</span>=<span className={styles.str}>&quot;/player.js&quot;</span>
+          <span className={styles.flag}>src</span>=<span className={styles.str}>
+            &quot;
+            <SiteOrigin />
+            /player.js&quot;
+          </span>
           {"></"}
           <span className={styles.cmd}>script</span>
           {">\n<"}

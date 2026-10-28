@@ -229,8 +229,8 @@ function EmbedPanel() {
       <div>
         <h3 className={styles.h3}>One script, one tag</h3>
         <p className={styles.stepWhat}>
-          The player is a web component with no dependencies (about 20 kB gzipped). Point it at a run’s files: the ones the API serves, or your
-          own copies.
+          The player is a web component with no dependencies (about 20 kB gzipped). Paste the snippet into any page: the player and the recorded
+          runs’ files are served to any site. For a run of your own, point it at copies of its files on your site.
         </p>
       </div>
       <EmbedDemo />

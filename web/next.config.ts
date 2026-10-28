@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { assertApiBaseForBuild } from "./lib/api-base";
 import { benchmarksFile } from "./lib/benchmarks-file";
+import { siteUrl } from "./lib/site-url";
 import { assertRealBenchmarks, assertRealShowcases } from "./lib/showcase-build";
 
 /** Sent with every response. */
@@ -14,17 +15,26 @@ const SECURITY_HEADERS = [
 ];
 
 /**
- * The embeddable player is loaded by other sites as a module script, which browsers fetch
- * with CORS: it must say any origin may use it.
+ * What other sites may load from this one: the embeddable player (a module script, fetched
+ * with CORS) and the recorded runs' public media (CC-licensed clips, their tracks and takes),
+ * which the player fetches and plays from the embedding page. Reading only; the range headers
+ * are exposed so media can seek.
  */
-const PLAYER_HEADERS = [
+const CROSS_ORIGIN = [
   { key: "Access-Control-Allow-Origin", value: "*" },
+  { key: "Access-Control-Allow-Methods", value: "GET, HEAD" },
+  { key: "Access-Control-Allow-Headers", value: "Range" },
+  { key: "Access-Control-Expose-Headers", value: "Content-Length, Content-Range, Accept-Ranges" },
   { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
-  { key: "Cache-Control", value: "public, max-age=300, stale-while-revalidate=86400" },
 ];
+const PLAYER_HEADERS = [...CROSS_ORIGIN, { key: "Cache-Control", value: "public, max-age=300, stale-while-revalidate=86400" }];
+
+const SITE = siteUrl(process.env);
 
 const config: NextConfig = {
   reactStrictMode: true,
+  // this site's address, for links that leave it (embed snippets, sharing cards)
+  env: SITE ? { NEXT_PUBLIC_SITE_URL: SITE } : {},
   poweredByHeader: false,
   // web/ is its own pnpm project; keep file tracing from walking up to other lockfiles
   outputFileTracingRoot: __dirname,
@@ -32,6 +42,7 @@ const config: NextConfig = {
     return [
       { source: "/:path*", headers: SECURITY_HEADERS },
       { source: "/player.js", headers: PLAYER_HEADERS },
+      { source: "/showcase/:path*", headers: CROSS_ORIGIN },
     ];
   },
 };

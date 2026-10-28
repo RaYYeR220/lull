@@ -64,6 +64,51 @@ test.describe("the developer page", () => {
     await expect(cli.getByText(/lull export-showcase runs\//)).toBeVisible();
   });
 
+  test("the embed snippet works pasted as given onto another site: script and media cross origin", async ({ page }) => {
+    await page.goto("/developers");
+    await tab(page, "Embed").click();
+    const origin = new URL(page.url()).origin;
+    const pre = page.getByRole("tabpanel", { name: "Embed" }).locator("pre").first();
+    await expect(pre).toContainText(`src="${origin}/player.js"`);
+    await expect(pre).toContainText('crossorigin="anonymous"');
+    // this site under a public-looking name (Chrome won't let a public page reach localhost),
+    // answering with its own responses and headers, CORS ones included
+    const site = "http://site.test";
+    const snippet = ((await pre.textContent()) ?? "").replaceAll(origin, site);
+    await page.route(`${site}/**`, async (route) => {
+      const url = new URL(route.request().url());
+      const range = route.request().headers()["range"];
+      const res = await page.request.get(`${origin}${url.pathname}`, { headers: range ? { Range: range } : {} });
+      await route.fulfill({ status: res.status(), headers: res.headers(), body: await res.body() });
+    });
+    // another site: its own page with the snippet pasted in, everything else from this site
+    const other = "http://embed.test";
+    await page.route(`${other}/`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Another site</title></head><body><main>${snippet}</main></body></html>`,
+      }),
+    );
+    const failed: string[] = [];
+    page.on("requestfailed", (r) => failed.push(`${r.url()} ${r.failure()?.errorText}`));
+    await page.goto(`${other}/`);
+    await page.waitForFunction(() => !!customElements.get("lull-player"));
+    const state = () => page.locator("lull-player").evaluate((el) => (el as unknown as { state: Record<string, unknown> }).state);
+    await expect.poll(async () => (await state()).descriptions, { timeout: 15_000 }).toBe("ready");
+    await expect.poll(async () => (await state()).extended, { timeout: 15_000 }).toBe("ready");
+    await expect.poll(async () => (await state()).video, { timeout: 15_000 }).toBe("ready");
+    // the transcript fills from the fetched track
+    await page.locator("lull-player").getByRole("button", { name: "Transcript" }).click();
+    await expect(page.locator("lull-player").getByRole("region", { name: "Descriptions transcript" })).toContainText("A second person with dark hair");
+    expect(failed.filter((f) => !/ERR_ABORTED/.test(f))).toEqual([]);
+    // the headers that make it work
+    for (const p of ["/player.js", "/showcase/ed90/descriptions.vtt", "/showcase/ed90/audio/c001.m4a"]) {
+      const res = await page.request.get(`${origin}${p}`, { headers: { Origin: other } });
+      expect(res.headers()["access-control-allow-origin"], p).toBe("*");
+    }
+  });
+
   test("the embed tab documents every attribute, and its live player plays", async ({ page }) => {
     await page.goto("/developers");
     await tab(page, "Embed").click();
