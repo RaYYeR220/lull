@@ -423,7 +423,8 @@ class _Run:
                     run_id=self.run_id,
                     memo=self.memo,
                 ),
-                keep=lambda result: not result.errors,
+                # failed or capped lookups are tried again by a later run
+                keep=lambda result: not result.errors and not result.notes,
             )
             info.update(terms=len(found.glossary), skipped=found.skipped, errors=len(found.errors))
         if found.skipped:

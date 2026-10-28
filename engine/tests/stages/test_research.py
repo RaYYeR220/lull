@@ -396,3 +396,16 @@ def test_at_most_five_terms_by_default(tmp_path):
     names = ["Proog", "Emo", "A1", "B2", "C3", "D4", "Bad"]  # all said in WORDS
     res = research(_ev(), WORDS, RunOptions(), FakeTF(names), tv, run_id="r")
     assert [e.term for e in res.glossary] == names[:5] and len(seen) == 5
+
+
+def test_a_source_page_the_search_cap_stopped_is_noted(tmp_path):
+    """A cap of 0 searches: the source page is not read, which is noted, and no lookup is
+    tried after it."""
+    seen: list = []
+    ledger = Ledger(tmp_path / "c.db", cap_run=None, cap_day=None, cap_total=None, tavily_run=0)
+    tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler(seen)))
+    opts = RunOptions(source_url="https://example.org/film")
+    res = research(_ev(), WORDS, opts, FakeTF(["Proog"]), tv, run_id="r")
+    assert seen == []
+    assert res.notes == ["source page not read: search cap", "research capped: 0 searches"]
+    assert [g.note for g in res.glossary] == ["lookup skipped: search cap"]

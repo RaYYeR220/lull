@@ -26,6 +26,7 @@ SEARCHED_KINDS = {"person", "place", "organization", "work"}  # looked up when s
 ON_SCREEN_KINDS = {"technical"}  # looked up only when the screen shows them
 LOOKUP_FAILED = "lookup failed"
 LOOKUP_CAPPED = "lookup skipped: search cap"
+SOURCE_CAPPED = "source page not read: search cap"
 Kind = Literal["person", "place", "organization", "work", "technical", "other"]
 
 
@@ -155,15 +156,20 @@ def research(
 ) -> ResearchResult:
     """The glossary: terms Lightning picks out (see _extract_terms), each looked up with
     Tavily when there is a client. A failed lookup or source extract is recorded in `errors`
-    and degrades the entry; a spend cap still stops the stage. `memo` keeps the term list, the
+    and degrades the entry; the search cap stops the lookups (and the source page) and is
+    recorded in `notes`; a spend cap still stops the stage. `memo` keeps the term list, the
     source page and each successful lookup (steps "terms", "source" and "lookup")."""
     errors: list[str] = []
+    notes: list[str] = []
     context: str | None = None
+    capped: SearchCapReached | None = None
     if tavily is not None and opts.source_url:
         url = opts.source_url
         try:
             pages = memo("source", {"url": url}, lambda: tavily.extract([url], run_id=run_id))
-        except SearchCapReached:
+        except SearchCapReached as e:
+            capped = e
+            notes.append(SOURCE_CAPPED)
             pages = []
         except TavilyError as e:
             errors.append(f"source extract failed: {e}")
@@ -173,7 +179,9 @@ def research(
             context = raw[:CONTEXT_CHARS]
 
     if not words and not events and not context:
-        return ResearchResult(glossary=[], skipped=tavily is None, errors=errors)
+        if capped is not None:
+            notes.append(f"research capped: {capped.done} searches")
+        return ResearchResult(glossary=[], skipped=tavily is None, errors=errors, notes=notes)
 
     inputs = {"events": events, "words": words, "context": context, "max_terms": max_terms}
 
@@ -186,7 +194,6 @@ def research(
         return ResearchResult(glossary=entries, skipped=True)
 
     entries = []
-    capped: SearchCapReached | None = None
     for t, k in terms:
         if capped is not None:
             entries.append(GlossaryEntry(term=t, canonical=t, note=LOOKUP_CAPPED, kind=k))
@@ -202,7 +209,8 @@ def research(
         except TavilyError as e:
             errors.append(f"search failed for {t!r}: {e}")
             entries.append(GlossaryEntry(term=t, canonical=t, note=LOOKUP_FAILED, kind=k))
-    notes = [f"research capped: {capped.done} searches"] if capped else []
+    if capped is not None:
+        notes.append(f"research capped: {capped.done} searches")
     return ResearchResult(
         glossary=entries, skipped=False, source_context=context, errors=errors, notes=notes
     )

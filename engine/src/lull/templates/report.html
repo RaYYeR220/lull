@@ -203,6 +203,9 @@
   {% elif research is not none and not research.skipped %}
   <p>No term needed a lookup.</p>
   {% endif %}
+  {% if research is not none and research.notes | default([]) %}
+  <ul class="reasons">{% for n in research.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+  {% endif %}
   {% if research is not none and research.errors %}
   <ul class="reasons">{% for e in research.errors %}<li>{{ e }}</li>{% endfor %}</ul>
   {% endif %}

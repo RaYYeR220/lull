@@ -949,3 +949,34 @@ def test_source_digest_reads_only_source_files_with_unix_line_ends(tmp_path):
         (pkg / kept).write_text("{}", encoding="utf-8")
         assert source_digest(pkg) != first
         first = source_digest(pkg)
+
+
+class _CappedTavily:
+    """Every search hits the run's search cap."""
+
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+        self.searched: list[str] = []
+
+    def search(self, query, *, run_id, max_results=3):
+        from lull.ledger import SearchCapReached
+
+        self.searched.append(query)
+        raise SearchCapReached("run", 3, 3)
+
+    def extract(self, urls, *, run_id):
+        return []
+
+
+def test_capped_research_is_reported_and_not_cached(tone_slides, tmp_path, fast_media):
+    """A run that hit its search cap says so in the manifest and the report, and its research
+    is not kept, so a later run with searches left looks the terms up."""
+    ledger = _ledger(tmp_path)
+    tavily = _CappedTavily(ledger)
+    res = run(tone_slides, tmp_path / "run", RunOptions(), tf=FakeTF(ledger),
+              speech=FakeSpeech(), tavily=tavily, ledger=ledger, run_id="tc", wps=3.0)  # fmt: skip
+    summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert summary["research"]["notes"] == ["research capped: 3 searches"]
+    report = (tmp_path / "run" / "report.html").read_text(encoding="utf-8")
+    assert "research capped: 3 searches" in report
+    assert not (tmp_path / "run" / "stages" / "research.json").exists()

@@ -1120,7 +1120,7 @@ def _stage(
         "tts_disclosure": disclosure,
         "research": None if research is None else {
             "skipped": research.skipped, "terms": len(research.glossary),
-            "errors": research.errors,
+            "errors": research.errors, "notes": research.notes,
         },
     }  # fmt: skip
 
