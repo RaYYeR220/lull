@@ -150,7 +150,7 @@ def verify_all(call: dict) -> dict:
     """Every claim the judge is given is supported."""
     content = next(m for m in call["messages"] if m["role"] == "user")["content"]
     text = " ".join(p["text"] for p in content if p.get("type") == "text")
-    listed = re.findall(r"^(k\d+): ", text, re.M)
+    listed = re.findall(r"^([ks]\d+): ", text, re.M)  # the claims and the sentences
     return {"verdicts": [{"id": i, "verdict": "supported", "evidence": "seen", "at": 0.5}
                          for i in listed]}  # fmt: skip
 

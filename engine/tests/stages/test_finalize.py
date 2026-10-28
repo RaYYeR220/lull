@@ -1,3 +1,4 @@
+import re
 import wave
 from pathlib import Path
 
@@ -120,13 +121,15 @@ class FakeTF:
             if found is None:  # the same line judged again: its split was kept
                 found = self._answer("verify", call)
             if "claims" in found:
-                return {"verdicts": [
+                return _sentences_pass(call, {"verdicts": [
                     {"id": f"k{i}", "verdict": c.get("verdict"), "evidence": "",
                      "at": c.get("at")}
                     for i, c in enumerate(found["claims"], start=1)
-                ]}  # fmt: skip
-            return found
+                ]})  # fmt: skip
+            return _sentences_pass(call, found)
         out = self._answer(role, call)
+        if role == "verify":
+            return _sentences_pass(call, out)
         if role == "split" and isinstance(out, dict):  # words given for tokens: their range
             line = _description(call)
             out = {"claims": [
@@ -140,6 +143,24 @@ class FakeTF:
 
     def of(self, role: str) -> list[dict]:
         return [c for c in self.calls if c["role"] == role]
+
+
+def _atomic(claims):
+    """The atomic claims of a published or judged list (the whole sentences left out)."""
+    return [c for c in claims if c.kind == "atomic"]
+
+
+def _sentences_pass(call, out):
+    """A judge answer as a test wrote it, with each whole sentence the judge was also given
+    (ids s1, s2, ...) supported unless the test gave it a verdict; an answer with no verdict
+    at all stays empty."""
+    if not isinstance(out, dict) or not out.get("verdicts"):
+        return out
+    given = {v.get("id") for v in out["verdicts"]}
+    listed = re.findall(r"^(s\d+): ", _user_text(call), re.M)
+    extra = [{"id": i, "verdict": "supported", "evidence": "", "at": None}
+             for i in listed if i not in given]  # fmt: skip
+    return {**out, "verdicts": [*out["verdicts"], *extra]}
 
 
 @pytest.fixture(autouse=True)
@@ -251,13 +272,13 @@ def test_all_supported_and_short_audio_is_verified(tmp_path, tone_slides):
     assert out.end == pytest.approx(out.start + out.audio_dur)
     assert out.tempo == 1.0
     assert out.text == TEXT
-    assert [c.verdict for c in out.claims] == ["supported"] * 3
+    assert [c.verdict for c in _atomic(out.claims)] == ["supported"] * 3
     assert Path(out.audio_path) == tmp_path / "work" / "audio" / "c001.wav"
     assert speech.calls[0]["voice"] == "Aria" and speech.calls[0]["text"] == TEXT
     assert tf.roles() == ["verify"]
     call = tf.of("verify")[0]
     assert call["model"] == VL and call["schema"] == VERIFY_SCHEMA
-    assert (call["stage"], call["thinking"], call["temperature"]) == ("finalize", False, 0.2)
+    assert (call["stage"], call["thinking"], call["temperature"]) == ("finalize", False, 0.0)
     assert (call["max_tokens"], call["estimate"]) == (1500, 0.005)
     user = next(m for m in call["messages"] if m["role"] == "user")["content"]
     assert user[0]["type"] == "video_url"
@@ -271,7 +292,7 @@ def test_all_supported_and_short_audio_is_verified(tmp_path, tone_slides):
 def test_claim_times_are_absolute(tmp_path, video):
     tf = FakeTF(verify=[_claims(("a person opens a door", "supported"), at=1.5)])
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
-    assert [(c.text, c.verdict, c.at) for c in out.claims] == [
+    assert [(c.text, c.verdict, c.at) for c in _atomic(out.claims)] == [
         ("a person opens a door", "supported", 2.5)
     ]  # fmt: skip
 
@@ -305,8 +326,8 @@ def test_not_visible_claim_is_removed_and_reverified(tmp_path, video):
     assert _description(tf.of("verify")[1]) == "A person opens a door."
     # every verification round is kept: the draft as first checked, then the cut line
     assert [(c.text, [k.verdict for k in c.claims]) for c in out.checks] == [
-        (TEXT, ["supported", "not_visible", "supported"]),
-        ("A person opens a door.", ["supported", "supported"]),
+        (TEXT, ["supported", "not_visible", "supported", "supported"]),  # the sentence last
+        ("A person opens a door.", ["supported", "supported", "supported"]),
     ]
 
 
@@ -322,12 +343,16 @@ def test_contradicted_claim_is_removed(tmp_path, video):
     assert out.status == "verified" and "red" not in out.text
 
 
+LONG = "A person in a red coat opens a door while a dog barks."
+
+
 def _new_failure_each_round(*last_round, then=()):
-    """A verifier that rejects a different detail of the line in each of the two repair
-    rounds ("red", "coat": every line these tests verify says them), then answers
-    `last_round` on the third check, then the answers in `then`."""
+    """A verifier for LONG that rejects a different phrase in each of the two repair rounds
+    ("in a red coat", then "while a dog barks"), then answers `last_round` on the third check
+    ("A person opens a door."), then the answers in `then`."""
     answers = iter(
-        [_claims(("a person", "supported"), (word, "not_visible")) for word in ("red", "coat")]
+        [_claims(("a person", "supported"), (words, "not_visible"))
+         for words in ("in a red coat", "while a dog barks")]
         + [_claims(*last_round), *then]
     )  # fmt: skip
     return lambda call: next(answers)
@@ -344,7 +369,7 @@ def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
         ),  # fmt: skip
     )
     speech = FakeSpeech([])
-    out = _run(tmp_path, video, tf, speech)
+    out = _run(tmp_path, video, tf, speech, cue=_cue(LONG))
     assert out.status == "held"
     assert len(tf.of("verify")) == 4 and len(tf.of("mend")) == 3
     assert "opens" not in out.text and "door" not in out.text  # the contradiction is cut
@@ -393,7 +418,7 @@ def test_contradiction_that_cannot_be_cut_withholds_the_text(tmp_path, video):
     assert out.status == "held" and out.text == ""
     assert "withheld" in out.note
     assert out.claims == []  # nothing is said, so no claim is published; the check is kept
-    assert [k.verdict for k in out.checks[-1].claims] == ["supported", "contradicted"]
+    assert [k.verdict for k in _atomic(out.checks[-1].claims)] == ["supported", "contradicted"]
 
 
 def test_everything_removed_is_held(tmp_path, video):
@@ -590,7 +615,7 @@ def test_a_compression_that_drops_a_visual_twice_is_held_with_the_full_line(tmp_
     assert "left 1 sentence for 2 visuals" in _user_text(tf.of("compress")[1])
     assert out.status == "held" and out.text == HASHTAG  # the reviewer gets the whole line
     assert "compression left 1 sentence for 2 visuals, twice" in out.note
-    assert [c.verdict for c in out.claims] == ["supported", "supported"]  # they judged HASHTAG
+    assert [c.verdict for c in _atomic(out.claims)] == ["supported"] * 2  # they judged HASHTAG
     assert (out.audio_path, out.audio_dur) == (None, None)
 
 
@@ -659,11 +684,11 @@ def test_verify_always_fails_is_held_after_two_repairs(tmp_path, video):
         verify=_new_failure_each_round(("a person", "supported"), ("door", "not_visible")),
     )
     speech = FakeSpeech([])
-    out = _run(tmp_path, video, tf, speech)
+    out = _run(tmp_path, video, tf, speech, cue=_cue(LONG))
     assert out.status == "held"
     assert len(tf.of("verify")) == 3 and len(tf.of("mend")) == 2
     assert "not verified after 2 repairs: door (not visible)" in out.note
-    assert "2 claims removed: red; coat" in out.note
+    assert "2 claims removed: in a red coat; while a dog barks" in out.note
     assert speech.calls == []
     assert out.start == GAP.usable_start
     assert {c["stage"] for c in tf.calls} == {"finalize"}
@@ -871,14 +896,17 @@ def test_removing_a_whole_look_ahead_sentence_is_fine(tmp_path, video):
     assert out.ahead is False and "look-ahead sentence removed" in out.note
 
 
-def test_a_mend_that_strips_the_look_ahead_but_keeps_its_sentence_is_held(tmp_path, video):
+def test_a_mend_that_strips_the_look_ahead_is_not_taken(tmp_path, video):
+    """The mend drops "In a moment" from a sentence it keeps: only whole sentences may go, so
+    the engine's cut stands, look-ahead and all."""
     tf = FakeTF(
-        verify=[_claims(("a person waves", "not_visible"), ("a red car drives past", "supported"))],
+        verify=[_claims(("a person waves", "not_visible"), ("a red car drives past", "supported")),
+                _supported("a red car drives past")],
         mend=[{"text": "A red car drives past."}],  # the look-ahead dropped, its sentence kept
-    )
-    out = _run(tmp_path, video, tf, FakeSpeech([]), cue=_ahead_cue(), events=AHEAD_EVENTS)
-    assert tf.roles() == ["verify", "mend"]
-    assert out.status == "held" and "In a moment" in out.note and out.ahead is True
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_ahead_cue(), events=AHEAD_EVENTS)
+    assert tf.roles() == ["verify", "mend", "verify"]
+    assert out.text == "In a moment, a red car drives past." and out.ahead is True
 
 
 def test_split_sentences_and_count_ahead():
@@ -1306,7 +1334,9 @@ def test_a_compressed_cue_publishes_only_the_claims_its_final_text_makes(tmp_pat
     )  # fmt: skip
     out = _run(tmp_path, video, tf, FakeSpeech([5.6, 3.0]), cue=_cue(long_text))
     assert out.status == "verified" and out.text == final
-    assert [c.text for c in out.claims] == ["a person in a red coat", "the person opens a door"]
+    assert [c.text for c in _atomic(out.claims)] == [
+        "a person in a red coat", "the person opens a door"
+    ]  # fmt: skip
     last = out.checks[-1]
     assert last.text == out.text
     assert all(c in last.claims for c in out.claims)  # each verdict judged on the final text
@@ -1424,7 +1454,7 @@ def test_a_held_cue_keeps_a_contradiction_found_when_its_cut_text_is_checked_aga
             then=[_claims(("a person", "contradicted"))],
         ),  # fmt: skip
     )
-    out = _run(tmp_path, video, tf, FakeSpeech([]))
+    out = _run(tmp_path, video, tf, FakeSpeech([]), cue=_cue(LONG))
     assert out.status == "held" and "door" not in out.text
     assert [(c.text, c.verdict) for c in out.claims] == [("a person", "contradicted")]
     assert "a person (contradicted)" in out.note
@@ -1569,7 +1599,7 @@ def test_a_sound_split_is_judged_claim_by_claim(tmp_path):
         verify=[_verdicts(("k1", "supported", 1.5), ("k9", "supported"))],
     )
     out = verify(line, clip, tf, run_id="r1", names={"Emo"}, offset=10.0)
-    assert [(c.text, c.verdict, c.at, c.span) for c in out] == [
+    assert [(c.text, c.verdict, c.at, c.span) for c in _atomic(out)] == [
         ("a person in a red coat", "supported", 11.5, "A person in a red coat"),
         ("the person opens a door", "not_visible", None, "opens a door"),
     ]  # fmt: skip
@@ -1604,7 +1634,7 @@ def test_a_split_whose_tokens_leave_words_out_is_asked_again_naming_them():
     assert check_split(line, claims) == []
     # names are context and framing words need no claim
     assert check_split("In a moment, Proog waves.", [
-        _sc("k1", "Proog waves", "waves", "In a moment, Proog waves.")],
+        _sc("k1", "Proog waves", "Proog waves", "In a moment, Proog waves.")],
         names={"Proog"}) == []  # fmt: skip
 
 
@@ -2023,7 +2053,7 @@ def test_a_cut_works_on_tokens_whatever_the_script_or_apostrophe(
 @pytest.mark.parametrize(
     "raw, mended, ok",
     [
-        ("A person opens a red door.", "The person opens the door.", True),  # articles, a drop
+        ("A person opens a red door.", "The person opens the door.", False),  # "red" dropped
         ("A person opens a red door.", "A person opens a red door", True),
         ("A person, opens a door.", "A person opens a door.", True),
         ("A person opens a red door.", "A person in red opens a door.", False),  # "red" moved
@@ -2071,11 +2101,374 @@ def test_a_mend_answer_cut_off_leaves_the_raw_cut(tmp_path, video):
     assert out.status == "verified" and out.text == "A person opens a door."
 
 
-def test_a_judge_answer_cut_off_leaves_every_claim_not_visible(tmp_path, video):
+def test_a_judge_answer_cut_off_is_raised_for_the_caller_to_hold(tmp_path, video):
     from lull.stages.verify import judge
+    from lull.tf import TFUnusable
 
     clip = tmp_path / "c.mp4"
     clip.write_bytes(b"\0" * 16)
     claims = [_sc("k1", "a cat sits", "A cat sits", "A cat sits.")]
-    [c] = judge("A cat sits.", claims, clip, FakeTF(verify=_cut_off), run_id="r1")
-    assert c.verdict == "not_visible" and c.evidence is None
+    with pytest.raises(TFUnusable):
+        judge("A cat sits.", claims, clip, FakeTF(verify=_cut_off), run_id="r1")
+
+
+# -- fix round 4: the r3 probes, each ending held or with the false fact gone ---------------------
+
+
+def _by_text(answers: dict):
+    """A split or judge answered by the description it is given (any other is a test bug)."""
+
+    def answer(call):
+        text = _description(call)
+        assert text in answers, f"no answer for {text!r}"
+        got = answers[text]
+        return got.pop(0) if isinstance(got, list) else got
+
+    return answer
+
+
+BEHIND = "A man stands behind the car."
+BEHIND_SPLIT = {"claims": [
+    {"id": "k1", "text": "a man stands", "tokens": [[0, 2]]},
+    {"id": "k2", "text": "there is a car", "tokens": [[4, 5]]},
+    {"id": "k3", "text": "the man is behind the car", "tokens": [[1, 1], [3, 5]]},
+]}  # fmt: skip
+
+
+@pytest.mark.strict_split
+def test_r3_b1_the_split_is_sound():
+    from lull.stages.verify import check_split
+
+    claims = [_sc(c["id"], c["text"], c["tokens"]) for c in BEHIND_SPLIT["claims"]]
+    assert check_split(BEHIND, claims) == []
+
+
+@pytest.mark.parametrize(
+    "raw, mended",
+    [
+        ("A man stands the car.", BEHIND),  # the cut "behind" put back
+        ("A cat sits on the table.", "A cat sits under the table."),  # a preposition swapped
+        ("A man and a woman sit. A cup.", "A man and a woman sit. She has a cup."),  # she, has
+        ("The man does not wave.", "The man waves."),  # a negation dropped
+        ("A toy gun lies on a table.", "A gun lies on a table."),  # a modifier dropped
+        ("A man nearly falls.", "A man falls."),
+    ],
+    ids=["preposition-back", "preposition-swap", "pronoun-has", "negation", "toy", "nearly"],
+)
+def test_r3_b1_a_mend_compares_every_word_but_articles(raw, mended):
+    from lull.stages.verify import mend_keeps
+
+    assert mend_keeps(raw, mended) is False
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize("second", ["contradicted", "supported"])
+def test_r3_b1_a_mend_that_restores_the_line_never_voices_the_cut_fact(tmp_path, video, second):
+    tf = FakeTF(
+        split=_by_text({BEHIND: BEHIND_SPLIT, "A man stands the car.": {"claims": [
+            {"id": "k1", "text": "a man stands", "tokens": [[0, 2]]},
+            {"id": "k2", "text": "the car", "tokens": [[3, 4]]}]}}),
+        verify=[_verdicts(("k1", "supported"), ("k2", "supported"), ("k3", "contradicted")),
+                _verdicts(("k1", "supported"), ("k2", "supported"), ("k3", second)),
+                _verdicts(("k1", "supported"), ("k2", "supported"), ("k3", second))],
+        mend=[{"text": BEHIND}, {"text": BEHIND}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0, 2.0]), cue=_cue(BEHIND))
+    assert out.status == "held" or "behind" not in out.text
+
+
+SHE = "A man and a woman sit. She holds a cup."
+SHE_SPLIT = {"claims": [
+    {"id": "k1", "text": "a man sits", "tokens": [[0, 1], [5, 5]]},
+    {"id": "k2", "text": "a woman sits", "tokens": [[3, 5]]},
+    {"id": "k3", "text": "there is a cup", "tokens": [[9, 10]]},
+    {"id": "k4", "text": "she holds a cup", "tokens": [[7, 10]]},
+]}  # fmt: skip
+
+
+@pytest.mark.strict_split
+def test_r3_b1_a_mend_cannot_re_form_a_contradicted_possession(tmp_path, video):
+    mended = "A man and a woman sit. She has a cup."
+    cup = "A man and a woman sit. A cup."
+    tf = FakeTF(
+        split=_by_text({SHE: SHE_SPLIT,
+                        mended: {"claims": [
+                            {"id": "k1", "text": "a man sits", "tokens": [[0, 1], [5, 5]]},
+                            {"id": "k2", "text": "a woman sits", "tokens": [[3, 5]]},
+                            {"id": "k3", "text": "she has a cup", "tokens": [[7, 10]]}]},
+                        cup: {"claims": [
+                            {"id": "k1", "text": "a man sits", "tokens": [[0, 1], [5, 5]]},
+                            {"id": "k2", "text": "a woman sits", "tokens": [[3, 5]]},
+                            {"id": "k3", "text": "a cup", "tokens": [[7, 8]]}]}}),
+        verify=_by_text({
+            SHE: _verdicts(("k1", "supported"), ("k2", "supported"), ("k3", "supported"),
+                           ("k4", "contradicted")),
+            mended: _verdicts(("k1", "supported"), ("k2", "supported"), ("k3", "supported")),
+            cup: _verdicts(("k1", "supported"), ("k2", "supported"), ("k3", "supported"))}),
+        mend=[{"text": mended}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(SHE))
+    assert "She has a cup" not in out.text and "She holds" not in out.text
+
+
+ROOM = "A room with no door."
+
+
+@pytest.mark.strict_split
+def test_r3_b2_a_negation_is_never_cut_alone(tmp_path, video):
+    first = {"claims": [
+        {"id": "k1", "text": "there is a room", "tokens": [[1, 1]]},
+        {"id": "k2", "text": "there is a door", "tokens": [[4, 4]]},
+        {"id": "k3", "text": "the room is with no door", "tokens": [[1, 4]]},
+    ]}  # fmt: skip
+    tf = FakeTF(
+        split=_by_text({ROOM: first, "A room with a door.": {"claims": [
+            {"id": "k1", "text": "a room with a door", "tokens": [[0, 4]]}]},
+            "A room door.": {"claims": [{"id": "k1", "text": "a room door", "tokens": [[0, 2]]}]}}),
+        verify=[_verdicts(("k1", "supported"), ("k2", "supported"), ("k3", "contradicted")),
+                _verdicts(("k1", "supported"))],
+        mend=[{"text": "A room with a door."}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(ROOM))
+    assert out.status == "held" and "with a door" not in out.text
+
+
+@pytest.mark.strict_split
+def test_r3_b2_not_is_never_cut_while_its_claims_words_stay(tmp_path, video):
+    line = "The door does not open."
+    tf = FakeTF(
+        split=_by_text({line: {"claims": [
+            {"id": "k1", "text": "the door does open", "tokens": [[0, 2], [4, 4]]},
+            {"id": "k2", "text": "the door does not open", "tokens": [[0, 4]]}]},
+            "The door does open.": {"claims": [
+                {"id": "k1", "text": "the door does open", "tokens": [[0, 3]]}]}}),
+        verify=[_verdicts(("k1", "supported"), ("k2", "contradicted")),
+                _verdicts(("k1", "supported"))],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    assert out.status == "held" and "does open" not in out.text
+
+
+WAVE = "The man does not wave. He holds a red cup."
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize("second", ["contradicted", "supported"])
+def test_r3_b3_a_mend_never_drops_a_negation(tmp_path, video, second):
+    first = {"claims": [
+        {"id": "k1", "text": "the man does not wave", "tokens": [[0, 4]]},
+        {"id": "k2", "text": "he holds a cup", "tokens": [[6, 8], [10, 10]]},
+        {"id": "k3", "text": "the cup is red", "tokens": [[9, 10]]},
+    ]}  # fmt: skip
+    mended = "The man waves. He holds a cup."
+    tf = FakeTF(
+        split=_by_text({WAVE: first,
+                        mended: {"claims": [
+                            {"id": "k1", "text": "the man waves", "tokens": [[0, 2]]},
+                            {"id": "k2", "text": "he holds a cup", "tokens": [[4, 7]]}]},
+                        "He holds a cup.": {"claims": [
+                            {"id": "k1", "text": "he holds a cup", "tokens": [[0, 3]]}]}}),
+        verify=[_verdicts(("k1", "supported"), ("k2", "supported"), ("k3", "contradicted")),
+                _verdicts(("k1", second), ("k2", "supported")),
+                _verdicts(("k1", "supported"))],
+        mend=[{"text": mended}, {"text": "He holds a cup."}],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(WAVE))
+    assert "waves" not in out.text and (out.status == "held" or "not wave" in out.text)
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "line, claims, names, said",
+    [
+        ("A man greets a woman. She smiles.",
+         [("a man greets a woman", [[0, 4]]), ("he smiles", [[7, 7]])], (), "he"),
+        ("A man stands by a woman. Her coat is red.",
+         [("a man stands by a woman", [[0, 5]]), ("his coat is red", [[7, 10]])], (), "his"),
+        ("Proog waves. Emma smiles.", [("proog waves", [[0, 1]]), ("proog smiles", [[4, 4]])],
+         ("Proog", "Emma"), "proog"),
+        ("A man and a woman sit. She has a cup.",
+         [("a man sits", [[0, 1], [5, 5]]), ("a woman sits", [[3, 5]]),
+          ("he has a cup", [[7, 10]])], (), "he"),
+    ],
+    ids=["pronoun", "possessive", "name", "pronoun-after-mend"],
+)  # fmt: skip
+def test_r3_a_a_claim_may_name_a_person_only_by_its_own_tokens(line, claims, names, said):
+    from lull.stages.verify import check_split
+
+    got = check_split(line, [_sc(f"k{i}", t, r) for i, (t, r) in enumerate(claims, 1)], names)
+    assert any(f"says {said}" in p for p in got), got
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "line, claims",
+    [
+        ("The man does not smile.",  # every claim true, the line false: he smiles
+         [("the man does smile", [[1, 2], [4, 4]]), ("the man is not outside", [[1, 1], [3, 3]])]),
+        ("A man in a red coat stands by a door.",  # the coat is blue, the door red
+         [("a man stands by a door", [[0, 1], [6, 9]]), ("the man is in a coat", [[1, 3], [5, 5]]),
+          ("the door is red", [[4, 4], [9, 9]])]),
+        ("A man in a red coat stands by a red door.",
+         [("a man stands by a door", [[0, 1], [6, 8], [10, 10]]),
+          ("the man is in a coat", [[1, 3], [5, 5]]), ("the door is red", [[4, 4], [10, 10]]),
+          ("the door is red", [[9, 10]])]),
+    ],
+    ids=["negation-moved", "binding-across-phrases", "binding-repeated-word"],
+)  # fmt: skip
+def test_r3_a_a_line_whose_claims_all_hold_but_whose_sentence_does_not_is_held(
+    tmp_path, video, line, claims
+):
+    """The split check passes these (lexical limit); the sentence the judge also reads as a
+    whole is contradicted, so the line is held, uncut."""
+    from lull.stages.verify import check_split
+
+    split = {"claims": [{"id": f"k{i}", "text": t, "tokens": r}
+                        for i, (t, r) in enumerate(claims, 1)]}  # fmt: skip
+    assert check_split(line, [_sc(c["id"], c["text"], c["tokens"]) for c in split["claims"]]) == []
+    verdicts = [(f"k{i}", "supported") for i in range(1, len(claims) + 1)]
+    tf = FakeTF(split=[split], verify=[_verdicts(*verdicts, ("s1", "contradicted"))])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    assert out.status == "held" and out.audio_path is None
+    assert out.text == line and tf.roles() == ["verify"]  # no cut: it cannot target a sentence
+    assert "(contradicted)" in out.note
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "line, claims",
+    [
+        ("Two cars are parked.", [("three cars are parked", [[0, 3]])]),
+        ("A man with a hat walks.", [("a man without a hat walks", [[0, 5]])]),
+        ("The door does not open.", [("the door opens", [[1, 1], [4, 4]])]),
+        ("Nobody is in the room.", [("the room", [[3, 4]])]),
+        ("A man in a red hat stands by a blue car.",
+         [("a man in a blue hat", [[0, 5]]), ("a red car", [[4, 4], [9, 10]]),
+          ("a man stands by a car", [[0, 1], [6, 8], [10, 10]])]),
+    ],
+    ids=["number", "without", "does-not", "nobody", "binding-swap"],
+)  # fmt: skip
+def test_r3_a_the_split_check_still_rejects(line, claims):
+    from lull.stages.verify import check_split
+
+    assert check_split(line, [_sc(f"k{i}", t, r) for i, (t, r) in enumerate(claims, 1)])
+
+
+def test_r3_f_a_judge_answer_cut_off_holds_the_line_as_it_was(tmp_path, video):
+    tf = FakeTF(split=[_split(("a person", "A person"), ("a person opens a door", [[0, 1], [6, 8]]),
+                              ("a person in a red coat", "A person in a red coat"))],
+                verify=_cut_off)  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue())
+    assert out.status == "held" and out.text == TEXT and out.audio_path is None
+    assert "verification answer cut off" in out.note and "removed" not in out.note
+    assert tf.roles() == ["verify"]
+
+
+# -- fix round 4: the sentence gate, the judge at temperature 0, cuts that would change meaning --
+
+
+@pytest.mark.strict_split
+def test_the_judge_reads_every_sentence_whole_beside_the_atomic_claims(tmp_path, video):
+    line = "A person in a red coat opens a door. A cat runs past."
+    tf = FakeTF(split=[_split(*_FINE, ("a cat runs past", "A cat runs past"))],
+                verify=[_verdicts(("k1", "supported"), ("k2", "supported"), ("k3", "supported"),
+                                  ("k4", "supported"), ("s1", "supported"),
+                                  ("s2", "supported"))])  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    judged = _user_text(tf.of("verify")[0])
+    assert "s1: A person in a red coat opens a door\n" in judged
+    assert "\ns2" not in judged  # "A cat runs past" is k4 already: not asked twice
+    call = tf.of("verify")[0]
+    assert call["temperature"] == 0.0
+    assert out.status == "verified"
+    assert [(c.kind, c.text) for c in out.claims][-1] == (
+        "sentence",
+        "A person in a red coat opens a door",
+    )
+    assert {c.kind for c in out.claims} == {"atomic", "sentence"}
+
+
+@pytest.mark.strict_split
+def test_a_failed_sentence_with_a_failed_claim_in_it_is_cut_by_the_claim(tmp_path, video):
+    tf = FakeTF(
+        split=[_split(*_FINE), _split(("a person", "A person"),
+                                      ("a person opens a door", "A person opens a door"))],
+        verify=[_verdicts(("k1", "supported"), ("k2", "contradicted"), ("k3", "supported"),
+                          ("s1", "contradicted")),
+                _verdicts(("k1", "supported"), ("k2", "supported"), ("s1", "supported"))],
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(TEXT))
+    assert out.status == "verified" and out.text == "A person opens a door."
+
+
+@pytest.mark.strict_split
+def test_a_fallen_back_split_is_not_asked_twice_per_sentence(tmp_path, video):
+    tf = FakeTF(split=[{"claims": []}, {"claims": []}], verify=[_verdicts(("s1", "supported"))])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(TEXT))
+    assert re.findall(r"^(\w+): ", _user_text(tf.of("verify")[0]), re.M) == ["s1"]
+    assert out.status == "verified"
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "line, claims, failed",
+    [
+        ("A toy gun lies on a table.", [("a gun lies on a table", [[0, 0], [2, 6]]),
+                                        ("a toy gun", [[0, 2]])], "k2"),
+        ("A man nearly falls.", [("a man falls", [[0, 1], [3, 3]]),
+                                 ("a man nearly falls", [[0, 3]])], "k2"),
+        ("A person opens a red door.", [("a person opens a door", [[0, 3], [5, 5]]),
+                                        ("the door is red", [[4, 5]])], "k2"),
+        ("A man stands behind the car.", [("a man stands", [[0, 2]]), ("the car", [[4, 5]]),
+                                          ("the man is behind the car", [[1, 1], [3, 5]])], "k3"),
+    ],
+    ids=["toy", "nearly", "colour", "dangling-preposition"],
+)  # fmt: skip
+def test_a_cut_that_would_leave_a_word_without_its_modifier_or_link_holds(
+    tmp_path, video, line, claims, failed
+):
+    split = {"claims": [{"id": f"k{i}", "text": t, "tokens": r}
+                        for i, (t, r) in enumerate(claims, 1)]}  # fmt: skip
+    verdicts = [(f"k{i}", "not_visible" if f"k{i}" == failed else "supported")
+                for i in range(1, len(claims) + 1)]  # fmt: skip
+    tf = FakeTF(split=[split], verify=[_verdicts(*verdicts)])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    assert out.status == "held" and "mend" not in tf.roles()
+    assert out.text == line  # not visible only: kept for the reviewer
+
+
+@pytest.mark.parametrize(
+    "raw, mended, ok",
+    [
+        ("A man waves. A cup.", "A man waves.", True),  # a whole sentence dropped
+        ("A man waves. A cup.", "A cup.", True),
+        ("A man waves, smiling.", "A man waves.", False),  # part of a sentence dropped
+        ("Door opens.", "A door opens.", True),  # articles aside
+        ("A man sit.", "A man sits.", True),  # the same word, inflected
+    ],
+)  # fmt: skip
+def test_a_mend_may_drop_only_whole_sentences(raw, mended, ok):
+    from lull.stages.verify import mend_keeps
+
+    assert mend_keeps(raw, mended) is ok
+
+
+def test_a_mend_equal_to_the_line_before_the_cut_is_refused():
+    from lull.stages.verify import mend_ok
+
+    assert mend_ok("A door opens.", "Door opens.", "A door opens.") is False
+    assert mend_ok("A door opens.", "Door opens.", "The door opens.") is False  # same, normalised
+    assert mend_ok("A red door opens.", "Door opens.", "A door opens.") is True
+
+
+def test_a_repair_answer_cut_off_keeps_the_line_and_its_errors(tmp_path, video):
+    bad = "We watch a person open a door."
+    out = _run(tmp_path, video, FakeTF(repair=_cut_off), FakeSpeech([]), cue=_cue(bad))
+    assert out.status == "held" and "R7-person" in out.note
+
+
+def test_a_compress_answer_cut_off_is_no_shorter_line():
+    tf = FakeTF(compress=_cut_off)
+    assert compress("A red door opens slowly.", 3, [], tf, run_id="r1") == (
+        "A red door opens slowly."
+    )

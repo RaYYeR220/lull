@@ -39,7 +39,7 @@ CLIP_SEE_S = 2.0  # a capped clip runs at least this far past the last visual's 
 CLIP_MAX_S = 20.0  # longest clip, when the visuals of one line start far apart
 CLIP_HEIGHT = 360
 VERIFY_MAX_TOKENS = 1500
-VERIFY_TEMPERATURE = 0.2
+VERIFY_TEMPERATURE = 0.0  # the same frames, the same verdict
 VERIFY_ESTIMATE = 0.005  # a clip of up to CLIP_MAX_S (20 s), not just the 12 s cap
 SPLIT_MAX_TOKENS = 1200
 SPLIT_TEMPERATURE = 0.0
@@ -301,11 +301,22 @@ def norm(word: str) -> str:
 
 
 # words a claim's text may hold without its tokens holding them
+_PRONOUNS = frozenset(
+    """he him his himself she her hers herself they them their theirs themselves it its itself
+    i me my mine we us our ours you your yours""".split()
+)  # a claim may say one only where its own tokens do: never another person's
+_ARTICLES = frozenset({"a", "an", "the"})
 _LIGHT = frozenset(
     """a an the is are was were be been being am has have had there it its they them their
     theirs he him his she her hers this that these those who whom whose which what of to in on
     at by for from with into onto over under up down off out about around through across
     along between behind beside near past against toward towards inside outside""".split()
+)
+FUNCTION_WORDS = _LIGHT | _EXEMPT  # words that tie the others together, saying nothing seen
+PREPOSITIONS = frozenset(
+    """of to in on at by for from with into onto over under up down off out about around
+    through across along between behind beside near past against toward towards inside
+    outside""".split()
 )
 
 
@@ -360,12 +371,49 @@ def _content_seq(text: str) -> list[str]:
             and fold(t.text) not in _LIGHT and fold(t.text) not in _EXEMPT]  # fmt: skip
 
 
+def _sentence_words(text: str) -> list[list[str]]:
+    """The words of each sentence of `text`, normalised (see norm), articles aside."""
+    out: list[list[str]] = []
+    cur: list[str] = []
+    for t in tokenize(text):
+        if t.word and fold(t.text) not in _ARTICLES:
+            cur.append(norm(t.text))
+        elif not t.word and t.text in ".!?\u2026" and cur:
+            out.append(cur)
+            cur = []
+    return out + ([cur] if cur else [])
+
+
 def mend_keeps(raw: str, mended: str) -> bool:
-    """Whether a mend of the cut line `raw` only tidies it: its content words (see
-    content_words) are those of `raw`, in their order, some perhaps dropped; none added,
-    doubled or moved onto another word ("a red door" never becomes "a person in red")."""
-    left = iter(_content_seq(raw))
-    return all(w in left for w in _content_seq(mended))
+    """Whether a mend of the cut line `raw` only tidies it. Every word but the articles is
+    compared (normalised: case, apostrophes, stems, numbers; see norm): the mend says the
+    words of `raw` in their order, and may leave out only whole sentences of it. So it never
+    adds, doubles or moves a word ("a red door" never becomes "a person in red"), puts back a
+    preposition or a pronoun, or drops a word from a sentence it keeps ("does not")."""
+    have = _sentence_words(raw)
+    want = [w for s in _sentence_words(mended) for w in s]
+
+    @cache
+    def fits(i: int, j: int) -> bool:  # want[j:] from the sentences have[i:]
+        if j == len(want):
+            return True
+        if i == len(have):
+            return False
+        s = have[i]
+        return (want[j : j + len(s)] == s and fits(i + 1, j + len(s))) or fits(i + 1, j)
+
+    return fits(0, 0)
+
+
+def mend_ok(before: str, raw: str, mended: str) -> bool:
+    """Whether `mended` may stand for the cut line `raw` of `before`: it only tidies `raw`
+    (mend_keeps) and is not `before` again, articles and spelling aside."""
+    flat = [w for s in _sentence_words(mended) for w in s]
+    return (
+        bool(flat)
+        and flat != [w for s in _sentence_words(before) for w in s]
+        and (mend_keeps(raw, mended))
+    )
 
 
 class SplitClaim(BaseModel):
@@ -375,6 +423,7 @@ class SplitClaim(BaseModel):
     id: str
     text: str
     tokens: list[tuple[int, int]]
+    whole: bool = False  # a whole sentence the judge reads as written (sentence_gate)
 
     def indices(self) -> set[int]:
         return {i for a, b in self.tokens for i in range(a, b + 1)}
@@ -395,12 +444,12 @@ def check_split(text: str, claims: list[SplitClaim], names: Iterable[str] = ()) 
       ranges and its word (normalised: see norm) is in the claim's own text, so a claim can
       neither leave a fact of its tokens unjudged nor be judged for it under another word;
     - a claim text that holds a word its own tokens do not (light words such as articles,
-      copulas, pronouns and prepositions aside), so a claim cannot add or swap a fact (a
-      "blue hat" built from the tokens of "red hat ... blue car")."""
+      copulas and prepositions aside), so a claim cannot add or swap a fact (a "blue hat"
+      built from the tokens of "red hat ... blue car"); a pronoun or a name counts as such a
+      word, so a claim never moves an action onto another person ("he smiles" from the tokens
+      of "She smiles")."""
     tokens = tokenize(text)
     n = len(tokens)
-    # a claim may name who it is about: the programme's names are context, not facts
-    name_words = {norm(t.text) for nm in names if nm for t in tokenize(nm)}
     problems = []
     ids = [c.id for c in claims]
     if len(set(ids)) < len(ids):
@@ -414,8 +463,9 @@ def check_split(text: str, claims: list[SplitClaim], names: Iterable[str] = ()) 
         said = [fold(w) for w in _WORD_RE.findall(c.text)]
         said_norm = {norm(w) for w in said}
         covered |= {i for i in own if tokens[i].word and norm(tokens[i].text) in said_norm}
-        theirs = {norm(tokens[i].text) for i in own if tokens[i].word} | name_words
-        added = sorted({w for w in said if w not in _LIGHT and w not in _EXEMPT
+        theirs = {norm(tokens[i].text) for i in own if tokens[i].word}
+        added = sorted({w for w in said
+                        if (w in _PRONOUNS or (w not in _LIGHT and w not in _EXEMPT))
                         and norm(w) not in theirs})  # fmt: skip
         if added:
             problems.append(f"claim {c.id} says {', '.join(added)}, which its tokens do not")
@@ -546,16 +596,18 @@ def judge(
         {"role": "system", "content": load_prompt("verify")},
         {"role": "user", "content": [video_part(clip), {"type": "text", "text": user}]},
     ]
-    try:
-        out = tf.json(
-            VL, messages, VERIFY_SCHEMA,
-            run_id=run_id, stage=STAGE, role="verify", thinking=False,
-            max_tokens=VERIFY_MAX_TOKENS, temperature=VERIFY_TEMPERATURE,
-            estimate=VERIFY_ESTIMATE,
-        )  # fmt: skip
-    except TFUnusable as e:  # no verdict at all: every claim counts as not visible
-        log.warning("verify: the judge gave no usable answer (%s)", e)
-        out = {"verdicts": []}
+    out = tf.json(
+        VL,
+        messages,
+        VERIFY_SCHEMA,
+        run_id=run_id,
+        stage=STAGE,
+        role="verify",
+        thinking=False,
+        max_tokens=VERIFY_MAX_TOKENS,
+        temperature=VERIFY_TEMPERATURE,
+        estimate=VERIFY_ESTIMATE,
+    )  # fmt: skip  (an answer cut off raises TFUnusable: the caller holds the line)
     raw = out.get("verdicts") if isinstance(out, dict) else None
     if not isinstance(raw, list):
         raise ValueError("verify: model answer has no 'verdicts' list")
@@ -581,7 +633,7 @@ def judge(
             text=c.text, verdict=verdict,
             at=round(max(0.0, float(at)) + offset, 3) if ok and verdict != "not_visible" else None,
             span=c.span(text), evidence=" ".join(evidence.split()) or None,
-            tokens=[list(r) for r in c.tokens],
+            tokens=[list(r) for r in c.tokens], kind="sentence" if c.whole else "atomic",
         ))  # fmt: skip
     return _distinct(result)
 
@@ -596,8 +648,35 @@ def verify(
     Failed claims are never filtered away; supported ones the line does not make are left out
     and added to `dropped` (claims_of)."""
     claims = split_claims(text, tf, run_id=run_id, names=names, cache=cache, notes=notes)
-    judged = judge(text, claims, clip, tf, run_id=run_id, names=names, offset=offset)
+    asked = claims + sentence_gate(text, claims)
+    judged = judge(text, asked, clip, tf, run_id=run_id, names=names, offset=offset)
     return claims_of(text, judged, dropped)
+
+
+def sentence_gate(text: str, claims: list[SplitClaim]) -> list[SplitClaim]:
+    """Every whole sentence of `text` (ids s1, s2, ...; see sentence_claims), for the judge to
+    read as written beside the atomic `claims`: what the atomic claims cannot hold (which
+    detail belongs to whom, a negation, the sense of the whole) is judged there. A sentence
+    that one of `claims` already says, on the same tokens, is not asked twice (the fallback
+    split's claims are the sentences themselves)."""
+    toks = tokenize(text)
+
+    def says(c: SplitClaim) -> tuple:  # its words, and the line's words it comes from
+        return _words(c.text), frozenset(i for i in c.indices() if i < len(toks) and toks[i].word)
+
+    said = {says(c) for c in claims}
+    taken = {c.id for c in claims}
+    gate = []
+    for s in sentence_claims(text):
+        if says(s) in said:
+            continue
+        sid = s.id if s.id not in taken else "w" + s.id[1:]
+        gate.append(s.model_copy(update={"id": sid, "whole": True}))
+    return gate
+
+
+def _words(text: str) -> tuple[str, ...]:
+    return tuple(fold(w) for w in _WORD_RE.findall(text))
 
 
 def rewrite(prompt: str, user: str, tf: TokenFactory, *, run_id: str, role: str) -> str:

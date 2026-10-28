@@ -83,6 +83,7 @@ class Claim(BaseModel):
     span: str | None = None  # the exact words of the cue text the claim comes from
     evidence: str | None = None  # what the frames showed, in the vision model's words
     tokens: list[list[int]] | None = None  # the line's token ranges it comes from (inclusive)
+    kind: Literal["atomic", "sentence"] = "atomic"  # a whole sentence: judged as written
 
 
 class Check(BaseModel):

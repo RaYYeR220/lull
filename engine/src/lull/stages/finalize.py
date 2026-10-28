@@ -45,10 +45,14 @@ from lull.stages.plan import count_words
 from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
+    FUNCTION_WORDS,
+    PREPOSITIONS,
+    Token,
     clip_window,
     content_words,
+    fold,
     mend,
-    mend_keeps,
+    mend_ok,
     rewrite,
     tagged,
     time_framing,
@@ -56,7 +60,7 @@ from lull.stages.verify import (
     verify,
 )
 from lull.stages.voice import MAX_TEMPO, atempo, voice
-from lull.tf import TokenFactory
+from lull.tf import TFUnusable, TokenFactory
 from lull.timeline import merge_spans
 from lull.types import Check, Claim, Cue, Gap, RunOptions, Span, VisualEvent
 
@@ -254,7 +258,11 @@ def repair(
             tagged("names", [", ".join(known)] if known else []),
         ]
     )
-    return rewrite("repair", user, tf, run_id=run_id, role="repair")
+    try:
+        return rewrite("repair", user, tf, run_id=run_id, role="repair")
+    except TFUnusable as e:  # no repair: the line keeps its errors, and lint holds it
+        log.warning("finalize: the repair gave no usable answer (%s)", e)
+        return text
 
 
 def compress(
@@ -268,7 +276,11 @@ def compress(
     user = "\n\n".join(
         [tagged("description", [text]), f"{ask} {note}" if note else ask, tagged("keep", keep)]
     )
-    return rewrite("compress", user, tf, run_id=run_id, role="compress")
+    try:
+        return rewrite("compress", user, tf, run_id=run_id, role="compress")
+    except TFUnusable as e:  # no shorter line: it is fitted (or held) as it is
+        log.warning("finalize: the compression gave no usable answer (%s)", e)
+        return text
 
 
 # -- sentences and look-aheads ------------------------------------------------------------------
@@ -421,6 +433,63 @@ def _same(a: str, b: str) -> bool:
     return " ".join(a.split()) == " ".join(b.split())
 
 
+JUDGE_CUT_OFF = "verification answer cut off"
+NEGATIONS = frozenset("not no never without nobody nothing none neither nor cannot nowhere".split())
+
+
+class _JudgeCutOff(Exception):
+    """The judge's answer was cut off by its token limit: the line has no verdict."""
+
+
+def _is_negation(word: str) -> bool:
+    w = fold(word)
+    return w in NEGATIONS or w.endswith("n't")
+
+
+def _meaning_cut(tokens: list[Token], drop: set[int], bad: list[Claim]) -> str | None:
+    """Why cutting `drop` from the line would change what the words it keeps say, or None:
+    - a negation cut while a content word of its failed claim stays ("A room with no door"
+      would say "a room ... door");
+    - a word cut right before a content word that stays, the cut not starting with a
+      function word: a modifier cut from its head ("toy gun" -> "gun", "nearly falls" ->
+      "falls", "a red door" -> "a door");
+    - a cut ending in a preposition right before a word that stays ("stands behind the car"
+      -> "stands the car")."""
+    for i in sorted(drop):
+        if not _is_negation(tokens[i].text):
+            continue
+        for c in bad:
+            mine = {k for a, b in (c.tokens or []) for k in range(a, b + 1)}
+            if i in mine and any(
+                k not in drop and tokens[k].word and fold(tokens[k].text) not in FUNCTION_WORDS
+                and not _is_negation(tokens[k].text)
+                for k in mine if k < len(tokens)
+            ):  # fmt: skip
+                return f'the cut would leave the words "{tokens[i].text}" denies'
+    for a, b in _runs(drop):
+        nxt = b + 1
+        if nxt >= len(tokens) or nxt in drop or not tokens[nxt].word:
+            continue
+        if (
+            fold(tokens[a].text) not in FUNCTION_WORDS
+            and fold(tokens[nxt].text) not in FUNCTION_WORDS
+        ):
+            return f'the cut would leave "{tokens[nxt].text}" without "{tokens[b].text}"'
+        if fold(tokens[b].text) in PREPOSITIONS:
+            return f'the cut would leave "{tokens[nxt].text}" without "{tokens[b].text}"'
+    return None
+
+
+def _runs(idx: set[int]) -> list[tuple[int, int]]:
+    out: list[list[int]] = []
+    for i in sorted(idx):
+        if out and out[-1][1] == i - 1:
+            out[-1][1] = i
+        else:
+            out.append([i, i])
+    return [(a, b) for a, b in out]
+
+
 def cut_tokens(text: str, drop: set[int]) -> str:
     """`text` without the tokens in `drop` (and the space before each), tidied by autofix:
     a space before punctuation removed, doubled spaces collapsed."""
@@ -437,11 +506,20 @@ def cut_tokens(text: str, drop: set[int]) -> str:
     joined = re.sub(r"([,;:])(?=[,;:.!?…])", "", joined)
     joined = re.sub(r"^[,;:]\s*", "", joined)
     joined = re.sub(r"\s*[\"“]\s*[\"”]", "", joined)  # quotes left empty
-    joined = re.sub(r"\s+([,.;:!?…])", r"", joined)
     out = autofix(" ".join(joined.split())) if any(c.isalnum() for c in joined) else ""
     # a sentence the cut left with nothing that describes (only "In a moment,") goes too
-    kept = [p for p in re.split(r"(?<=[.!?…])\s+", out) if content_words(p)]
+    kept = [_capital(p) for p in re.split(r"(?<=[.!?…])\s+", out) if content_words(p)]
     return autofix(" ".join(kept)) if kept else ""
+
+
+def _capital(sentence: str) -> str:
+    """A sentence whose first word the cut left lowercase starts with a capital ("a cup."
+    -> "A cup."); a word with capitals of its own ("iPhone") is left as it is."""
+    m = re.match(r"(\W*)(\w+)", sentence)
+    if not m or not m.group(2)[0].islower() or m.group(2)[1:] != m.group(2)[1:].lower():
+        return sentence
+    i = m.start(2)
+    return sentence[:i] + sentence[i].upper() + sentence[i + 1 :]
 
 
 @dataclass
@@ -502,23 +580,32 @@ class _Finalise:
         self.names = set(ctx.named) | set(ctx.cast) | set(ctx.introduced) | set(ctx.proper_nouns)
         self.keep = _verbatim_in(self.text, ctx.verbatim)
         for rnd in range(1, MAX_ROUNDS + 1):
-            last = rnd == MAX_ROUNDS
-            reason = self.style()
-            if reason:
-                return self.held(reason)
-            if not ctx.verify:  # evaluation only: voice the fitted line unchecked
-                out = self.speak(last)
-                if out is not None:
-                    return out
-                continue
-            self.claims = self.check_frames()
-            if not self.claims:
-                return self.held("the verifier found no visual claim to check")
-            bad = [c for c in self.claims if c.verdict != "supported"]
-            out = self.cut(bad, last) if bad else self.speak(last)
+            try:
+                out = self.round(rnd == MAX_ROUNDS)
+            except _JudgeCutOff:  # no verdict: held as it is, nothing cut for it
+                return self.held(JUDGE_CUT_OFF)
             if out is not None:
                 return out
         raise AssertionError("unreachable")  # pragma: no cover - every last round returns
+
+    def round(self, last: bool) -> Cue | None:
+        """One round: style, then the frames; the cue, or None to go round again. A line is
+        voiced only when every atomic claim and every whole sentence is supported. A failed
+        sentence whose atomic claims all hold is held as it is: a cut cannot target it."""
+        reason = self.style()
+        if reason:
+            return self.held(reason)
+        if not self.ctx.verify:  # evaluation only: voice the fitted line unchecked
+            return self.speak(last)
+        self.claims = self.check_frames()
+        if not self.claims:
+            return self.held("the verifier found no visual claim to check")
+        bad = [c for c in self.claims if c.verdict != "supported"]
+        atomic = [c for c in bad if c.kind != "sentence"]
+        if bad and not atomic:
+            return self.held("each claim is supported but a sentence is not: "
+                             + _claims_note(bad))  # fmt: skip
+        return self.cut(atomic, last) if atomic else self.speak(last)
 
     # -- results -------------------------------------------------------------------------
 
@@ -663,9 +750,13 @@ class _Finalise:
             self.clip = (cut_clip(self.video, dst, lo, hi, height=CLIP_HEIGHT), lo)
         clip, offset = self.clip
         names = names_in(self.text, self.names)
-        claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset,
-                        cache=self.splits, dropped=self.extras,
-                        notes=self.split_notes)  # fmt: skip
+        try:
+            claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names,
+                            offset=offset, cache=self.splits, dropped=self.extras,
+                            notes=self.split_notes)  # fmt: skip
+        except TFUnusable as e:
+            log.warning("finalize: %s: %s (%s)", self.cue.id, JUDGE_CUT_OFF, e)
+            raise _JudgeCutOff from e
         self.checks.append(Check(text=self.text, claims=claims))
         return claims
 
@@ -710,19 +801,24 @@ class _Finalise:
         (see mend_keeps), else the raw cut is kept when it passes lint."""
         text = self.text
         tokens = tokenize(text)
+        bad = [c for c in bad if c.kind != "sentence"]  # a sentence is never cut as such
         failed = {i for c in bad for a, b in (c.tokens or []) for i in range(a, b + 1)}
-        kept = {i for c in self.claims if c not in bad and c.verdict == "supported"
+        kept = {i for c in self.claims
+                if c not in bad and c.verdict == "supported" and c.kind != "sentence"
                 for a, b in (c.tokens or []) for i in range(a, b + 1)}  # fmt: skip
         framing = time_framing(tokens)  # "In a moment" is never a claim's to lose
         drop = {i for i in failed - kept - framing if i < len(tokens) and tokens[i].word}
         if not drop:
             return text, "the failed claims share every word with claims that passed"
+        why = _meaning_cut(tokens, drop, bad)
+        if why:
+            return text, why
         raw = cut_tokens(text, drop)
         if not content_words(raw):
             return "", None
         cut = sorted({tokens[i].text for i in drop}, key=str.lower)
         mended = autofix(mend(raw, cut, self.tf, run_id=self.run_id))
-        if mended and mend_keeps(raw, mended):
+        if mended and mend_ok(text, raw, mended):
             return mended, None
         if mended:
             log.info("finalize: %s: the mend changed words; the raw cut stands", self.cue.id)
@@ -735,7 +831,7 @@ class _Finalise:
         withheld when they cannot be cut. The cut text is checked once more: its claims, each
         with its verdict (a contradiction found then included, and named in the note), are
         the ones it is held with; the findings are those of the text kept."""
-        wrong = [c for c in bad if c.verdict == "contradicted"]
+        wrong = [c for c in bad if c.verdict == "contradicted" and c.kind != "sentence"]
         if wrong:
             cut, why = (self.text, "tried") if cut_tried else self.cut_out(wrong)
             if why:
