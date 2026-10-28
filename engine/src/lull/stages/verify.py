@@ -216,13 +216,16 @@ def said_in(claim: str, text: str) -> bool:
 
 
 def claims_of(text: str, claims: Iterable[Claim]) -> list[Claim]:
-    """The claims `text` makes (said_in); a failed claim without text (UNSPECIFIED) stays, so
-    a failed check is never lost."""
+    """The claims of `text`: a supported claim stays only when the line says it (said_in), so
+    the extras the verifier lists from the frames are not published as the line's. Every
+    contradicted or not-visible claim stays, however it is worded: a failed check is never
+    filtered away, and it decides the cue's fate."""
     kept, extra = [], []
     for c in claims:
-        (kept if c.text == UNSPECIFIED or said_in(c.text, text) else extra).append(c)
+        ok = c.verdict != "supported" or said_in(c.text, text)
+        (kept if ok else extra).append(c)
     if extra:
-        log.info("verify: %d claims the line does not make left out: %s", len(extra),
+        log.info("verify: %d supported claims the line does not make left out: %s", len(extra),
                  "; ".join(c.text for c in extra))  # fmt: skip
     return kept
 
@@ -234,8 +237,8 @@ def verify(
     """Atomic visual claims of `text`, each judged against the frames of `clip` only.
 
     `names` are names the programme has established; they are context, not claims. `offset` is
-    the clip's start in the video, added to every claim time. Only the claims `text` makes
-    are returned (claims_of).
+    the clip's start in the video, added to every claim time. Supported claims the line does
+    not make are left out; failed ones never are (claims_of).
     """
     known = sorted(set(names))
     user = "\n\n".join(

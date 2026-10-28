@@ -1337,3 +1337,33 @@ def test_a_tempo_that_misses_by_the_padding_is_raised_once(tmp_path, video, monk
     assert out.status == "verified" and out.audio_dur <= 3.32
     assert len(factors) == 2 and factors[0] < factors[1] <= 1.10
     assert out.tempo == factors[1] and "compress" not in tf.roles()
+
+
+# -- a failed verdict is never filtered away --------------------------------------------------
+
+
+def test_claims_of_drops_only_supported_claims_the_line_does_not_make():
+    """Only the verifier's extras (supported claims about what else the frames show) are left
+    out; every contradicted or not-visible claim stays, however it is worded."""
+    from lull.stages.verify import claims_of
+
+    text = "One person waves at the camera. Thirty students sit in rows."
+    claims = [
+        Claim(text="a person waves", verdict="supported", at=1.0),
+        Claim(text="1 person", verdict="contradicted", at=1.0),  # "one" written as a digit
+        Claim(text="30 students", verdict="not_visible", at=None),  # beyond the number words
+        Claim(text="a dog sleeps by the door", verdict="supported", at=2.0),  # an extra
+    ]
+    assert [c.text for c in claims_of(text, claims)] == [
+        "a person waves", "1 person", "30 students"
+    ]  # fmt: skip
+
+
+def test_a_paraphrased_contradicted_claim_is_never_voiced_as_verified(tmp_path, video):
+    tf = FakeTF(
+        verify=[_claims(("a person waves", "supported"), ("1 person", "contradicted"))],
+        remove=lambda call: {"text": _description(call)},  # the cut finds nothing to cut
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue("One person waves at the camera."))
+    assert out.status == "held" and out.audio_path is None
+    assert tf.roles() == ["verify", "remove"]
