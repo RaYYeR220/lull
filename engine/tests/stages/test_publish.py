@@ -1718,3 +1718,33 @@ def test_claims_judged_on_another_text_are_never_published(tmp_path, fake_media)
     data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
     assert [(c["id"], len(c["claims"])) for c in data["cues"]] == [("c001", 1), ("c002", 0)]
     assert "a door opens" not in (run / "script.md").read_text(encoding="utf-8").split("c002")[1]
+
+
+def test_a_lock_file_that_cannot_be_created_for_a_moment_is_tried_again(tmp_path, monkeypatch):
+    """Windows refuses to create a file whose name another thread has just deleted
+    (FileNotFoundError or PermissionError, for a moment): the waiter tries again; one that
+    keeps failing raises."""
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_POLL_S", 0.001)
+    real = pub.os.open
+    fails = iter([FileNotFoundError(2, "gone"), PermissionError(13, "pending")])
+
+    def flaky(path, flags, *a):
+        err = next(fails, None)
+        if err is not None and str(path).endswith(".publish.lock"):
+            raise err
+        return real(path, flags, *a)
+
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setattr(pub.os, "open", flaky)
+    with pub._lock(run):
+        assert (run / ".publish.lock").exists()
+
+    def never(path, flags, *a):
+        raise PermissionError(13, "denied")
+
+    monkeypatch.setattr(pub.os, "open", never)
+    with pytest.raises(PermissionError), pub._lock(run):
+        pass

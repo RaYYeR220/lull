@@ -100,6 +100,7 @@ LOCK_HEARTBEAT_S = 60.0  # a publish touches its lock this often
 LOCK_QUIET_S = 150.0  # no touch for this long: the lock is stale ...
 LOCK_STALE_S = 600.0  # ... and breakable when its publisher is gone, or it is this old
 LOCK_POLL_S = 0.2
+LOCK_CREATE_TRIES = 50  # a lock file that cannot be created this many times running: raise
 BREAKING_STALE_S = 30.0  # a breaker's marker this old was left by a crash
 OWNER_RECHECK_S = 0.05  # a lock that cannot be read is looked at once more after this
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
@@ -651,7 +652,19 @@ def _lock(run_dir: Path) -> Iterator[None]:
     the heartbeat touches it and the release removes it only while it still holds ours."""
     path = run_dir / LOCK
     token = secrets.token_hex(16)
-    while not _take(path, token):
+    refused = 0
+    while True:
+        try:
+            if _take(path, token):
+                break
+            refused = 0
+        except (FileNotFoundError, PermissionError):
+            # Windows, for a moment, cannot create a file whose name was just deleted
+            refused += 1
+            if refused >= LOCK_CREATE_TRIES or not run_dir.is_dir():
+                raise
+            time.sleep(LOCK_POLL_S)
+            continue
         # judged in place first (cheap, moves nothing): a live, heartbeating lock is never
         # set aside; _break judges again, authoritatively, on the file it moved
         if path.exists() and _breakable(path) and _break(path):
