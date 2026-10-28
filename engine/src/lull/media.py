@@ -9,6 +9,7 @@ refuses any container but MP4/MOV, Matroska and WebM right after probing (`asser
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -21,6 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
+log = logging.getLogger(__name__)
 _FLOOR_DB = -120.0
 SAFE_PROTOCOLS = "file,pipe"
 SAFE_FORMATS = "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm"  # ffprobe's -format_whitelist
@@ -60,6 +62,7 @@ def _bin(name: str) -> str:
 
 
 PROBE_TIMEOUT_S = 30.0  # an ffprobe, a version check, a single frame
+KILL_WAIT_S = 10.0  # the wait for a killed tool to close its pipes
 FFMPEG_MIN_TIMEOUT_S = 30.0  # ffmpeg gets at least this long ...
 FFMPEG_TIMEOUT_PER_S = 8.0  # ... or this many seconds per second of media it handles
 
@@ -99,7 +102,10 @@ def _exec(cmd: list[str], *, cwd: Path | None, timeout: float) -> subprocess.Com
         out, err = proc.communicate(timeout=timeout)
     except BaseException:
         _kill_tree(proc)
-        proc.communicate()
+        try:  # reap it; pipes a stray helper still holds must not hang the run either
+            proc.communicate(timeout=KILL_WAIT_S)
+        except subprocess.TimeoutExpired:
+            log.warning("media: %s did not close its pipes after the kill", Path(cmd[0]).stem)
         raise
     return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 

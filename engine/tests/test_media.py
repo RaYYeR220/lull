@@ -374,3 +374,28 @@ def test_a_tool_that_times_out_takes_the_processes_it_started_with_it(tmp_path):
     assert time.monotonic() - t0 < 20  # not held up until the helper's own end (60 s)
     child, grand = (int(p) for p in pids.read_text().split())
     assert not _alive(child) and not _alive(grand)
+
+
+def test_the_wait_after_a_kill_is_bounded_too(monkeypatch):
+    """A process whose pipes never close after the kill cannot hang the run: the wait after
+    the kill has a limit of its own, and the timeout is raised."""
+    waits = []
+
+    class Hung:
+        pid, returncode = 4242, None
+
+        def communicate(self, timeout=None):
+            waits.append(timeout)
+            raise subprocess.TimeoutExpired("ffmpeg", timeout)
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(media.subprocess, "Popen", lambda *a, **k: Hung())
+    monkeypatch.setattr(media, "_kill_tree", lambda proc: None)
+    with pytest.raises(subprocess.TimeoutExpired):
+        media._exec(["ffmpeg"], cwd=None, timeout=1)
+    assert len(waits) == 2 and None not in waits

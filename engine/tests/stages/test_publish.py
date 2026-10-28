@@ -2093,3 +2093,33 @@ def test_recovery_puts_back_a_folder_a_crash_left_half_moved(tmp_path):
     pub._recover(run)
     assert _files(run) == {"manifest.json": "old manifest", "keyframes/c001.jpg": "one",
                            "keyframes/c002.jpg": "two"}  # fmt: skip
+
+
+def test_a_rollback_that_fails_too_raises_the_first_error_and_logs_both(
+    tmp_path, monkeypatch, caplog
+):
+    import errno
+
+    from lull.stages import publish as pub
+
+    src = tmp_path / "src"
+    src.mkdir()
+    for name in ("a.txt", "b.txt"):
+        (src / name).write_text(name, encoding="utf-8")
+    real = pub._rename
+
+    def rename(s, d):
+        s, d = Path(s), Path(d)
+        if s.is_dir():
+            raise OSError(errno.EXDEV, "Invalid cross-device link", str(s))
+        if s.name == "b.txt":
+            raise OSError(errno.EIO, "the bucket said no", str(s))
+        if d.parent == src:  # moving a.txt back
+            raise OSError(errno.EACCES, "the rollback was refused", str(s))
+        return real(s, d)
+
+    monkeypatch.setattr(pub, "_rename", rename)
+    with pytest.raises(OSError) as err:
+        pub._move(src, tmp_path / "dst")
+    assert err.value.errno == errno.EIO
+    assert "the rollback was refused" in caplog.text and "the bucket said no" in caplog.text

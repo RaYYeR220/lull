@@ -751,10 +751,14 @@ def _move(src: Path, dst: Path) -> None:
             for item in sorted(src.iterdir()):
                 _move(item, dst / item.name)
                 moved.append(item.name)
-        except BaseException:
-            for name in reversed(moved):
-                _move(dst / name, src / name)
-            dst.rmdir()
+        except BaseException as first:
+            try:
+                for name in reversed(moved):
+                    _move(dst / name, src / name)
+                dst.rmdir()
+            except OSError as second:  # never hides why the move failed: both are logged
+                log.error("publish: moving %s back failed too (%s) after: %s", src.name,
+                          second, first)  # fmt: skip
             raise
         src.rmdir()
 
