@@ -533,3 +533,9 @@ def test_said_in_dialogue_ignores_pronouns_fragments_and_auxiliaries():
     said = _ve(2.0, 4.0, "action", "She hands him the key; that is fine, he was told.",
                said=True)  # fmt: skip
     assert confirm_said([said], words)[0].said_in_dialogue is True  # fine + told: 2 of 4
+
+
+def test_said_in_dialogue_ignores_reflexives_and_modals():
+    words = [_w("He", 1.0), _w("could", 1.3), _w("do", 1.6), _w("it", 1.9), _w("himself.", 2.2)]
+    event = _ve(2.0, 4.0, "action", "He could see himself in the mirror.", said=True)
+    assert confirm_said([event], words)[0].said_in_dialogue is False

@@ -47,6 +47,8 @@ _WORD = re.compile(r"\w+")
 # words that say nothing about what is on screen: they never show the dialogue conveys it
 _SAID_STOP = _STOP | frozenset(
     "he she him her his hers it its they them their we us our you your i me my "
+    "himself herself itself themselves myself yourself ourselves yourselves "
+    "can could will would shall should may might must "
     "s t ll re ve d m "
     "is are was were be been being am has have had do does did "
     "this that these those".split()
@@ -359,9 +361,10 @@ def _combine(a: VisualEvent, b: VisualEvent) -> VisualEvent:
 def confirm_said(events: list[VisualEvent], words: list[Word]) -> list[VisualEvent]:
     """Ruling R1: an event keeps the model's said_in_dialogue only when at least SAID_SHARE of
     its content words are said within SAID_AROUND_S of it; otherwise the flag is cleared (an
-    undescribed visual is worse than a repeated one). Content words leave out pronouns, the
-    fragments of contractions and possessives, be/have/do forms and this/that/these/those as
-    well as the usual stopwords. The flag is never set here."""
+    undescribed visual is worse than a repeated one). Content words leave out pronouns
+    (reflexive ones too), the fragments of contractions and possessives, be/have/do forms,
+    modal verbs and this/that/these/those as well as the usual stopwords. The flag is never
+    set here."""
     out = []
     for e in events:
         if e.said_in_dialogue:
