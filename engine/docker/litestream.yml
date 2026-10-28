@@ -1,0 +1,7 @@
+# The spend ledger (SQLite, WAL) replicated to Cloud Storage. Used only when LULL_BUCKET (or
+# LULL_LEDGER_REPLICA) is set; entrypoint.sh fills LULL_LEDGER_REPLICA, by default
+# gs://$LULL_BUCKET/ledger. Credentials come from the runtime service account (ADC).
+dbs:
+  - path: ${LULL_HOME}/ledger.db
+    replica:
+      url: ${LULL_LEDGER_REPLICA}

@@ -1,0 +1,9 @@
+# Only what the image needs; never the local venv, caches, tests, .env or media.
+*
+!pyproject.toml
+!uv.lock
+!src/
+!docker/entrypoint.sh
+!docker/litestream.yml
+**/__pycache__
+**/*.py[cod]
