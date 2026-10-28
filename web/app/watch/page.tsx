@@ -8,7 +8,8 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 import { cx } from "@/lib/cx";
 import { watchHref } from "@/lib/routes";
 import { keyframeUrl, loadIndex, loadShowcase } from "@/lib/showcase";
-import { creditParts, lineCounts, numberedCues, plural, spend } from "@/lib/showcase-derive";
+import { spentUsd } from "@/lib/showcase-schema.mjs";
+import { creditParts, lineCounts, listNames, numberedCues, plural, spend } from "@/lib/showcase-derive";
 import { MAIN_ID } from "@/lib/site";
 import { formatTimecode, isoDuration } from "@/lib/timecode";
 import styles from "./watch.module.css";
@@ -29,6 +30,7 @@ function cardFrame(id: string, cues: { id: string; kind: string }[]): string | n
 export default async function WatchIndex() {
   const index = await loadIndex();
   const shows = await Promise.all(index.map((e) => loadShowcase(e.id)));
+  const names = listNames(index);
 
   return (
     <>
@@ -65,7 +67,7 @@ export default async function WatchIndex() {
                   <div className={styles.cardBody}>
                     <h2 className={styles.cardTitle}>
                       <Link href={watchHref(s.id)} className={styles.cardLink}>
-                        {s.title}
+                        {names[s.id] ?? s.title}
                       </Link>
                     </h2>
                     <p className={styles.cardCredit}>
@@ -77,7 +79,7 @@ export default async function WatchIndex() {
                       <li>{plural(lines, "line")} in its pauses</li>
                       {held ? <li>{held} held for review</li> : null}
                       {extended ? <li>{extended} extended</li> : null}
-                      {s.costUsd !== undefined ? <li>{spend(s.costUsd).figure} in model calls</li> : null}
+                      {spentUsd(s) !== undefined ? <li>{spend(spentUsd(s)!).figure} in model calls</li> : null}
                     </ul>
                   </div>
                 </li>

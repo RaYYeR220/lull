@@ -323,6 +323,7 @@ export default function Kitchen() {
           <div className={styles.player}>
             <Player
               src={`${MEDIA}/video.mp4`}
+              poster={`${MEDIA}/poster.jpg`}
               descriptions={`${MEDIA}/descriptions.vtt`}
               extended={`${MEDIA}/extended.vtt`}
               describedAudio={`${MEDIA}/described-audio.m4a`}

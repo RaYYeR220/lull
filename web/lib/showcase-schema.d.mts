@@ -75,12 +75,14 @@ export type Showcase = {
   cueAudioBase?: string;
   /** One draft line and the verifier's ruling on each of its claims. */
   verifyExample?: VerifyExample;
-  /** Model spend under the run's id, USD: the whole run, every call it made. */
+  /** The export's own model spend, USD: the attempt that published the run. spentUsd() gives what the site shows. */
   costUsd?: number;
   /** What the run's report says, when the export carries it. */
   summary?: ShowcaseSummary;
   /** Set on a placeholder that is not an engine export; a production build refuses it. */
   interim?: true;
+  /** The site's poster for the player (public/showcase/<id>/poster.jpg), when the sync made one. */
+  poster?: string;
 };
 
 /** One row of public/showcase/index.json. */
@@ -106,6 +108,7 @@ export declare const LAYOUT: {
   readonly descriptions: string;
   readonly extended: string;
   readonly keyframes: string;
+  readonly poster: string;
   readonly cueAudioExt: string;
 };
 
@@ -118,4 +121,5 @@ export declare function parseShowcase(raw: unknown, id: string): Showcase;
 export declare function requiredFiles(raw: Record<string, unknown>): string[];
 export declare function indexEntry(s: Showcase): ShowcaseIndexEntry;
 export declare function heldOf(s: Pick<Showcase, "cues" | "summary">): number | null;
+export declare function spentUsd(s: Pick<Showcase, "costUsd" | "summary">): number | undefined;
 export declare function parseIndex(raw: unknown): ShowcaseIndexEntry[];

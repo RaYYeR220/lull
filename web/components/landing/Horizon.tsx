@@ -78,6 +78,22 @@ const Overlay = memo(function Overlay({ gaps, cues, duration: T }: Pick<HorizonD
  * lit, and a playhead that speaks each description into its pause. Nothing plays until the
  * gate or Play is pressed; with real audio it plays at 1x, otherwise a silent 3x preview.
  */
+/** Runs `fn` after the next paint once the browser is idle (at most 1.5 s later); returns a cancel. */
+function whenIdle(fn: () => void): () => void {
+  const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+  let idle = 0;
+  let timer = 0;
+  const frame = requestAnimationFrame(() => {
+    if (w.requestIdleCallback) idle = w.requestIdleCallback(fn, { timeout: 1500 });
+    else timer = window.setTimeout(fn, 1);
+  });
+  return () => {
+    cancelAnimationFrame(frame);
+    if (idle) w.cancelIdleCallback?.(idle);
+    if (timer) window.clearTimeout(timer);
+  };
+}
+
 export function Horizon({ data }: { data: HorizonData }) {
   const controller = useHorizonController();
   const { mode, playing, track } = useHorizonState();
@@ -104,8 +120,19 @@ export function Horizon({ data }: { data: HorizonData }) {
     };
   }, [data]);
 
-  // canvas, frame loop and observers
+  // canvas, frame loop and observers: set up after the first paint, when the browser is idle
+  // (at most 1.5 s later), so none of it lands in the page's first long task
   useEffect(() => {
+    let teardown: (() => void) | undefined;
+    const cancel = whenIdle(() => {
+      teardown = setup();
+    });
+    return () => {
+      cancel();
+      teardown?.();
+    };
+
+    function setup(): (() => void) | undefined {
     const stage = stageRef.current;
     const canvas = canvasRef.current;
     const scroller = scrollRef.current;
@@ -161,6 +188,8 @@ export function Horizon({ data }: { data: HorizonData }) {
       const W = frame.width;
       const axis = W - 2 * frame.pad;
       if (axis <= 0) return;
+      // every read first, then the writes: one layout, not one per label
+      const needs = gapLabels.map((el) => Math.max(0, ...[...el.children].map((c) => (c as HTMLElement).offsetWidth)));
       const X = (t: number) => frame.pad + (t / T) * axis;
       const boxes = cues.map((c, i) => {
         const x0 = X(c.gapStart);
@@ -182,7 +211,7 @@ export function Horizon({ data }: { data: HorizonData }) {
       gapLabels.forEach((el, i) => {
         const g = data.gaps[i];
         if (!g) return;
-        const need = Math.max(0, ...[...el.children].map((c) => (c as HTMLElement).offsetWidth));
+        const need = needs[i] ?? 0;
         const mid = (X(g.start) + X(g.end)) / 2;
         const tight = need > X(g.end) - X(g.start) + 8 || mid - need / 2 < lastRight + 6;
         el.toggleAttribute("data-tight", tight);
@@ -319,6 +348,7 @@ export function Horizon({ data }: { data: HorizonData }) {
       rm.removeEventListener("change", onMotion);
       detachLoop();
     };
+    }
   }, [controller, data, model]);
 
   // real sound: switch over once both soundtracks have loaded their metadata

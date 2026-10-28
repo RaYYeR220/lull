@@ -38,9 +38,12 @@ export const FOOTER_LINKS: readonly SiteLink[] = [
   { href: "/benchmarks", label: "Benchmarks", live: true },
 ];
 
-/** Prefetch setting for a link to `href`: default for live routes, off for routes not built yet (and pages under them). */
-export function prefetchFor(href: string): false | undefined {
-  const under = (base: string) => href === base || href.startsWith(`${base}/`);
-  const link = [...NAV_LINKS, ...FOOTER_LINKS].find((l) => l.href.startsWith("/") && under(l.href));
-  return link && !link.live ? false : undefined;
+/**
+ * Prefetch setting for a link to `href`: off. The pages are static and open quickly on a click;
+ * prefetching every route in view spent the first seconds' bandwidth on a phone, ahead of the
+ * page being looked at. (Routes not built yet were never prefetched either.)
+ */
+export function prefetchFor(href: string): false {
+  void href;
+  return false;
 }

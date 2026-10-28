@@ -25,6 +25,7 @@ function detail(
     gaps?: unknown;
     loudness?: unknown;
     original?: string | null;
+    spend?: unknown;
   } = {},
 ): DoneDetail {
   const outputs = Object.fromEntries((over.outputs ?? ["descriptions.vtt", "extended.vtt", "described-audio.m4a", "described.mp4", "cues.json"]).map((n) => [n, { bytes: 100 }]));
@@ -47,6 +48,7 @@ function detail(
       outputs,
       summary: {
         cost_usd: 0.02,
+        ...(over.spend !== undefined ? { spend: over.spend } : {}),
         calls_by_role_model: [
           { role: "watch", model: "nvidia/Nemotron-3.5-Super-VL", calls: 3 },
           { role: "plan", model: "nvidia/Nemotron-3-Ultra-550b-a55b", calls: 1 },
@@ -70,6 +72,21 @@ function detail(
 }
 
 const INDEX = [{ id: "ed90", title: "Elephants Dream", credit: "c", duration: 90, cues: 10 }];
+
+describe("what a run shows it spent, and the picture before it plays", () => {
+  it("an API run: every attempt under its id when the summary says, else this run", () => {
+    expect(fromApi("r1", detail({ spend: { model_usd: 0.02, model_usd_all_runs: 0.05, searches: 1 } })).costUsd).toBe(0.05);
+    expect(fromApi("r1", detail({ spend: { model_usd: 0.03, searches: 0 } })).costUsd).toBe(0.03);
+    expect(fromApi("r1", detail()).costUsd).toBe(0.02);
+  });
+
+  it("an API run's poster is its first evidence frame; a recorded run's is the site's poster", () => {
+    const run = fromApi("r1", detail());
+    expect(run.media?.poster).toBe(`${API_BASE}/v1/runs/r1/files/keyframes/x001.jpg`);
+    expect(fromShowcase({ ...show, poster: "/showcase/ed90/poster.jpg" }).media?.poster).toBe("/showcase/ed90/poster.jpg");
+    expect(fromShowcase(show).media?.poster).toBeUndefined();
+  });
+});
 
 describe("a recorded run", () => {
   const run = fromShowcase(show);

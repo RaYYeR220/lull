@@ -86,6 +86,17 @@ const DESCRIBED_SOUND = "This video’s own sound already has the descriptions i
 const isMode = (v: unknown): v is PlayerMode => typeof v === "string" && (MODES as readonly string[]).includes(v);
 const speaks = (m: PlayerMode | null) => m === "spoken" || m === "extended";
 
+/** Runs `fn` once the page has loaded and the browser is idle (at most 3 s after load). */
+function afterLoad(fn: () => void): void {
+  const idle = () => {
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(fn, { timeout: 3000 });
+    else window.setTimeout(fn, 200);
+  };
+  if (document.readyState === "complete") idle();
+  else window.addEventListener("load", idle, { once: true });
+}
+
 type Hold = {
   cue: Cue;
   remaining: number;
@@ -690,7 +701,10 @@ export class LullPlayer extends Base {
     this.current = next;
 
     if (next === "mixed") {
-      if (audio.preload !== "auto") audio.preload = "auto";
+      // the whole mix is buffered once the page has loaded and is idle, or at the first play,
+      // so it never competes with the page's own first paint
+      if (this.want) this.warmMix();
+      else afterLoad(() => this.current === "mixed" && this.warmMix());
       this.follower = new MediaFollower(video, audio, { onStall: (on) => this.onMixedStall(on) });
       this.follower.attach();
     }
@@ -841,7 +855,13 @@ export class LullPlayer extends Base {
     this.renderAll();
   }
 
+  /** Lets the described mix buffer in full. */
+  private warmMix(): void {
+    if (this.els.audio.preload !== "auto") this.els.audio.preload = "auto";
+  }
+
   private playVideo(): void {
+    if (this.current === "mixed") this.warmMix();
     const p = this.els.video.play();
     if (p && typeof p.catch === "function") {
       p.catch((err: DOMException) => {

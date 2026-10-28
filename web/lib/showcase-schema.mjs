@@ -40,6 +40,8 @@ export const LAYOUT = Object.freeze({
   descriptions: "descriptions.vtt",
   extended: "extended.vtt",
   keyframes: "keyframes/",
+  /** Written by the sync (not the engine): the frame at 1 s, for the player before it plays. */
+  poster: "poster.jpg",
   cueAudioExt: "m4a",
 });
 
@@ -243,8 +245,18 @@ export function indexEntry(s) {
     duration: s.duration,
     cues: s.cues.length,
     ...(heldOf(s) !== null ? { held: heldOf(s) } : {}),
-    ...(s.costUsd !== undefined ? { costUsd: s.costUsd } : {}),
+    ...(spentUsd(s) !== undefined ? { costUsd: spentUsd(s) } : {}),
   };
+}
+
+/**
+ * What the run spent on model calls, USD, as the site shows it: every attempt under the run's
+ * id when the summary says (summary.spend.modelUsdAllRunsOfRunId), else the export's own
+ * figure, costUsd, which covers only the attempt that published it.
+ */
+export function spentUsd(s) {
+  const all = s.summary?.spend?.modelUsdAllRunsOfRunId;
+  return typeof all === "number" ? all : s.costUsd;
 }
 
 /**

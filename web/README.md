@@ -47,9 +47,17 @@ A production build stops, and says why, when:
 
 - **Recorded runs:** `node scripts/sync-showcase.mjs <export dir> <id>` copies an engine export
   (`lull export-showcase RUN_DIR OUT_DIR --title … --credit …`) into `public/showcase/<id>/`. It
-  checks the export first and rewrites the index. A `video.mp4` over 15 MiB is re-encoded on the
-  way in with ffmpeg (at most 480 lines, H.264 CRF 30, audio copied unchanged so the timing holds);
-  ffmpeg must be on the PATH for that. Keep `public/showcase/` under about 40 MB in all.
+  checks the export first and rewrites the index. On the way in, with ffmpeg (on the PATH):
+  - a `video.mp4` over 15 MiB is re-encoded at most 480 lines high, H.264 CRF 30, its sound
+    copied unchanged so the timing holds; still over 25 MiB, it is made again at 360 lines with
+    its sound as AAC 64 kbit/s;
+  - a described mix over 8 MiB is re-encoded as AAC 64 kbit/s;
+  - `poster.jpg`, the frame at 1 s (at most 60 KiB), is written for the player to show before it
+    plays.
+
+  The site shows a run's spend as `summary.spend.modelUsdAllRunsOfRunId` when the export has it
+  (every attempt under the run's id), else its `costUsd`. Keep `public/showcase/` under about
+  70 MB in all.
 - **Benchmarks:** the evaluation's scorer writes `benchmarks.json`. Put it at
   `public/benchmarks.json` and rebuild. With no file, the page shows its empty state.
 - **API refusal codes:** after the API changes its refusals, run `node scripts/api-codes.mjs` to

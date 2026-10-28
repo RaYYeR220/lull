@@ -517,6 +517,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
                   cueAudioExt={run.media.cueAudioExt}
                   crossOrigin={run.media.crossOrigin}
                   sound={run.media.sound}
+                  poster={run.media.poster}
                   label={`${run.title}, described`}
                 />
               ) : (

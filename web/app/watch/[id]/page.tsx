@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { preload } from "react-dom";
 import { Footer } from "@/components/chrome/Footer";
 import { Nav } from "@/components/chrome/Nav";
 import { Eyebrow } from "@/components/ui/Eyebrow";
@@ -41,8 +42,11 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 export default async function WatchPage({ params }: { params: Promise<Params> }) {
   const { id } = await params;
   const s = await loadShowcaseRun(id);
+  // the player's poster is the first thing seen: fetch it with the page, not after the player's code
+  if (s.media?.poster) preload(s.media.poster, { as: "image", fetchPriority: "high" });
   const voiced = voicedLines(s).length;
-  const extended = s.cues.filter((c) => c.kind === "extended").length;
+  // a held extended line is held, not extended
+  const extended = s.cues.filter((c) => c.kind === "extended" && c.status !== "held").length;
   const lines = runLines(s);
   const credit = creditParts(s.credit ?? "");
 

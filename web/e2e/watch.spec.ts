@@ -4,7 +4,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { parseIndex } from "@/lib/showcase-schema.mjs";
 import { parseShowcase } from "@/lib/showcase";
-import { numberedCues } from "@/lib/showcase-derive";
+import { listNames, numberedCues } from "@/lib/showcase-derive";
 import { formatTimecode } from "@/lib/timecode";
 import { waitReady } from "./player-fixtures";
 import { API, MOCK, apiDown, routeApi } from "./try-api";
@@ -40,18 +40,21 @@ test.describe("the library", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Recorded runs, ready to watch.");
     const cards = page.getByRole("main").getByRole("listitem").filter({ has: page.getByRole("heading", { level: 2 }) });
     await expect(cards).toHaveCount(index.length);
+    // two runs of one film are told apart by the part of it each is
+    const names = listNames(index);
+    expect(names).toMatchObject({ ed90: "Elephants Dream (1:00–2:30)", ed: "Elephants Dream (full length)" });
     for (const e of index) {
-      await expect(page.getByRole("link", { name: e.title, exact: true })).toHaveAttribute("href", `/watch/${e.id}`);
+      await expect(page.getByRole("link", { name: names[e.id], exact: true })).toHaveAttribute("href", `/watch/${e.id}`);
       // credited with its licence on the card
-      await expect(cards.filter({ has: page.getByRole("link", { name: e.title, exact: true }) })).toContainText(e.credit);
+      await expect(cards.filter({ has: page.getByRole("link", { name: names[e.id], exact: true }) })).toContainText(e.credit);
     }
-    expect(index.map((e) => e.id)).toEqual(["ed90", "bbb120", "tos180"]);
+    expect(index.map((e) => e.id)).toEqual(["ed90", "bbb120", "tos180", "ed"]);
     // the clip the engine was tuned on says so wherever its title shows
     await expect(page.getByRole("link", { name: "Tears of Steel (development clip, used to tune the engine)" })).toBeVisible();
     // the nav's Library is this page
     await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
     await routeApi(page, "ok");
-    await page.getByRole("link", { name: "Elephants Dream" }).click();
+    await page.getByRole("link", { name: "Elephants Dream (1:00–2:30)" }).click();
     await expect(page).toHaveURL(/\/watch\/ed90$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Elephants Dream");
   });

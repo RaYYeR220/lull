@@ -3,7 +3,19 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MAX_VIDEO_BYTES, isInside, reencodeArgs, syncShowcase, writeIndex } from "../scripts/sync-showcase.mjs";
+import {
+  MAX_480_BYTES,
+  MAX_DESCRIBED_BYTES,
+  MAX_POSTER_BYTES,
+  MAX_VIDEO_BYTES,
+  audioArgs,
+  isInside,
+  posterArgs,
+  reencodeArgs,
+  syncShowcase,
+  writeIndex,
+  type MediaTools,
+} from "../scripts/sync-showcase.mjs";
 
 const SCRIPT = path.join(__dirname, "..", "scripts", "sync-showcase.mjs");
 const REAL = JSON.parse(readFileSync(path.join(__dirname, "..", "public", "showcase", "ed90", "showcase.json"), "utf8")) as Record<string, unknown>;
@@ -129,37 +141,88 @@ describe("sync-showcase", () => {
     expect(isInside(root, work)).toBe(false);
   });
 
-  it("re-encodes a video over the limit on the way in, and leaves a smaller one as it is", () => {
-    const calls: string[][] = [];
-    const encode = (from: string, to: string) => {
-      calls.push([path.basename(from), path.basename(to)]);
-      writeFileSync(to, Buffer.from([7]));
+  /** Stand-in media steps: each writes `size` bytes and records what it was asked. */
+  function fakeTools(sizes: { video480?: number; video360?: number; audio?: number; poster?: number | "fail" } = {}) {
+    const calls: string[] = [];
+    const tools: MediaTools = {
+      video: (from, to, lines, sound) => {
+        calls.push(`video ${path.basename(from)} ${lines} ${sound}`);
+        writeFileSync(to, Buffer.alloc(lines === 480 ? (sizes.video480 ?? 2) : (sizes.video360 ?? 1), 7));
+      },
+      audio: (from, to) => {
+        calls.push(`audio ${path.basename(from)}`);
+        writeFileSync(to, Buffer.alloc(sizes.audio ?? 2, 8));
+      },
+      poster: (from, to) => {
+        calls.push(`poster ${path.basename(from)}`);
+        if (sizes.poster === "fail") throw new Error("no frame at 1 s");
+        writeFileSync(to, Buffer.alloc(sizes.poster ?? 3, 9));
+      },
     };
-    const small = syncShowcase({ src: makeExport("small"), id: "ed90", dest, maxVideoBytes: 4, encode });
-    expect(calls).toEqual([]);
-    expect(small.video).toEqual({ bytes: 4, reencoded: false });
-    const big = syncShowcase({ src: makeExport("big"), id: "ed90", dest, maxVideoBytes: 3, encode });
-    expect(calls).toEqual([["video.mp4", ".small-video.mp4"]]);
-    expect(big.video).toEqual({ bytes: 1, reencoded: true, from: 4 });
-    expect(readFileSync(path.join(dest, "ed90", "video.mp4"))).toEqual(Buffer.from([7]));
-    expect(listed(path.join(dest, "ed90"))).toEqual(big.files);
+    return { tools, calls };
+  }
+
+  it("leaves small media as it is and adds a poster", () => {
+    const { tools, calls } = fakeTools();
+    const r = syncShowcase({ src: makeExport("small"), id: "ed90", dest, maxVideoBytes: 4, maxDescribedBytes: 4, tools });
+    expect(calls).toEqual(["poster video.mp4"]);
+    expect(r.video).toEqual({ bytes: 4, reencoded: false });
+    expect(r.described).toBeNull();
+    expect(r.poster).toEqual({ bytes: 3 });
+    expect(listed(path.join(dest, "ed90"))).toEqual([...r.files, "poster.jpg"].sort());
+  });
+
+  it("re-encodes a video over the limit at 480 lines, and again at 360 when that is still too big", () => {
+    const at480 = fakeTools({ video480: 2 });
+    const a = syncShowcase({ src: makeExport("big"), id: "ed90", dest, maxVideoBytes: 3, max480Bytes: 2, tools: at480.tools });
+    expect(at480.calls).toEqual(["video video.mp4 480 copy", "poster video.mp4"]);
+    expect(a.video).toEqual({ bytes: 2, reencoded: true, from: 4, lines: 480 });
+
+    const at360 = fakeTools({ video480: 3, video360: 1 });
+    const b = syncShowcase({ src: makeExport("bigger"), id: "ed90", dest, maxVideoBytes: 3, max480Bytes: 2, tools: at360.tools });
+    // made from the export again, not from the 480-line copy; the sound as AAC at 64 kbit/s
+    expect(at360.calls).toEqual(["video video.mp4 480 copy", "video video.mp4 360 aac64", "poster video.mp4"]);
+    expect(b.video).toEqual({ bytes: 1, reencoded: true, from: 4, lines: 360 });
+    expect(readFileSync(path.join(dest, "ed90", "video.mp4"))).toEqual(Buffer.alloc(1, 7));
+  });
+
+  it("re-encodes a described mix over its limit", () => {
+    const { tools, calls } = fakeTools({ audio: 2 });
+    const r = syncShowcase({ src: makeExport("mix"), id: "ed90", dest, maxDescribedBytes: 3, tools });
+    expect(calls).toEqual(["audio described-audio.m4a", "poster video.mp4"]);
+    expect(r.described).toEqual({ bytes: 2, from: 4 });
+    expect(readFileSync(path.join(dest, "ed90", "described-audio.m4a"))).toEqual(Buffer.alloc(2, 8));
+  });
+
+  it("goes on without a poster it can't make, and says why", () => {
+    const { tools } = fakeTools({ poster: "fail" });
+    const r = syncShowcase({ src: makeExport("still"), id: "ed90", dest, tools });
+    expect(r.poster).toEqual({ error: "no frame at 1 s" });
+    expect(existsSync(path.join(dest, "ed90", "poster.jpg"))).toBe(false);
   });
 
   it("keeps the site's copy when re-encoding fails", () => {
-    syncShowcase({ src: makeExport("before"), id: "ed90", dest });
-    const fail = () => {
-      throw new Error("no ffmpeg");
+    syncShowcase({ src: makeExport("before"), id: "ed90", dest, tools: fakeTools().tools });
+    const fail: MediaTools = {
+      ...fakeTools().tools,
+      video: () => {
+        throw new Error("no ffmpeg");
+      },
     };
-    expect(() => syncShowcase({ src: makeExport("after"), id: "ed90", dest, maxVideoBytes: 1, encode: fail })).toThrow(/no ffmpeg/);
+    expect(() => syncShowcase({ src: makeExport("after"), id: "ed90", dest, maxVideoBytes: 1, tools: fail })).toThrow(/no ffmpeg/);
     expect(readFileSync(path.join(dest, "ed90", "video.mp4"))).toEqual(Buffer.from([0, 1, 2, 9]));
   });
 
-  it("re-encodes to at most 480 lines at CRF 30, the audio copied so the timing stays", () => {
+  it("re-encodes with CRF 30 and keeps the timing: the sound copied at 480 lines, AAC 64k at 360", () => {
     const args = reencodeArgs("in.mp4", "out.mp4");
-    expect(args).toEqual(expect.arrayContaining(["-i", "in.mp4", "out.mp4", "scale=-2:'min(480,ih)'", "libx264", "30", "copy", "+faststart"]));
+    expect(args).toEqual(expect.arrayContaining(["-i", "in.mp4", "out.mp4", "scale=-2:'min(480,ih)'", "libx264", "+faststart"]));
     expect(args[args.indexOf("-crf") + 1]).toBe("30");
     expect(args[args.indexOf("-c:a") + 1]).toBe("copy");
-    expect(MAX_VIDEO_BYTES).toBe(15 * 1024 * 1024);
+    const small = reencodeArgs("in.mp4", "out.mp4", 360, "aac64");
+    expect(small).toEqual(expect.arrayContaining(["scale=-2:'min(360,ih)'", "aac", "64k"]));
+    expect(audioArgs("a.m4a", "b.m4a")).toEqual(expect.arrayContaining(["-vn", "aac", "64k"]));
+    expect(posterArgs("v.mp4", "p.jpg", 5)).toEqual(expect.arrayContaining(["-ss", "1", "-frames:v", "1", "-q:v", "5"]));
+    expect([MAX_VIDEO_BYTES, MAX_480_BYTES, MAX_DESCRIBED_BYTES, MAX_POSTER_BYTES]).toEqual([15 * 1024 * 1024, 25 * 1024 * 1024, 8 * 1024 * 1024, 60 * 1024]);
   });
 
   it("refuses an interim placeholder", () => {

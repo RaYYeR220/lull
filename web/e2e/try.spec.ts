@@ -187,7 +187,7 @@ test.describe("try it", () => {
       await expect(heading).toBeFocused();
       const notice = page.getByRole("region", { name: r.heading });
       await expect(notice).toContainText(r.body);
-      await expect(notice.getByRole("link", { name: "Elephants Dream" })).toHaveAttribute("href", "/watch/ed90");
+      await expect(notice.getByRole("link", { name: "Elephants Dream (1:00–2:30)" })).toHaveAttribute("href", "/watch/ed90");
       await expect(notice.getByRole("button", { name: "Try again" })).toHaveCount(r.retry ? 1 : 0);
       // the picker is still there to change the choice
       await expect(start(page)).toBeEnabled();
@@ -223,7 +223,7 @@ test.describe("try it", () => {
     await page.goto("/try");
     await expect(page.getByText("Not answering")).toBeVisible();
     const notice = page.getByRole("region", { name: "The live service isn’t answering." });
-    await expect(notice.getByRole("link", { name: "Elephants Dream" })).toHaveAttribute("href", "/watch/ed90");
+    await expect(notice.getByRole("link", { name: "Elephants Dream (1:00–2:30)" })).toHaveAttribute("href", "/watch/ed90");
     await expect(page.getByRole("button", { name: "Describe your clip" })).toBeDisabled();
     await expect(page.getByText("The live service isn’t answering, so a description can’t start.")).toBeVisible();
     // checking again once it answers brings the picker back

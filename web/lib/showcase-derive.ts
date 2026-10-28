@@ -348,3 +348,21 @@ export function describeSpeech(speech: readonly [number, number][]): string {
   if (parts.length <= 1) return parts.join("");
   return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
 }
+
+/**
+ * The names the site lists recorded runs by: the title, and where two runs share it, which part
+ * of the video each is ("Elephants Dream (1:00–2:30)", "Elephants Dream (full length)"), read
+ * from the credit's excerpt.
+ */
+export function listNames(index: readonly { id: string; title: string; credit: string }[]): Record<string, string> {
+  const seen = new Map<string, number>();
+  for (const e of index) seen.set(e.title, (seen.get(e.title) ?? 0) + 1);
+  return Object.fromEntries(
+    index.map((e) => {
+      if ((seen.get(e.title) ?? 0) < 2) return [e.id, e.title];
+      const m = /excerpt\s+([\d:.]+)\s*[-–]\s*([\d:.]+)/i.exec(e.credit);
+      return [e.id, `${e.title} (${m ? `${m[1]}–${m[2]}` : "full length"})`];
+    }),
+  );
+}
+

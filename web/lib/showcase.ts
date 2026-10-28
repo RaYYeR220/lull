@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { cache } from "react";
@@ -14,7 +15,9 @@ const root = () => path.join(process.cwd(), "public", "showcase");
 export const loadShowcase = cache(async (id: string): Promise<Showcase> => {
   if (!SHOWCASE_ID.test(id)) throw new ShowcaseError(id, "id", "must be lowercase letters, digits and dashes");
   const raw: unknown = JSON.parse(await readFile(path.join(root(), id, LAYOUT.json), "utf8"));
-  return parseShowcase(raw, id);
+  const show = parseShowcase(raw, id);
+  // the sync's poster, when it made one
+  return existsSync(path.join(root(), id, LAYOUT.poster)) ? { ...show, poster: showcaseUrl(id, LAYOUT.poster) } : show;
 });
 
 /**
@@ -34,9 +37,10 @@ export const loadIndex = cache(async (): Promise<ShowcaseIndexEntry[]> => {
 });
 
 /** The files a showcase's player reads, as site URLs (the export's fixed layout). */
-export function showcaseMedia(s: Pick<Showcase, "id" | "audio" | "cueAudioBase">) {
+export function showcaseMedia(s: Pick<Showcase, "id" | "audio" | "cueAudioBase" | "poster">) {
   return {
     video: showcaseUrl(s.id, LAYOUT.video),
+    poster: s.poster,
     descriptions: showcaseUrl(s.id, LAYOUT.descriptions),
     extended: showcaseUrl(s.id, LAYOUT.extended),
     describedAudio: s.audio?.described,

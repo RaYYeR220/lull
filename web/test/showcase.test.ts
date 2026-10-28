@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseIndex, parseShowcase, requiredFiles } from "../lib/showcase-schema.mjs";
+import { indexEntry, parseIndex, parseShowcase, requiredFiles, spentUsd } from "../lib/showcase-schema.mjs";
 import {
   closeUp,
   creditParts,
   draftSegments,
+  listNames,
   linesInsidePauses,
   numberedCues,
   spend,
@@ -35,10 +36,10 @@ describe("the shipped showcase is the engine's real export", () => {
 
   it("lists in the index exactly as its showcase.json reads", () => {
     const index = parseIndex(JSON.parse(readFileSync(path.join(ROOT, "index.json"), "utf8")));
-    expect(index.map((e) => e.id)).toEqual(["ed90", "bbb120", "tos180"]);
+    expect(index.map((e) => e.id)).toEqual(["ed90", "bbb120", "tos180", "ed"]);
     for (const e of index) {
       const s = parseShowcase(JSON.parse(readFileSync(path.join(ROOT, e.id, "showcase.json"), "utf8")), e.id);
-      expect(e).toEqual({ id: e.id, title: s.title, credit: s.credit, duration: s.duration, cues: s.cues.length, held: s.summary?.counts.held, costUsd: s.costUsd });
+      expect(e).toEqual({ id: e.id, title: s.title, credit: s.credit, duration: s.duration, cues: s.cues.length, held: s.summary?.counts.held, costUsd: spentUsd(s) });
       // every recorded run is credited with its licence
       expect(creditParts(s.credit).licence).not.toBeNull();
     }
@@ -159,6 +160,28 @@ describe("what the pages derive from the run", () => {
     });
     expect(creditParts("Big Buck Bunny (2008), Blender Foundation, CC BY-SA 3.0 (excerpt)").licence?.url).toBe("https://creativecommons.org/licenses/by-sa/3.0/");
     expect(creditParts("USGS, public domain")).toEqual({ before: "USGS, public domain", licence: null, after: "" });
+  });
+
+  it("shows the spend of every attempt under the run's id, not only the one that published it", () => {
+    const ed = parseShowcase(JSON.parse(readFileSync(path.join(ROOT, "ed", "showcase.json"), "utf8")), "ed");
+    expect(ed.costUsd).toBe(0.027156);
+    expect(spentUsd(ed)).toBe(0.293713);
+    expect(indexEntry(ed).costUsd).toBe(0.293713);
+    const index = parseIndex(JSON.parse(readFileSync(path.join(ROOT, "index.json"), "utf8")));
+    expect(index.find((e) => e.id === "ed")?.costUsd).toBe(0.293713);
+    // without a summary, the export's own figure
+    const { summary: _s, ...bare } = clone(); // eslint-disable-line @typescript-eslint/no-unused-vars
+    expect(spentUsd(parseShowcase(bare, "ed90"))).toBe(0.038668);
+  });
+
+  it("names two runs of one film apart, by the part of it each is", () => {
+    const index = parseIndex(JSON.parse(readFileSync(path.join(ROOT, "index.json"), "utf8")));
+    expect(listNames(index)).toEqual({
+      ed90: "Elephants Dream (1:00–2:30)",
+      bbb120: "Big Buck Bunny",
+      tos180: "Tears of Steel (development clip, used to tune the engine)",
+      ed: "Elephants Dream (full length)",
+    });
   });
 
   it("says the run's spend as a figure and in words", () => {

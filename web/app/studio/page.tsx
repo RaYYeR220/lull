@@ -7,6 +7,7 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 import { cx } from "@/lib/cx";
 import { studioHref } from "@/lib/routes";
 import { loadIndex } from "@/lib/showcase";
+import { listNames } from "@/lib/showcase-derive";
 import { MAIN_ID } from "@/lib/site";
 import { formatTimecode } from "@/lib/timecode";
 import styles from "./studio.module.css";
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
 /** The studio's front page: the recorded runs to open, and the runs this browser can edit. */
 export default async function StudioIndex() {
   const index = await loadIndex();
-  const titles = Object.fromEntries(index.map((e) => [e.id, e.title]));
+  const titles = listNames(index);
   return (
     <>
       <Nav />
@@ -44,7 +45,7 @@ export default async function StudioIndex() {
             {index.map((e) => (
               <li key={e.id} className={styles.run}>
                 <Link href={studioHref(e.id)} className={styles.runLink}>
-                  <span className={styles.runTitle}>{e.title}</span>
+                  <span className={styles.runTitle}>{titles[e.id]}</span>
                   <span className={styles.runMeta}>
                     {formatTimecode(e.duration, 0)} long, {e.cues} lines{e.held ? `, ${e.held} held for review` : ""}
                   </span>

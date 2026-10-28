@@ -6,7 +6,7 @@
  */
 import type { CueStatus, LintFinding, Sample } from "./api";
 import { cueAudioPattern, runFileUrl, type ApiClaim, type ApiCue, type ManifestSummary, type DoneDetail, type RunDetail } from "./api-runs";
-import { LAYOUT, showcaseUrl } from "./showcase-schema.mjs";
+import { LAYOUT, showcaseUrl, spentUsd } from "./showcase-schema.mjs";
 import type { Showcase, ShowcaseIndexEntry, ShowcaseWord } from "./showcase-schema.mjs";
 import { lineCounts, type LineCounts } from "./showcase-derive";
 import { inferWps } from "./studio-budget";
@@ -62,6 +62,8 @@ export type RunMedia = {
   crossOrigin?: "anonymous";
   /** "described": the video's own sound already carries the descriptions (the API's described.mp4). */
   sound?: "described";
+  /** The picture before it plays: the site's poster for a recorded run, else the run's first evidence frame. */
+  poster?: string;
 };
 
 /** Which model did what for the run (one per role), and the voice. */
@@ -139,9 +141,10 @@ export function showcaseFiles(s: Pick<Showcase, "id" | "audio">, sizes: Record<s
 }
 
 /** What the player reads for a recorded run (the export's fixed layout, as site URLs). */
-export function showcaseMedia(s: Pick<Showcase, "id" | "audio" | "cueAudioBase">): RunMedia {
+export function showcaseMedia(s: Pick<Showcase, "id" | "audio" | "cueAudioBase" | "poster">): RunMedia {
   return {
     src: showcaseUrl(s.id, LAYOUT.video),
+    ...(s.poster ? { poster: s.poster } : {}),
     descriptions: showcaseUrl(s.id, LAYOUT.descriptions),
     extended: showcaseUrl(s.id, LAYOUT.extended),
     describedAudio: s.audio?.described,
@@ -195,7 +198,7 @@ export function fromShowcase(s: Showcase, opts: { hasFrame?: (url: string) => bo
     media: showcaseMedia(s),
     files: showcaseFiles(s, opts.sizes),
     summary: null,
-    costUsd: s.costUsd ?? null,
+    costUsd: spentUsd(s) ?? null,
     voice: null,
     wps,
     dirty: null,
@@ -313,6 +316,8 @@ export function fromApi(
           cueAudioExt: "wav",
           crossOrigin: "anonymous",
           sound: original ? undefined : "described",
+          // the recorded clip's own poster when its video is the site's, else the run's first evidence frame
+          poster: (!detail.original && clip?.poster) || cues.find((c) => c.frame)?.frame || undefined,
         }
       : null;
   }
@@ -340,7 +345,8 @@ export function fromApi(
     media,
     files,
     summary: manifest.summary,
-    costUsd: manifest.summary.spend?.modelUsd ?? manifest.summary.costUsd,
+    // every attempt under the run's id, as the checks say
+    costUsd: manifest.summary.spend?.modelUsdAllRuns ?? manifest.summary.spend?.modelUsd ?? manifest.summary.costUsd,
     voice: manifest.options.voice,
     wps: detail.wps ?? (gaps ? (inferWps(gaps)?.wps ?? null) : null),
     dirty: detail.dirty,

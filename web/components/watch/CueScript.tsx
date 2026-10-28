@@ -3,15 +3,32 @@
 import { memo, useState, type ReactNode } from "react";
 import { StatusMark } from "@/components/ui/StatusMark";
 import { Timecode } from "@/components/ui/Timecode";
+import { useAfterLoad } from "@/components/ui/useAfterLoad";
 import { cx } from "@/lib/cx";
 import { fitWords, type RunCue } from "@/lib/run-data";
 import { countWords } from "@/lib/studio-budget";
 import styles from "./Watch.module.css";
 
-/** The run's evidence frame for a line, or an empty frame when there is none (or it doesn't load). */
-export function EvidenceFrame({ src, className, empty }: { src: string | null; className?: string; /** Said in place of a missing frame. */ empty?: ReactNode }) {
+/**
+ * The run's evidence frame for a line, or an empty frame when there is none (or it doesn't load).
+ * With `deferred`, the picture is fetched only once the page has loaded: a script's frames never
+ * compete with the player for the first seconds' bandwidth.
+ */
+export function EvidenceFrame({
+  src,
+  className,
+  empty,
+  deferred = false,
+}: {
+  src: string | null;
+  className?: string;
+  /** Said in place of a missing frame. */
+  empty?: ReactNode;
+  deferred?: boolean;
+}) {
   const [failed, setFailed] = useState<string | null>(null);
-  if (!src || failed === src) return <span className={className}>{empty}</span>;
+  const loaded = useAfterLoad();
+  if (!src || failed === src || (deferred && !loaded)) return <span className={className}>{failed === src || !src ? empty : null}</span>;
   // eslint-disable-next-line @next/next/no-img-element -- the run's own 854x480 still, shown small
   return <img className={className} src={src} alt="" width={854} height={480} loading="lazy" decoding="async" onError={() => setFailed(src)} />;
 }
@@ -20,7 +37,7 @@ const Row = memo(function Row({ cue, current, onSeek, borrowed }: { cue: RunCue;
   return (
     <li className={cx(styles.line, current && styles.current)} data-line={cue.id} data-status={cue.status}>
       <button type="button" className={styles.lineBtn} aria-current={current ? "true" : undefined} onClick={() => onSeek(cue)}>
-        <EvidenceFrame src={cue.frame} className={styles.frame} />
+        <EvidenceFrame src={cue.frame} className={styles.frame} deferred />
         <span className={styles.when}>
           <Timecode seconds={cue.start} className={styles.tc} />
           <span className={styles.label}>{cue.label}</span>

@@ -5,6 +5,7 @@ import type { Benchmarks as BenchmarkData } from "@/lib/benchmarks-schema";
 import { cx } from "@/lib/cx";
 import type { Showcase } from "@/lib/showcase";
 import { spend } from "@/lib/showcase-derive";
+import { spentUsd } from "@/lib/showcase-schema.mjs";
 import styles from "./Benchmarks.module.css";
 
 const METRICS: { key: BenchmarkKey; name: string; what: string }[] = [
@@ -18,7 +19,8 @@ const METRICS: { key: BenchmarkKey; name: string; what: string }[] = [
 export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData | null; showcase: Showcase }) {
   const cells = landingMetrics(benchmarks);
   const measured = METRICS.filter((m) => cells[m.key]).length;
-  const cost = showcase.costUsd === undefined ? null : spend(showcase.costUsd);
+  const spent = spentUsd(showcase);
+  const cost = spent === undefined ? null : spend(spent);
 
   return (
     <Section

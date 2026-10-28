@@ -13,8 +13,13 @@
  * a fresh folder that then replaces public/showcase/<id>/. The index keeps its order and adds
  * a new showcase at the end; every row is rebuilt from its showcase.json.
  *
- * A video over 15 MiB is re-encoded on the way in (ffmpeg: at most 480 lines, H.264 CRF 30,
- * the audio copied as it is, so the timing doesn't move), to keep the site's media small.
+ * The site's media is kept small on the way in (ffmpeg; the timing never moves):
+ * - a video over 15 MiB is re-encoded at most 480 lines high, H.264 CRF 30, its sound copied
+ *   as it is; if that is still over 25 MiB, it is made from the export again at 360 lines,
+ *   CRF 30, its sound as AAC at 64 kbit/s;
+ * - a described mix over 8 MiB is re-encoded as AAC at 64 kbit/s;
+ * - a poster, poster.jpg, is grabbed from the video at 1 s, at most 60 KiB, for the player to
+ *   show before it plays (a poster that can't be made is reported, and the sync goes on).
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -25,24 +30,54 @@ import { LAYOUT, SHOWCASE_ID, indexEntry, parseIndex, parseShowcase, requiredFil
 /** public/showcase/ of this site. */
 export const PUBLIC_SHOWCASE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public", "showcase");
 const INDEX = "index.json";
-/** A video larger than this is re-encoded on the way in. */
+/** A video larger than this is re-encoded on the way in, at most 480 lines high. */
 export const MAX_VIDEO_BYTES = 15 * 1024 * 1024;
+/** A 480-line video still larger than this is made again at 360 lines. */
+export const MAX_480_BYTES = 25 * 1024 * 1024;
+/** A described mix larger than this is re-encoded at 64 kbit/s. */
+export const MAX_DESCRIBED_BYTES = 8 * 1024 * 1024;
+/** The poster's largest size. */
+export const MAX_POSTER_BYTES = 60 * 1024;
 
-/** ffmpeg arguments that re-encode `from` to `to`: at most 480 lines, CRF 30, the audio as it is. */
-export function reencodeArgs(from, to) {
+/**
+ * ffmpeg arguments that re-encode `from` to `to`: at most `lines` high, H.264 CRF 30; the sound
+ * copied as it is, or ("aac64") as AAC at 64 kbit/s.
+ */
+export function reencodeArgs(from, to, lines = 480, sound = "copy") {
   return [
     "-v", "error", "-y", "-i", from,
-    "-vf", "scale=-2:'min(480,ih)'",
+    "-vf", `scale=-2:'min(${lines},ih)'`,
     "-c:v", "libx264", "-preset", "slow", "-crf", "30", "-pix_fmt", "yuv420p",
-    "-c:a", "copy", "-movflags", "+faststart",
+    ...(sound === "copy" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "64k"]),
+    "-movflags", "+faststart",
     to,
   ];
 }
 
-function ffmpeg(from, to) {
-  const r = spawnSync("ffmpeg", reencodeArgs(from, to), { stdio: ["ignore", "ignore", "pipe"], encoding: "utf8" });
-  if (r.error || r.status !== 0) throw new SyncError(`re-encoding ${LAYOUT.video} failed: ${r.error?.message ?? r.stderr?.trim() ?? `exit ${r.status}`}`);
+/** ffmpeg arguments that re-encode an audio file as AAC at 64 kbit/s. */
+export const audioArgs = (from, to) => ["-v", "error", "-y", "-i", from, "-vn", "-c:a", "aac", "-b:a", "64k", "-movflags", "+faststart", to];
+
+/** ffmpeg arguments that grab the frame at 1 s as a JPEG of quality `q` (2 best, 31 worst). */
+export const posterArgs = (from, to, q) => ["-v", "error", "-y", "-ss", "1", "-i", from, "-frames:v", "1", "-q:v", String(q), to];
+
+function ffmpegRun(args, what) {
+  const r = spawnSync("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"], encoding: "utf8" });
+  if (r.error || r.status !== 0) throw new SyncError(`${what} failed: ${r.error?.message ?? r.stderr?.trim() ?? `exit ${r.status}`}`);
 }
+
+/** The media steps, through ffmpeg; the tests pass their own. */
+export const FFMPEG = {
+  video: (from, to, lines, sound) => ffmpegRun(reencodeArgs(from, to, lines, sound), `re-encoding ${LAYOUT.video}`),
+  audio: (from, to) => ffmpegRun(audioArgs(from, to), "re-encoding the described mix"),
+  poster: (from, to) => {
+    // the best quality that fits
+    for (let q = 3; q <= 15; q += 2) {
+      ffmpegRun(posterArgs(from, to, q), "the poster");
+      if (statSync(to).size <= MAX_POSTER_BYTES) return;
+    }
+    throw new SyncError(`the poster is over ${MAX_POSTER_BYTES} bytes even at the lowest quality tried`);
+  },
+};
 
 export class SyncError extends Error {
   constructor(message) {
@@ -97,7 +132,7 @@ function readJson(file, what) {
  * Returns the relative paths copied, the new index, and the video's size before and after
  * (`reencoded` when it was over `maxVideoBytes`).
  */
-export function syncShowcase({ src, id, dest = PUBLIC_SHOWCASE, maxVideoBytes = MAX_VIDEO_BYTES, encode = ffmpeg }) {
+export function syncShowcase({ src, id, dest = PUBLIC_SHOWCASE, maxVideoBytes = MAX_VIDEO_BYTES, max480Bytes = MAX_480_BYTES, maxDescribedBytes = MAX_DESCRIBED_BYTES, tools = FFMPEG }) {
   if (typeof id !== "string" || !SHOWCASE_ID.test(id)) throw new SyncError(`the id must be lowercase letters, digits and dashes, not ${JSON.stringify(id)}`);
   const from = path.resolve(src);
   if (!existsSync(from) || !lstatSync(from).isDirectory()) throw new SyncError(`${from} is not a folder`);
@@ -119,6 +154,8 @@ export function syncShowcase({ src, id, dest = PUBLIC_SHOWCASE, maxVideoBytes = 
   const staging = path.join(dest, `.${id}.sync-${process.pid}`);
   rmSync(staging, { recursive: true, force: true });
   let video;
+  let described = null;
+  let poster;
   try {
     for (const rel of files) {
       const to = path.join(staging, ...rel.split("/"));
@@ -129,16 +166,37 @@ export function syncShowcase({ src, id, dest = PUBLIC_SHOWCASE, maxVideoBytes = 
     video = { bytes: statSync(staged).size, reencoded: false };
     if (video.bytes > maxVideoBytes) {
       const smaller = path.join(staging, `.small-${LAYOUT.video}`);
-      encode(staged, smaller);
+      let lines = 480;
+      tools.video(staged, smaller, 480, "copy");
+      if (statSync(smaller).size > max480Bytes) {
+        lines = 360;
+        tools.video(staged, smaller, 360, "aac64");
+      }
       renameSync(smaller, staged);
-      video = { bytes: statSync(staged).size, reencoded: true, from: video.bytes };
+      video = { bytes: statSync(staged).size, reencoded: true, from: video.bytes, lines };
+    }
+    const mix = typeof raw.audio?.described === "string" ? path.join(staging, ...raw.audio.described.split("/")) : null;
+    if (mix && existsSync(mix) && statSync(mix).size > maxDescribedBytes) {
+      const before = statSync(mix).size;
+      const smaller = path.join(path.dirname(mix), `.small-${path.basename(mix)}`);
+      tools.audio(mix, smaller);
+      renameSync(smaller, mix);
+      described = { bytes: statSync(mix).size, from: before };
+    }
+    const still = path.join(staging, LAYOUT.poster);
+    try {
+      tools.poster(staged, still);
+      poster = { bytes: statSync(still).size };
+    } catch (e) {
+      rmSync(still, { force: true });
+      poster = { error: e instanceof Error ? e.message : String(e) };
     }
     rmSync(target, { recursive: true, force: true });
     renameSync(staging, target);
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
-  return { files, index: writeIndex(dest), video };
+  return { files, index: writeIndex(dest), video, described, poster };
 }
 
 /**
@@ -173,10 +231,12 @@ if (run) {
     process.exit(2);
   }
   try {
-    const { files, index, video } = syncShowcase({ src, id });
+    const { files, index, video, described, poster } = syncShowcase({ src, id });
     const mb = (n) => `${(n / 1024 / 1024).toFixed(1)} MiB`;
-    const size = video.reencoded ? `re-encoded ${mb(video.from)} to ${mb(video.bytes)}` : mb(video.bytes);
-    console.log(`showcase ${id}: copied ${files.length} files to public/showcase/${id}/ (video ${size}); the index lists ${index.map((e) => e.id).join(", ")}`);
+    const size = video.reencoded ? `re-encoded at ${video.lines} lines, ${mb(video.from)} to ${mb(video.bytes)}` : mb(video.bytes);
+    const mix = described ? `; described mix ${mb(described.from)} to ${mb(described.bytes)}` : "";
+    const still = poster.error ? `; no poster: ${poster.error}` : `; poster ${Math.round(poster.bytes / 1024)} KiB`;
+    console.log(`showcase ${id}: copied ${files.length} files to public/showcase/${id}/ (video ${size}${mix}${still}); the index lists ${index.map((e) => e.id).join(", ")}`);
   } catch (e) {
     console.error(`sync-showcase: ${e instanceof Error ? e.message : String(e)}`);
     process.exit(1);

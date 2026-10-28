@@ -507,7 +507,8 @@ test.describe("the studio, a run that isn't there to edit", () => {
     await holdToken(page, FORK_ID, FORK_TOKEN);
     await page.goto("/studio");
     await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Studio" })).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("link", { name: /Elephants Dream/ })).toHaveAttribute("href", "/studio/ed90");
+    await expect(page.getByRole("link", { name: /^Elephants Dream \(1:00–2:30\)/ })).toHaveAttribute("href", "/studio/ed90");
+    await expect(page.getByRole("link", { name: /^Elephants Dream \(full length\)/ })).toHaveAttribute("href", "/studio/ed");
     await expect(page.getByRole("link", { name: new RegExp(FORK_ID) })).toHaveAttribute("href", `/studio/${FORK_ID}`);
   });
 });

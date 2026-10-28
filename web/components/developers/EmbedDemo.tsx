@@ -16,6 +16,7 @@ export function embedSnippet(origin: string): string {
 
 <lull-player
   src="${at("/showcase/ed90/video.mp4")}"
+  poster="${at("/showcase/ed90/poster.jpg")}"
   descriptions="${at("/showcase/ed90/descriptions.vtt")}"
   described-audio="${at("/showcase/ed90/described-audio.m4a")}"
   extended="${at("/showcase/ed90/extended.vtt")}"
@@ -41,6 +42,7 @@ export function EmbedDemo() {
       <figure className={styles.live}>
         <Player
           src="/showcase/ed90/video.mp4"
+          poster="/showcase/ed90/poster.jpg"
           descriptions="/showcase/ed90/descriptions.vtt"
           describedAudio="/showcase/ed90/described-audio.m4a"
           extended="/showcase/ed90/extended.vtt"

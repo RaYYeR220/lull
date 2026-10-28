@@ -82,6 +82,7 @@ export function WatchRun({
             cueAudioExt={media.cueAudioExt}
             crossOrigin={media.crossOrigin}
             sound={media.sound}
+            poster={media.poster}
             label={label}
           />
         ) : (
