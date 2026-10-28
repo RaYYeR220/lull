@@ -2,10 +2,11 @@
 
 POST /v1/runs takes an upload (or a sample id). Before anything streams, it checks that no
 other run is going (409) and at most MAX_UPLOADS uploads are being received (503), the
-visitor's rate limits (429: runs started, and uploads refused), the size (413), the format and
-the duration (422: uploads up to MAX_SECONDS, samples MAX_SAMPLE_SECONDS) and the spend caps
-(402). The run gets a remuxed copy cut at that limit and probed again (lull.api.clip), so the
-duration that counts is the copy's, not what the container claims. Then it answers with
+visitor's rate limits (429: runs started, and uploads refused), the size (413), the format, the
+limits on what decoding it costs (422 unsupported: lull.api.clip.over_limits) and the duration
+(422: uploads up to MAX_SECONDS, samples MAX_SAMPLE_SECONDS) and the spend caps (402). The
+run gets a remuxed copy cut at that limit and probed again (lull.api.clip), so the duration
+that counts is the copy's, not what the container claims. Then it answers with
 text/event-stream: a `run` event, every engine event as it happens (stage_start / stage_end /
 call / cue / warning), a final `done` or `error`, and a `: ping` comment whenever the stream
 has been quiet for 15 s.
@@ -79,7 +80,8 @@ HEARTBEAT_S = 15.0
 BUSY_RETRY_S = 60
 MAX_UPLOADS = 2  # uploads received and checked at once
 UPLOADS_RETRY_S = 15
-UPLOAD_DEADLINE_S = 60.0  # to receive and store the whole body
+UPLOAD_DEADLINE_S = 60.0  # to receive the whole body (the visitor's part)
+STORE_DEADLINE_S = 60.0  # to store it (ours: a slow disk is never counted against them)
 FORM_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
 REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
 WALL_CLOCK_S = 600.0
@@ -658,12 +660,14 @@ def _save(src: BinaryIO, dst: Path, limit: int) -> int:
     return size
 
 
-async def _store(fn: Callable[..., Any], *args: Any) -> Any:
-    """Write the video into the run folder; a disk that fails (a timeout on a network mount,
-    say) is our trouble, not the visitor's: 503, not counted against them."""
+async def _store(fn: Callable[..., Any], *args: Any, deadline: float = STORE_DEADLINE_S) -> Any:
+    """Write the video into the run folder, within `deadline` seconds; a disk that fails or
+    hangs (a network mount, say) is our trouble, not the visitor's: 503, not counted against
+    them. (A hung write is left to finish in its thread; the run folder is removed.)"""
     try:
-        return await anyio.to_thread.run_sync(fn, *args)
-    except OSError:
+        with anyio.fail_after(deadline):
+            return await anyio.to_thread.run_sync(fn, *args, abandon_on_cancel=True)
+    except OSError:  # TimeoutError included
         log.exception("live: storing an upload failed")
         raise LiveError(
             503,
@@ -726,6 +730,8 @@ def too_long(duration: float, limit: float) -> LiveError:
 
 
 async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
+    """The video probed, in a container we take (422 unreadable) and within the limits that
+    bound a run's work (422 unsupported, the reason in plain words: lull.api.clip)."""
     try:
         info = await anyio.to_thread.run_sync(live.probe, video)
         media.assert_safe_container(info)  # the engine's rule, right after probing
@@ -734,6 +740,9 @@ async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
         raise unreadable() from None
     if not info.duration > 0:
         raise unreadable()
+    reason = clip.over_limits(info)
+    if reason is not None:
+        raise LiveError(422, "unsupported", reason)
     return info
 
 
@@ -766,15 +775,19 @@ def _sample(settings: ApiSettings, sample_id: str) -> Path | None:
 async def _accept(
     live: Live, request: Request, run_id: str, run_dir: Path, client: str
 ) -> tuple[Job, str]:
-    """Receive the form (within the upload deadline: 408), put the video in run_dir/input,
-    probe and cut it, check the spend caps and write request.json, which keeps the sha256 of
-    the edit token returned with the job. Raises LiveError; the caller then removes run_dir."""
-    received = None
+    """Receive the form (within the upload deadline: 408), put the video in run_dir/input
+    (on our own clock: 503 when the disk is slow), probe and cut it, check the spend caps and
+    write request.json, which keeps the sha256 of the edit token returned with the job. Raises
+    LiveError; the caller then removes run_dir."""
+    form = None
     with anyio.move_on_after(live.upload_deadline):
-        received = await _receive(live, request, run_dir)
-    if received is None:  # the deadline, not a TimeoutError from the disk (that is ours)
+        form = await _read_form(request, live.max_bytes)
+    if form is None:  # the deadline ran out while the body was arriving
         raise upload_timeout(live.upload_deadline)
-    opts, video, source = received
+    try:
+        opts, video, source = await _receive(live, form, run_dir)
+    finally:
+        await form.close()
     limit = live.max_sample_seconds if source["kind"] == "sample" else live.max_seconds
     info = await _cut(live, run_id, video, limit)
     live.check_budget(run_id, info.duration)
@@ -802,36 +815,32 @@ async def _accept(
 
 
 async def _receive(
-    live: Live, request: Request, run_dir: Path
+    live: Live, form: FormData, run_dir: Path
 ) -> tuple[RunOptions, Path, dict[str, Any]]:
-    """The form read and checked, its video (upload or sample) stored in run_dir/input."""
-    form = await _read_form(request, live.max_bytes)
-    try:
-        opts = _options(form)
-        upload, sample = form.get("file"), form.get("sample")
-        has_file = isinstance(upload, UploadFile)
-        has_sample = isinstance(sample, str) and sample != ""
-        if has_file == has_sample or (upload is not None and not has_file):
-            raise LiveError(422, "invalid", "Send one video file or one sample id.")
-        if isinstance(upload, UploadFile):
-            name = _safe_name(upload.filename)
-            if name is None:
-                raise LiveError(422, "format", FORMAT_MESSAGE)
-            if upload.size is not None and upload.size > live.max_bytes:
-                raise too_large(live.max_bytes)
-            video = _new_run_dir(run_dir) / name
-            size = await _store(_save, upload.file, video, live.max_bytes)
-            source: dict[str, Any] = {"kind": "upload", "name": name, "bytes": size}
-        else:
-            assert isinstance(sample, str)
-            path = _sample(live.settings, sample)
-            if path is None:
-                raise LiveError(422, "sample", "There is no sample with that id.")
-            video = _new_run_dir(run_dir) / path.name
-            await _store(_link_or_copy, path, video)
-            source = {"kind": "sample", "id": sample, "name": path.name}
-    finally:
-        await form.close()
+    """The form checked, its video (upload or sample) stored in run_dir/input."""
+    opts = _options(form)
+    upload, sample = form.get("file"), form.get("sample")
+    has_file = isinstance(upload, UploadFile)
+    has_sample = isinstance(sample, str) and sample != ""
+    if has_file == has_sample or (upload is not None and not has_file):
+        raise LiveError(422, "invalid", "Send one video file or one sample id.")
+    if isinstance(upload, UploadFile):
+        name = _safe_name(upload.filename)
+        if name is None:
+            raise LiveError(422, "format", FORMAT_MESSAGE)
+        if upload.size is not None and upload.size > live.max_bytes:
+            raise too_large(live.max_bytes)
+        video = _new_run_dir(run_dir) / name
+        size = await _store(_save, upload.file, video, live.max_bytes)
+        source: dict[str, Any] = {"kind": "upload", "name": name, "bytes": size}
+    else:
+        assert isinstance(sample, str)
+        path = _sample(live.settings, sample)
+        if path is None:
+            raise LiveError(422, "sample", "There is no sample with that id.")
+        video = _new_run_dir(run_dir) / path.name
+        await _store(_link_or_copy, path, video)
+        source = {"kind": "sample", "id": sample, "name": path.name}
     return opts, video, source
 
 
@@ -1040,7 +1049,10 @@ async def run_events(run_id: str, request: Request, after: int | None = None) ->
     job = _resume_job(live, run_id, run_dir)
     if live.executor.busy:
         raise busy()
+    key = live.limiter.client_key(client_ip(request, live.settings.lull_proxy_hops))
+    live.check_rate(key)  # a resume is a start: it counts like one
     live.check_budget(run_id, job.duration)
     first = {"run_id": run_id, "duration": job.duration, "options": _opts(job), "resumed": True}
     backlog, run, q = await live.start(job, first)
+    live.limiter.hit(key)
     return _sse(_since(backlog, after), run, q, live.heartbeat)

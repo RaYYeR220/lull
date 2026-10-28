@@ -1210,6 +1210,11 @@ def test_an_engine_timeout_is_the_engines_error_not_the_wall_clock(lc, live, dat
     assert err["type"] == "error" and err["kind"] == "TimeoutError"
     assert "speech server did not answer" in err["message"]
     assert not live.runner.jobs[0].stop.is_set()
+    # it ends cleanly: the run reads failed, the executor is free for the next one
+    assert not live.executor.busy
+    assert lc.get(f"/v1/runs/{events[0]['run_id']}").json()["status"] == "failed"
+    live.runner = Script()
+    assert types(parse_sse(post(lc).text))[-1] == "done"
 
 
 def test_a_stopped_run_skips_the_after_run_steps(lc, live, data):
@@ -1312,7 +1317,9 @@ def test_the_real_probe_reports_the_container(noaudio):
     from lull.api import clip
 
     info = clip.probe(noaudio)
-    assert type(info) is media.Probe  # the engine's own, no API copy of it
+    # the engine's own Probe, extended (not copied) with what the limits look at
+    assert isinstance(info, media.Probe) and type(info).__mro__[1] is media.Probe
+    assert (info.videos, info.others) == (((720, 1280, 25.0),), ())
     assert info.format_name == MP4_FORMAT
     media.assert_safe_container(info)
     assert not hasattr(clip, "SAFE_CONTAINERS") and not hasattr(clip, "ClipProbe")
@@ -1523,3 +1530,106 @@ def test_the_shipped_samples_are_licensed_short_and_small():
     allowed = (SAMPLES_DIR.parent / ".dockerignore").read_text(encoding="utf-8")
     assert "!samples/" in allowed.splitlines()  # baked into the image
     assert "!README.md" in allowed.splitlines()  # pyproject's readme: the build needs it
+
+
+# -- media over the limits is refused before any work ----------------------------------------------
+
+
+def _ff(*args: str) -> None:
+    import subprocess
+
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], check=True, capture_output=True)
+
+
+@pytest.fixture(scope="module")
+def bombs(tmp_path_factory) -> dict[str, Path]:
+    """Small files that ask for too much: a big frame, a high rate, a second (bigger) picture,
+    a subtitle track; and an allowed file with two sound tracks."""
+    d = tmp_path_factory.mktemp("bombs")
+    enc = ["-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"]
+    _ff("-f", "lavfi", "-i", "testsrc2=s=2560x1440:r=10:d=1", *enc, str(d / "big.mp4"))
+    _ff("-f", "lavfi", "-i", "testsrc2=s=320x240:r=120:d=1", *enc, str(d / "fast.mp4"))
+    _ff("-f", "lavfi", "-i", "testsrc2=s=320x240:r=10:d=1",
+        "-f", "lavfi", "-i", "testsrc2=s=2560x1440:r=10:d=1",
+        "-map", "0:v", "-map", "1:v", *enc, str(d / "two.mp4"))  # fmt: skip
+    srt = d / "s.srt"
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nhello\n")
+    _ff("-f", "lavfi", "-i", "testsrc2=s=320x240:r=10:d=1", "-i", str(srt),
+        "-map", "0:v", "-map", "1:s", *enc, "-c:s", "mov_text", str(d / "subs.mp4"))  # fmt: skip
+    _ff("-f", "lavfi", "-i", "testsrc2=s=320x240:r=10:d=2",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+        "-f", "lavfi", "-i", "sine=frequency=880:duration=2",
+        "-map", "0:v", "-map", "1:a", "-map", "2:a", *enc, "-c:a", "aac",
+        str(d / "two_sounds.mp4"))  # fmt: skip
+    return {p.stem: p for p in d.glob("*.mp4")}
+
+
+@pytest.mark.parametrize(
+    "name,says",
+    [("big", "2560x1440"), ("fast", "frames a second"), ("two", "2 pictures"),
+     ("subs", "subtitle")],
+)  # fmt: skip
+def test_media_over_the_limits_is_refused_before_any_work(lc, live, bombs, name, says):
+    from lull.api import clip
+
+    live.probe, live.trim = clip.probe, clip.trim
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+    trims: list = []
+    live.trim = lambda *a: trims.append(a) or clip.trim(*a)
+    r = post(lc, bombs[name].read_bytes(), name=f"{name}.mp4")
+    assert r.status_code == 422, r.text
+    assert r.json()["error"] == "unsupported" and says in r.json()["message"]
+    assert trims == [] and live.runner.jobs == []
+    assert post(lc).status_code == 429  # it counted as a refused upload
+
+
+def test_the_run_gets_one_picture_and_its_sound(lc, live, bombs):
+    from lull.api import clip
+
+    live.probe, live.trim = clip.probe, clip.trim
+    assert types(parse_sse(post(lc, bombs["two_sounds"].read_bytes()).text))[-1] == "done"
+    (job,) = live.runner.jobs
+    info = clip.probe(job.video)
+    assert info.audio_streams == 2 and info.width == 320
+
+
+def test_storing_the_upload_is_not_on_the_visitors_clock(lc, live, monkeypatch):
+    from lull.api import live as live_mod
+
+    live.upload_deadline = 0.3
+    real = live_mod._save
+
+    def slow(src, dst, limit):
+        time.sleep(0.6)  # a slow disk, after the body has arrived
+        return real(src, dst, limit)
+
+    monkeypatch.setattr(live_mod, "_save", slow)
+    big = b"\0" * (2 << 20)  # spooled to disk: closing the form is a checkpoint
+    assert types(parse_sse(post(lc, big).text))[-1] == "done"
+
+
+def test_an_owner_resume_counts_like_a_start(lc, live, data):
+    live.limiter = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+    a = make_unfinished(data, "live-20261027-100000-aaaaaa")
+    b = make_unfinished(data, "live-20261027-100000-bbbbbb")
+    assert lc.get(f"/v1/runs/{a.name}/events", headers=OWNER_AUTH).status_code == 200
+    r = lc.get(f"/v1/runs/{b.name}/events", headers=OWNER_AUTH)
+    assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+    assert len(live.runner.jobs) == 1
+
+
+def test_the_limits_in_plain_words():
+    from lull.api.clip import Media, over_limits
+
+    def m(**kw):
+        base = dict(duration=10.0, width=1920, height=1080, fps=25.0, has_audio=True,
+                    videos=((1920, 1080, 25.0),), audios=((2, 48000),), bit_rate=8e6)  # fmt: skip
+        return Media(**{**base, **kw})
+
+    assert over_limits(m()) is None
+    assert over_limits(m(videos=((1080, 1920, 60000 / 1001),))) is None  # a phone, upright
+    assert "3 sound tracks" in over_limits(m(audios=((2, 48000),) * 3))
+    assert "16 channels" in over_limits(m(audios=((16, 48000),)))
+    assert "150 Mb/s" in over_limits(m(bit_rate=150e6))
+    assert "data track" in over_limits(m(others=("data",)))
+    assert "4096x2160" in over_limits(m(videos=((4096, 2160, 25.0),)))
