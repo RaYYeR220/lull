@@ -473,15 +473,15 @@ def test_a_compression_not_shorter_drops_the_lowest_priority_sentence(tmp_path, 
         verify=lambda call: _supported(*[s.rstrip(".") for s in _description(call).split(". ")]),
         compress=[{"text": HASHTAG + " It glows."}],  # longer than before
     )
-    ctx = CTX.model_copy(update={"verbatim": ["#CLIMATECHAMPIONS"],
+    ctx = CTX.model_copy(update={"verbatim": ["#OPENDAY"],
                                  "priority": {"e001": 4, "e002": 2}})  # fmt: skip
     cue = _cue(HASHTAG, event_ids=["e001", "e002"], parts={
-        "e001": 'A hashtag reads: "#CLIMATECHAMPIONS".',
-        "e002": "The USGS logo and tagline appear on a black background.",
+        "e001": 'A banner reads: "#OPENDAY".',
+        "e002": "The school crest and motto appear on a blue background.",
     })  # fmt: skip
     out = _run(tmp_path, video, tf, FakeSpeech([5.0, 2.0]), cue=cue,
                events={"e001": EV, "e002": LOGO}, ctx=ctx)  # fmt: skip
-    assert out.status == "verified" and out.text == 'A hashtag reads: "#CLIMATECHAMPIONS".'
+    assert out.status == "verified" and out.text == 'A banner reads: "#OPENDAY".'
     assert "dropped the sentence for e002" in out.note
     assert out.described == ["e001"]
 
@@ -501,38 +501,36 @@ def test_a_compression_that_fails_lint_is_not_taken(tmp_path, video):
 # -- (d2) a compression that cuts too much is tried once more, then held ---------------------
 
 LOGO = EV.model_copy(update={"id": "e002", "t_start": 3.0, "t_end": 6.0, "text": "A logo."})
-# live csc_intro run: Lightning answered this 14-word line (target 10) with "#CLIMATECHAMPIONS."
-HASHTAG = (
-    'A hashtag reads: "#CLIMATECHAMPIONS". The USGS logo and tagline appear on a black background.'
-)
+# a 14-word line (target 10) that a compression once answered with its hashtag alone
+HASHTAG = 'A banner reads: "#OPENDAY". The school crest and motto appear on a blue background.'
 
 
 def _two_visuals(tmp_path, video, tf, speech):
-    ctx = CTX.model_copy(update={"verbatim": ["#CLIMATECHAMPIONS"]})
+    ctx = CTX.model_copy(update={"verbatim": ["#OPENDAY"]})
     cue = _cue(HASHTAG, event_ids=["e001", "e002"])
     events = {"e001": EV, "e002": LOGO}
     return _run(tmp_path, video, tf, speech, cue=cue, events=events, ctx=ctx)
 
 
 def test_a_compression_that_guts_the_line_is_retried_with_a_note(tmp_path, video):
-    shorter = 'A hashtag reads: "#CLIMATECHAMPIONS". The USGS logo appears.'  # 8 words
+    shorter = 'A banner reads: "#OPENDAY". The school crest appears.'  # 8 words
     tf = FakeTF(
-        verify=[_supported("a hashtag reads #CLIMATECHAMPIONS", "the USGS logo")] * 2,
-        compress=[{"text": "#CLIMATECHAMPIONS."}, {"text": shorter}],
+        verify=[_supported("a banner reads #OPENDAY", "the school crest")] * 2,
+        compress=[{"text": "#OPENDAY."}, {"text": shorter}],
     )
     out = _two_visuals(tmp_path, video, tf, FakeSpeech([5.0, 3.5]))  # usable 4.0 s
     assert tf.roles() == ["verify", "compress", "compress", "verify"]
     first, retry = (_user_text(c) for c in tf.of("compress"))
     assert "about 10 words" in first and "previous answer" not in first
-    assert 'previous answer "#CLIMATECHAMPIONS." kept 1 of about 10 words' in retry
+    assert 'previous answer "#OPENDAY." kept 1 of about 10 words' in retry
     assert out.status == "verified" and out.text == shorter
     assert "compressed 14→8 words" in out.note
 
 
 def test_a_compression_that_drops_a_visual_twice_is_held_with_the_full_line(tmp_path, video):
-    one = 'A black screen shows the hashtag "#CLIMATECHAMPIONS".'  # 7 words, 1 sentence
+    one = 'A black screen shows the banner "#OPENDAY".'  # 7 words, 1 sentence
     tf = FakeTF(
-        verify=[_supported("a hashtag reads #CLIMATECHAMPIONS", "the USGS logo")],
+        verify=[_supported("a banner reads #OPENDAY", "the school crest")],
         compress=[{"text": one}, {"text": one}],
     )
     out = _two_visuals(tmp_path, video, tf, FakeSpeech([5.0]))
@@ -1352,7 +1350,7 @@ def test_a_placement_look_ahead_is_not_kept_through_compression(tmp_path, video,
 
 def test_a_tempo_that_misses_by_the_padding_is_raised_once(tmp_path, video, monkeypatch):
     """atempo pads its output to whole frames, so the factor that should fit can miss by a few
-    milliseconds (ed90: 3.344 s for a 3.32 s pause came out at 3.3215 s at 1.008): the factor
+    milliseconds (a 3.344 s line for a 3.32 s pause came out at 3.3215 s at 1.008): the factor
     is raised once rather than the line sent for compression."""
     factors = []
 
