@@ -1,8 +1,8 @@
 # Lull: evaluation results
 
-Generated 2026-10-28T12:52:03+00:00 from commit `b03457c5057d` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
+Generated 2026-10-28T14:54:20+00:00 from commit `c34b41340c7b` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
 
-Not included: Suite B (missing); negative control (missing); ablation (missing).
+Not included: Suite B (missing).
 
 ## Suite A: planted facts, hidden answer key
 
@@ -104,33 +104,84 @@ No unsupported claim is about styling, colours, layout or slide numbers: the key
 | a11 | x003#5 | extended | atomic | d, paraphrase | precipitation patterns shifting | Slide says 'Precipitation patterns are shifting'; claim omits 'are'. | Slide 3 reads 'Precipitation patterns are shifting'; 'are' dropped. |
 | a11 | x003#6 | extended | sentence | b | Slide titled Extreme Weather Events lists four points: heatwaves becoming more frequent, sea levels rising steadily, storm intensity increasing, precipitation patterns shifting | Listed points do not match slide text exactly (missing 'are' in three items). | Repeats claims #1 to #5 of the same cue; unsupported only through #3 to #5. |
 
+## Controls: does the verifier catch false descriptions?
+
+### Negative control
+
+Pre-registration: tag `controls-prereg-2` -> commit `f30231c37c0d7a7a07593f8d9ba3a8decbbdb129` (2026-10-28T05:21:36+01:00). Run 2026-10-28T14:33:25+00:00 at commit `63307fd8eb0b`. Verifier `nvidia/Nemotron-3.5-Super-VL`, temperature 0.0 (the pipeline's settings). Spend $0.0825.
+
+Headline over the same-video rules (38 cues; value [95% CI over cues]):
+
+| metric | value |
+|---|---|
+| false accept: UPPER BOUND on verifier failure (a claim may be true of the other footage too) | 13.2% [2.6%, 23.7%] (5/38) |
+| per-claim false accept | 21.5% [8.8%, 36.4%] (23/107) |
+| discriminative false accept, Suite A (11 cues) | 0.0% [0.0%, 0.0%] (0/11) |
+| true accept on the true clip (optimistic: cues that passed verification) | 100.0% [100.0%, 100.0%] (38/38) |
+
+| mismatch rule | cues | false accept | per-claim false accept | true accept |
+|---|---|---|---|---|
+| another slide | 11 | 0.0% [0.0%, 0.0%] (0/11) | 3.0% [0.0%, 10.7%] (1/33) | 100.0% [100.0%, 100.0%] (11/11) |
+| other events, 30 s away | 27 | 18.5% [3.7%, 33.3%] (5/27) | 29.7% [12.5%, 48.8%] (22/74) | 100.0% [100.0%, 100.0%] (27/27) |
+| other video | 2 | 0.0% [0.0%, 0.0%] (0/2) | 0.0% [0.0%, 0.0%] (0/5) | 100.0% [100.0%, 100.0%] (2/2) |
+
+Every false accept is listed under Known failures.
+
+### Ablation: Suite A without frame verification
+
+Pre-registration: tag `controls-prereg-2` (Suite A pin `suite-a-prereg`). Run 2026-10-28T14:52:55+00:00 at commit `f33995831726` on engine 0.2.0+980454e1b9cd77d0; the with-arm is results/suite_a.json. Spend $0.7873.
+
+| metric | with verification | without | difference [95% CI over videos] |
+|---|---|---|---|
+| hallucination_claims | 18.1% | 19.5% | +1.4% [-16.2%, +16.1%] |
+| hallucination_cues | 25.8% | 19.5% | -6.3% [-27.7%, +14.0%] |
+| hallucination_voiced_text (headline) | 11.0% | 5.9% | -5.1% [-18.4%, +4.5%] |
+| voiced_cues_with_unsupported | 12.9% | 17.1% | +4.2% [-13.6%, +22.5%] |
+| recall_standard | 2.6% | 0.9% | -1.7% [-4.5%, +0.5%] |
+| recall_with_extended | 14.0% | 28.9% | +14.9% [+6.2%, +23.1%] |
+| decoys_stated | 0.0% | 0.0% | +0.0% [+0.0%, +0.0%] |
+
+Share of cues carrying the verifier's claim split: with 1.0, without 0.0 (without it, the claims metric is judged per whole cue; the voiced-text metric splits both arms the same way).
+
 ## Deviations from the pre-registrations
 
 - **Suite A**: Scorer rules the key does not spell out, applied to primary metrics: a verdict the judge leaves out counts against the system (fact not conveyed, claim unsupported, cue redundant, decoy stated) and is listed under "judge problems"; extended cues count only when the run reports extended_produced.
 - **Suite A**: a08's tie (its line chart shows the highest value, 100000, at three categories; the key names the first). Primary recall and exact match follow the key as written (the judge sees the fact as the key states it; the exact match needs the key's label). Supplementary, reported next to the primary: tie-aware recall (a fact is also credited when a cue states the highest value with any tied category, checked deterministically) and tie-aware exact match. Added after the pre-registration.
 - **Suite A**: Supplementary metrics (next section), all labelled "supplementary" in every report: hallucination of the voiced text (its own call; a cue without an answer counts as one unsupported statement), claims the cue text does not say, decoys stated in their absent part only, the second judge with agreement and kappa, the probe's near misses, cross-credits and the voiced-text probe.
 - **Suite A**: Reporting: silence and pause counts per video, hardware, the run inventory, the zero-spend rebuild bundle, the pinned tag.
+- **Controls**: per-rule reporting, with a same-video headline called an upper bound;
+- **Controls**: the discriminative false accept;
+- **Controls**: the true-accept disclosure;
+- **Controls**: the 0.5 s event-overlap rule and per-row event overlap;
+- **Controls**: the title rule for slide fallbacks;
+- **Controls**: the ablation's all-videos-paired check.
 
 ## Known failures
 
 - **Suite A: held cues, "the failed claims share every word with claims that passed"**: 10 cues held for this reason in 12 runs. A held cue is not voiced.
 - **Suite A: held cues, "nothing left once the unverified claims were removed"**: 1 cue held for this reason in 12 runs. A held cue is not voiced.
+- **Negative control: false accept, bbb120 c002 (other events, 30 s away)**: "A grassy field with scattered trees stretches under a pink and blue sky." was fully supported on bbb120 45.00-57.00 s (its true clip 2.70-14.70 s); raw only (no key for this video).
+- **Negative control: false accept, bbb120 c020 (other events, 30 s away)**: "In a moment, the rabbit leaps up on its hind legs, reaching for a butterfly near a tree." was fully supported on bbb120 80.50-85.22 s (its true clip 115.28-120.00 s); raw only (no key for this video).
+- **Negative control: false accept, ed90 c010 (other events, 30 s away)**: "Both stand facing each other, gesturing." was fully supported on ed90 27.00-35.00 s (its true clip 65.00-73.00 s); raw only (no key for this video).
+- **Negative control: false accept, ed90 c013 (other events, 30 s away)**: "The two figures fall through the dark space, tumbling among the wires and platforms." was fully supported on ed90 42.00-51.00 s (its true clip 81.00-90.00 s); raw only (no key for this video).
+- **Negative control: false accept, tos180 c012 (other events, 30 s away)**: "The robot's lit eyes show in close-up." was fully supported on tos180 129.00-133.10 s (its true clip 94.90-99.00 s); raw only (no key for this video).
 - **Run-to-run variance**: Lull's descriptions come from remote models that do not reproduce an answer for a fixed seed (Nemotron 3.5 Lightning ignored the seed in our checks), so the same video gives different cues from one run to the next. Each suite scores one pre-registered run (Suite A: the first complete --all invocation on the final engine) and does not average over runs; the intervals are bootstrapped over videos or reference lines, not over repeated runs.
 - **Sparse descriptions compared with human audio description**: Lull says less than a human describer. In the Suite B smoke on Elephants Dream 60-150 s it voiced 55 words per minute (83 with the extended track) against 120 (Silvia Pfeiffer) and 95 (JJ Hunt), and the primary judge credited none of the describers' 46 facts in that clip to its cues. Lull holds or cuts a description it cannot verify against the frames and fits the standard track into the programme's own pauses, which leaves room for far fewer words than a describer who writes for every scene.
 - **Lecture pauses swallowed before the speech-span fix**: Before the engine's fix round the listen stage widened narration spans by 0.2-0.6 s and merged sentences across planned pauses of about 1.9 s, so a Suite A lecture had only 4-5 speech-free windows and the standard track voiced little more than slide titles; extended cues froze the picture before their slide appeared. Found in the Suite A smoke (a01, a02, pre-fix engine) and fixed in the engine; the scored run is on the fixed engine and the smoke numbers are not results.
 - **TTS nondeterminism**: Magpie TTS returns slightly different audio for the same sentence from one call to the next (seed and temperature parameters did not change that in our checks): a01 re-rendered from an empty cache came out 48.56 s instead of 48.40 s. Suite A's lectures are rendered once and cached (the render tarball reproduces them bit for bit), and Lull's own cue durations vary slightly between runs.
+- **Elephants Dream (full film) failed in publish**: The scored recorded run of the full film (final-ed) finished its descriptions (43 verified, 21 held, 43 extended) and then failed while saving keyframes: a cue's keyframe time, 656.3 s, lies after the last video frame of this file (the video stream ends at 653.8 s, the audio at 658.1 s), because the engine bounds keyframe times by the container's duration rather than the video stream's. ffmpeg returned no frame and the run stopped without publishing. A pipeline failure, not re-run: there is no full-film showcase, and Suite B, whose results need all four videos, has no results.
 
 ## Cost accounting (draft)
 
-A draft for comparison with the provider's billing, not yet checked against it. Model ledger `~/.lull/ledger.db` as of 2026-10-28T12:51:33+00:00: 1520 calls from 2026-10-27T20:18:51+00:00 to 2026-10-28T12:34:48+00:00 (UTC), every run on this machine (engine development, the eval and its judges). `tokens in` is the whole prompt as the provider reported it (`usage.prompt_tokens`), cached part included; `tokens out` is `usage.completion_tokens`. Token Factory total in the ledger: $3.2919.
+A draft for comparison with the provider's billing, not yet checked against it. Model ledger `~/.lull/ledger.db` as of 2026-10-28T14:53:41+00:00: 2574 calls from 2026-10-27T20:18:51+00:00 to 2026-10-28T14:52:55+00:00 (UTC), every run on this machine (engine development, the eval and its judges). `tokens in` is the whole prompt as the provider reported it (`usage.prompt_tokens`), cached part included; `tokens out` is `usage.completion_tokens`. Token Factory total in the ledger: $4.6670.
 
 | provider | model | calls | tokens in | of which cached | tokens out | cost (ledger) | cost (recomputed) |
 |---|---|---|---|---|---|---|---|
-| tavily | tavily-search (48 credits) | 48 | 0 | 0 | 0 | $0.3840 | $0.3840 |
+| tavily | tavily-search (67 credits) | 67 | 0 | 0 | 0 | $0.5360 | $0.5360 |
 | tokenfactory | Qwen/Qwen3-235B-A22B-Instruct-2507 | 94 | 94,010 | 18,928 | 48,231 | $0.0449 | $0.0449 |
-| tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 216 | 422,198 | 8,704 | 713,274 | $2.5544 | $2.5544 |
-| tokenfactory | nvidia/Nemotron-3.5-Super-VL | 563 | 1,718,068 | 267,648 | 202,910 | $0.6338 | $0.6338 |
-| tokenfactory | nvidia/Nemotron-3_5-Lightning | 599 | 433,673 | 0 | 136,925 | $0.0589 | $0.0589 |
+| tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 300 | 571,376 | 8,704 | 975,063 | $3.4889 | $3.4889 |
+| tokenfactory | nvidia/Nemotron-3.5-Super-VL | 904 | 2,621,662 | 274,176 | 301,785 | $0.9923 | $0.9923 |
+| tokenfactory | nvidia/Nemotron-3_5-Lightning | 1,209 | 951,587 | 0 | 349,040 | $0.1409 | $0.1409 |
 
 Per UTC day (billing periods are usually days):
 
@@ -140,11 +191,11 @@ Per UTC day (billing periods are usually days):
 | 2026-10-27 | tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 6 | 25,143 | 17,931 | $0.0789 |
 | 2026-10-27 | tokenfactory | nvidia/Nemotron-3.5-Super-VL | 100 | 226,086 | 15,944 | $0.0822 |
 | 2026-10-27 | tokenfactory | nvidia/Nemotron-3_5-Lightning | 19 | 8,436 | 1,694 | $0.0009 |
-| 2026-10-28 | tavily | tavily-search | 32 | 0 | 0 | $0.2560 |
+| 2026-10-28 | tavily | tavily-search | 51 | 0 | 0 | $0.4080 |
 | 2026-10-28 | tokenfactory | Qwen/Qwen3-235B-A22B-Instruct-2507 | 94 | 94,010 | 48,231 | $0.0449 |
-| 2026-10-28 | tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 210 | 397,055 | 695,343 | $2.4754 |
-| 2026-10-28 | tokenfactory | nvidia/Nemotron-3.5-Super-VL | 463 | 1,491,982 | 186,966 | $0.5516 |
-| 2026-10-28 | tokenfactory | nvidia/Nemotron-3_5-Lightning | 580 | 425,237 | 135,231 | $0.0580 |
+| 2026-10-28 | tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 294 | 546,233 | 957,132 | $3.4100 |
+| 2026-10-28 | tokenfactory | nvidia/Nemotron-3.5-Super-VL | 804 | 2,395,576 | 285,841 | $0.9101 |
+| 2026-10-28 | tokenfactory | nvidia/Nemotron-3_5-Lightning | 1,190 | 943,151 | 347,346 | $0.1400 |
 
 Prices, USD per 1M tokens (input / cached input / output):
 
@@ -170,10 +221,14 @@ task. LULL_CAP_DAY=10. Nothing below was run twice to get a better number.
 |---|---|---|---|---|---|
 | 0. merge main, adapter for the final verifier | about 11:33 | 11:49:40 | about 17 min | $0 | merged without conflicts (tf.py already had the optional seed); engine tests 782 passed, 6 skipped; eval tests 190 passed |
 | 1. Suite A scored run (`suite_a.score --all --cap 2.00`) | 11:50:29 | 12:17:05 | 26.6 min | $0.9146 (scorer: $1.0470 over the referenced run ids, cached probe answers included) | invocation 20261028T115030Z, 12/12 published, none failed; results committed (1ee9ece) |
-| 2. recorded runs (`lull describe --mode extended`, fresh run ids final-*) | 12:18:06 | 12:36 (stopped) | 18 min | $0.3648 | STOPPED: Token Factory answered 402 `credit_balance_exhausted` ("You have exhausted your budget. Please add funds") at 12:34; an infrastructure failure, not a pipeline result |
-| 3. Suite B | | | | $0 | not run: needs the ed and USGS runs |
-| 4. Controls | | | | $0 | not run: needs model calls and the showcase runs |
-| 5. Report (Suite A only) | | | | $0 | RESULTS.md and results/benchmarks.json from the complete results so far |
+| 2. recorded runs (`lull describe --mode extended`, fresh run ids final-*) | 12:18:06 | 12:37:58 (stopped) | 20 min | $0.3648 | STOPPED: Token Factory answered 402 `credit_balance_exhausted` ("You have exhausted your budget. Please add funds") at 12:34; an infrastructure failure, not a pipeline result |
+| 2, resumed once from cache after the top-up (the one infrastructure retry) | 13:36:47 | 14:21:20 | 44.6 min | $0.5052 | 6 of 7 published; `ed` FAILED in publish (a pipeline failure, below); site exports ed90, bbb120, tos180 |
+| 3. Suite B | | | | $0 | NOT RUN: its results need runs of all four videos and `ed` failed (no cues.json, so the scorer refuses it); not started as a partial invocation |
+| 4a. negative control (`controls.negative --suite-a --showcase ed90,bbb120,tos180 --cap 0.50`) | 14:21:59 | 14:33:25 | 11.4 min | $0.0825 | results/controls_negative.json, CONTROLS.md (the Suite A runs and three site runs; `ed` failed). An invocation at 14:21:50 stopped in 1 s before any call: the run paths were given in a form Windows Python could not open; no spend |
+| 4b. ablation (`LULL_NO_VERIFY=1 controls.ablation --all --cap 2.00`) | 14:33:47 | 14:52:56 | 19.2 min | $0.7873 | results/ablation.json, ABLATION.md; 12/12 runs, same engine fingerprint as Suite A (0.2.0+980454e1b9cd77d0) |
+| 5. Report | | | | $0 | RESULTS.md and results/benchmarks.json from the complete results (Suite A, negative control, ablation); Suite B missing |
+
+Task spend: ledger $2.0125 before the task, $4.6670 after step 4: **$2.6545** of the $8 budget.
 
 Step 2 in detail (inputs in lull-runs/final/inputs/: ed90.mp4 copied from the existing ed90
 excerpt, ED 60-150 s, sha256 0daa75ac9328b0c0...; bbb120.mp4 = Big Buck Bunny 0:00-2:00 and
@@ -183,10 +238,49 @@ tos180.mp4 = Tears of Steel 3:30-6:30, cut with ffmpeg; ED and the USGS videos u
   plan finished; finalize stopped at the 402 after cue c041 (4:56 of 10:58); exit 3; 170
   calls, $0.3648. Its finished stages are cached in lull-runs/final/ed: the same command
   resumes where it stopped.
-- `ed90`: listen finished, watch hit the 402 at its first call; exit 3; no spend.
-- `bbb120`: listen finished, watch hit the 402; stopped; no spend.
-- `tos180`, `woodshole`, `aquatic_connectivity`, `csc_intro`: not started.
+- `ed90`, `bbb120`, `tos180`, `woodshole`, `aquatic_connectivity`, `csc_intro` (started one
+  after another by the driver, 12:34:51 to 12:37:40): listen finished (local speech), watch
+  hit the 402 at its first call; exit 3 each; no spend. (Corrected: an earlier version of this
+  log said the last four were not started and bbb120 was stopped; the driver's own log,
+  lull-runs/final/logs/recorded.log, shows all six ran to the 402.)
 
-The failure policy allows one retry of an infrastructure failure. That retry needs the
-provider account topped up first; it is the same `lull describe` command with the same
-`--out` and `--run-id`, resuming from the cached stages. Nothing was retried here.
+### The one infrastructure interruption: the provider balance (HTTP 402)
+
+- **12:34** Token Factory answered every call with 402 `credit_balance_exhausted`. Interrupted:
+  `ed` in finalize after cue c041 (4:56 of 10:58); `ed90`, `bbb120`, `tos180`, `woodshole`,
+  `aquatic_connectivity`, `csc_intro` at their first watch call, after listen. Ledger at the
+  stop $3.2919 (task spend $1.2794).
+- The user topped the account up (promo credits). **13:36:47** the runs were resumed once, in
+  the same order, with the same command, `--out` and `--run-id` (LULL_CAP_DAY=10; `ed`
+  LULL_CAP_RUN=1.50; LULL_TAVILY_DAY=100 so the day's search cap of 60 could not cut a run's
+  research short; the day ended at 51 searches). Resumed from cache: `ed` its listen, watch,
+  research, plan and schedule stages and the 34 finalize cues done before the stop (finalize
+  went on at c042); the other six their listen stage.
+- **14:21:20** the resume finished. Ledger $3.2919 before, $3.7971 after: **$0.5052** (`ed`
+  $0.0963 more, $0.4611 over both attempts; `ed90` $0.0387; `bbb120` $0.0672; `tos180`
+  $0.1298; `woodshole` $0.0738; `aquatic_connectivity` $0.0659; `csc_intro` $0.0336). No run
+  was retried a second time.
+
+| run | profile | outcome | cues verified / held / extended | wall (resume) |
+|---|---|---|---|---|
+| ed | entertainment | FAILED in publish (below) | 43 / 21 / 43 | 884 s |
+| ed90 | entertainment | published | 10 / 1 / 2 | 231 s |
+| bbb120 | entertainment | published | 12 / 6 / 2 | 316 s |
+| tos180 | entertainment | published | 9 / 6 / 14 | 416 s |
+| woodshole | education | published | 0 / 5 / 22 | 367 s |
+| aquatic_connectivity | education | published | 4 / 4 / 14 | 343 s |
+| csc_intro | education | published | 1 / 0 / 1 | 114 s |
+
+**`ed` failed (a pipeline failure, counted as failed, not re-run).** Finalize finished (787.9
+s) and the mixes were written; then the keyframe step asked ffmpeg for a frame at 656.267 s
+(cue c083's event). This file's video stream ends at 653.757 s (its audio at 658.074 s, the
+container at 658.094 s), and the engine clamps keyframe times to the container duration less
+0.1 s, so ffmpeg wrote no frame and publish raised `MediaError` (exit 1). Reproduced locally
+without model calls (the same batched ffmpeg command over the cached cues: only that time
+fails). Consequences: no `ed` showcase export, and Suite B cannot produce results, which need
+runs of all four videos.
+
+Site exports (`lull export-showcase`) in lull-runs/showcase-final/: `ed90` ("Elephants Dream",
+excerpt 1:00-2:30), `bbb120` ("Big Buck Bunny", 0:00-2:00), `tos180` ("Tears of Steel
+(development clip, used to tune the engine)", 3:30-6:30), each with its CC BY credit. The USGS
+runs are not exported (music licences).
