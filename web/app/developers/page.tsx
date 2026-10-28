@@ -447,8 +447,8 @@ export default function DevelopersPage() {
                 </li>
                 <li>A browser page from another site is refused (403 origin), and so is a host name it doesn’t serve (421 host).</li>
                 <li>
-                  describe_video blocks while the run goes, about 3 minutes for a 45 s sample, and sends progress at every stage. Reset your
-                  client’s timeout on progress, or allow at least 5 minutes. Leaving stops the run.
+                  describe_video blocks while the run goes, about six minutes for a 45 s sample on the hosted service, and sends progress at
+                  every stage. Reset your client’s timeout on progress, or allow at least 10 minutes.
                 </li>
                 <li>Runs pass the same gates and spend caps as the REST API: one at a time, per-visitor limits, the day’s budget.</li>
               </ul>

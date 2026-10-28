@@ -1,6 +1,6 @@
 import { Section } from "@/components/ui/Section";
 import Link from "next/link";
-import { landingMetrics, type BenchmarkKey } from "@/lib/benchmarks-landing";
+import { landingFindings, landingMetrics, type BenchmarkKey } from "@/lib/benchmarks-landing";
 import type { Benchmarks as BenchmarkData } from "@/lib/benchmarks-schema";
 import { cx } from "@/lib/cx";
 import type { Showcase } from "@/lib/showcase";
@@ -15,10 +15,11 @@ const METRICS: { key: BenchmarkKey; name: string; what: string }[] = [
   { key: "costPerMinute", name: "Cost per minute", what: "Model spend for each minute of video." },
 ];
 
-/** 9. Benchmarks: four empty cells until they are measured, and the one number that has been. */
+/** 9. Benchmarks: the four measured numbers (empty cells until they are), what else the evaluation found, and the run's spend. */
 export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData | null; showcase: Showcase }) {
   const cells = landingMetrics(benchmarks);
   const measured = METRICS.filter((m) => cells[m.key]).length;
+  const findings = landingFindings(benchmarks);
   const spent = spentUsd(showcase);
   const cost = spent === undefined ? null : spend(spent);
 
@@ -26,11 +27,13 @@ export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData
     <Section
       id="benchmarks"
       eyebrow="Benchmarks"
-      heading="Evaluation in progress."
+      heading={measured === METRICS.length ? "Measured, misses included." : "Evaluation in progress."}
       lede={
         measured === 0
           ? "We’ll publish four numbers with the method and the test set beside them. Until they’re measured, these cells stay empty."
-          : "Four numbers, each with the method and the test set beside it. Cells that aren’t measured yet stay empty."
+          : measured === METRICS.length
+            ? "Four numbers from a pre-registered test on synthetic lectures, each with its interval. The comparison with human describers, the controls and every known failure are on the benchmarks page."
+            : "Four numbers, each with the method and the test set beside it. Cells that aren’t measured yet stay empty."
       }
     >
       <div className={styles.grid}>
@@ -56,6 +59,12 @@ export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData
             );
           })}
         </ul>
+        {findings.human || findings.check ? (
+          <div className={styles.findings} data-findings="">
+            {findings.human ? <p data-finding="human">{findings.human}</p> : null}
+            {findings.check ? <p data-finding="check">{findings.check}</p> : null}
+          </div>
+        ) : null}
         <p className={styles.method}>
           <Link href="/benchmarks" className={styles.methodLink}>
             How it is measured

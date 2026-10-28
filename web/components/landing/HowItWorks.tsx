@@ -34,7 +34,7 @@ const STEPS: { verb: string; text: string; model: ReactNode }[] = [
   },
   {
     verb: "Check & speak",
-    text: "Every claim is re-checked against its frames. Then the line is voiced.",
+    text: "Each claim is checked against its frames. A line is voiced only if its check passes; one that fails is held for a person.",
     model: (
       <>
         <b>Super VL</b> checks, <b>NVIDIA Magpie</b> speaks

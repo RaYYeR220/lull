@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Glyph } from "@/components/ui/Glyph";
 import { Section } from "@/components/ui/Section";
 import { cx } from "@/lib/cx";
@@ -21,7 +22,7 @@ export function Refusal({ showcase }: { showcase: Showcase }) {
   const cut = segments.filter((s) => s.verdict && s.verdict !== "supported").length || (v ? v.claims.filter((c) => c.verdict !== "supported").length : 0);
 
   return (
-    <Section id="refusal" eyebrow="The refusal" heading="A line it can’t prove, it doesn’t say." headCols={8}>
+    <Section id="refusal" eyebrow="The refusal" heading="A line that fails its frame check isn’t voiced." headCols={8}>
       <StrikeOnView className={styles.sheet}>
         {v ? (
           <div className={styles.main}>
@@ -61,8 +62,15 @@ export function Refusal({ showcase }: { showcase: Showcase }) {
         ) : null}
         <div className={styles.side}>
           <p>
-            Nemotron 3.5 Super VL takes another look at the exact frames the line came from and rules on each claim. Whatever it
-            can&rsquo;t see is cut before a voice is made.
+            Nemotron 3.5 Super VL takes another look at the exact frames the line came from and rules on each claim. What it
+            can&rsquo;t see is cut before a voice is made; a line that still fails is held for a person.
+          </p>
+          <p className={styles.caveat}>
+            The check is a model too, so it can pass a line that is wrong.{" "}
+            <Link href="/benchmarks" className={styles.caveatLink}>
+              The benchmarks
+            </Link>{" "}
+            show how often, and what turning it off changed.
           </p>
           <ul className={styles.verdicts} aria-label="Possible verdicts">
             <li>

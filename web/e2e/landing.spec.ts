@@ -39,7 +39,7 @@ test.describe("landing", () => {
       "The missing half of a lecture",
       "How Lull works",
       "Zero overlap, by construction.",
-      "A line it can’t prove, it doesn’t say.",
+      "A line that fails its frame check isn’t voiced.",
       "Six files, in formats players already read.",
       "Every line, with its evidence.",
       "From a terminal, an API or an agent.",

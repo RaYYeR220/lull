@@ -115,13 +115,98 @@ export type SuiteA = {
   videos: SuiteAVideo[];
 };
 
+/** Suite B's recall of one reference's facts: within the window or anywhere, standard track or with extended. */
+export type SuiteBRecall = { facts: number; lines: number; standardWindow: Ratio; bothWindow: Ratio; standardAnywhere: Ratio; bothAnywhere: Ratio };
+
+export type SuiteBReference = {
+  /** pfeiffer, hunt, usgs_ad */
+  id: string;
+  recall: SuiteBRecall;
+  /** Without the facts that still hold an unresolved term (USGS's ASR), when there are any. */
+  withoutUnresolved: SuiteBRecall | null;
+  flaggedFacts: number;
+  secondJudge: { recall: SuiteBRecall | null; agreementWindow: Agreement | null; agreementAnywhere: Agreement | null } | null;
+};
+
+export type OverlapSide = { side: string; descriptionS: number; overlapS: number; share: number | null };
+
+export type SuiteBVideo = {
+  video: string;
+  runId: string | null;
+  judgeProblems: number;
+  /** Against the reference transcript of the original (shown first). */
+  againstReference: { sides: OverlapSide[]; freezePointsInSpeech: number | null } | null;
+  /** Against the Lull run's own speech detection: 0 for Lull by construction. */
+  ownSpans: { sides: OverlapSide[]; freezePointsInSpeech: number | null };
+  /** USGS AD measured on its own (AD version's) timeline: not comparable with a standard track. */
+  usgsOwnTimeline: { descriptionS: number; overlapS: number; share: number | null; narrationMissingS: number | null } | null;
+  density: { minutes: number; sides: { side: string; words: number; perMin: number }[] } | null;
+};
+
+export type ProbeTotal = { model: string; sensitivity: Count | null; specificity: Count | null; crossCredits: number | null };
+
+export type SuiteB = {
+  complete: boolean;
+  smoke: boolean;
+  note: string | null;
+  date: string;
+  gitCommit: string;
+  gitDirty: boolean | null;
+  preregistration: { tag: string; commit: string; committed: string };
+  firstPreregistrationTag: string | null;
+  referenceSetSha256: string;
+  callsAfterPreregistration: boolean | null;
+  judgeModel: string | null;
+  secondJudgeModel: string | null;
+  judgePromptSha256: string | null;
+  windowS: number | null;
+  longBlockWindowS: number | null;
+  spendUsd: number | null;
+  runs: { video: string; runId: string; clip: [number, number] | null; full: boolean; engine: string | null }[];
+  references: SuiteBReference[];
+  /** Human against human: one describer's lines judged against the other's facts. */
+  baseline: { id: string; recall: SuiteBRecall }[];
+  probe: { primary: ProbeTotal | null; second: ProbeTotal | null };
+  videos: SuiteBVideo[];
+};
+
+export type NegativeRow = { rows: number; falseAccept: Ratio; falseAcceptClaims: Ratio; trueAccept: Ratio };
+
+export type NegativeControl = {
+  complete: boolean;
+  date: string;
+  gitCommit: string;
+  preregistration: { tag: string; commit: string; committed: string };
+  verifier: { model: string; temperature: number | null } | null;
+  spendUsd: number | null;
+  headline: NegativeRow & { rules: string[]; upperBound: boolean; discriminativeFalseAccept: Ratio | null; suiteARows: number | null };
+  byRule: ({ rule: string } & NegativeRow)[];
+};
+
+export type AblationRow = { metric: string; with: number; without: number; difference: number; ci95: [number, number] | null; videos: number | null };
+
+export type Ablation = {
+  complete: boolean;
+  date: string;
+  gitCommit: string;
+  preregistration: { controlsTag: string | null; suiteATag: string | null };
+  engineFingerprint: string | null;
+  claimSplit: { with: number | null; without: number | null } | null;
+  headline: string | null;
+  spendUsd: number | null;
+  comparison: AblationRow[];
+};
+
 export type Benchmarks = {
   generatedAt: string;
   gitCommit: string;
   /** Test data, never the published evaluation. */
   fixture: boolean;
   suiteA: SuiteA | null;
-  /** Other suites present in the file (not drawn on this page yet). */
+  suiteB: SuiteB | null;
+  negative: NegativeControl | null;
+  ablation: Ablation | null;
+  /** Other suites present in the file that this page doesn't draw. */
   otherSuites: string[];
   knownFailures: { title: string; detail: string }[];
 };
@@ -331,6 +416,197 @@ export function parseSuiteA(raw: unknown): SuiteA {
   };
 }
 
+function bRecall(v: unknown, where: string): SuiteBRecall {
+  if (!isObj(v)) throw new BenchmarksError(where, "must be an object of recall shares");
+  return {
+    facts: at(v, "facts", where).num(),
+    lines: at(v, "lines", where).optNum() ?? 0,
+    standardWindow: ratio(v.standard_window, `${where}.standard_window`),
+    bothWindow: ratio(v.both_window, `${where}.both_window`),
+    standardAnywhere: ratio(v.standard_anywhere, `${where}.standard_anywhere`),
+    bothAnywhere: ratio(v.both_anywhere, `${where}.both_anywhere`),
+  };
+}
+
+const optBRecall = (v: unknown, where: string): SuiteBRecall | null => (isObj(v) ? bRecall(v, where) : null);
+
+function side(name: string, v: unknown): OverlapSide | null {
+  if (!isObj(v) || !isNum(v.description_s) || !isNum(v.overlap_s)) return null;
+  return { side: name, descriptionS: v.description_s, overlapS: v.overlap_s, share: isNum(v.share) ? v.share : null };
+}
+
+const SIDES = ["lull_standard", "pfeiffer_vtt", "hunt_vtt", "hunt_wav"];
+
+function overlapOf(o: Obj): { sides: OverlapSide[]; freezePointsInSpeech: number | null } {
+  return {
+    sides: SIDES.map((k) => side(k, o[k])).filter((x): x is OverlapSide => x !== null),
+    freezePointsInSpeech: Array.isArray(o.lull_extended_freeze_points_in_speech) ? o.lull_extended_freeze_points_in_speech.length : null,
+  };
+}
+
+function bVideo(v: unknown, i: number): SuiteBVideo {
+  const where = `suites.suite_b.videos[${i}]`;
+  if (!isObj(v)) throw new BenchmarksError(where, "must be an object");
+  const o = at(v, "overlap", where).obj();
+  const ref = isObj(o.supplementary_against_reference_asr) ? o.supplementary_against_reference_asr : null;
+  const usgs = isObj(o.usgs_ad_own_timeline) ? o.usgs_ad_own_timeline : null;
+  const d = isObj(v.density) ? v.density : null;
+  return {
+    video: at(v, "video", where).str(),
+    runId: at(v, "run_id", where).optStr(),
+    judgeProblems: Array.isArray(v.judge_problems) ? v.judge_problems.length : 0,
+    againstReference: ref ? overlapOf(ref) : null,
+    ownSpans: overlapOf(o),
+    usgsOwnTimeline:
+      usgs && isNum(usgs.description_s) && isNum(usgs.overlap_s)
+        ? { descriptionS: usgs.description_s, overlapS: usgs.overlap_s, share: isNum(usgs.share) ? usgs.share : null, narrationMissingS: isNum(usgs.narration_missing_from_ad_version_s) ? usgs.narration_missing_from_ad_version_s : null }
+        : null,
+    density:
+      d && isNum(d.minutes)
+        ? {
+            minutes: d.minutes,
+            sides: Object.entries(d)
+              .filter(([k, x]) => k !== "minutes" && isObj(x) && isNum(x.words) && isNum(x.per_min))
+              .map(([k, x]) => ({ side: k, words: (x as Obj).words as number, perMin: (x as Obj).per_min as number })),
+          }
+        : null,
+  };
+}
+
+function probeTotal(v: unknown): ProbeTotal | null {
+  if (!isObj(v) || typeof v.model !== "string" || !isObj(v.total)) return null;
+  return { model: v.model, sensitivity: count(v.total.sensitivity), specificity: count(v.total.specificity), crossCredits: isNum(v.total.cross_credits) ? v.total.cross_credits : null };
+}
+
+function prereg(v: unknown, where: string) {
+  const pre = isObj(v) ? v : null;
+  if (!pre) throw new BenchmarksError(where, "must be an object {tag, commit, committed}");
+  return { tag: at(pre, "tag", where).str(), commit: at(pre, "commit", where).str(), committed: at(pre, "committed", where).str() };
+}
+
+/** suite_b as its scorer (suite_b/score.py) writes it. */
+export function parseSuiteB(raw: unknown): SuiteB {
+  const where = "suites.suite_b";
+  if (!isObj(raw)) throw new BenchmarksError(where, "must be an object");
+  const f = (k: string) => at(raw, k, where);
+  const summary = f("summary").obj();
+  const refs = at(summary, "references", `${where}.summary`).obj();
+  const base = isObj(summary.baseline) ? summary.baseline : {};
+  const probe = f("judge_probe").optObj();
+  return {
+    complete: raw.complete === true,
+    smoke: raw.smoke === true,
+    note: f("note").optStr(),
+    date: f("date").str(),
+    gitCommit: f("git_commit").str(),
+    gitDirty: f("git_dirty").optBool(),
+    preregistration: prereg(raw.preregistration, `${where}.preregistration`),
+    firstPreregistrationTag: f("first_preregistration_tag").optStr(),
+    referenceSetSha256: f("reference_set_sha256").str(),
+    callsAfterPreregistration: f("ledger_calls_after_preregistration").optBool(),
+    judgeModel: f("judge_model").optStr(),
+    secondJudgeModel: f("second_judge_model").optStr(),
+    judgePromptSha256: f("judge_prompt_sha256").optStr(),
+    windowS: f("window_s").optNum(),
+    longBlockWindowS: f("long_block_window_s").optNum(),
+    spendUsd: f("spend_usd").optNum(),
+    runs: (Array.isArray(raw.runs) ? raw.runs : []).filter(isObj).map((r, i) => ({
+      video: at(r, "video", `${where}.runs[${i}]`).str(),
+      runId: at(r, "run_id", `${where}.runs[${i}]`).str(),
+      clip: pair(r.clip),
+      full: r.full === true,
+      engine: isObj(r.engine) && typeof r.engine.engine === "string" ? r.engine.engine : null,
+    })),
+    references: Object.entries(refs).map(([id, v]) => {
+      const w = `${where}.summary.references.${id}`;
+      if (!isObj(v)) throw new BenchmarksError(w, "must be an object");
+      const sj = isObj(v.second_judge) ? v.second_judge : null;
+      return {
+        id,
+        recall: bRecall(v.recall, `${w}.recall`),
+        withoutUnresolved: optBRecall(v.recall_without_unresolved, `${w}.recall_without_unresolved`),
+        flaggedFacts: isNum(v.flagged_facts) ? v.flagged_facts : Array.isArray(v.flagged_facts) ? v.flagged_facts.length : 0,
+        secondJudge: sj
+          ? { recall: optBRecall(sj.recall, `${w}.second_judge.recall`), agreementWindow: agreementOf(sj.agreement_window), agreementAnywhere: agreementOf(sj.agreement_anywhere) }
+          : null,
+      };
+    }),
+    baseline: Object.entries(base).map(([id, v]) => ({ id, recall: bRecall(v, `${where}.summary.baseline.${id}`) })),
+    probe: { primary: probeTotal(probe?.primary), second: probeTotal(probe?.second) },
+    videos: Array.isArray(raw.videos) ? raw.videos.map(bVideo) : [],
+  };
+}
+
+function negRow(v: unknown, where: string): NegativeRow {
+  if (!isObj(v)) throw new BenchmarksError(where, "must be an object");
+  return {
+    rows: at(v, "rows", where).num(),
+    falseAccept: ratio(v.false_accept, `${where}.false_accept`),
+    falseAcceptClaims: ratio(v.false_accept_claims, `${where}.false_accept_claims`),
+    trueAccept: ratio(v.true_accept, `${where}.true_accept`),
+  };
+}
+
+/** controls.negative as controls/negative.py writes it. */
+export function parseNegative(raw: unknown): NegativeControl {
+  const where = "suites.controls.negative";
+  if (!isObj(raw)) throw new BenchmarksError(where, "must be an object");
+  const f = (k: string) => at(raw, k, where);
+  const metrics = f("metrics").obj();
+  const head = at(metrics, "headline", `${where}.metrics`).obj();
+  const by = isObj(metrics.by_rule) ? metrics.by_rule : {};
+  const ver = f("verifier").optObj();
+  return {
+    complete: raw.complete === true,
+    date: f("date").str(),
+    gitCommit: f("git_commit").str(),
+    preregistration: prereg(raw.preregistration, `${where}.preregistration`),
+    verifier: ver && typeof ver.model === "string" ? { model: ver.model, temperature: isNum(ver.temperature) ? ver.temperature : null } : null,
+    spendUsd: f("spend_usd").optNum(),
+    headline: {
+      ...negRow(head, `${where}.metrics.headline`),
+      rules: Array.isArray(head.rules) ? head.rules.filter((r): r is string => typeof r === "string") : [],
+      upperBound: head.upper_bound === true,
+      discriminativeFalseAccept: optRatio(head.discriminative_false_accept, `${where}.metrics.headline.discriminative_false_accept`),
+      suiteARows: isNum(head.suite_a_rows) ? head.suite_a_rows : null,
+    },
+    byRule: Object.entries(by).map(([rule, v]) => ({ rule, ...negRow(v, `${where}.metrics.by_rule.${rule}`) })),
+  };
+}
+
+/** controls.ablation as controls/ablation.py writes it. */
+export function parseAblation(raw: unknown): Ablation {
+  const where = "suites.controls.ablation";
+  if (!isObj(raw)) throw new BenchmarksError(where, "must be an object");
+  const f = (k: string) => at(raw, k, where);
+  const pre = f("preregistration").optObj();
+  const tag = (k: string) => (pre && isObj(pre[k]) && typeof (pre[k] as Obj).tag === "string" ? ((pre[k] as Obj).tag as string) : null);
+  const split = f("claim_split").optObj();
+  const comparison = f("comparison").obj();
+  return {
+    complete: raw.complete === true,
+    date: f("date").str(),
+    gitCommit: f("git_commit").str(),
+    preregistration: { controlsTag: tag("controls"), suiteATag: tag("suite_a") },
+    engineFingerprint: f("engine_fingerprint").optStr(),
+    claimSplit: split ? { with: isNum(split.with) ? split.with : null, without: isNum(split.without) ? split.without : null } : null,
+    headline: f("headline").optStr(),
+    spendUsd: f("spend_usd").optNum(),
+    comparison: Object.entries(comparison).map(([metric, v]) => {
+      const w = `${where}.comparison.${metric}`;
+      if (!isObj(v)) throw new BenchmarksError(w, "must be an object");
+      return {
+        metric,
+        with: at(v, "with", w).num(),
+        without: at(v, "without", w).num(),
+        difference: at(v, "difference", w).num(),
+        ci95: pair(v.ci95),
+        videos: isNum(v.videos) ? v.videos : null,
+      };
+    }),
+  };
+}
+
 /** The whole file. Throws BenchmarksError naming the first field that doesn't hold. */
 export function parseBenchmarks(raw: unknown): Benchmarks {
   if (!isObj(raw)) throw new BenchmarksError("the file", "must be a JSON object");
@@ -343,7 +619,10 @@ export function parseBenchmarks(raw: unknown): Benchmarks {
     gitCommit: f("git_commit").str(),
     fixture: raw.fixture === true,
     suiteA: suites.suite_a === undefined ? null : parseSuiteA(suites.suite_a),
-    otherSuites: Object.keys(suites).filter((k) => k !== "suite_a" && suites[k] !== undefined && suites[k] !== null),
+    suiteB: suites.suite_b === undefined || suites.suite_b === null ? null : parseSuiteB(suites.suite_b),
+    negative: isObj(suites.controls) && suites.controls.negative != null ? parseNegative(suites.controls.negative) : null,
+    ablation: isObj(suites.controls) && suites.controls.ablation != null ? parseAblation(suites.controls.ablation) : null,
+    otherSuites: Object.keys(suites).filter((k) => !["suite_a", "suite_b", "controls"].includes(k) && suites[k] !== undefined && suites[k] !== null),
     knownFailures: failures.map((x, i) => {
       if (!isObj(x)) throw new BenchmarksError(`.known_failures[${i}]`, "must be an object");
       return { title: at(x, "title", `.known_failures[${i}]`).str(), detail: at(x, "detail", `.known_failures[${i}]`).str() };

@@ -49,3 +49,5 @@
 @media print{
   .sheet[data-pending] .out .claimText{background-size:100% 2px}
 }
+.caveat{margin-top:var(--s-3);color:var(--cream-2);font-size:var(--fs-small);line-height:1.55}
+.caveatLink{color:var(--cream-1);text-decoration:underline;text-underline-offset:.2em}

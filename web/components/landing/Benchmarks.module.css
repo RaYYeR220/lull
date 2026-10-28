@@ -17,7 +17,7 @@
 .measured .after{margin-top:4px}
 
 @media (max-width:1100px){
-  .metrics,.method{grid-column:1 / -1}
+  .metrics,.method,.findings{grid-column:1 / -1}
   .measured{grid-column:1 / span 6;grid-row:auto}
 }
 @media (max-width:760px){
@@ -25,3 +25,4 @@
   .slot{justify-content:flex-start;padding-left:14px}
   .measured{grid-column:1 / -1}
 }
+.findings{grid-column:1 / span 8;display:grid;gap:var(--s-3);max-width:46em;color:var(--cream-1);font-size:var(--fs-body);line-height:1.6}

@@ -10,13 +10,14 @@ import styles from "@/components/benchmarks/Benchmarks.module.css";
 
 export const metadata: Metadata = {
   title: "Benchmarks",
-  description: "How Lull is evaluated: a pre-registered test on synthetic lectures with a hidden answer key, every number with its interval, failures included.",
+  description:
+    "How Lull is evaluated: pre-registered tests on synthetic lectures and against human audio description, two controls of the frame check, every number with its interval, failures included.",
 };
 
 /** The evaluation's own write-up, in the repository. */
 const README = `${REPO_URL}/blob/main/eval/README.md`;
 
-/** What Suite A measures, from eval/README.md: said before any number, and in the empty state. */
+/** What each suite measures, from eval/README.md: said before any number, and in the empty state. */
 function MethodSummary() {
   return (
     <div className={styles.method}>
@@ -30,6 +31,16 @@ function MethodSummary() {
         described with and without the extended track, claims the key doesn’t support, decoys stated, lines that only repeat the narration, and
         model spend and processing time per minute. A model judge decides what a line conveys; a second judge from another model family checks
         it, and their agreement is reported. Shares are pooled over the videos with 95 % bootstrap intervals.
+      </p>
+      <p>
+        <b>Suite B</b> compares Lull with human audio description of the same videos: two people’s descriptions of Elephants Dream, and the
+        U.S. Geological Survey’s own described versions of three of its videos. Each describer’s lines were split into facts before any run, and
+        the judge decides which of them Lull’s lines convey, within a window around where the describer said it and anywhere in the video. On
+        Elephants Dream each describer is also scored against the other, which gives a human ceiling.
+      </p>
+      <p>
+        <b>Two controls</b> test the frame check itself. The negative control checks published lines again against footage they don’t
+        describe and counts how many still pass. The ablation runs Suite A again with the check turned off and compares the two, video by video.
       </p>
     </div>
   );

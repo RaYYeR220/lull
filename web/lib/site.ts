@@ -10,7 +10,7 @@ export const SITE = {
   name: "Lull",
   claim: "Audio description that waits for the silence.",
   description:
-    "Lull watches your video, writes what a blind viewer would miss, fits each line into a real pause, and checks it against the frames before it speaks.",
+    "Lull watches your video, writes lines about what is on screen, fits each into a real pause, and voices only the lines that pass a check against the frames.",
 } as const;
 
 export type SiteLink = {

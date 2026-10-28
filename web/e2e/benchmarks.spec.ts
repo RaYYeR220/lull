@@ -26,7 +26,7 @@ test.describe("benchmarks", () => {
     await expect(page.getByRole("heading", { name: "The evaluation hasn’t been published yet." })).toHaveCount(0);
     await expect(page.locator("[data-fixture]")).toHaveText(/^Test fixture\. These numbers are test data/);
     await expect(page.locator("[data-partial]")).toContainText("Partial run (a smoke on a subset): not Suite A results.");
-    const how = page.getByRole("region", { name: "What was measured, and how" });
+    const how = page.getByRole("region", { name: "Suite A: what was measured, and how" });
     await expect(how).toContainText("Tag suite-a-prereg, commit 194d4d0803aa");
     await expect(how).toContainText("354967ad20310ab6013c5fd884520f57120dbaa56d81b927f2d0c3ec35b7ce96");
     await expect(how).toContainText("Commit 439ebeab3985");
@@ -54,11 +54,11 @@ test.describe("benchmarks", () => {
     await expect(page.locator("[data-supplementary]")).toHaveText(/^Added after the pre-registration/);
     await expect(measure(page, "voiced").getByRole("cell").first()).toHaveText("71.4 %");
 
-    const videos = page.getByRole("region", { name: "Every video" });
+    const videos = page.getByRole("region", { name: "Suite A: every video" });
     await expect(videos.locator("[data-video]")).toHaveCount(2);
     await expect(videos.locator('[data-video="a01"]').getByRole("cell")).toHaveText(["48.6 s", "25.6 s", "9 (7)", "2 of 24", "7 of 24", "0 of 12", "0.000 s", "$0.0184", "67.0 s"]);
 
-    const judges = page.getByRole("region", { name: "How far to trust the judges" });
+    const judges = page.getByRole("region", { name: "Suite A: how far to trust the judges" });
     await expect(judges).toContainText("Qwen/Qwen3-235B-A22B-Instruct-2507");
     await expect(judges.getByRole("row", { name: /Visual facts/ }).getByRole("cell")).toHaveText(["41", "92.7 %", "0.81"]);
     await expect(judges.getByRole("row", { name: /Claims/ }).getByRole("cell").last()).toHaveText("Undefined: neither judge varied");
@@ -66,6 +66,28 @@ test.describe("benchmarks", () => {
     await expect(page.getByRole("region", { name: "Known failures" }).getByRole("heading", { level: 3 })).toHaveCount(2);
     // decided when the site was built: the browser asks for no results file
     expect(fetched).toEqual([]);
+  });
+
+  test("Suite B and the controls: the human ceiling beside Lull, intervals, labels, and the plain verdict", async ({ page }) => {
+    await page.goto("/benchmarks");
+    const b = page.getByRole("region", { name: "Suite B: against human audio description" });
+    await expect(b).toContainText("Tag suite-b-prereg-2");
+    const pfeiffer = b.locator('[data-reference="pfeiffer"]');
+    await expect(pfeiffer.getByRole("columnheader")).toHaveText(["Facts conveyed", "Lull, standard track", "Lull, with extended", "Another human describer"]);
+    await expect(pfeiffer.locator('[data-row="window"] [data-cell="lull-extended"]')).toHaveText("1.3 % [0.0 %, 3.4 %] (2/152)");
+    await expect(pfeiffer.locator('[data-row="window"] [data-cell="human"]')).toContainText("38.8 % [27.6 %, 50.6 %] (59/152)");
+    await expect(b.locator('[data-reference="usgs_ad"] [data-cell="human"]').first()).toHaveText("None: one describer for this video");
+    await expect(b.locator('[data-lower-bound="usgs_ad"]')).toContainText("lower bound");
+    await expect(b.locator('[data-overlap="elephants_dream:lull_standard"]').last()).toContainText("0 by construction against its own speech detection");
+    await expect(b.locator('[data-second-judge="hunt"]')).toContainText("kappa 0.21");
+
+    const controls = page.getByRole("region", { name: "Controls: does the frame check catch a false line?" });
+    await expect(controls.locator('[data-stat="false-accept"]')).toContainText("False accept, an upper bound");
+    await expect(controls.locator('[data-stat="false-accept"]')).toContainText("13.2 % [2.6 %, 23.7 %] (5/38)");
+    await expect(controls.locator('[data-stat="discriminative"]')).toContainText("(0/11)");
+    await expect(controls.locator('[data-rule="other events, 30 s away"]').getByRole("cell").first()).toHaveText("27");
+    await expect(controls.locator('[data-ablation="recall_with_extended"]').getByRole("cell")).toHaveText(["14.0 %", "28.9 %", "+14.9 % [+6.2 %, +23.1 %] (12 videos)"]);
+    await expect(controls.locator("[data-ablation-sentence]")).toHaveText(/^On these synthetic lectures, checking each line against its frames did not measurably reduce unsupported statements, and it cost recall/);
   });
 
   test("the landing links to the method", async ({ page }) => {

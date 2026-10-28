@@ -37,9 +37,9 @@ describe("benchmarks.json", () => {
     const raw = clone();
     raw.extra = { anything: true };
     raw.suites.suite_a.aggregate.something_new = 1;
-    raw.suites.suite_b = { videos: [] };
+    raw.suites.suite_c = { videos: [] };
     const b = parseBenchmarks(raw);
-    expect(b.otherSuites).toEqual(["suite_b"]);
+    expect(b.otherSuites).toEqual(["suite_c"]);
     expect(b.suiteA?.aggregate.recallStandard.num).toBe(3);
   });
 

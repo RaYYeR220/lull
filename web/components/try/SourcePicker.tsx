@@ -35,7 +35,7 @@ type FileState =
 
 const MODE_COPY: Record<Mode, { name: string; what: string }> = {
   standard: { name: "Standard", what: "Lines fit into the pauses that are already there." },
-  extended: { name: "Extended", what: "Also makes a version that holds the picture for lines that need more room." },
+  extended: { name: "Extended", what: "Also makes a version that holds the picture for lines that need more room, mid-sentence if the narration runs on." },
 };
 
 const ACCEPT = "video/mp4,video/quicktime,video/webm,video/x-matroska,.mp4,.mov,.webm,.mkv";

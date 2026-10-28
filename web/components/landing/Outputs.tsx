@@ -29,7 +29,7 @@ const FILES: { name: string; std: string; icon: keyof typeof ICON; desc: ReactNo
   },
   { name: "described-audio.m4a", std: "WCAG G78", icon: "audio", desc: "The description as its own audio track, for players that let viewers choose it." },
   { name: "described.mp4", std: "WCAG G173", icon: "video", desc: "The video with the description mixed into its soundtrack." },
-  { name: "extended.mp4", std: "SC 1.2.7, G8", icon: "extended", desc: "Pauses the picture when a pause is too short for what needs saying." },
+  { name: "extended.mp4", std: "SC 1.2.7, G8", icon: "extended", desc: "Pauses the picture when a pause is too short for what needs saying, mid-sentence if the narration runs on." },
   { name: "report.html", std: "Conformance", icon: "report", desc: "WCAG conformance for the video, plus every model call and what it cost." },
   { name: "script.md", std: "Markdown", icon: "script", desc: "The full description script, for editing and sign-off." },
 ];

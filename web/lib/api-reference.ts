@@ -443,7 +443,7 @@ In a dim corridor of cables, …`,
       status: 200,
       type: "application/json or text/event-stream",
       what:
-        "describe_video blocks while the run goes (about 3 minutes for a 45 s sample) and sends a progress notification at every stage: reset your timeout on progress, or allow at least 5 minutes. Leaving stops the run. A refusal comes back as a tool error that starts with the API's code (busy:, rate_limited:, budget:, sample:, unsupported:).",
+        "describe_video blocks while the run goes (about six minutes for a 45 s sample on the hosted service) and sends a progress notification at every stage: reset your timeout on progress, or allow at least 10 minutes. A refusal comes back as a tool error that starts with the API's code (busy:, rate_limited:, budget:, sample:, unsupported:).",
       shape: `{ "jsonrpc": "2.0", "id": 1, "result": { "tools": [
   { "name": "list_samples", … }, { "name": "describe_video", "inputSchema": { "properties": { "sample_id": …, "mode": { "enum": ["standard", "extended"] } } }, … },
   { "name": "get_tracks", … }, { "name": "get_report", … } ] } }`,

@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { costPerMinute, preregCalls, type Agreement, type Benchmarks, type Count, type SuiteA } from "@/lib/benchmarks-schema";
 import { modelName } from "@/lib/run-format";
+import { ControlsView } from "./ControlsView";
 import { IntervalChart } from "./IntervalChart";
+import { SuiteBView } from "./SuiteBView";
 import styles from "./Benchmarks.module.css";
 
 const pct = (x: number | null, digits = 1) => (x === null ? "None" : `${(x * 100).toFixed(digits)} %`);
@@ -109,14 +111,14 @@ function SuiteAView({ a }: { a: SuiteA }) {
 
       <section aria-labelledby="how-title" className={styles.section}>
         <h2 id="how-title" className={styles.h2}>
-          What was measured, and how
+          Suite A: what was measured, and how
         </h2>
         <Method a={a} />
       </section>
 
       <section aria-labelledby="primary-title" className={styles.section}>
         <h2 id="primary-title" className={styles.h2}>
-          Pre-registered measures
+          Suite A: pre-registered measures
         </h2>
         <p className={styles.lede}>Each share is pooled over the videos, with a 95 % percentile bootstrap interval (10,000 resamples of videos).</p>
         <IntervalChart
@@ -161,7 +163,7 @@ function SuiteAView({ a }: { a: SuiteA }) {
 
       <section aria-labelledby="supplementary-title" className={styles.section}>
         <h2 id="supplementary-title" className={styles.h2}>
-          Supplementary measures
+          Suite A: supplementary measures
         </h2>
         <p className={styles.added} data-supplementary="">
           Added after the pre-registration. They are reported beside the pre-registered measures, never instead of them.
@@ -188,9 +190,9 @@ function SuiteAView({ a }: { a: SuiteA }) {
       {a.videos.length ? (
         <section aria-labelledby="videos-title" className={styles.section}>
           <h2 id="videos-title" className={styles.h2}>
-            Every video
+            Suite A: every video
           </h2>
-          <div className={styles.tableWrap} tabIndex={0} role="group" aria-label="Every video, scrolls sideways on small screens">
+          <div className={styles.tableWrap} tabIndex={0} role="group" aria-label="Suite A, every video, scrolls sideways on small screens">
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -233,7 +235,7 @@ function SuiteAView({ a }: { a: SuiteA }) {
       {a.secondJudge || a.probe ? (
         <section aria-labelledby="judges-title" className={styles.section}>
           <h2 id="judges-title" className={styles.h2}>
-            How far to trust the judges
+            Suite A: how far to trust the judges
           </h2>
           {a.secondJudge ? (
             <>
@@ -308,10 +310,13 @@ export function BenchmarksView({ data, readme, empty }: { data: Benchmarks | nul
           The method in full
         </a>
       </p>
-      {b.suiteA ? <SuiteAView a={b.suiteA} /> : <p className={styles.lede}>No suite has been scored yet.</p>}
+      {b.suiteA ? <SuiteAView a={b.suiteA} /> : null}
+      {b.suiteB ? <SuiteBView b={b.suiteB} /> : null}
+      {b.negative || b.ablation ? <ControlsView negative={b.negative} ablation={b.ablation} /> : null}
+      {!b.suiteA && !b.suiteB && !b.negative && !b.ablation ? <p className={styles.lede}>No suite has been scored yet.</p> : null}
       {b.otherSuites.length ? (
         <p className={styles.note}>
-          Also in the file, not drawn here yet: {b.otherSuites.map((s) => s.replace("_", " ")).join(", ")}.
+          Also in the file, not drawn here: {b.otherSuites.map((s) => s.replace("_", " ")).join(", ")}.
         </p>
       ) : null}
       <section aria-labelledby="failures-title" className={styles.section}>

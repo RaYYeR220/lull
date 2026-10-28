@@ -161,7 +161,7 @@ test.describe("the developer page", () => {
     await expect(mcp.locator("pre").first()).toContainText(`"url": "${API}/mcp"`);
     await expect(mcp).toContainText("never fetches what it is handed");
     await expect(mcp).toContainText("403 origin");
-    await expect(mcp).toContainText("allow at least 5 minutes");
+    await expect(mcp).toContainText("allow at least 10 minutes");
     // local: the stdio server with its own keys
     await expect(mcp.locator("pre").nth(1)).toContainText('"args": ["run", "--directory", "/path/to/lull/engine", "lull", "mcp"]');
     // the reference documents /mcp's own refusals

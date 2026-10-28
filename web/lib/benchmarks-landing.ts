@@ -1,4 +1,5 @@
 import type { Benchmarks, Ratio } from "./benchmarks-schema";
+import { ablationSentence } from "./benchmarks-text";
 
 export const BENCHMARK_KEYS = ["overlap", "hallucination", "recall", "costPerMinute"] as const;
 export type BenchmarkKey = (typeof BENCHMARK_KEYS)[number];
@@ -6,6 +7,40 @@ export type LandingCell = { value: string; detail?: string };
 
 const pct = (x: number) => `${(x * 100).toFixed(1)} %`;
 const interval = (r: Ratio) => (r.ci95 ? `; 95 % interval ${(r.ci95[0] * 100).toFixed(1)}–${(r.ci95[1] * 100).toFixed(1)} %` : "");
+
+const span = (xs: number[]) => {
+  const lo = Math.min(...xs) * 100;
+  const hi = Math.max(...xs) * 100;
+  return lo.toFixed(1) === hi.toFixed(1) ? `${lo.toFixed(1)} %` : `${lo.toFixed(1)}–${hi.toFixed(1)} %`;
+};
+
+/**
+ * What the rest of the evaluation found, in plain sentences read from the results (complete,
+ * published runs only): how much of what human describers said Lull conveyed, against the
+ * human-to-human ceiling; and what the frame check does and doesn't do.
+ */
+export function landingFindings(b: Benchmarks | null): { human: string | null; check: string | null } {
+  if (!b || b.fixture) return { human: null, check: null };
+  let human: string | null = null;
+  const sb = b.suiteB;
+  if (sb && sb.complete && !sb.smoke) {
+    const lull = sb.references.map((r) => r.recall.bothWindow.value).filter((v): v is number => v !== null);
+    const people = sb.baseline.map((x) => x.recall.standardWindow.value).filter((v): v is number => v !== null);
+    if (lull.length && people.length)
+      human = `Against human audio description of the same videos, Lull conveyed ${span(lull)} of the facts the describers chose to say; two people describing the same film shared ${span(people)}. A person can add the rest in the studio.`;
+  }
+  const parts: string[] = [];
+  const neg = b.negative;
+  if (neg && neg.complete && neg.headline.falseAccept.value !== null)
+    parts.push(
+      `Checked against the wrong footage, the frame check still passed ${pct(neg.headline.falseAccept.value)} of lines (${neg.headline.falseAccept.num} of ${neg.headline.falseAccept.den}, an upper bound).`,
+    );
+  if (b.ablation && b.ablation.complete) {
+    const s = ablationSentence(b.ablation);
+    if (s) parts.push(s);
+  }
+  return { human, check: parts.length ? parts.join(" ") : null };
+}
 
 /**
  * The landing's four cells, from the published Suite A results: only a complete scored run,
