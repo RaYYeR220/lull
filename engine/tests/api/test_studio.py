@@ -93,6 +93,7 @@ def template(tone_slides, tmp_path_factory) -> Path:
                 "input": "input/clip.mp4",
                 "options": {"mode": "standard", "voice": "Sofia"},
                 "video": {"duration": 12.0},
+                "wps": 3.0,
                 "edit_token_sha256": OWNER_HASH,
             }
         )
@@ -823,6 +824,7 @@ def test_publish_with_nothing_changed_is_a_no_op(sc, rd, app):
         raise AssertionError("published although nothing changed")
 
     app.state.studio.publisher = never
+    sc.get(f"/v1/runs/{RID}")  # the first read keeps the loudness envelope (loudness.json)
     before = snapshot(rd)
     r = sc.post(f"/v1/runs/{RID}/publish")
     assert r.status_code == 200
@@ -852,6 +854,7 @@ def test_startup_sweeps_edit_folders_nothing_refers_to(make_app, rd):
 
 
 def test_the_sample_hash_is_computed_once_per_file_version(template, data, monkeypatch):
+    from lull.api import facts
     from lull.api import studio as studio_mod
 
     d = place(template, data / "showcase")
@@ -861,9 +864,9 @@ def test_the_sample_hash_is_computed_once_per_file_version(template, data, monke
     shutil.rmtree(d / "input")
     manifest = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
     calls = []
-    real = studio_mod.file_sha256
-    monkeypatch.setattr(studio_mod, "file_sha256", lambda p: calls.append(p) or real(p))
-    studio_mod.sample_sha256.cache_clear()
+    real = facts.file_sha256
+    monkeypatch.setattr(facts, "file_sha256", lambda p: calls.append(p) or real(p))
+    facts.sample_sha256.cache_clear()
     for _ in range(3):
         assert studio_mod.source_video(d, manifest, {}, data / "samples") == sample
     assert len(calls) == 1
@@ -959,7 +962,9 @@ def test_fork_a_showcase_run_into_an_editable_copy(make_app, template, data, fas
         req = json.loads((d / "request.json").read_text(encoding="utf-8"))
         assert req["edit_token_sha256"] == hashlib.sha256(token.encode()).hexdigest()
         assert token not in json.dumps(req)
-        assert req["source"] == {"kind": "fork", "id": RID, "name": "clip.mp4"}
+        assert req["source"] == {
+            "kind": "fork", "id": RID, "name": "clip.mp4", "origin": "sample"
+        }  # fmt: skip
         for p in (d / "stages").rglob("*.json"):  # no record points back into the source
             for s in _strings(json.loads(p.read_text(encoding="utf-8"))):
                 assert str(src) not in s and src.as_posix() not in s, (p, s)
@@ -1306,3 +1311,70 @@ def test_fork_a_live_run_with_overrides_and_a_held_previous(sc, rd, fakes, data)
     assert not prev.exists()  # the fork's previous take is superseded ...
     assert take.is_file() and snapshot(rd) == before  # ... and the source is untouched
     assert sc.post(f"/v1/runs/{new}/publish", headers=auth).status_code == 200
+
+
+# -- GET /v1/runs/{id}: everything the web reads about a run ---------------------------------------
+
+
+def test_detail_has_the_web_contract(sc, rd, monkeypatch):
+    import math
+
+    from lull import media
+
+    calls = []
+    real = media.extract_wav
+    monkeypatch.setattr(media, "extract_wav", lambda *a, **k: calls.append(a) or real(*a, **k))
+    j = sc.get(f"/v1/runs/{RID}").json()
+    assert j["id"] == RID and j["kind"] == "live" and j["status"] == "done"
+    assert j["source"] == {"kind": "upload"}
+    assert j["error"] is None and j["dirty"] is False
+    assert j["duration"] == pytest.approx(12.0, abs=0.1)
+    published = cues_doc(rd)
+    assert j["speech"] == [[round(s["start"], 3), round(s["end"], 3)] for s in published["speech"]]
+    assert j["gaps"] == [
+        {"id": g["id"], "start": round(g["usable_start"], 3), "end": round(g["usable_end"], 3),
+         "capacity": g["capacity_words"]}
+        for g in published["gaps"]
+    ]  # fmt: skip
+    assert j["wps"] == 3.0  # the rate this run was described at
+    loud = j["loudness"]
+    assert j["loudness_hop_s"] == 0.1 and len(loud) == math.ceil(12.0 / 0.1)
+    assert all(-120.0 <= v <= 0.0 for v in loud)
+    assert loud[10] > -40.0 and loud[80] <= -100.0  # a tone 0-4 s, then silence
+    assert j["original"] == f"/v1/runs/{RID}/original"
+    assert [c["extended"] for c in j["cues"]["cues"]] == [False, False]
+    assert [c["extended"] for c in j["cues"]["extended"]] == [True]
+    assert isinstance(j["manifest"]["summary"]["repetitive"], list)
+    again = sc.get(f"/v1/runs/{RID}").json()
+    assert again["loudness"] == loud and len(calls) == 1  # worked out once, then kept
+    assert (rd / "loudness.json").is_file()
+
+
+def test_the_original_is_served_with_ranges(sc, rd):
+    full = sc.get(f"/v1/runs/{RID}/original")
+    assert full.status_code == 200 and full.headers["content-type"] == "video/mp4"
+    assert full.content == (rd / "input" / "clip.mp4").read_bytes()
+    part = sc.get(f"/v1/runs/{RID}/original", headers={"Range": "bytes=0-9"})
+    assert part.status_code == 206 and len(part.content) == 10
+    assert sc.head(f"/v1/runs/{RID}/original").status_code == 200
+
+
+def test_a_showcase_run_without_its_input_uses_its_sample(make_app, template, data, fast_media):
+    d = place(template, data / "showcase")
+    (data / "samples").mkdir(parents=True)
+    shutil.copyfile(d / "input" / "clip.mp4", data / "samples" / "clip.mp4")
+    shutil.rmtree(d / "input")
+    (d / "request.json").unlink()
+    with TestClient(make_app()) as c:
+        j = c.get(f"/v1/runs/{RID}").json()
+        assert j["kind"] == "showcase" and j["status"] == "done"
+        assert j["source"] == {"kind": "sample", "sample_id": "clip"}
+        assert j["original"] == f"/v1/runs/{RID}/original" and j["loudness"]
+        assert c.get(j["original"]).status_code == 200
+
+
+def test_a_fork_says_where_it_came_from(sc, rd, data):
+    new = sc.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+    j = sc.get(f"/v1/runs/{new}").json()
+    assert j["source"] == {"kind": "fork", "forked_from": RID, "origin": "upload"}
+    assert j["status"] == "done" and j["original"] == f"/v1/runs/{new}/original"

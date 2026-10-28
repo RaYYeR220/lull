@@ -22,7 +22,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from lull.api import facts
 from lull.api.clean import Scrubber, default_roots
+from lull.api.facts import contained_file, safe_rel  # noqa: F401 - used here and re-exported
 from lull.api.settings import ApiSettings
 from lull.api.spend import public_spend, public_summary
 
@@ -83,26 +85,6 @@ def _mtime_iso(d: Path) -> str:
     return datetime.fromtimestamp(_mtime(d), UTC).isoformat(timespec="seconds")
 
 
-def safe_rel(rel: Any) -> bool:
-    """True for a plain relative path inside a run: forward slashes, no empty, '.' or '..'
-    part, no drive, stream (':') or NUL."""
-    if not isinstance(rel, str) or not rel or len(rel) > 512:
-        return False
-    if rel.startswith("/") or any(c in rel for c in ("\\", "\x00", ":")):
-        return False
-    return all(p not in ("", ".", "..") for p in rel.split("/"))
-
-
-def contained_file(d: Path, rel: str) -> Path | None:
-    """d/rel when it is a file that resolves inside d (no symlink out of it)."""
-    if not safe_rel(rel):
-        return None
-    target = (d / rel).resolve()
-    if not target.is_relative_to(d.resolve()) or not target.is_file():
-        return None
-    return target
-
-
 def audio_url(run_id: str, cue: dict) -> str | None:
     """The cue's audio route, versioned by the file it plays so a new take is not cached."""
     path, cue_id = cue.get("audio_path"), cue.get("id")
@@ -125,6 +107,8 @@ class RunStore:
     ) -> None:
         self.settings = settings
         self.clock = clock
+        # whether a run id is being described in this process right now (set by the live side)
+        self.active: Callable[[str], bool] = lambda run_id: False
         self._lock = threading.Lock()
         self._list: tuple[float, list[dict]] | None = None
         self._json: OrderedDict[Path, tuple[tuple[int, int], Any]] = OrderedDict()
@@ -195,7 +179,6 @@ class RunStore:
         manifest = self.manifest(d)
         title, duration, cost, cues, created, spend = d.name, None, None, None, None, None
         if manifest is not None:
-            status = "published"
             video, summ = _dict(manifest.get("video")), _dict(manifest.get("summary"))
             title = _str(video.get("name")) or d.name
             duration, cost = _num(video.get("duration")), _num(summ.get("cost_usd"))
@@ -203,10 +186,7 @@ class RunStore:
             cost = spend["model_usd"] if spend["model_usd"] is not None else cost
             cues = summ.get("cues") if isinstance(summ.get("cues"), dict) else None
             created = _str(manifest.get("created"))
-        elif (d / MANIFEST).exists() or (d / ERROR).exists():
-            status = "failed"  # a manifest that does not read is no publication
-        else:
-            status = "running"
+        status = facts.run_status(d, self.active(d.name))
         return {
             "id": d.name,
             "kind": kind,
@@ -248,15 +228,47 @@ class RunStore:
         """True when the Studio changed a cue since the run was last published."""
         return _dict(self.read_json(d / STUDIO)).get("dirty") is True
 
-    def detail(self, d: Path) -> dict[str, Any] | None:
+    def kind_of(self, d: Path) -> str:
+        return "showcase" if d.parent.resolve() == self.settings.showcase_dir.resolve() else "live"
+
+    def detail(self, d: Path) -> dict[str, Any]:
+        """Everything the web reads about the run in `d`, finished or not (lull.api.facts):
+        manifest and cues once published, null before."""
+        kind = self.kind_of(d)
         manifest = self.manifest(d)
-        if manifest is None:
-            return None
+        request = _dict(self.read_json(d / facts.REQUEST))
+        published = self.read_json(d / CUES)
+        samples = self.settings.samples_dir
+        video = facts.source_video(d, manifest or {}, request, samples)
+        length = facts.duration(manifest or {}, request)
+        video_name = _str(_dict((manifest or {}).get("video")).get("name"))
+        source_name = _str(_dict(request.get("source")).get("name"))
         return {
-            "manifest": self.public_manifest(manifest),
+            "id": d.name,
+            "kind": kind,
+            "status": facts.run_status(d, self.active(d.name)),
+            "source": facts.run_source(kind, manifest or {}, request, samples),
+            "title": self.scrub(video_name or source_name or d.name),
+            "duration": length,
+            "created": _str((manifest or {}).get("created"))
+            or _str(request.get("created"))
+            or _mtime_iso(d),
+            "error": self.scrub.tree(facts.public_error(d)),
+            "manifest": self.public_manifest(manifest) if manifest is not None else None,
             "cues": self.public_cues(d),
             "dirty": self.dirty(d),
+            "speech": facts.speech_spans(published),
+            "gaps": facts.gap_windows(published),
+            "wps": facts.voice_rate(manifest or {}, request),
+            "loudness": facts.loudness(d, video, length) if video is not None else None,
+            "loudness_hop_s": facts.LOUDNESS_HOP,
+            "original": f"/v1/runs/{d.name}/original" if video is not None else None,
         }
+
+    def original(self, d: Path) -> Path | None:
+        """The source video of the run in `d` (see lull.api.facts), or None."""
+        request = _dict(self.read_json(d / facts.REQUEST))
+        return facts.source_video(d, self.manifest(d) or {}, request, self.settings.samples_dir)
 
     def public_manifest(self, m: dict) -> dict[str, Any]:
         """The manifest fields a visitor gets, with local paths stripped from every string."""
@@ -292,7 +304,11 @@ class RunStore:
         for key in ("cues", "extended"):
             items = doc.get(key)
             items = items if isinstance(items, list) else []
-            out[key] = [cue_view(d.name, c) for c in items if isinstance(c, dict)]
+            out[key] = [
+                {**cue_view(d.name, c), "extended": key == "extended"}  # the picture holds
+                for c in items
+                if isinstance(c, dict)
+            ]
         return out
 
     # -- files ----------------------------------------------------------------------------------

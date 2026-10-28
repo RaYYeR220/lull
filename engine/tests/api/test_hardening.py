@@ -74,11 +74,11 @@ def test_a_damaged_manifest_never_breaks_the_list(client, data, make_run):
     r = client.get("/v1/runs")
     assert r.status_code == 200
     by_id = {i["id"]: i for i in r.json()}
-    assert by_id["good"]["status"] == "published"
+    assert by_id["good"]["status"] == "done"
     assert by_id["junk"]["status"] == "failed"
     assert by_id["listed"]["status"] == "failed"
     w = by_id["weird"]
-    assert w["status"] == "published" and w["title"] == "weird"
+    assert w["status"] == "done" and w["title"] == "weird"
     assert w["duration"] is None and w["cost_usd"] is None and isinstance(w["created"], str)
     assert client.get("/v1/runs/junk").status_code == 404
     assert client.get("/v1/runs/listed").status_code == 404

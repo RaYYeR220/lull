@@ -28,6 +28,9 @@ CONTENT_TYPES = {
     ".vtt": "text/vtt",
     ".m4a": "audio/mp4",
     ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".webm": "video/webm",
+    ".mkv": "video/x-matroska",
     ".html": "text/html; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
     ".json": "application/json",
@@ -96,10 +99,17 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     @app.get("/v1/runs/{run_id}")
     def get_run(run_id: str):
         found = store.find(run_id)
-        detail = store.detail(found[1]) if found else None
-        if detail is None:
+        if found is None:
             raise HTTPException(404, "run not found")
-        return detail
+        return store.detail(found[1])
+
+    @app.api_route("/v1/runs/{run_id}/original", methods=["GET", "HEAD"])
+    def get_original(run_id: str):
+        found = store.find(run_id)
+        target = store.original(found[1]) if found else None
+        if target is None:
+            raise HTTPException(404, "not found")
+        return file_response(target)
 
     @app.api_route("/v1/runs/{run_id}/files/{path:path}", methods=["GET", "HEAD"])
     def get_file(run_id: str, path: str):

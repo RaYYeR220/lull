@@ -54,16 +54,16 @@ def test_list_runs_order(client, data, make_run):
     make_run(data / "runs", "bad", failed=True)
     make_run(data / "runs", "pending", manifest=False)
     items = client.get("/v1/runs").json()
-    pub = [i["id"] for i in items if i["status"] == "published"]
+    pub = [i["id"] for i in items if i["status"] == "done"]
     assert pub == ["show1", "new", "old"]
     assert items[0]["kind"] == "showcase" and items[1]["kind"] == "live"
     first = items[0]
     assert first["title"] == "Showcase" and first["duration"] == 90.0
-    assert first["status"] == "published" and first["cost_usd"] == 0.03
+    assert first["status"] == "done" and first["cost_usd"] == 0.03
     assert first["cues"]["verified"] == 5
     by_id = {i["id"]: i for i in items}
     assert by_id["bad"]["status"] == "failed"
-    assert by_id["pending"]["status"] == "running"
+    assert by_id["pending"]["status"] == "stopped"  # not being described here
 
 
 def test_list_runs_caps_live_at_20(client, data, make_run):

@@ -1353,3 +1353,55 @@ def test_live_runs_make_at_most_3_web_searches(lc, live):
     post(lc)
     (job,) = live.runner.jobs
     assert job.ledger.tavily_run == 3
+
+
+# -- GET /v1/runs/{id}: a durable status for any run -----------------------------------------------
+
+
+def test_every_run_has_a_status_and_a_source(lc, live, data):
+    stopped = make_unfinished(data)
+    j = lc.get(f"/v1/runs/{stopped.name}").json()
+    assert j["status"] == "stopped" and j["manifest"] is None and j["cues"] is None
+    assert j["source"] == {"kind": "upload"} and j["error"] is None
+    assert j["original"] == f"/v1/runs/{stopped.name}/original"
+
+    live.runner = Script(
+        lambda job: [Event("stage_start", "watch", {}, 1.0)],
+        exc=lambda job: MediaError("ffmpeg failed (exit 1): Invalid data"),
+        manifest=False,
+    )
+    failed = parse_sse(post(lc).text)[0]["run_id"]
+    j = lc.get(f"/v1/runs/{failed}").json()
+    assert j["status"] == "failed"
+    assert j["error"] == {"type": "MediaError", "message": j["error"]["message"], "stage": "watch"}
+
+    live.runner = Script()
+    done = parse_sse(post(lc).text)[0]["run_id"]
+    assert lc.get(f"/v1/runs/{done}").json()["status"] == "done"
+
+    gate = threading.Event()
+    live.runner = Script(gate=gate)
+    with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as r:
+        lines = r.iter_lines()
+        head = lines_until(lines, "event: run")
+        running = json.loads(next(lines).split(": ", 1)[1])["run_id"]
+        assert head and lc.get(f"/v1/runs/{running}").json()["status"] == "running"
+        gate.set()
+        list(lines)
+    statuses = {i["id"]: i["status"] for i in lc.get("/v1/runs").json()}
+    assert statuses.get(done) in (None, "done")  # the list speaks the same words
+
+
+def test_a_sample_run_says_which_sample(lc, live, data):
+    (data / "samples").mkdir(parents=True)
+    (data / "samples" / "street.mp4").write_bytes(b"DUR=8;")
+    run_id = parse_sse(post(lc, None, sample="street").text)[0]["run_id"]
+    j = lc.get(f"/v1/runs/{run_id}").json()
+    assert j["source"] == {"kind": "sample", "sample_id": "street"}
+
+
+def test_a_live_run_records_its_voice_rate(lc, live, data):
+    run_id = parse_sse(post(lc).text)[0]["run_id"]
+    req = json.loads((data / "runs" / run_id / "request.json").read_text("utf-8"))
+    assert req["wps"] == 3.05  # Sofia's built-in rate: what the engine will use
+    assert lc.get(f"/v1/runs/{run_id}").json()["wps"] == 3.05

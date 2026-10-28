@@ -65,7 +65,7 @@ from lull.speech import NemoSpeechHTTP
 from lull.tavily import Tavily
 from lull.tf import TokenFactory
 from lull.types import RunOptions
-from lull.voices import DEFAULT_WPS, voice_wps
+from lull.voices import DEFAULT_WPS, FALLBACK_WPS, voice_wps
 
 log = logging.getLogger(__name__)
 
@@ -506,6 +506,7 @@ class Live:
             per_client=REFUSALS_PER_HOUR, client_window=HOUR, per_day=1_000_000
         )
         self.executor = Executor(changed=store.invalidate)
+        store.active = lambda run_id: self.executor.get(run_id) is not None
         self.heartbeat = HEARTBEAT_S
         self.max_bytes = MAX_UPLOAD_BYTES
         self.max_seconds = MAX_SECONDS
@@ -672,6 +673,13 @@ def _link_or_copy(src: Path, dst: Path) -> None:
         shutil.copyfile(src, dst)
 
 
+def _rate(voice: str) -> float:
+    try:
+        return voice_wps(voice)[0]
+    except ValueError:  # voices.json does not load
+        return FALLBACK_WPS
+
+
 def _known_voice(name: str) -> bool:
     try:
         return voice_wps(name)[1] != "fallback"
@@ -779,6 +787,7 @@ async def _accept(
                 "has_audio": info.has_audio,
             },
             "client": client[:16],
+            "wps": _rate(opts.voice),  # what the engine describes it at (lull.voices)
             TOKEN_KEY: token_hash,
         },
     )

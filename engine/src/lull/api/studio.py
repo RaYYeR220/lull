@@ -75,6 +75,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from lull import media
+from lull.api import facts
 from lull.api.live import Live, LiveError, budget_message, client_ip, new_run_id
 from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import DAY, HOUR, RateLimiter
@@ -109,7 +110,7 @@ from lull.stages.listen import ListenResult
 from lull.stages.plan import PlanResult
 from lull.stages.publish import publish
 from lull.stages.research import ResearchResult
-from lull.store import Store, file_sha256
+from lull.store import Store
 from lull.tf import TokenFactory
 from lull.timeline import find_gaps, split_gaps
 from lull.types import Cue, Gap, RunOptions, VisualEvent
@@ -217,35 +218,12 @@ def _wps(voice: str) -> float:
         return FALLBACK_WPS
 
 
-@functools.lru_cache(maxsize=64)
-def _sha_of(path: str, mtime_ns: int, size: int) -> str:
-    return file_sha256(Path(path))
-
-
-def sample_sha256(path: Path) -> str:
-    """The file's sha256, hashed once per version of it (path, mtime, size)."""
-    st = path.stat()
-    return _sha_of(str(path), st.st_mtime_ns, st.st_size)
-
-
-sample_sha256.cache_clear = _sha_of.cache_clear  # type: ignore[attr-defined]
-
-
 def source_video(run_dir: Path, manifest: dict, request: dict, samples_dir: Path) -> Path:
-    """The video the run described: its upload (request.json), else input/<name>, else the
-    sample of that name when its sha256 matches the manifest's."""
-    rel = request.get("input")
-    if safe_rel(rel) and (found := contained_file(run_dir, rel)) is not None:
-        return found
-    video = _dict(manifest.get("video"))
-    name, sha = video.get("name"), video.get("sha256")
-    if safe_rel(name) and "/" not in name:
-        if (found := contained_file(run_dir, f"input/{name}")) is not None:
-            return found
-        sample = samples_dir / name
-        if isinstance(sha, str) and sample.is_file() and sample_sha256(sample) == sha:
-            return sample
-    raise NotEditable("its source video is not kept")
+    """The video the run described (lull.api.facts.source_video), or NotEditable."""
+    found = facts.source_video(run_dir, manifest, request, samples_dir)
+    if found is None:
+        raise NotEditable("its source video is not kept")
+    return found
 
 
 def load_context(run_dir: Path, samples_dir: Path) -> RunContext:
@@ -1053,7 +1031,7 @@ async def publish_run(run_id: str, request: Request) -> dict:
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         if not studio.store.dirty(run_dir):  # nothing changed since it was published
-            return _detail(studio, run_dir)
+            return await _detail(studio, run_dir)
         studio.check_rate(request, studio.publish_limiter)
         rc = await studio.context(run_dir)
         missing = unvoiced(doc)
@@ -1080,14 +1058,12 @@ async def publish_run(run_id: str, request: Request) -> dict:
             studio.store.invalidate(run_dir)
         await anyio.to_thread.run_sync(lambda: mark(run_dir, dirty=False))
         studio.store.invalidate(run_dir)
-        return _detail(studio, run_dir)  # read under the lock: no change can slip in
+        return await _detail(studio, run_dir)  # under the lock: no change can slip in
 
 
-def _detail(studio: Studio, run_dir: Path) -> dict:
-    detail = studio.store.detail(run_dir)
-    if detail is None:  # pragma: no cover - the run has a manifest (doc() checked)
-        raise LiveError(500, "publish_failed", "Publishing wrote no manifest.")
-    return detail
+async def _detail(studio: Studio, run_dir: Path) -> dict:
+    """The run as GET /v1/runs/{id} gives it (in a thread: it may work out the loudness)."""
+    return await anyio.to_thread.run_sync(studio.store.detail, run_dir)
 
 
 # -- forks --------------------------------------------------------------------------------------
@@ -1129,7 +1105,9 @@ def _rebase(obj: Any, src: Path, dst: Path) -> Any:
     return obj
 
 
-def fork_run(src: Path, dst: Path, *, run_id: str, token_hash: str, client: str) -> None:
+def fork_run(
+    src: Path, dst: Path, *, run_id: str, token_hash: str, client: str, origin: dict | None = None
+) -> None:
     """Copy what the Studio and a new publish need from the published run `src` into the new
     live run folder `dst`, left out of the run list until it is complete: the manifest and
     cues.json (under the new run id), studio.json, the outputs and keyframes, the stage
@@ -1140,6 +1118,7 @@ def fork_run(src: Path, dst: Path, *, run_id: str, token_hash: str, client: str)
     (dst / PENDING).touch()
     manifest = _dict(_read_json(src / MANIFEST))
     request = _dict(_read_json(src / REQUEST))
+    origin = origin or {}
 
     copied: set[str] = set()
 
@@ -1186,7 +1165,7 @@ def fork_run(src: Path, dst: Path, *, run_id: str, token_hash: str, client: str)
         {
             "run_id": run_id,
             "created": _now(),
-            "source": {"kind": "fork", "id": src.name, "name": name},
+            "source": {"kind": "fork", "id": src.name, "name": name, **origin},
             **({"input": video} if video else {}),
             "options": {k: options[k] for k in ("mode", "voice") if k in options},
             "video": {"duration": duration},
@@ -1196,6 +1175,20 @@ def fork_run(src: Path, dst: Path, *, run_id: str, token_hash: str, client: str)
     )
     _write_json(dst / MANIFEST, {**manifest, "run_id": run_id})  # last: then it is a run
     (dst / PENDING).unlink()
+
+
+def fork_origin(studio: Studio, kind: str, src: Path) -> dict:
+    """What a fork of `src` came from in the end: a sample's run (recorded or live) or an
+    upload, and which sample; a fork of a fork keeps its origin."""
+    manifest = _dict(_read_json(src / MANIFEST))
+    source = facts.run_source(
+        kind, manifest, _dict(_read_json(src / REQUEST)), studio.settings.samples_dir
+    )
+    origin = source.get("origin") if source["kind"] == "fork" else source["kind"]
+    out = {"origin": origin if origin in ("sample", "upload") else "upload"}
+    if isinstance(source.get("sample_id"), str):
+        out["sample_id"] = source["sample_id"]
+    return out
 
 
 @router.post("/v1/runs/{run_id}/fork")
@@ -1219,8 +1212,14 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
         try:
             await anyio.to_thread.run_sync(
                 functools.partial(
-                    fork_run, src, dst, run_id=new_id, token_hash=token_hash, client=client[:16]
-                )
+                    fork_run,
+                    src,
+                    dst,
+                    run_id=new_id,
+                    token_hash=token_hash,
+                    client=client[:16],
+                    origin=fork_origin(studio, found[0], src),
+                )  # fmt: skip
             )
         except Exception:
             log.exception("studio: forking %s failed", run_id)
