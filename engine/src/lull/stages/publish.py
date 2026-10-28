@@ -78,6 +78,8 @@ KEYFRAMES = "keyframes"
 F113_MIN_PAUSE = 2.0  # seconds of usable pause
 MIN_COVERAGE = 0.8  # important events described, for 1.2.5 / 1.2.7 to be met (ruling, Task 16)
 IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is owed (Task 17)
+MAX_DEMOTED = 0.25  # share of the watch-salient events the plan may judge repetitive
+MET_NOTHING_VISUAL = "met (no visual information beyond the soundtrack)"  # G203
 REVIEWED = ("edited", "approved")  # statuses a person has signed off
 STATUSES = ("verified", "edited", "approved", "held", "extended")  # counted in the summary
 TTS_NAME = mixer.TTS_NAME
@@ -242,6 +244,7 @@ def coverage(
         "ratio_with_extended": ratio(len(with_ext)),
         "undescribed": [i for i in salient if i not in with_ext],
         "repetitive": [e.id for e in repetitive(events, priority)],
+        "watch_salient": sum(e.salience >= SALIENT and not said_already(e) for e in events),
     }
 
 
@@ -304,6 +307,27 @@ def _missing(cov: dict | None, key: str) -> list[str]:
     return [f"{_n(n, 'important event')} undescribed ({done} of {total} described)"]
 
 
+def _planner(cov: dict | None) -> list[str]:
+    """Why the plan's ratings block a pass (ruling, Task 17 fix round): it judged more than
+    MAX_DEMOTED of the watch-salient events repetitive, or rated nothing important although the
+    watch saw salient events."""
+    if not cov or cov.get("watch_salient") is None:
+        return []  # a summary from before these were recorded
+    salient, demoted = cov["watch_salient"], len(cov.get("repetitive") or [])
+    out = []
+    if salient and demoted > MAX_DEMOTED * salient + _EPS:
+        out.append(f"{demoted} of {salient} salient events judged repetitive by the planner "
+                   f"(limit {MAX_DEMOTED * 100:.0f} %)")  # fmt: skip
+    if salient and not cov.get("important_events"):
+        out.append("no event was rated important")
+    return out
+
+
+def _nothing_visual(cov: dict | None) -> bool:
+    """No important and no salient event at all: the soundtrack carries everything (G203)."""
+    return bool(cov) and cov.get("watch_salient") == 0 and not cov.get("important_events")
+
+
 def wcag_status(
     *, standard: int, extended_produced: bool, held: int, overlap_s: float, f113: int,
     reviewed: bool = False, extended_error: str | None = None, coverage: dict | None = None,
@@ -318,9 +342,16 @@ def wcag_status(
     not depend on coverage. 1.2.7 is claimed only for extended.mp4, on the same checks with
     extended descriptions counted (a held cue or an unused pause is missing from it too). A
     pass reads "met" only when every published line was reviewed by a person.
+
+    The plan's ratings cannot buy a pass: 1.2.5 and 1.2.7 need review when the plan judged
+    more than MAX_DEMOTED of the watch-salient events repetitive, or rated nothing important
+    while the watch saw salient events. With no important and no salient event at all (a
+    talking head: the soundtrack holds all the information, G203) all three read
+    MET_NOTHING_VISUAL unless another check fails.
     """
+    nothing_visual = _nothing_visual(coverage)
     blockers = []
-    if standard == 0 and not extended_produced:
+    if standard == 0 and not extended_produced and not nothing_visual:
         blockers.append(
             "no description is voiced in the standard track and no extended version was produced"
         )
@@ -334,12 +365,17 @@ def wcag_status(
     if held:
         blockers.append(f"{_n(held, 'description')} held for review")
     passed = MET if reviewed else MET_AUTOMATED
+    if nothing_visual:
+        passed = MET_NOTHING_VISUAL
     status = passed if not blockers else REVIEW
     only_extended = standard == 0 and extended_produced
-    blockers_125 = blockers + _missing(
-        coverage, "described_with_extended" if only_extended else "described"
+    planner = _planner(coverage)
+    blockers_125 = (
+        blockers
+        + _missing(coverage, "described_with_extended" if only_extended else "described")
+        + planner
     )
-    blockers_127 = blockers + _missing(coverage, "described_with_extended")
+    blockers_127 = blockers + _missing(coverage, "described_with_extended") + planner
     ad = []
     if standard:
         ad.append("described.mp4 and described-audio.m4a (G173 described version, "
@@ -350,7 +386,13 @@ def wcag_status(
         ["extended.vtt"] if extended_produced else []
     )
     via_123 = ", ".join([*texts, "script.md"]) + (f", with {' and '.join(ad)}" if ad else "")
-    if extended_produced:
+    if nothing_visual:
+        g203 = "the soundtrack carries all the information (G203)"
+        via_123 = f"{via_123}; {g203}"
+        ad.append(g203)
+    if nothing_visual and not extended_produced:
+        row_127 = (passed if not blockers_127 else REVIEW, ad[-1], blockers_127)
+    elif extended_produced:
         row_127 = (passed if not blockers_127 else REVIEW,
                    "extended.mp4 (G8 extended audio description) and extended.vtt",
                    blockers_127)  # fmt: skip

@@ -316,6 +316,7 @@ def test_coverage_counts_salient_events_in_voiced_cues():
         "ratio_with_extended": 0.5,
         "undescribed": ["e2", "e3"],
         "repetitive": [],
+        "watch_salient": 4,
     }
     assert coverage(cues, ext, events, extended_produced=False)["described_with_extended"] == 1
     assert coverage([], [], [_ev("e9", 0, 1, salience=2)], extended_produced=False)["ratio"] is None
@@ -1298,3 +1299,86 @@ def test_the_report_lists_what_the_planner_judged_repetitive(tmp_path, fake_medi
     html = (run / "report.html").read_text(encoding="utf-8")
     assert "judged repetitive by the planner" in html and "The two keep walking." in html
     assert "1 of 3 important events described" in html
+
+
+# -- Task 17 fix round: coverage the planner cannot game ----------------------------------------
+
+
+def test_wcag_refuses_a_pass_when_the_planner_demotes_too_many_salient_events():
+    """Ruling: more than 25 % of the watch-salient events judged repetitive blocks 1.2.5 and
+    1.2.7 (rating everything 1-2 must not buy a pass); 25 % exactly is allowed."""
+    many = _cov(5, 5) | {"watch_salient": 8, "repetitive": ["e1", "e2", "e3"]}
+    rows = _wcag(extended_produced=True, coverage=many)
+    reason = "3 of 8 salient events judged repetitive by the planner (limit 25 %)"
+    assert rows["1.2.5"]["status"] == "needs review" and reason in rows["1.2.5"]["reasons"]
+    assert rows["1.2.7"]["status"] == "needs review" and reason in rows["1.2.7"]["reasons"]
+    assert rows["1.2.3"]["status"] == "met"
+    few = _cov(6, 6) | {"watch_salient": 8, "repetitive": ["e1", "e2"]}
+    assert _wcag(extended_produced=True, coverage=few)["1.2.5"]["status"] == "met"
+
+
+def test_wcag_when_no_event_is_rated_important():
+    """Nothing important although the watch saw salient events: review. Nothing important and
+    nothing salient (a talking head, G203): met, with no description needed."""
+    demoted = _cov(0, 0) | {"watch_salient": 3, "repetitive": ["e1", "e2", "e3"]}
+    rows = _wcag(coverage=demoted)
+    assert rows["1.2.5"]["status"] == "needs review"
+    assert "no event was rated important" in rows["1.2.5"]["reasons"]
+    talking_head = _cov(0, 0) | {"watch_salient": 0, "repetitive": []}
+    rows = _wcag(standard=0, coverage=talking_head)
+    g203 = "met (no visual information beyond the soundtrack)"
+    assert [rows[c]["status"] for c in ("1.2.3", "1.2.5", "1.2.7")] == [g203] * 3
+    assert all("G203" in rows[c]["via"] for c in rows)
+    assert _wcag(standard=0, held=1, coverage=talking_head)["1.2.5"]["status"] == "needs review"
+
+
+def test_coverage_reports_how_many_events_the_watch_found_salient():
+    events = [_ev("e1", 0, 1, salience=5), _ev("e2", 1, 2, salience=4),
+              _ev("e3", 2, 3, salience=3)]  # fmt: skip
+    cov = coverage([], [], events, extended_produced=False, priority={"e1": 1, "e3": 4})
+    assert (cov["watch_salient"], cov["repetitive"], cov["important_events"]) == (2, ["e1"], 2)
+
+
+def test_the_report_escapes_text_from_the_models(tmp_path, fake_media):
+    """The report environment autoescapes: an event or a held reason holding markup shows as
+    text, never as markup."""
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    evil = "<script>alert(1)</script>"
+    events = [_ev("e1", 1.0, 3.0, salience=5, text=f"A sign reads {evil}")]
+    cues = [_cue("c001", 1.0, None, status="held", ev=["e1"], note=f"held: {evil}")]
+    run = tmp_path / "run"
+    publish(run, video, cues, [], events, [_gap("g001", 1.0, 4.0)], None, _ledger(tmp_path),
+            "r1", RunOptions(), speech=[])  # fmt: skip
+    html = (run / "report.html").read_text(encoding="utf-8")
+    assert "<script>alert" not in html and "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+
+
+def test_the_report_renders_a_summary_from_before_task_17(tmp_path, fake_media, monkeypatch):
+    """Older summaries have no `repetitive` and no `important_events`: the template falls back
+    instead of failing."""
+    from lull.stages import publish as pub
+
+    seen = {}
+    real = pub._render_report
+
+    def keep(context):
+        seen["context"] = context
+        return real(context)
+
+    monkeypatch.setattr(pub, "_render_report", keep)
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    publish(tmp_path / "run", video, [_cue("c001", 1.0, 1.0, ev=["e1"])], [],
+            [_ev("e1", 1.0, 3.0)], [_gap("g001", 1.0, 3.0)], None, _ledger(tmp_path), "r1",
+            RunOptions(), speech=[])  # fmt: skip
+    old = dict(seen["context"])
+    summary = {k: v for k, v in old["summary"].items() if k != "repetitive"}
+    summary["coverage"] = {
+        k: v
+        for k, v in summary["coverage"].items()
+        if k not in ("important_events", "repetitive", "watch_salient")
+    }
+    html = real({**old, "summary": summary})
+    assert "1 of 1 important events described" in html
+
