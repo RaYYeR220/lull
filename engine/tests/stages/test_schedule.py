@@ -150,7 +150,7 @@ def test_long_too_big_for_the_gap_so_both_events_get_their_short():
 
 
 def test_a_brief_visual_is_not_voiced_after_a_long_sentence_ends_it():
-    """Reviewer's case: A (9-30 s, 20 words) sorts first in gap 10-20, so B (10.5-11 s) would
+    """A (9-30 s, 20 words) sorts first in gap 10-20, so B (10.5-11 s) would
     start about 8.5 s in, long after it ended; only one of them may use the gap."""
     events = [_ev("e001", 9.0, 30.0), _ev("e002", 10.5, 11.0, sal=4)]
     variants = [_var("e001", "long", 20), _var("e002", "short", 4)]

@@ -351,7 +351,7 @@ def test_prompt_teaches_the_craft():
     assert text.count("Bad:") >= 3 and text.count("Good:") >= 3
 
 
-def test_prompt_fix_round_wording():
+def test_prompt_sets_no_word_ceiling_and_asks_for_short_versions():
     text = load_prompt()
     assert "22" not in text  # no exact word ceiling the model could try to count to
     assert "discards versions that run long" in text

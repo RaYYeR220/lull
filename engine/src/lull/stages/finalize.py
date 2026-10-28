@@ -839,9 +839,11 @@ def finalize_cue(
 ) -> Cue:
     """The cue verified and voiced, or held with the reason in `note`.
 
-    A standard cue (with its gap) comes back "verified" with start = gap.usable_start and
-    end = start + measured audio duration; an extended cue (gap None) keeps "extended" and its
-    start. Model calls carry stage "finalize" and roles verify, repair, remove and compress.
+    A standard cue (with its gap) comes back "verified" with start where placement puts it in
+    its window (LEAD_IN_S before its first visual, or earlier with "In a moment, " when it
+    could not finish otherwise) and end = start + measured audio duration; an extended cue
+    (gap None) keeps "extended" and its start. Model calls carry stage "finalize" and roles
+    verify, repair, remove and compress.
     """
     if (gap is None) != (cue.gap_id is None) or (gap is not None and gap.id != cue.gap_id):
         got = gap.id if gap else None

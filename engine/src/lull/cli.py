@@ -3,7 +3,9 @@
 
 Settings come from the environment or a .env file: NEBIUS_API_KEY, TAVILY_API_KEY (optional),
 LULL_SPEECH_URL (default http://127.0.0.1:8089), LULL_SPEECH_KEY, LULL_HOME (ledger and voice
-rates, default ~/.lull) and the LULL_CAP_* spend caps.
+rates, default ~/.lull), the LULL_CAP_RUN / LULL_CAP_DAY / LULL_CAP_TOTAL model spend caps in
+USD and the LULL_TAVILY_RUN / LULL_TAVILY_DAY web search caps (a count). A cap of 0 refuses
+everything; "none" switches it off.
 """
 
 from __future__ import annotations
@@ -181,7 +183,7 @@ def _print_summary(summary: dict, seconds: float, out: Path) -> None:
     for h in summary.get("held", []):
         typer.echo(f"  held      {h['id']}: {h['reason']}")
     typer.echo(f"  overlap   {summary['overlap_seconds']:.3f} s")
-    typer.echo(f"  cost      ${summary['cost_usd']:.4f}")
+    typer.echo(f"  model spend ${summary['cost_usd']:.4f} this run")
     typer.echo(f"  output    {out}")
 
 

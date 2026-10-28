@@ -77,7 +77,7 @@ def test_describe_prints_progress_and_a_summary(
     assert "! the recogniser stretched 'Ada.'" in r.output
     assert re.search(r"^\s*cues\s+2 verified, 0 held, 1 extended$", r.output, re.M)
     assert re.search(r"^\s*overlap\s+0\.000 s$", r.output, re.M)
-    assert re.search(r"^\s*cost\s+\$0\.\d{4}\b", r.output, re.M)
+    assert re.search(r"^\s*model spend\s+\$0\.\d{4} this run\b", r.output, re.M), r.output
     assert re.search(rf"^\s*output\s+{re.escape(str(out))}$", r.output, re.M)
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["run_id"] == "demo"
