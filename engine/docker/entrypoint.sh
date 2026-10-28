@@ -37,6 +37,14 @@ cpus() {
   echo "$n"
 }
 
+# LULL_NO_VERIFY is the engine's evaluation-only switch (no frame verification): never in a
+# deployment. A true value stops the container here; any value is never passed on.
+case "$(printf '%s' "${LULL_NO_VERIFY:-}" | tr '[:upper:]' '[:lower:]')" in
+  ""|0|false|no|off) ;;
+  *) log "LULL_NO_VERIFY is set: frame verification would be off; refusing to start"; exit 1 ;;
+esac
+unset LULL_NO_VERIFY
+
 export LULL_DATA="${LULL_DATA:-/data}"
 export LULL_HOME="${LULL_HOME:-$LULL_DATA/home}"
 export LULL_SPEECH_URL="$SPEECH_URL"

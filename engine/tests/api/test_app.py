@@ -165,3 +165,34 @@ def test_not_found_has_the_error_shape(client, data, make_run, path):
     r = client.get(path)
     assert r.status_code == 404
     assert r.json()["error"] == "not_found" and set(r.json()) == {"error", "message"}
+
+
+@pytest.mark.parametrize("value", ["1", "true", "YES", "on"])
+def test_the_api_refuses_to_start_without_frame_verification(settings, monkeypatch, value, caplog):
+    from fastapi.testclient import TestClient
+
+    from lull.api.app import create_app
+
+    monkeypatch.setenv("LULL_NO_VERIFY", value)
+    with pytest.raises(RuntimeError, match="LULL_NO_VERIFY"):
+        with TestClient(create_app(settings)):
+            pass
+    assert any("LULL_NO_VERIFY" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no"])
+def test_a_false_no_verify_is_no_obstacle(settings, monkeypatch, value):
+    from fastapi.testclient import TestClient
+
+    from lull.api.app import create_app
+
+    monkeypatch.setenv("LULL_NO_VERIFY", value)
+    with TestClient(create_app(settings)) as c:
+        assert c.get("/v1/samples").status_code == 200
+
+
+def test_the_entrypoint_never_forwards_no_verify():
+    from pathlib import Path
+
+    script = (Path(__file__).resolve().parents[2] / "docker" / "entrypoint.sh").read_text()
+    assert "LULL_NO_VERIFY" in script and "unset LULL_NO_VERIFY" in script

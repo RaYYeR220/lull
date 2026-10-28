@@ -112,8 +112,12 @@ where the entrypoint logs "the API did not stop in 7.5s; killing it".
 | `LULL_SPEECH_KEY` | random per start | bearer key between the API and the speech server |
 | `LULL_SPEECH_WAIT` | `120` | seconds to wait for the speech server at start |
 | `LULL_SPEECH_THREADS` | the cgroup CPU quota (`cpu.max`), else `nproc` | Magpie TTS CPU threads |
-| `LULL_CAP_RUN` / `LULL_CAP_DAY` / `LULL_CAP_TOTAL` | `0.50` / `3.00` / `35.00` | spend caps in USD |
+| `LULL_CAP_RUN` / `LULL_CAP_DAY` / `LULL_CAP_TOTAL` | `0.50` / `3.00` / `35.00` | spend caps in USD on model calls only; `none` = no cap, `0` refuses every call |
+| `LULL_TAVILY_DAY` | `60` | web searches per day (counted, never priced); a live run may make 3 |
+| `LULL_SAMPLES` | `/opt/lull/samples` | the sample clips and `samples.json` baked into the image (read-only) |
+| `LULL_UPLOAD_RETENTION_DAYS` | `7` | an upload's run is removed this many days after it was made (forks: 24 h), by the sweep at start and every hour; `/v1/health` states it |
 | `LULL_SHOWCASE_EDITABLE` | `0` | local only: lets the Studio change showcase runs |
+| `LULL_NO_VERIFY` | unset | the engine's evaluation-only switch (no frame verification): a true value stops the container at start, and the API refuses to start with it; it is never passed on |
 
 Litestream authenticates to Cloud Storage with the runtime service account (Application
 Default Credentials); it needs object read/write on the bucket.

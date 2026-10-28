@@ -7,6 +7,7 @@ import asyncio
 import contextlib
 import logging
 import mimetypes
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -43,6 +44,23 @@ CORS_METHODS = ["GET", "HEAD", "OPTIONS", "POST", "PATCH"]
 CORS_HEADERS = ["Authorization", "Content-Type", "Last-Event-ID"]
 
 
+NO_VERIFY = "LULL_NO_VERIFY"  # the engine's evaluation-only switch: frames go unchecked
+FALSE_WORDS = ("", "0", "false", "no", "off")
+
+
+def refuse_unverified() -> None:
+    """The API never describes without frame verification: with LULL_NO_VERIFY set to
+    anything true it does not start at all (so /v1/health is never answered)."""
+    value = os.environ.get(NO_VERIFY)
+    if value is not None and value.strip().lower() not in FALSE_WORDS:
+        message = (
+            f"{NO_VERIFY}={value!r} turns frame verification off (evaluation only): "
+            "the API does not start with it; unset it"
+        )
+        log.critical(message)
+        raise RuntimeError(message)
+
+
 def no_run() -> LiveError:
     return LiveError(404, "not_found", "There is no run with that id.")
 
@@ -66,6 +84,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        refuse_unverified()
         studio = app.state.studio
         swept = studio.sweep()  # before serving: no edit is in progress yet
         if swept:
