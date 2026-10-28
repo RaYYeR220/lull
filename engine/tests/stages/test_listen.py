@@ -213,3 +213,37 @@ def test_listen_and_the_mix_hear_late_audio_on_the_video_clock(late_audio, tmp_p
     wav = media.extract_wav(out.ad_audio, tmp_path / "mixed.wav")
     loud = [t for t, db in loudness_profile(wav, hop=0.05) if db > -40]
     assert loud[0] == pytest.approx(span.start, abs=0.1)
+
+
+@pytest.fixture(scope="module")
+def two_sentences(tmp_path_factory) -> Path:
+    """Two 2 s sentences (tones) with a 1.9 s pause between them, 0-2 s and 3.9-5.9 s."""
+    out = tmp_path_factory.mktemp("media") / "two_sentences.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=25:d=7",
+         "-f", "lavfi", "-i", "sine=frequency=300:duration=7",
+         "-af", "volume=enable='between(t,2,3.9)+gte(t,5.9)':volume=0", "-map", "0:v",
+         "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-t", "7",
+         str(out)],
+        check=True, capture_output=True,
+    )  # fmt: skip
+    return out
+
+
+class _WordsAndAWideTurn:
+    """Words where the narration is, and a diarised turn that runs across the pause."""
+
+    def transcribe(self, wav):
+        return [Word(text="sentence.", start=0.05, end=1.95),
+                Word(text="another.", start=3.95, end=5.85)]  # fmt: skip
+
+    def diarize(self, wav):
+        return [Turn(speaker=0, start=0.0, end=6.3)]
+
+
+def test_a_pause_between_sentences_stays_usable(two_sentences, tmp_path):
+    heard = listen(two_sentences, tmp_path / "work", _WordsAndAWideTurn(), wps=3.0)
+    pauses = [g for g in heard.gaps if g.start < 3.0 < g.end]
+    assert pauses, heard.speech
+    assert pauses[0].usable_end - pauses[0].usable_start >= 1.9 - 2 * 0.2 - 0.05

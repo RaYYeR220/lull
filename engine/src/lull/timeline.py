@@ -35,10 +35,17 @@ def merge_spans(spans: list[Span], join_within: float = 0.0) -> list[Span]:
 
 
 def speech_spans(words: list[Word], turns: list[Turn], join_within: float = 0.25) -> list[Span]:
-    """Union of word spans and diarized turns, merged across tiny pauses."""
-    spans = [Span(start=w.start, end=w.end) for w in words]
-    spans += [Span(start=t.start, end=t.end) for t in turns]
-    return merge_spans(spans, join_within)
+    """Where someone speaks. The recogniser's words bound speech wherever there are words:
+    their spans, merged across tiny pauses. A diarised turn counts only where it holds no word
+    at all (a laugh, singing): one that runs past the words, or across the pause between two
+    sentences, never widens the speech they bound."""
+    spans = merge_spans([Span(start=w.start, end=w.end) for w in words], join_within)
+    wordless = [
+        Span(start=t.start, end=t.end)
+        for t in turns
+        if not any(w.start < t.end and w.end > t.start for w in words)
+    ]
+    return merge_spans(spans + wordless, join_within)
 
 
 def complement(spans: list[Span], start: float, end: float) -> list[Span]:
