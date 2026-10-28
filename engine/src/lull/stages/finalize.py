@@ -46,6 +46,7 @@ from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
     clip_window,
+    is_extra,
     remove_claims,
     rewrite,
     tagged,
@@ -456,6 +457,7 @@ class _Finalise:
     repairs: int = 0  # claim cuts made
     rechecked: bool = False  # the unchanged line was judged afresh once
     splits: dict = field(default_factory=dict)  # claim splits by text (verify.split_claims)
+    extras: list[Claim] = field(default_factory=list)  # supported claims the line never made
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
     at: float | None = None  # where in its window the voiced line starts
@@ -519,6 +521,10 @@ class _Finalise:
             parts.append(f"compressed {self.words_before}→{count_words(self.text)} words")
         for eid in self.dropped:
             parts.append(f"dropped the sentence for {eid} to fit")
+        if self.extras:
+            seen = list(dict.fromkeys(c.text for c in self.extras))
+            parts.append(f"left out {'a claim' if len(seen) == 1 else 'claims'} the line does "
+                         "not make: " + "; ".join(seen))  # fmt: skip
         return "; ".join(parts + extra) or None
 
     def _result(
@@ -644,7 +650,7 @@ class _Finalise:
         clip, offset = self.clip
         names = names_in(self.text, self.names)
         claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset,
-                        cache=self.splits)  # fmt: skip
+                        cache=self.splits, dropped=self.extras)  # fmt: skip
         self.checks.append(Check(text=self.text, claims=claims))
         return claims
 
@@ -701,11 +707,13 @@ class _Finalise:
         return None
 
     def fresh_check(self, bad: list[Claim], last: bool) -> Cue | None | bool:
-        """The repair removed nothing. The unchanged line's claims are judged once more
-        against the frames; when the same failed claim comes back (or this was done already)
-        False, and the caller holds the cue. Otherwise the new verdicts decide: all supported,
-        the line goes on to be voiced; a new failure is cut as any other."""
-        if self.rechecked:
+        """The repair removed nothing. Only when every failed claim is one the line does not
+        make (is_extra, decided without a model) is the unchanged line judged once more: a
+        claim the line makes and that failed is never given a second chance, however a second
+        look would word, flip or drop it. False when there is no second look, or when the same
+        failed claim comes back: the caller holds the cue. Otherwise the new verdicts decide:
+        all supported, the line goes on to be voiced; a new failure is cut as any other."""
+        if self.rechecked or not all(is_extra(c, self.text) for c in bad):
             return False
         self.rechecked = True
         self.claims = self.check_frames()

@@ -321,24 +321,23 @@ def test_claim_rejected_again_after_removal_is_held(tmp_path, video):
 
 
 def test_removal_that_changes_nothing_is_held(tmp_path, video):
-    """The line is checked once more, afresh; the same failed claim comes back: held."""
     tf = FakeTF(
-        verify=[_claims(("a person", "supported"), ("a red coat", "not_visible"))] * 2,
+        verify=[_claims(("a person", "supported"), ("a red coat", "not_visible"))],
         remove=lambda call: {"text": _description(call)},
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert tf.roles() == ["verify", "remove", "verify"]
+    assert tf.roles() == ["verify", "remove"]
     assert out.status == "held" and out.text == TEXT
     assert "removed nothing" in out.note
 
 
 def test_contradiction_that_cannot_be_cut_withholds_the_text(tmp_path, video):
     tf = FakeTF(
-        verify=[_claims(("a person", "supported"), ("a red coat", "contradicted"))] * 2,
+        verify=[_claims(("a person", "supported"), ("a red coat", "contradicted"))],
         remove=lambda call: {"text": _description(call)},
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert tf.roles() == ["verify", "remove", "verify"]
+    assert tf.roles() == ["verify", "remove"]
     assert out.status == "held" and out.text == ""
     assert "withheld" in out.note
     assert out.claims == []  # nothing is said, so no claim is published; the check is kept
@@ -1391,12 +1390,12 @@ def test_claims_of_drops_only_supported_claims_the_line_does_not_make():
 
 def test_a_paraphrased_contradicted_claim_is_never_voiced_as_verified(tmp_path, video):
     tf = FakeTF(
-        verify=[_claims(("a person waves", "supported"), ("1 person", "contradicted"))] * 2,
+        verify=[_claims(("a person waves", "supported"), ("1 person", "contradicted"))],
         remove=lambda call: {"text": _description(call)},  # the cut finds nothing to cut
     )
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue("One person waves at the camera."))
     assert out.status == "held" and out.audio_path is None
-    assert tf.roles() == ["verify", "remove", "verify"]  # checked afresh once: same verdict
+    assert tf.roles() == ["verify", "remove"]
 
 
 def test_a_held_cue_keeps_a_contradiction_found_when_its_cut_text_is_checked_again(tmp_path, video):
@@ -1668,3 +1667,64 @@ def test_the_split_prompt_asks_for_one_checkable_fact_and_exact_spans():
         assert case in text, case
     judge_prompt = " ".join(load_prompt("verify").split())
     assert "add no claim" in judge_prompt
+
+
+# -- a second look never rescues a failed claim -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        _supported("a person in a red coat", "the person opens a door"),  # reworded
+        _claims(("a person", "supported"), ("a red coat", "supported")),  # flipped
+        _supported("a person"),  # the failed claim left out
+    ],
+    ids=["reworded", "flipped", "omitted"],
+)
+def test_a_failed_claim_the_line_says_is_never_rescued_by_a_second_look(tmp_path, video, second):
+    """The line says "a red coat" and it failed; the repair could not cut it. Whatever a
+    second check would answer (the fact reworded, its verdict flipped, or the claim left out),
+    there is none: the cue is held."""
+    tf = FakeTF(
+        verify=[_claims(("a person", "supported"), ("a red coat", "contradicted")), second],
+        remove=lambda call: {"text": TEXT},
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert out.status == "held" and out.audio_path is None
+    assert tf.roles() == ["verify", "remove"]
+
+
+def test_a_contradicted_whole_sentence_claim_holds_the_line(tmp_path, video):
+    """The split gave one claim for the whole sentence and it was contradicted: nothing
+    re-asks for a finer split, and no later all-supported answer can pass the line."""
+    line = "A person in a blue jacket walks onto the bridge and looks around."
+    tf = FakeTF(
+        split=[_split((line.rstrip("."), line))],
+        verify=[_verdicts(("k1", "contradicted")), _verdicts(("k1", "supported"))],
+        remove=lambda call: {"text": line},
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=_cue(line))
+    assert out.status == "held" and out.audio_path is None
+    assert tf.roles(splits=True) == ["split", "verify", "remove"]
+
+
+def test_supported_claims_the_line_does_not_make_are_left_out_and_noted(tmp_path, video,
+                                                                       monkeypatch):  # fmt: skip
+    from lull.stages import verify as ver
+
+    extra = Claim(text="a dog sleeps on the porch", verdict="supported", at=1.0, span=None)
+    kept = Claim(text="a person opens a door", verdict="supported", at=1.0,
+                 span="A person in a red coat opens a door.")  # fmt: skip
+    dropped: list = []
+    assert ver.claims_of(TEXT, [kept, extra], dropped=dropped) == [kept]
+    assert dropped == [extra]
+
+    def fake_verify(text, clip, tf, *, dropped=None, **kw):
+        if dropped is not None:
+            dropped.append(extra)
+        return [kept]
+
+    monkeypatch.setattr(fin, "verify", fake_verify)
+    out = _run(tmp_path, video, FakeTF(), FakeSpeech([2.0]))
+    assert out.status == "verified"
+    assert "left out a claim the line does not make: a dog sleeps on the porch" in out.note

@@ -213,16 +213,24 @@ def said_in(claim: str, text: str) -> bool:
     return len(words & _said_words(text)) >= SAID_SHARE * len(words)
 
 
-def claims_of(text: str, claims: Iterable[Claim]) -> list[Claim]:
+def is_extra(claim: Claim, text: str) -> bool:
+    """Whether `claim` is not something `text` says: it has no span in the text and its
+    wording is not in it either (said_in). Deterministic: no model decides it."""
+    return (claim.span is None or claim.span not in text) and not said_in(claim.text, text)
+
+
+def claims_of(
+    text: str, claims: Iterable[Claim], dropped: list[Claim] | None = None
+) -> list[Claim]:
     """The claims of `text`: a supported claim stays only when the line says it (said_in), so
     the extras the verifier lists from the frames are not published as the line's. Every
     contradicted or not-visible claim stays, however it is worded: a failed check is never
     filtered away, and it decides the cue's fate."""
     kept, extra = [], []
     for c in claims:
-        ok = c.verdict != "supported" or (c.span is not None and c.span in text)
-        ok = ok or said_in(c.text, text)
-        (kept if ok else extra).append(c)
+        (extra if c.verdict == "supported" and is_extra(c, text) else kept).append(c)
+    if dropped is not None:
+        dropped.extend(extra)
     if extra:
         log.info("verify: %d supported claims the line does not make left out: %s", len(extra),
                  "; ".join(c.text for c in extra))  # fmt: skip
@@ -390,13 +398,15 @@ def judge(
 def verify(
     text: str, clip: Path, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
     offset: float = 0.0, cache: dict[str, list[SplitClaim]] | None = None,
+    dropped: list[Claim] | None = None,
 ) -> list[Claim]:  # fmt: skip
     """The claims of `text`, each judged against the frames of `clip`: split_claims, then
     judge. `names` are names the programme has established; they are context, not claims.
-    Failed claims are never filtered away (claims_of)."""
+    Failed claims are never filtered away; supported ones the line does not make are left out
+    and added to `dropped` (claims_of)."""
     claims = split_claims(text, tf, run_id=run_id, names=names, cache=cache)
     judged = judge(text, claims, clip, tf, run_id=run_id, names=names, offset=offset)
-    return claims_of(text, judged)
+    return claims_of(text, judged, dropped)
 
 
 def rewrite(prompt: str, user: str, tf: TokenFactory, *, run_id: str, role: str) -> str:
