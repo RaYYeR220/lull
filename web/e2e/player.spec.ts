@@ -358,7 +358,7 @@ test.describe("player, embedded on another site", () => {
     expect((await playerState(page)).mode).toBe("spoken");
   });
 
-  test("no serious or critical axe violations, at both widths, with the panels open", async ({ page, baseURL }) => {
+  test("no moderate, serious or critical axe violations, at both widths, with the panels open", async ({ page, baseURL }) => {
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
       await page.setViewportSize(viewport);
       await open(page, baseURL);
@@ -367,7 +367,7 @@ test.describe("player, embedded on another site", () => {
       await modeButton(page).click();
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations
-        .filter((v) => v.impact === "serious" || v.impact === "critical")
+        .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
         .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
       expect(blocking, `at ${viewport.width}px`).toEqual([]);
     }
@@ -426,7 +426,7 @@ test.describe("player, in the site", () => {
       await player(page).getByRole("button", { name: "Pause" }).click();
       const results = await new AxeBuilder({ page }).include("#player").analyze();
       const blocking = results.violations
-        .filter((v) => v.impact === "serious" || v.impact === "critical")
+        .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
         .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
       expect(blocking, `at ${viewport.width}px`).toEqual([]);
     }

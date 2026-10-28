@@ -225,7 +225,7 @@ test.describe("a recorded run's page", () => {
     await expect(page.getByRole("link", { name: "Open the copy to look at it" })).toHaveAttribute("href", `/studio/${FORK_ID}`);
   });
 
-  test("has no serious or critical axe violations, with a line playing", async ({ page }) => {
+  test("has no moderate, serious or critical axe violations, with a line playing", async ({ page }) => {
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });
@@ -235,7 +235,7 @@ test.describe("a recorded run's page", () => {
       await expect(row(page, "c002").getByRole("button")).toHaveAttribute("aria-current", "true");
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations
-        .filter((v) => v.impact === "serious" || v.impact === "critical")
+        .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
         .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
       expect(blocking, `at ${viewport.width}px`).toEqual([]);
     }
@@ -243,7 +243,7 @@ test.describe("a recorded run's page", () => {
       await page.setViewportSize(viewport);
       await page.goto("/watch", { waitUntil: "networkidle" });
       const results = await new AxeBuilder({ page }).analyze();
-      const blocking = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id);
+      const blocking = results.violations.filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical").map((v) => v.id);
       expect(blocking, `library at ${viewport.width}px`).toEqual([]);
     }
   });

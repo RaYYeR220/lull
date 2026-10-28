@@ -147,7 +147,7 @@ test.describe("a finished live run", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("corridor-walk.mp4");
   });
 
-  test("has no serious or critical axe violations, and no sideways scroll on a phone", async ({ page }) => {
+  test("has no moderate, serious or critical axe violations, and no sideways scroll on a phone", async ({ page }) => {
     // several whole-page axe passes: slow when the suite runs in parallel
     test.setTimeout(180_000);
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
@@ -160,7 +160,7 @@ test.describe("a finished live run", () => {
         await expect(page.getByRole("status").filter({ hasText: "Loading" })).toHaveCount(0);
         const results = await new AxeBuilder({ page }).analyze();
         const blocking = results.violations
-          .filter((v) => v.impact === "serious" || v.impact === "critical")
+          .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
           .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
         expect(blocking, `${id} at ${viewport.width}px`).toEqual([]);
         const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));

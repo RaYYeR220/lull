@@ -36,7 +36,7 @@ function pageErrors(page: Page): string[] {
 async function axe(page: Page, where: string) {
   const results = await new AxeBuilder({ page }).analyze();
   const blocking = results.violations
-    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
     .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
   expect(blocking, where).toEqual([]);
 }
@@ -254,7 +254,7 @@ test.describe("the studio, editing a copy", () => {
     await expect(save(page)).toBeFocused();
   });
 
-  test("has no serious or critical axe violations, with the drawer open, at 1440 and 390", async ({ page }) => {
+  test("has no moderate, serious or critical axe violations, with the drawer open, at 1440 and 390", async ({ page }) => {
     // several whole-page axe passes: slow when the suite runs in parallel
     test.setTimeout(180_000);
     await holdToken(page, FORK_ID, FORK_TOKEN);

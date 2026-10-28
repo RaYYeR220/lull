@@ -112,7 +112,7 @@ test.describe("conformance reports", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("There’s no run with that id.");
   });
 
-  test("has no serious or critical axe violations and no sideways scroll, at 1440 and 390", async ({ page }) => {
+  test("has no moderate, serious or critical axe violations and no sideways scroll, at 1440 and 390", async ({ page }) => {
     // four whole-page axe passes: slow when the suite runs in parallel
     test.setTimeout(180_000);
     await routeApi(page, own());
@@ -124,7 +124,7 @@ test.describe("conformance reports", () => {
         await expect(page.getByRole("status").filter({ hasText: "Loading" })).toHaveCount(0);
         const results = await new AxeBuilder({ page }).analyze();
         const blocking = results.violations
-          .filter((v) => v.impact === "serious" || v.impact === "critical")
+          .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
           .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
         expect(blocking, `${url} at ${viewport.width}px`).toEqual([]);
         const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));

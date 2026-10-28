@@ -269,14 +269,14 @@ test.describe("landing", () => {
     await expect(sheet).toHaveCount(0);
   });
 
-  test("no serious or critical axe violations mid-preview", async ({ page }) => {
+  test("no moderate, serious or critical axe violations mid-preview", async ({ page }) => {
     await previewOnly(page);
     await page.goto("/", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Preview the timing" }).click();
     await expect.poll(() => playhead(page)).toBeGreaterThan(10);
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     const results = await new AxeBuilder({ page }).analyze();
-    const blocking = results.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => v.id);
+    const blocking = results.violations.filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical").map((v) => v.id);
     expect(blocking).toEqual([]);
   });
 });

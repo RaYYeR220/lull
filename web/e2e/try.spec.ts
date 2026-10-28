@@ -19,7 +19,7 @@ function collectErrors(page: Page): string[] {
 async function axe(page: Page, where: string) {
   const results = await new AxeBuilder({ page }).analyze();
   const blocking = results.violations
-    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
     .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
   expect(blocking, where).toEqual([]);
 }
@@ -298,7 +298,7 @@ test.describe("try it", () => {
     await expect(page.getByRole("link", { name: "Watch it described" })).toBeFocused();
   });
 
-  test("no serious or critical axe violations: picker, done and refusal, at 1440 and 390", async ({ page }) => {
+  test("no moderate, serious or critical axe violations: picker, done and refusal, at 1440 and 390", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     for (const viewport of [DESKTOP, PHONE]) {
       await page.setViewportSize(viewport);

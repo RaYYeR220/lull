@@ -73,7 +73,7 @@ test.describe("benchmarks", () => {
     await expect(page.locator("#benchmarks").getByRole("link", { name: "How it is measured" })).toHaveAttribute("href", "/benchmarks");
   });
 
-  test("has no serious or critical axe violations and no sideways scroll, at 1440 and 390", async ({ page }) => {
+  test("has no moderate, serious or critical axe violations and no sideways scroll, at 1440 and 390", async ({ page }) => {
     // whole-page axe passes: slow when the suite runs in parallel
     test.setTimeout(180_000);
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
@@ -82,7 +82,7 @@ test.describe("benchmarks", () => {
       await expect(page.locator("[data-fixture]")).toBeVisible();
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations
-        .filter((v) => v.impact === "serious" || v.impact === "critical")
+        .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
         .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
       expect(blocking, `at ${viewport.width}px`).toEqual([]);
       const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
