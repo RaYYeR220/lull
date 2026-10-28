@@ -116,13 +116,15 @@ test.describe("landing", () => {
     expect((await track(page, "described")).paused).toBe(false);
     expect((await track(page, "original")).paused).toBe(true);
 
-    // real time, not the 3x preview: the clock follows the soundtrack
-    const t0 = await playhead(page);
-    const w0 = Date.now();
-    await page.waitForTimeout(1500);
-    const rate = ((await playhead(page)) - t0) / ((Date.now() - w0) / 1000);
-    expect(rate).toBeGreaterThan(0.5);
-    expect(rate).toBeLessThan(1.6);
+    // real time, not the 3x preview: the clock follows the soundtrack itself
+    await expect.poll(async () => Math.abs((await playhead(page)) - (await track(page, "described")).t), { timeout: 10_000 }).toBeLessThan(0.4);
+
+    // the described soundtrack speaks each line: the live region stays quiet past a line's start
+    const live = page.locator("[data-horizon-live]");
+    const first = voiced[0]!.start;
+    await page.locator('audio[data-track="described"]').evaluate((a, t) => ((a as HTMLAudioElement).currentTime = t), first - 0.4);
+    await expect.poll(async () => await playhead(page), { timeout: 10_000 }).toBeGreaterThan(first + 0.3);
+    await expect(live).toHaveText("");
 
     // the original takes over from the same moment
     const at = (await track(page, "described")).t;

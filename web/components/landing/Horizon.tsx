@@ -211,7 +211,9 @@ export function Horizon({ data }: { data: HorizonData }) {
       });
       if (now !== -1 && now !== controller.spoken) {
         controller.spoken = now;
-        setLive(cues[now]?.text ?? "");
+        // only the silent preview hands lines to a screen reader: with a soundtrack on, the
+        // described one already speaks them and the original's silences are the point
+        if (controller.getSnapshot().mode === "visual") setLive(cues[now]?.text ?? "");
       }
     };
 
@@ -375,8 +377,9 @@ export function Horizon({ data }: { data: HorizonData }) {
             <Glyph name="replay" />
             Replay
           </button>
+          {/* a toggle: one label, its state in aria-pressed */}
           <button className={`${styles.btn} ${styles.lampToggle}`} type="button" aria-pressed={still} onClick={toggleLamp}>
-            {still ? "Resume lamp" : "Pause lamp"}
+            Pause lamp
           </button>
         </div>
       </figcaption>
