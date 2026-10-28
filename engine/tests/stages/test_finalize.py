@@ -2037,3 +2037,45 @@ def test_a_mend_may_tidy_but_never_add_or_move_a_word(raw, mended, ok):
     from lull.stages.verify import mend_keeps
 
     assert mend_keeps(raw, mended) is ok
+
+
+# -- a model answer cut off by its token limit fails closed, never the run ----------------------
+
+
+def _cut_off(call):
+    from lull.tf import TFUnusable
+
+    raise TFUnusable("truncated: finish_reason=length after retry with max_tokens=2400")
+
+
+@pytest.mark.strict_split
+def test_a_split_answer_cut_off_is_asked_again_then_falls_back(tmp_path, video):
+    """A split that runs past its token limit (twice, inside the client) is one failed
+    attempt: it is asked again, and when that is cut off too the line is split one claim per
+    sentence; the run goes on."""
+    tf = FakeTF(split=_cut_off, verify=[_verdicts(("s1", "supported"))])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(TEXT))
+    assert tf.roles(splits=True) == ["split", "split", "verify"]
+    assert "too long" in _user_text(tf.calls[1])
+    assert out.status == "verified" and "claims: one per sentence (split failed)" in out.note
+
+
+def test_a_mend_answer_cut_off_leaves_the_raw_cut(tmp_path, video):
+    tf = FakeTF(
+        verify=[_claims(("a person", "supported"), ("in a red coat", "not_visible"),
+                        ("opens a door", "supported")),
+                _supported("a person", "opens a door")],
+        mend=_cut_off,
+    )  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert out.status == "verified" and out.text == "A person opens a door."
+
+
+def test_a_judge_answer_cut_off_leaves_every_claim_not_visible(tmp_path, video):
+    from lull.stages.verify import judge
+
+    clip = tmp_path / "c.mp4"
+    clip.write_bytes(b"\0" * 16)
+    claims = [_sc("k1", "a cat sits", "A cat sits", "A cat sits.")]
+    [c] = judge("A cat sits.", claims, clip, FakeTF(verify=_cut_off), run_id="r1")
+    assert c.verdict == "not_visible" and c.evidence is None

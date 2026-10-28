@@ -44,6 +44,11 @@ class TFError(Exception):
         self.body = body[:500]
 
 
+class TFUnusable(TFError):
+    """No usable answer: cut off by the token limit, empty or unparseable, even after the
+    retry with twice the tokens. The call was made and paid for; the caller may fail closed."""
+
+
 def _data_url(path: Path) -> tuple[str, str]:
     mime = _MIME.get(path.suffix.lower())
     if mime is None:
@@ -195,7 +200,7 @@ class TokenFactory:
                 return parse(content)
             except ValueError as e:  # JSONDecodeError subclasses ValueError
                 last = f"unparseable output ({e})"
-        raise TFError(f"truncated: {last} after retry with max_tokens={max_tokens * 2}")
+        raise TFUnusable(f"truncated: {last} after retry with max_tokens={max_tokens * 2}")
 
     def _post(self, body: dict, run_id: str, estimate: float) -> tuple[dict, float]:
         headers = {"Authorization": f"Bearer {self.api_key}"}

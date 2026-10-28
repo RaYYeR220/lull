@@ -26,7 +26,7 @@ from typing import NamedTuple
 
 from pydantic import BaseModel
 
-from lull.tf import LIGHTNING, VL, TokenFactory, video_part
+from lull.tf import LIGHTNING, VL, TFUnusable, TokenFactory, video_part
 from lull.types import Claim, VisualEvent
 
 log = logging.getLogger(__name__)
@@ -468,6 +468,10 @@ def sentence_claims(text: str) -> list[SplitClaim]:
     return out
 
 
+CUT_OFF = (
+    "the answer was too long and was cut off: give each claim one or a few ranges "
+    "[first, last], not a range per token"
+)
 FALLBACK_NOTE = "claims: one per sentence (split failed)"
 
 
@@ -495,13 +499,18 @@ def split_claims(
             {"role": "system", "content": load_prompt("split")},
             {"role": "user", "content": "\n\n".join([*base, note] if note else base)},
         ]
-        out = tf.json(
-            LIGHTNING, messages, SPLIT_SCHEMA,
-            run_id=run_id, stage=STAGE, role="split", thinking=False,
-            max_tokens=SPLIT_MAX_TOKENS, temperature=SPLIT_TEMPERATURE, estimate=SPLIT_ESTIMATE,
-        )  # fmt: skip
-        claims = _parse_split(out)
-        problems = check_split(text, claims, known) if claims else ["no claim was returned"]
+        try:
+            out = tf.json(
+                LIGHTNING, messages, SPLIT_SCHEMA,
+                run_id=run_id, stage=STAGE, role="split", thinking=False,
+                max_tokens=SPLIT_MAX_TOKENS, temperature=SPLIT_TEMPERATURE,
+                estimate=SPLIT_ESTIMATE,
+            )  # fmt: skip
+        except TFUnusable:  # cut off by the token limit: a failed attempt, not a failed run
+            claims, problems = [], [CUT_OFF]
+        else:
+            claims = _parse_split(out)
+            problems = check_split(text, claims, known) if claims else ["no claim was returned"]
         if not problems:
             break
         note = "Your previous answer was not usable: " + "; ".join(problems) + ". Split again."
@@ -537,11 +546,16 @@ def judge(
         {"role": "system", "content": load_prompt("verify")},
         {"role": "user", "content": [video_part(clip), {"type": "text", "text": user}]},
     ]
-    out = tf.json(
-        VL, messages, VERIFY_SCHEMA,
-        run_id=run_id, stage=STAGE, role="verify", thinking=False,
-        max_tokens=VERIFY_MAX_TOKENS, temperature=VERIFY_TEMPERATURE, estimate=VERIFY_ESTIMATE,
-    )  # fmt: skip
+    try:
+        out = tf.json(
+            VL, messages, VERIFY_SCHEMA,
+            run_id=run_id, stage=STAGE, role="verify", thinking=False,
+            max_tokens=VERIFY_MAX_TOKENS, temperature=VERIFY_TEMPERATURE,
+            estimate=VERIFY_ESTIMATE,
+        )  # fmt: skip
+    except TFUnusable as e:  # no verdict at all: every claim counts as not visible
+        log.warning("verify: the judge gave no usable answer (%s)", e)
+        out = {"verdicts": []}
     raw = out.get("verdicts") if isinstance(out, dict) else None
     if not isinstance(raw, list):
         raise ValueError("verify: model answer has no 'verdicts' list")
@@ -608,6 +622,10 @@ def rewrite(prompt: str, user: str, tf: TokenFactory, *, run_id: str, role: str)
 def mend(text: str, cut: list[str], tf: TokenFactory, *, run_id: str) -> str:
     """The grammar of `text` (a line the engine cut words out of) mended by Lightning (role
     "mend"); `cut` lists the words that were cut, which must not come back. The caller checks
-    the answer (it may only keep or drop words, never add one)."""
+    the answer (it may only keep or drop words, never add one); "" when there is none."""
     parts = [tagged("description", [text]), tagged("cut", [", ".join(cut)] if cut else [])]
-    return rewrite("mend", "\n\n".join(parts), tf, run_id=run_id, role="mend")
+    try:
+        return rewrite("mend", "\n\n".join(parts), tf, run_id=run_id, role="mend")
+    except (TFUnusable, ValueError) as e:  # no usable mend: the caller keeps the raw cut
+        log.warning("verify: the mend gave no usable answer (%s)", e)
+        return ""
