@@ -1,0 +1,12 @@
+# local build output and test artefacts: Vercel builds from source
+.next
+node_modules
+test-results
+playwright-report
+e2e/__screens__
+e2e/fixtures/*.mp4
+e2e/fixtures/*.m4a
+e2e/fixtures/*.wav
+e2e/fixtures/*.vtt
+*.tsbuildinfo
+public/player.js
