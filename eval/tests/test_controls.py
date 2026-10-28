@@ -254,7 +254,8 @@ def test_the_adapter_is_the_only_caller_of_the_engine_verifier(monkeypatch, tmp_
 
     monkeypatch.setattr(V, "verify", fake_verify)
     out = VA.check("A slide is shown.", tmp_path / "c.mp4", offset=10.0, tf="TF", run_id="r")
-    assert out == [{"text": "A slide is shown.", "verdict": "supported", "at": 2.0}]
+    assert out == [{"text": "A slide is shown.", "verdict": "supported", "at": 2.0,
+                    "kind": "atomic"}]  # fmt: skip
     assert seen == {"text": "A slide is shown.", "clip": tmp_path / "c.mp4", "tf": "TF",
                     "run_id": "r", "names": (), "offset": 10.0}  # fmt: skip
     lo, hi = VA.clip_window([event("e1", 10.0, 11.0)], 60.0)
@@ -484,3 +485,25 @@ def test_the_report_leads_with_the_same_video_upper_bound():
     assert "UPPER BOUND" in md[head:] and "(1 cues;" in md
     assert md.index("| other video |") > md.index("## By mismatch rule")
     assert "discriminative f1" in md
+
+
+def test_a_cut_off_verifier_answer_fails_closed(monkeypatch, tmp_path):
+    """The engine holds a cue whose verification answer was cut off; the control counts it as
+    not accepted (one not-visible entry naming why), never as a crash or an accept."""
+    from lull.stages import verify as V
+    from lull.tf import TFUnusable
+
+    def cut_off(*a, **kw):
+        raise TFUnusable("truncated: finish_reason=length")
+
+    monkeypatch.setattr(V, "verify", cut_off)
+    out = VA.check("A slide.", tmp_path / "c.mp4", offset=0.0, tf=None, run_id="r")
+    assert out == [{"text": "(verification answer cut off)", "verdict": "not_visible",
+                    "at": None, "kind": "cut_off"}]  # fmt: skip
+    assert not N.outcome(out)["fully_supported"]
+
+
+def test_adapter_settings_record_the_split_and_the_sentence_gate():
+    s = VA.settings()
+    assert s["temperature"] == 0.0 and s["split_model"] and s["sentence_gate"] is True
+    assert {"split_temperature", "split_max_tokens", "clip_max_s", "clip_see_s"} <= set(s)
