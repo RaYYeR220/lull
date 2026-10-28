@@ -1834,3 +1834,49 @@ def test_a_release_that_meets_a_reader_tries_again(tmp_path, monkeypatch):
     with pub._lock(run):
         pass
     assert not (run / ".publish.lock").exists()
+
+
+def _continuous(seconds: float = 30.0) -> list:
+    """Unpunctuated words of 0.35 s with 0.05 s between them: no sentence ends, no gap."""
+    from lull.types import Word
+
+    return [Word(text=f"w{i}", start=round(i * 0.4, 3), end=round(i * 0.4 + 0.35, 3))
+            for i in range(int(seconds / 0.4))]  # fmt: skip
+
+
+def test_in_continuous_speech_the_freeze_takes_the_next_word_boundary():
+    """No sentence ends and no gap opens within FREEZE_WAIT_S: the picture holds at the end of
+    the word running 0.3 s after the visual (2.35 s), never 28 s later at the end of the
+    speech, and never inside a word."""
+    words = _continuous()
+    ext = [_cue("x001", 2.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words)
+    t = frame / 25
+    assert 2.3 <= t <= 2.4, t
+    assert not any(w.start < t < w.end for w in words), f"freeze at {t} is mid-word"
+    assert mixer.hold(2.0, words=words) == (2.35, "word")
+
+
+def test_a_continuous_speech_freeze_is_noted_on_the_cue(tmp_path, fake_media):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    ext = [_cue("x001", 2.0, 1.0, gap=None, status="extended", audio="x.wav")]
+    run = tmp_path / "run"
+    words = _continuous(60.0)
+    speech = [Span(start=0.0, end=words[-1].end)]
+    publish(run, video, [], ext, [_ev("e1", 2.0, 4.0)], [], None, _ledger(tmp_path), "r1",
+            RunOptions(), speech=speech, words=words)  # fmt: skip
+    data = json.loads((run / "cues.json").read_text(encoding="utf-8"))
+    assert "freeze at a word boundary in continuous speech" in data["extended"][0]["note"]
+
+
+def test_wordless_speech_also_holds_a_freeze_back():
+    """A laugh or a song the recogniser gave no words (a diarised turn, 3-8 s) is speech too:
+    a visual at 4.0 s freezes when it ends, not in the middle of it."""
+    from lull.types import Word
+
+    words = [Word(text="Hello", start=0.0, end=0.4), Word(text="there.", start=0.5, end=1.0)]
+    speech = [Span(start=0.0, end=1.0), Span(start=3.0, end=8.0)]
+    ext = [_cue("x001", 4.0, 1.0, gap=None, status="extended")]
+    [(frame, _, _)] = _freezes(ext, words=words, speech=speech)
+    assert frame / 25 == pytest.approx(8.0, abs=0.04)

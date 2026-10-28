@@ -968,6 +968,15 @@ def publish(
     return PublishResult(files=files, manifest=run_dir / MANIFEST)
 
 
+def _continuous_note(c: Cue, words: list[Word], speech: list[Span]) -> Cue:
+    """`c` with a note when its picture holds at a word boundary in continuous speech (no
+    sentence end or gap between words within reach: see mix.hold)."""
+    if mixer.hold(c.start, words=words, speech=speech)[1] != "word":
+        return c
+    note = mixer.CONTINUOUS_NOTE
+    return c.model_copy(update={"note": f"{c.note}; {note}" if c.note else note})
+
+
 def own_claims(c: Cue) -> Cue:
     """`c` with only the claims judged on its current text: none when the text changed after
     its last check (an edit), since every verdict belongs to the text it was given to. A cue
@@ -1017,6 +1026,8 @@ def _stage(
         spoken_ext, info, standard=spoken, speech=speech, words=words or []
     )
     freeze_at = {c.id: float(f.frame / fps) for f in freezes for c in f.cues}
+    extended = [_continuous_note(c, words or [], speech) if c.id in freeze_at else c
+                for c in extended]  # fmt: skip
     # one timeline for every output: a voiced extended cue sits at its freeze point in the
     # extended track, script.md and cues.json (freeze_at) alike
     placed = [

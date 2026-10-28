@@ -465,45 +465,65 @@ def frame_rate(info: Probe) -> Fraction:
 
 def _units(words: Sequence[Word], speech: Sequence[Span]) -> list[tuple[float, float, bool]]:
     """(start, end, ends a sentence) of what is said, in time order: the recognised words (a
-    word ending in . ! ? or an ellipsis ends one), or without words the speech spans, each
-    taken as a sentence."""
-    if words:
-        return sorted(
-            (w.start, w.end, w.text.rstrip("\"')”’]").endswith((".", "!", "?", "…"))) for w in words
-        )
-    return [(s.start, s.end, True) for s in merge_spans(list(speech))]
+    word ending in . ! ? or an ellipsis ends one) and the speech spans that hold no word (a
+    laugh, singing), each of those taken as a sentence; without words, every speech span."""
+    spans = merge_spans(list(speech))
+    if not words:
+        return [(s.start, s.end, True) for s in spans]
+    said = [
+        (w.start, w.end, w.text.rstrip("\"')\u201d\u2019]").endswith((".", "!", "?", "\u2026")))
+        for w in words
+    ]
+    wordless = [
+        (s.start, s.end, True)
+        for s in spans
+        if not any(w.start < s.end and w.end > s.start for w in words)
+    ]
+    return sorted(said + wordless)
 
 
-def hold_point(t: float, *, words: Sequence[Word] = (), speech: Sequence[Span] = ()) -> float:
+def hold(t: float, *, words: Sequence[Word] = (), speech: Sequence[Span] = ()) -> tuple[float, str]:
     """The moment an extended description for a visual starting at `t` can stop the
-    programme: never before the visual. It is the first sentence boundary at or after
-    t + FREEZE_LEAD_S: a word that ends a sentence, a pause of SENTENCE_PAUSE_S or more between
-    words, or silence. When no sentence ends within FREEZE_WAIT_S of that, the first gap of
-    WORD_GAP_S or more between words after it will do (failing that, the sentence end)."""
+    programme, and how it was found; never before the visual. From t + FREEZE_LEAD_S on:
+    "silence" when nothing is said there, else the first sentence boundary ("sentence": a word
+    that ends a sentence, a pause of SENTENCE_PAUSE_S or more, the end of wordless speech)
+    within FREEZE_WAIT_S, else the first gap of WORD_GAP_S or more between words within it
+    ("gap"), else the end of the word running then ("word": continuous speech, never
+    mid-word, and never long after the visual)."""
     target = t + FREEZE_LEAD_S
     units = _units(words, speech)
     after = [i for i, (a, b, _) in enumerate(units) if b > target + _EPS_T]
     if not after:
-        return target  # nothing is said from here on
+        return target, "silence"  # nothing is said from here on
     k = after[0]
     a, _, _ = units[k]
-    if a >= target - _EPS_T:  # target falls between units k-1 and k
+    between = a >= target - _EPS_T  # target falls between units k-1 and k
+    if between:
         prev = units[k - 1] if k > 0 else None
         if prev is None or prev[2] or a - prev[1] >= SENTENCE_PAUSE_S - _EPS_T:
-            return target
-    sentence = None
+            return target, "silence"
+    limit = target + FREEZE_WAIT_S + _EPS_T
     for i in range(k, len(units)):
         end_i, ends = units[i][1], units[i][2]
+        if end_i > limit:
+            break
         nxt = units[i + 1][0] if i + 1 < len(units) else None
         if ends or nxt is None or nxt - end_i >= SENTENCE_PAUSE_S - _EPS_T:
-            sentence = max(target, end_i)
-            break
-    if sentence is not None and sentence - target <= FREEZE_WAIT_S + _EPS_T:
-        return sentence
+            return max(target, end_i), "sentence"
     for i in range(k, len(units) - 1):
+        if units[i][1] > limit:
+            break
         if units[i][1] >= target - _EPS_T and units[i + 1][0] - units[i][1] >= WORD_GAP_S - _EPS_T:
-            return units[i][1]
-    return sentence if sentence is not None else target
+            return units[i][1], "gap"
+    return (target if between else units[k][1]), "word"
+
+
+def hold_point(t: float, *, words: Sequence[Word] = (), speech: Sequence[Span] = ()) -> float:
+    """Where the extended version stops for a visual starting at `t` (see hold)."""
+    return hold(t, words=words, speech=speech)[0]
+
+
+CONTINUOUS_NOTE = "freeze at a word boundary in continuous speech"
 
 
 def freeze_time(
