@@ -478,11 +478,15 @@ def test_a_compression_not_shorter_drops_the_lowest_priority_sentence(tmp_path, 
 
 
 def test_a_compression_that_fails_lint_is_not_taken(tmp_path, video):
+    """A shorter rewrite that breaks a style rule gets one repair; still breaking it, it is
+    not taken."""
     tf = FakeTF(verify=lambda call: _supported("a person opens a door"),
-                compress=[{"text": "I see a person open a door."}])  # fmt: skip
+                compress=[{"text": "I see a person open a door."}],
+                repair=[{"text": "I see a person open a door."}])  # fmt: skip
     out = _run(tmp_path, video, tf, FakeSpeech([8.0]))
     assert out.status == "held" and out.text == TEXT
-    assert "compression did not shorten the line" in out.note
+    assert "the shorter compression broke R7-person even after a repair" in out.note
+    assert tf.roles() == ["verify", "compress", "repair"]
 
 
 # -- (d2) a compression that cuts too much is tried once more, then held ---------------------
@@ -1550,3 +1554,42 @@ def test_a_repair_rewrites_only_the_clause_that_carries_a_failed_claim(tmp_path,
     listed = _user_text(tf.of("remove")[0]).split("<remove>", 1)[1]
     assert "lasers scan the crowd" in listed and "walks along the bridge" not in listed
     assert "only the clause" in " ".join(load_prompt("remove").split())
+
+
+def test_a_compression_that_breaks_a_style_rule_gets_one_repair(tmp_path, video):
+    """A shorter rewrite that dropped the on-screen text the line reads is repaired once;
+    shorter and lint-clean after the repair, it is taken."""
+    ctx = CTX.model_copy(update={"verbatim": ["EXIT"]})
+    line = 'A sign reads: "EXIT". A person in a long red coat opens the wooden door.'
+    fixed = 'A sign reads: "EXIT". A person opens a door.'
+    tf = FakeTF(
+        verify=lambda call: _supported('a sign reads "EXIT"', "a person opens a door"),
+        compress=[{"text": "A sign glows. A person opens a door."}],
+        repair=[{"text": fixed}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([8.0, 2.0]), cue=_cue(line), ctx=ctx)
+    assert tf.roles() == ["verify", "compress", "repair", "verify"]
+    assert out.status == "verified" and out.text == fixed
+
+
+def test_a_failed_claim_that_bundles_several_facts_is_split_before_anything_is_cut(tmp_path, video):
+    """The verifier answered a whole sentence as one claim; before cutting, it is asked once
+    to split it, and only the clause that fails goes."""
+    line = "A person in a blue jacket walks onto the bridge and looks around."
+    kept = "A person in a blue jacket walks onto the bridge."
+    tf = FakeTF(
+        verify=[
+            _claims((line.rstrip("."), "not_visible")),
+            _claims(
+                ("a person in a blue jacket", "supported"),
+                ("the person walks onto the bridge", "supported"),
+                ("the person looks around", "not_visible"),
+            ),
+            _supported("a person in a blue jacket", "the person walks onto the bridge"),
+        ],  # fmt: skip
+        remove=[{"text": kept}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.5]), cue=_cue(line))
+    assert tf.roles() == ["verify", "verify", "remove", "verify"]
+    assert "one checkable fact" in _user_text(tf.of("verify")[1])
+    assert out.status == "verified" and out.text == kept

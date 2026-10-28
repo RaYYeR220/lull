@@ -244,6 +244,20 @@ FRESH_NOTE = (
 )
 
 
+SPLIT_NOTE = (
+    "A previous check of this description answered with a claim that holds several facts. "
+    'List one checkable fact per claim: split facts joined by "and", lists, and "X does Y '
+    'while Z", and judge each one on its own.'
+)
+_JOINS = re.compile(r"\b(?:and|while|as|then|but)\b|[,;]", re.IGNORECASE)
+
+
+def bundles_facts(claim: Claim) -> bool:
+    """Whether a claim holds several facts the verifier should have split: six words or more
+    joined by "and", "while", "as", "then", "but" or a comma."""
+    return len(claim.text.split()) >= 6 and _JOINS.search(claim.text) is not None
+
+
 def verify(
     text: str, clip: Path, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
     offset: float = 0.0, note: str | None = None,

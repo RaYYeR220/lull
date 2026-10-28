@@ -46,6 +46,8 @@ from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
     FRESH_NOTE,
+    SPLIT_NOTE,
+    bundles_facts,
     clip_window,
     remove_claims,
     rewrite,
@@ -456,6 +458,7 @@ class _Finalise:
     dropped: list[str] = field(default_factory=list)  # events whose sentence went to fit
     repairs: int = 0  # claim cuts made
     rechecked: bool = False  # the unchanged line was checked afresh once
+    split_asked: bool = False  # the verifier was asked once to split a claim of several facts
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
     at: float | None = None  # where in its window the voiced line starts
@@ -497,6 +500,12 @@ class _Finalise:
                     return out
                 continue
             self.claims = self.check_frames()
+            if not self.split_asked and any(
+                bundles_facts(c) for c in self.claims if c.verdict != "supported"
+            ):
+                # one failed claim holds several facts: one verdict would cut them all
+                self.split_asked = True
+                self.claims = self.check_frames(note=SPLIT_NOTE)
             if not self.claims:
                 return self.held("the verifier found no visual claim to check")
             bad = [c for c in self.claims if c.verdict != "supported"]
@@ -815,26 +824,44 @@ class _Finalise:
         if lost:
             self.text = candidate
             return self.held(lost)
-        if not self.shorter(before, candidate, keep):
+        taken = self.shorter(before, candidate, keep)
+        if taken is not None:
+            candidate = taken
+        else:
             # never longer: keep the line, and give up the sentence that matters least
+            answered = candidate
             candidate = self.drop_lowest(before)
             if candidate is None:
-                return self.held(
-                    f"{reason}; compression did not shorten the line ({count_words(before)} "
-                    f"words, answered with {count_words(autofix(new))})"
-                )
+                if count_words(answered) >= count_words(before):
+                    why = (f"compression did not shorten the line ({count_words(before)} words, "
+                           f"answered with {count_words(answered)})")  # fmt: skip
+                else:
+                    rules = sorted({f.rule for f in _lint(answered, keep, self.ctx)
+                                    if f.severity == "error"})  # fmt: skip
+                    why = ("the shorter compression broke " + ", ".join(rules)
+                           + " even after a repair")  # fmt: skip
+                return self.held(f"{reason}; {why}")
         if self.words_before is None:
             self.words_before = count_words(before)
         self.claims = []
         self.text = candidate
         return None
 
-    def shorter(self, before: str, candidate: str, keep: list[str]) -> bool:
+    def shorter(self, before: str, candidate: str, keep: list[str]) -> str | None:
         """A compression is taken only when it has fewer words than the line it replaces and
-        passes lint: a rewrite that is as long or longer, or breaks a style rule, is not one."""
+        passes lint; a shorter one that breaks a style rule gets one repair. The text to take,
+        or None (as long or longer, or still breaking a rule)."""
         if count_words(candidate) >= count_words(before):
-            return False
-        return not any(f.severity == "error" for f in _lint(candidate, keep, self.ctx))
+            return None
+        errors = [f for f in _lint(candidate, keep, self.ctx) if f.severity == "error"]
+        if not errors:
+            return candidate
+        fixed = self._repair(candidate, errors)
+        if count_words(fixed) >= count_words(before):
+            return None
+        if any(f.severity == "error" for f in _lint(fixed, keep, self.ctx)):
+            return None
+        return fixed
 
     def drop_lowest(self, text: str) -> str | None:
         """`text` without the sentence of the event the plan rates lowest (its salience when
