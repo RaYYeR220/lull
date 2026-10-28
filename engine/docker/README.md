@@ -135,70 +135,101 @@ Default Credentials); it needs object read/write on the bucket.
 
 ## On Cloud Run
 
-The data bucket is created with hierarchical namespace and uniform access. Publishing a run
-(live or from the Studio) renames folders; on a hierarchical bucket a folder rename is one
-atomic operation, where a flat bucket mounted with Cloud Storage FUSE refuses it (the engine
-then falls back to moving the files one by one, which works but is not atomic). Soft delete is
-off, so what retention removes is gone, and a lifecycle rule removes anything under
-`runs/` older than 8 days as a backstop to the app's own retention (uploads 7 days, forks a
-day); it is part of the setup, not optional.
+`docker/deploy-cloudrun.sh` does every step below, from `engine/` (it skips what exists, so it
+reruns): `PROJECT=<project> REGION=us-central1 docker/deploy-cloudrun.sh`, with
+`NEBIUS_API_KEY` and `TAVILY_API_KEY` in the environment the first time (they go to Secret
+Manager from stdin as `lull-nebius-api-key` and `lull-tavily-api-key`, never to disk). It uses
+the active gcloud account. From Git Bash on Windows it keeps `mount-path=/data` and the cron
+line as written (`MSYS2_ARG_CONV_EXCL`); MSYS would otherwise turn them into Windows paths.
+
+1. **Images:** an Artifact Registry repository `lull` (docker) whose cleanup policy keeps the
+   2 newest images.
+2. **Keys:** the two secrets.
+3. **Data:** the bucket `<project>-lull-data`, created with hierarchical namespace, uniform
+   access and no soft delete, and a lifecycle rule deleting anything under `runs/` 8 days
+   after it was written, as a backstop to the app's own retention (uploads 7 days, forks a
+   day). Publishing a run renames folders; on a hierarchical bucket a folder rename is one
+   atomic operation, where a flat bucket mounted with Cloud Storage FUSE refuses it (the
+   engine then falls back to moving the files one by one, which works but is not atomic).
+
+   ```bash
+   gcloud storage buckets create "gs://$BUCKET" --location "$REGION"      --uniform-bucket-level-access --enable-hierarchical-namespace --soft-delete-duration=0
+   echo '{"rule": [{"action": {"type": "Delete"},
+     "condition": {"age": 8, "matchesPrefix": ["runs/"]}}]}' > lifecycle.json
+   gcloud storage buckets update "gs://$BUCKET" --lifecycle-file=lifecycle.json
+   ```
+
+4. **Identity:** a service account `lull-api` with `roles/storage.objectUser` on the bucket and
+   `roles/secretmanager.secretAccessor` on the two secrets, and nothing project-wide.
+5. **Build:** `gcloud builds submit . --config docker/cloudbuild.yaml` (Cloud Build, with BuildKit,
+   which the Dockerfile's `COPY --chmod` needs). The upload is what `.gcloudignore` lets
+   through: the Dockerfile, `pyproject.toml`, `uv.lock`, `README.md`, `src/`, `samples/`
+   and the two files the image runs from `docker/` (60 files, 13 MB). No `.venv`, tests,
+   runs, `.env` or keys.
+6. **Deploy** `lull-api` with these flags:
+   - size and scaling: gen2, `--cpu 4 --memory 8Gi --concurrency 20 --timeout 3600
+     --min-instances 0 --max-instances 1 --cpu-throttling --cpu-boost`;
+   - the bucket at `/data`, the secrets as `NEBIUS_API_KEY` / `TAVILY_API_KEY`;
+   - `--allow-unauthenticated`, and the environment from a file (`--env-vars-file`), since
+     the origins and URLs hold commas: `LULL_DATA=/data`, `LULL_HOME=/tmp/lull-home`, `LULL_BUCKET`,
+     `LULL_PROXY_HOPS=1`, `LULL_SPEECH_THREADS=4`, `LULL_SPEECH_WAIT=200`, `LULL_WEB_ORIGINS`,
+     `LULL_PUBLIC_URL`.
+
+   The first deploy takes the traffic; the script then sets `LULL_PUBLIC_URL` to the service's
+   two URLs and their `smoke---` tag URLs. Later deploys go out with `--no-traffic --tag
+   smoke`.
+7. **Keep-warm:** a Cloud Scheduler job `lull-keep-warm` sends `GET /v1/health` every 10
+   minutes, 07:00-23:00 UTC (`*/10 7-22 * * *`).
+
+Notes:
+
+- **Request-based billing** (`--cpu-throttling`, not `--no-cpu-throttling`): the instance has
+  CPU only while a request is in flight. A live run works inside its own streaming request.
+  - **Leaving does not stop a run here.** Cloud Run does not pass a client's leaving on to the
+    container: the platform keeps the request open until the response ends, so a run whose
+    page closed still has its CPU and runs to the end. Measured: a client that left 13 s in
+    held the request for 527 s, and the run finished `done`. Its owner reads it when it is
+    done, or follows it again with the edit token.
+  - Where a connection really drops (other hosts, local runs), the run stops and its owner
+    restarts it from the stage cache.
+  - Litestream syncs while requests run and at shutdown.
+  - Housekeeping (retention) runs at start, hourly while the instance lives, and from
+    `/v1/health` when an hour has passed, so the keep-warm ping keeps it going.
+- **Speed:** a run is slower on Cloud Run's 4 vCPU than on a desktop, mostly in voicing. bbb45
+  (45 s) took 514 s end to end (listen 33 s, watch 15 s, plan 7 s, finalize 427 s, publish
+  29 s), against 182 s in Docker on a Ryzen 5 5600X. That is close to the 10-minute wall
+  clock, so a 60 s upload with many lines may hit it.
+- **Concurrency:** `--concurrency 20`. The work that loads the CPU is gated in the app (one
+  live run, two uploads received at once, two Studio edits re-checked and one publish at a
+  time), so the other slots are for reads, health and the event streams (at most 3 follow
+  one run and 8 are open in all). While a run keeps the CPU busy, the platform can still
+  answer a request 429 "no available instance" now and then (seen once while polling twice a
+  second); clients retry.
+- **One instance:** `--max-instances 1`, because the rate limits, the live executor and the
+  ledger live in one process, and Litestream allows one writer per replica. `max-instances`
+  counts per revision, so later deploys go out with `--no-traffic --tag smoke`, and the
+  traffic moves once the old revision's `/v1/health` says `"live_busy": false`.
+- **Visitor address:** `LULL_PROXY_HOPS=1`, because Cloud Run's front end appends the visitor's
+  address. Checked: requests carrying made-up `X-Forwarded-For` values still count against
+  the sender's own limit.
+- **Start:** `LULL_HOME` stays on local disk, and `LULL_BUCKET` keeps the ledger across
+  restarts. A new instance answers in about 37 s (the speech server takes 19 s of it, with
+  `--cpu-boost`); `LULL_SPEECH_WAIT=200` leaves room under the 240 s startup probe.
+- **Lifecycle rule:** it deletes objects under `runs/` 8 days after they were written,
+  whatever the app did. An upload's run is gone by then anyway, and a visitor's sample run
+  that old goes with it. The showcase (`showcase/`) is not touched.
+
+### Recorded runs (the showcase)
+
+`GET /v1/runs` lists the folders under `showcase/` in the bucket (an empty list until there
+are some). To add a finished run folder, for example `runs/ed90`:
 
 ```bash
-# once: the bucket and its lifecycle rule
-gcloud storage buckets create "gs://$LULL_BUCKET" --location "$REGION" \
-  --uniform-bucket-level-access --enable-hierarchical-namespace --soft-delete-duration=0
-cat > lifecycle.json <<'JSON'
-{"rule": [{"action": {"type": "Delete"},
-           "condition": {"age": 8, "matchesPrefix": ["runs/"]}}]}
-JSON
-gcloud storage buckets update "gs://$LULL_BUCKET" --lifecycle-file=lifecycle.json
-
-# the environment in a file: LULL_WEB_ORIGINS may hold commas
-cat > env.yaml <<YAML
-LULL_PROXY_HOPS: "1"
-LULL_BUCKET: "$LULL_BUCKET"
-LULL_WEB_ORIGINS: "$WEB_ORIGINS"
-LULL_PUBLIC_URL: "$SERVICE_URL,$SMOKE_URL"
-YAML
-
-# the first deploy takes the traffic (there is no revision yet to keep it)
-gcloud run deploy lull-api --image "$IMAGE" --region "$REGION" \
-  --cpu 4 --memory 8Gi --concurrency 20 --max-instances 1 --min-instances 0 \
-  --timeout 900 --execution-environment gen2 \
-  --add-volume name=data,type=cloud-storage,bucket="$LULL_BUCKET" \
-  --add-volume-mount volume=data,mount-path=/data \
-  --env-vars-file env.yaml \
-  --set-secrets NEBIUS_API_KEY=nebius-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest
-
-# later deploys: no traffic, a tag to smoke-test, then the traffic once the old one is idle
-gcloud run deploy lull-api --image "$IMAGE" --region "$REGION" --no-traffic --tag smoke
-uv run python docker/smoke.py "$(gcloud run services describe lull-api --region "$REGION" \
-  --format 'value(status.traffic.filter(tag=smoke).url)' | head -n 1)"
-gcloud run services update-traffic lull-api --region "$REGION" --to-tags smoke=100
+gcloud storage cp -r runs/ed90 "gs://<project>-lull-data/showcase/"
 ```
 
-- Request-based billing (the default; not `--no-cpu-throttling`): the instance has CPU only
-  while a request is in flight. A live run works inside its own streaming request; when the
-  page following it closes, the run stops at once (it reads `stopped`) and its owner restarts
-  it from the stage cache. Litestream syncs while requests run and at shutdown. Housekeeping
-  (retention) runs at start, hourly while the instance lives, and from `/v1/health` when an
-  hour has passed, so a keep-warm ping of `/v1/health` (Cloud Scheduler) keeps it going.
-- `--concurrency 20`: the work that loads the CPU is gated in the app (one live run, two
-  uploads received at once, two Studio edits re-checked and one publish at a time), so the
-  rest of the slots are for reads, health and the event streams (at most 3 follow one run and
-  8 are open in all).
-- `--max-instances 1`: the rate limits, the live executor and the ledger live in one process,
-  and Litestream allows one writer per replica. Two instances would replicate over each other.
-  `max-instances` counts per revision, so later deploys go out with `--no-traffic --tag smoke`
-  and the traffic moves once the old revision's `/v1/health` says `"live_busy": false`.
-- `LULL_PROXY_HOPS=1` (Cloud Run's front end appends the visitor's address).
-- `LULL_HOME` stays on local disk (the image's `/tmp/lull-home`); `LULL_BUCKET` set so the
-  ledger survives restarts.
-- Raise `LULL_SPEECH_WAIT` (e.g. 180) if cold starts on the platform are slower than measured
-  here; the default startup probe allows 240 s.
-- The lifecycle rule (above) deletes objects under `runs/` 8 days after they were written,
-  whatever the app did: an upload's run is gone by then anyway, and a visitor's sample run
-  that old goes with it. The showcase (`showcase/`) is not touched.
+The run appears in the list within 5 seconds. Its video is found among the baked-in samples
+by name and hash, or in its own `input/`.
 
 ### Deploy smoke
 
@@ -206,17 +237,23 @@ Against the `smoke` tag's URL of the new revision (it has no traffic yet; on the
 deploy, the service URL), from `engine/` with ffmpeg on PATH:
 
 ```bash
-uv run python docker/smoke.py "$SMOKE_URL"
+uv run python docker/smoke.py "$SMOKE_URL" --platform-keeps-requests
+uv run python docker/smoke.py "$SMOKE_URL" --mcp --mcp-list-only
 ```
 
-It checks health; starts a sample run (bbb45) and leaves it once its first stage starts (the
-run must read `stopped`); restarts it as its owner (`done`, a stage from the cache, model spend
-within $0.05 over both attempts); sends a 2560x1440 upload (422 unsupported); then, over the
-real mount, forks the run, approves or holds one cue and publishes it. It prints no token.
+The first command does five checks:
 
-`--mcp` checks the MCP server at `/mcp` instead (the agents' way in, see the engine README):
-`initialize` and `tools/list`, then one `describe_video` of the sample to `done` within the
-spend bound, and its tracks and report.
+1. health, the samples and the run list;
+2. a sample run (bbb45) left once its first stage starts. On Cloud Run it runs to `done`
+   (`--platform-keeps-requests`); elsewhere it must read `stopped`;
+3. for a stopped run, the owner restarts it to `done`, with a stage from the cache and model
+   spend within $0.05;
+4. a 2560x1440 upload, which must be refused with 422 unsupported;
+5. over the real mount: fork the run, approve or hold one cue, and publish it.
+
+`--run-id <a finished run>` skips the run (no spend). The second command checks `/mcp`:
+`initialize` and `tools/list`. Plain `--mcp` also runs one `describe_video` to `done`, within
+the spend bound. Neither prints a token.
 
 ## Sizes
 

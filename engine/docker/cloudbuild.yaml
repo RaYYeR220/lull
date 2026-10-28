@@ -1,0 +1,11 @@
+# Cloud Build for the API image (from engine/: gcloud builds submit --config docker/cloudbuild.yaml
+# --substitutions _IMAGE=<registry>/lull-api:<tag> .). BuildKit, as the Dockerfile's syntax line
+# and its COPY --chmod need; the upload is what .gcloudignore lets through.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    env: ["DOCKER_BUILDKIT=1"]
+    args: ["build", "--platform", "linux/amd64", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+timeout: 3600s
+options:
+  logging: CLOUD_LOGGING_ONLY

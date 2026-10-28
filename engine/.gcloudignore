@@ -1,0 +1,19 @@
+# What `gcloud builds submit engine` uploads: the build context the Dockerfile needs, nothing
+# else (no virtualenv, tests, runs, keys or .env). Mirrors .dockerignore.
+*
+!Dockerfile
+!.dockerignore
+!pyproject.toml
+!uv.lock
+!README.md
+!src/
+!src/**
+!docker/
+!docker/entrypoint.sh
+!docker/litestream.yml
+!samples/
+!samples/**
+**/__pycache__/
+**/*.pyc
+docker/README.md
+docker/smoke.py

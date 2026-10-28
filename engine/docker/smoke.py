@@ -2,19 +2,22 @@
 
     uv run python docker/smoke.py URL [--sample bbb45] [--max-spend 0.05]
 
-1. GET /v1/health answers ok, with the speech server up.
+1. GET /v1/health answers ok, with the speech server up; GET /v1/samples lists the samples
+   and GET /v1/runs answers (an empty showcase is fine).
 2. A sample run, left mid-way: POST /v1/runs, read until its first stage starts, then close the
-   connection. The run must read `stopped` (not failed).
-3. Its owner restarts it: GET /v1/runs/{id}/events with the edit token streams it to `done`,
-   the stage finished before the stop taken from the cache, the run's model spend (both
-   attempts) within --max-spend.
+   connection. Locally the run must read `stopped` (not failed). On Cloud Run the platform
+   keeps the request open until the run ends (it does not pass a client's leaving on), so the
+   run reads `running` and then `done`: with --platform-keeps-requests that is what is checked.
+3. A stopped run's owner restarts it: GET /v1/runs/{id}/events with the edit token streams it
+   to `done`, the stage finished before the stop taken from the cache, the run's model spend
+   (both attempts) within --max-spend. --run-id skips 2 and 3 and uses a finished run.
 4. An upload over the size limit (2560x1440, made here with ffmpeg) is refused: 422 unsupported.
 5. Over the real data volume: fork the run, approve (or hold) one cue, publish. Publishing
    renames folders, which a Cloud Storage mount takes only with hierarchical namespace.
 
 With --mcp it checks the MCP server at /mcp instead: initialize and tools/list, one
 describe_video of the sample to done (progress per stage, model spend within --max-spend), then
-get_tracks and get_report of that run.
+get_tracks and get_report of that run. --mcp-list-only stops after tools/list (no spend).
 
 Needs ffmpeg on PATH. Exits non-zero on the first failure. Prints no edit token.
 """
@@ -58,14 +61,34 @@ def events(lines: Iterator[str]) -> Iterator[dict]:
 
 
 def health(c: httpx.Client) -> None:
+    t0 = time.monotonic()
     j = c.get("/v1/health").json()
     if not (j.get("ok") and j.get("speech")):
         fail(f"health: {j}")
-    ok(f"health: speech up, spent today ${j['budget']['spent_today']}")
+    b = j["budget"]
+    ok(f"health in {time.monotonic() - t0:.1f} s: speech up, spent today ${b['spent_today']:.4f}"
+       f" (caps: run ${b['cap_run']}, day ${b['cap_day']}, total ${b['cap_total']})")  # fmt: skip
+    samples = [s["id"] for s in c.get("/v1/samples").json()]
+    if not samples:
+        fail("samples: none listed")
+    runs = c.get("/v1/runs")
+    if runs.status_code != 200 or not isinstance(runs.json(), list):
+        fail(f"runs: {runs.status_code} {runs.text[:200]}")
+    ok(f"samples {samples}; recorded runs listed: {len(runs.json())}")
 
 
-def leave_mid_run(c: httpx.Client, sample: str) -> tuple[str, str]:
-    """Start a sample run and go away once its first stage starts: (run id, edit token)."""
+def status_of(c: httpx.Client, run_id: str, owner: dict) -> str | None:
+    """The run's status, or None when the answer is not the API's (the platform's own 429)."""
+    r = c.get(f"/v1/runs/{run_id}", headers=owner)
+    try:
+        return r.json()["status"]
+    except (ValueError, KeyError):
+        return None
+
+
+def leave_mid_run(c: httpx.Client, sample: str, kept: bool) -> tuple[str, str, str]:
+    """Start a sample run and go away once its first stage starts: (run id, edit token,
+    the status it settles in)."""
     run_id = token = None
     with c.stream("POST", "/v1/runs", data={"sample": sample}, headers=CLIENT) as r:
         if r.status_code != 200:
@@ -78,17 +101,19 @@ def leave_mid_run(c: httpx.Client, sample: str) -> tuple[str, str]:
     if not (run_id and token):
         fail("start: no run event")
     owner = {"Authorization": f"Bearer {token}"}
-    deadline = time.time() + 60
+    want = ("done", "failed") if kept else ("stopped",)
+    deadline = time.time() + (900 if kept else 60)
     status = None
     while time.time() < deadline:
-        status = c.get(f"/v1/runs/{run_id}", headers=owner).json()["status"]
-        if status == "stopped":
+        status = status_of(c, run_id, owner) or status
+        if status in want:
             break
-        time.sleep(0.5)
-    if status != "stopped":
-        fail(f"left mid-run: the run reads {status}, not stopped")
-    ok(f"left mid-run: {run_id} reads stopped")
-    return run_id, token
+        time.sleep(3)
+    if status not in want or status == "failed":
+        fail(f"left mid-run: the run reads {status}, not {' or '.join(want)}")
+    how = "the platform kept the request open, so it ran to the end" if kept else ""
+    ok(f"left mid-run: {run_id} reads {status} {how}".rstrip())
+    return run_id, token, status
 
 
 def restart(c: httpx.Client, run_id: str, token: str, max_spend: float) -> None:
@@ -157,7 +182,7 @@ def publish_over_the_mount(c: httpx.Client, run_id: str) -> None:
     ok(f"publish over the data volume: fork {fork}, {what}, published")
 
 
-async def mcp_check(url: str, sample: str, max_spend: float) -> None:
+async def mcp_check(url: str, sample: str, max_spend: float, list_only: bool = False) -> None:
     from mcp import Client
 
     async with Client(f"{url}/mcp", mode="legacy", read_timeout_seconds=900) as c:
@@ -165,6 +190,8 @@ async def mcp_check(url: str, sample: str, max_spend: float) -> None:
         if names != ["describe_video", "get_report", "get_tracks", "list_samples"]:
             fail(f"mcp tools/list: {names}")
         ok(f"mcp initialize + tools/list: {names}")
+        if list_only:
+            return
         stages: list[str] = []
 
         async def progress(p: float, total: float | None, message: str | None) -> None:
@@ -195,17 +222,30 @@ def main() -> None:
     ap.add_argument("--sample", default="bbb45")
     ap.add_argument("--max-spend", type=float, default=0.05)
     ap.add_argument("--mcp", action="store_true", help="check the MCP server at /mcp instead")
+    ap.add_argument("--mcp-list-only", action="store_true", help="with --mcp: no describe")
+    ap.add_argument("--run-id", help="use this finished run instead of starting one")
+    ap.add_argument(
+        "--platform-keeps-requests",
+        action="store_true",
+        help="Cloud Run: leaving does not stop the run; expect it to finish",
+    )
     args = ap.parse_args()
     if args.mcp:
         with httpx.Client(base_url=args.url.rstrip("/"), timeout=TIMEOUT) as c:
             health(c)
-        asyncio.run(mcp_check(args.url.rstrip("/"), args.sample, args.max_spend))
+        asyncio.run(
+            mcp_check(args.url.rstrip("/"), args.sample, args.max_spend, args.mcp_list_only)
+        )
         print("mcp smoke passed")
         return
     with httpx.Client(base_url=args.url.rstrip("/"), timeout=TIMEOUT) as c:
         health(c)
-        run_id, token = leave_mid_run(c, args.sample)
-        restart(c, run_id, token, args.max_spend)
+        if args.run_id:
+            run_id = args.run_id
+        else:
+            run_id, token, status = leave_mid_run(c, args.sample, args.platform_keeps_requests)
+            if status == "stopped":
+                restart(c, run_id, token, args.max_spend)
         oversize(c)
         publish_over_the_mount(c, run_id)
     print("smoke passed")
