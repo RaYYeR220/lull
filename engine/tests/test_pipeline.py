@@ -117,7 +117,7 @@ def test_full_run_publishes_every_output(runs):
     summary = manifest["summary"]
     assert summary["cues"] == {"verified": 2, "edited": 0, "approved": 0, "held": 0, "extended": 1}
     assert summary["overlap_seconds"] == 0.0
-    assert summary["research"] == {"skipped": True, "terms": 1, "errors": []}
+    assert summary["research"] == {"skipped": True, "terms": 1, "errors": [], "notes": []}
     cues = json.loads((run_dir / "cues.json").read_text(encoding="utf-8"))
     assert [(c["id"], c["gap_id"], c["status"], c["text"]) for c in cues["cues"]] == [
         ("c001", "g001", "verified", CUE_TEXT["c001"]),
