@@ -34,6 +34,8 @@ const TABS: DevTab[] = [
           <span className={styles.prompt}>$ </span>
           <span className={styles.cmd}>curl -N -X POST</span> <span className={styles.str}>&quot;$LULL_API/v1/runs&quot;</span>
           {" \\\n    "}
+          <span className={styles.flag}>-H</span> <span className={styles.str}>&quot;X-Lull-Client: web&quot;</span>
+          {" \\\n    "}
           <span className={styles.flag}>-F</span> <span className={styles.str}>&quot;file=@lecture.mp4&quot;</span>
           {"\n\n"}
           <span className={styles.note}>{"# streams progress; the first event carries the run id.\n# GET /v1/runs/{id} then lists its nine files:\n#   descriptions.vtt  extended.vtt  described-audio.m4a\n#   described.mp4  extended.mp4 (when made)  cues.json\n#   script.md  report.html  manifest.json"}</span>

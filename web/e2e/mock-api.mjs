@@ -16,6 +16,7 @@
 //   GET /v1/runs/<id>/events: replays the whole run (the drop and reload cases)
 //     resume: the run stopped before it finished, so only its owner may follow it: the edit
 //     token as a Bearer, 403 forbidden without it
+//   POST /v1/runs and POST /v1/runs/<id>/fork need X-Lull-Client: web (400 client_header without it)
 //   POST /v1/runs/<id>/fork: 201 {run_id, edit_token} for ed90 (FORK_ID); 404 for any other id;
 //     fork429: the API's rate-limit refusal
 //   the published runs, their files and the studio's writes: e2e/mock-runs.mjs
@@ -202,7 +203,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(204, {
       ...CORS,
       "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS, POST, PATCH",
-      "Access-Control-Allow-Headers": "Authorization, Content-Type, Last-Event-ID",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, Last-Event-ID, X-Lull-Client",
     });
     return res.end();
   }
@@ -217,8 +218,13 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "GET" && route === "/v1/samples") return json(res, 200, SAMPLES);
 
+  // the two POSTs that start work need the site's header (it forces a CORS preflight)
+  const fromSite = req.headers["x-lull-client"] === "web";
+  const noClient = () => json(res, 400, { error: "client_header", message: "Start runs and copies from the Lull site, or send X-Lull-Client: web." });
+
   if (req.method === "POST" && route === "/v1/runs") {
     await drain(req);
+    if (!fromSite) return noClient();
     const refusal = REFUSALS[scenario];
     if (refusal) return json(res, refusal[0], refusal[1], refusal[2]);
     if (scenario === "mid") return stream(req, res, { stopAfter: MID_AFTER });
@@ -230,6 +236,7 @@ const server = createServer(async (req, res) => {
   const fork = route.match(/^\/v1\/runs\/([\w.-]+)\/fork$/);
   if (req.method === "POST" && fork) {
     await drain(req);
+    if (!fromSite) return noClient();
     if (scenario === "fork429")
       return json(res, 429, { error: "rate_limited", message: "Too many changes in a minute. Try again in 40 s." }, { "Retry-After": "40" });
     if (fork[1] !== "ed90") return json(res, 404, { error: "not_found", message: "There is no run with that id." });

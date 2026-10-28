@@ -117,6 +117,12 @@ export type RunSummary = {
 
 export type Obj = Record<string, unknown>;
 
+/**
+ * Sent on the two POSTs that start work (a run, a fork): a custom header makes the browser ask
+ * the API first (a CORS preflight), so another site can't start runs from a visitor's browser.
+ */
+export const CLIENT_HEADER = { "X-Lull-Client": "web" } as const;
+
 /** A web search rather than a model call (the API's spend.is_search: Tavily's models). */
 export const isSearch = (model: string, provider?: string | null) => model.startsWith("tavily") || provider === "tavily";
 export const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -272,6 +278,7 @@ export type RefusalCode =
   | "rate_limited"
   | "uploads_busy"
   | "storage"
+  | "client_header"
   | "one_upload_at_a_time"
   | "timeout"
   | "invalid"
@@ -306,6 +313,7 @@ export const API_REFUSALS: ReadonlySet<string> = new Set([
   "rate_limited",
   "uploads_busy",
   "storage",
+  "client_header",
   "one_upload_at_a_time",
   "timeout",
   "invalid",
@@ -338,6 +346,7 @@ const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
   rate_limited: "You have reached the limit of live descriptions for now.",
   uploads_busy: "Other videos are being uploaded right now. Try again in a few seconds.",
   storage: "The video could not be stored just now. Try again in a minute.",
+  client_header: "The live service didn’t recognise this page. Reload it and try again.",
   one_upload_at_a_time: "Your previous upload is still being received. Wait for it to finish, then try again.",
   timeout: "The upload did not arrive in time. Try a smaller file or a faster connection.",
   invalid: "The request was not accepted.",
@@ -690,7 +699,7 @@ export async function startRun(
     method: "POST",
     body: form,
     signal,
-    headers: { Accept: "text/event-stream" },
+    headers: { Accept: "text/event-stream", ...CLIENT_HEADER },
     cache: "no-store",
   });
   if (!res.ok) throw await toApiError(res);
@@ -825,7 +834,7 @@ export type Fork = { runId: string; editToken: string };
  * not published yet, 429 too many forks, 500 the copy failed).
  */
 export async function forkRun(runId: string, signal?: AbortSignal): Promise<Fork> {
-  const res = await request(`${API_BASE}${routePath("fork", { id: runId })}`, { method: "POST", signal, cache: "no-store" });
+  const res = await request(`${API_BASE}${routePath("fork", { id: runId })}`, { method: "POST", headers: CLIENT_HEADER, signal, cache: "no-store" });
   if (!res.ok) throw await toApiError(res);
   const raw: unknown = await res.json().catch(() => null);
   const id = isObj(raw) ? str(raw.run_id) : null;

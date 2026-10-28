@@ -32,6 +32,7 @@ const HEADINGS: Record<NoticeKind, string> = {
   rate_limited: "You’ve reached the live limit for now.",
   uploads_busy: "Other uploads are being checked.",
   storage: "The video couldn’t be stored just now.",
+  client_header: "The live service didn’t recognise this page.",
   one_upload_at_a_time: "Your last upload is still arriving.",
   timeout: "The upload took too long to arrive.",
   invalid: "The live service didn’t accept the request.",

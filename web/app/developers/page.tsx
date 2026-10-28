@@ -46,11 +46,12 @@ const REST_STEPS: { title: string; what: string; code: string; label: string; an
   },
   {
     title: "Describe a sample, and watch it happen",
-    what: "-N keeps curl from buffering: each stage, model call and line arrives as it happens. The first event has the run id and its edit token; keep both.",
-    code: `curl -N "$LULL_API/v1/runs" -F sample=ed45 -F mode=standard -F voice=Sofia
+    what:
+      "-N keeps curl from buffering: each stage, model call and line arrives as it happens. The first event has the run id and its edit token; keep both. X-Lull-Client: web is required on this and on a fork: a custom header makes browsers ask first, so other sites can't start runs from a visitor's browser.",
+    code: `curl -N "$LULL_API/v1/runs" -H "X-Lull-Client: web" -F sample=ed45 -F mode=standard -F voice=Sofia
 
 # or your own clip
-curl -N "$LULL_API/v1/runs" -F file=@lecture.mp4 -F mode=standard`,
+curl -N "$LULL_API/v1/runs" -H "X-Lull-Client: web" -F file=@lecture.mp4 -F mode=standard`,
     label: "Start a run",
     answer: API_REFERENCE.startRun.success.shape,
   },

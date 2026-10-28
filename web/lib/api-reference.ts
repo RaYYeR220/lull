@@ -201,6 +201,7 @@ event: done
 data: {"type":"done","seq":30,"run_id":"live-…","seconds":182.4,"summary":{"cues":{…},"coverage":{…},"wcag":[…],"cost_usd":0.03323,"spend":{"model_usd":0.03323,"model_usd_all_runs":0.03323,"searches":1},…}}`,
     },
     refusals: [
+      { status: 400, code: "client_header", when: "No X-Lull-Client: web header (it makes browsers ask first, so other sites can't start work from a visitor's browser)." },
       { status: 400, code: "invalid", when: "The body couldn't be read as a form." },
       { status: 400, code: "disconnected", when: "The upload was cut off before it finished." },
       { status: 402, code: "budget", when: "A spend cap is reached (scope: run, day, total, or the provider's balance)." },
@@ -220,7 +221,7 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":182.4,"summary":{"cu
     ],
     limits:
       "One run at a time. 3 runs an hour per visitor and 20 a day across visitors; a run is stopped after 10 minutes. The clip goes to Nebius Token Factory (NVIDIA Nemotron models) and to NVIDIA speech models on the service's server; anyone with a run's id can open it. Uploads are deleted after 7 days, forks after 24 hours.",
-    example: `curl -N "$LULL_API/v1/runs" -F sample=ed45 -F mode=standard -F voice=Sofia`,
+    example: `curl -N "$LULL_API/v1/runs" -H "X-Lull-Client: web" -F sample=ed45 -F mode=standard -F voice=Sofia`,
   },
   listRuns: {
     group: "Reading runs",
@@ -401,13 +402,14 @@ In a dim corridor of cables, …`,
     params: [ID],
     success: { status: 201, type: "application/json", what: "The copy's id and its edit token (keep it: it is the only way to change the copy).", shape: `{ "run_id": "live-…", "edit_token": "…" }` },
     refusals: [
+      { status: 400, code: "client_header", when: "No X-Lull-Client: web header (it makes browsers ask first, so other sites can't start work from a visitor's browser)." },
       NO_RUN,
       DESCRIBING,
       NOT_READY,
       { status: 429, code: "rate_limited", when: "5 copies an hour from you, 100 a day in all.", retryAfter: true },
       { status: 500, code: "fork_failed", when: "The copy couldn't be made." },
     ],
-    example: `curl -s -X POST "$LULL_API/v1/runs/ed90/fork"`,
+    example: `curl -s -X POST "$LULL_API/v1/runs/ed90/fork" -H "X-Lull-Client: web"`,
   },
 };
 

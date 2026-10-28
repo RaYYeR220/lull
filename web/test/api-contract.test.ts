@@ -126,3 +126,22 @@ describe("web searches in a live run", () => {
     expect(ev?.type === "done" && ev.summary).toMatchObject({ costUsd: 0.03323, searches: 1 });
   });
 });
+
+describe("the two POSTs that start work", () => {
+  it("say they come from this site (X-Lull-Client: web), so the browser asks first and other sites can't start runs", async () => {
+    const { startRun, forkRun } = await import("../lib/api");
+    const seen: Record<string, string | null> = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        seen[url.endsWith("/fork") ? "fork" : "start"] = new Headers(init?.headers).get("x-lull-client");
+        if (url.endsWith("/fork")) return json(201, { run_id: "live-f", edit_token: "t" });
+        const body = 'id: 0\nevent: run\ndata: {"type":"run","seq":0,"run_id":"live-a","edit_token":"t"}\n\nid: 1\nevent: done\ndata: {"type":"done","seq":1,"run_id":"live-a","summary":null}\n\n';
+        return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+      }),
+    );
+    await startRun({ sample: "ed45" }, { mode: "standard", voice: "Sofia" }, () => {});
+    await forkRun("ed90");
+    expect(seen).toEqual({ start: "web", fork: "web" });
+  });
+});
