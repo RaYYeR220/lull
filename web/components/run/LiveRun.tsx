@@ -186,25 +186,35 @@ export function LiveRun({ id, index }: { id: string; index: readonly ShowcaseInd
           title="This run is still being described."
           doors={
             <Gate label="Follow the run">
-              <Door tone="lit" href={followHref(id)}>
-                Follow it live
-              </Door>
+              {owner ? (
+                <Door tone="lit" href={followHref(id)}>
+                  Follow it live
+                </Door>
+              ) : (
+                <Door tone="lit" href="/try">
+                  Describe a clip
+                </Door>
+              )}
               <Door tone="dark" href="/watch">
                 Watch a recorded run
               </Door>
             </Gate>
           }
         >
-          <p>Its stages, model calls and lines show up as they happen on the try-it page. Once it is published, this page plays it.</p>
+          {owner ? (
+            <p>Its stages, model calls and lines show up as they happen on the try-it page. Once it is published, this page plays it.</p>
+          ) : (
+            <p>Only the browser that started it can follow it as it happens. Once it is published, this page plays it.</p>
+          )}
         </Notice>
       ) : state.kind === "stopped" ? (
         <Notice
-          title="This run hasn’t finished."
+          title={owner ? "Stopped: you left before it finished." : "This run hasn’t finished."}
           doors={
             <Gate label="What next">
               {owner ? (
                 <Door tone="lit" href={followHref(id)}>
-                  Resume it
+                  Resume
                 </Door>
               ) : (
                 <Door tone="lit" href="/try">
@@ -236,7 +246,13 @@ export function LiveRun({ id, index }: { id: string; index: readonly ShowcaseInd
             </Gate>
           }
         >
-          {state.reason ? <p className={styles.reason}>{state.reason}</p> : <p>The run didn’t record why it stopped.</p>}
+          {state.reason ? (
+            <p className={styles.reason}>{state.reason}</p>
+          ) : owner ? (
+            <p>The run didn’t record why it stopped.</p>
+          ) : (
+            <p>Only the browser that started it can see why it stopped.</p>
+          )}
           <p>Nothing was published from it, so there is nothing to play.</p>
         </Notice>
       ) : state.kind === "missing" ? (

@@ -9,14 +9,14 @@ const RECORDED = [{ id: "ed90", title: "Elephants Dream", credit: "Elephants Dre
 
 describe("the try page's sample cards", () => {
   it("come from the API's own metadata: title, length, credit with licence", () => {
-    const [csc, ed] = sampleItems(
+    const [bbb, ed] = sampleItems(
       [
-        sample({ id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "USGS", licence: "public domain" }),
+        sample({ id: "bbb45", title: "Big Buck Bunny (excerpt)", duration: 44.9, credit: "Blender Foundation, peach.blender.org", licence: "CC BY 3.0" }),
         sample({ id: "ed45", title: "Elephants Dream, an excerpt", duration: 45, credit: "Elephants Dream (2006), Blender Foundation / Orange Open Movie Team", licence: "CC BY 2.5" }),
       ],
       RECORDED,
     );
-    expect(csc).toEqual({ id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "USGS, public domain", recorded: false });
+    expect(bbb).toEqual({ id: "bbb45", title: "Big Buck Bunny (excerpt)", duration: 44.9, credit: "Blender Foundation, peach.blender.org, CC BY 3.0", recorded: false });
     expect(ed!.credit).toBe("Elephants Dream (2006), Blender Foundation / Orange Open Movie Team, CC BY 2.5");
     expect(ed!.recorded).toBe(false); // ed45 is not the recorded run ed90
   });

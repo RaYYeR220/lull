@@ -325,10 +325,11 @@ export function fromApi(
   return {
     id,
     source: "api",
-    title: clip?.title ?? opts.sample?.title ?? detail.title ?? manifest.video.name ?? id,
+    // an upload is named as it was sent; its copy is an mp4 named after it
+    title: clip?.title ?? opts.sample?.title ?? detail.source?.name ?? detail.title ?? manifest.video.name ?? id,
     // a licensed clip is credited wherever it plays: the recorded run's credit, or the sample's with its licence
     credit: clip?.credit ?? (opts.sample && (opts.sample.credit || opts.sample.licence) ? [opts.sample.credit, opts.sample.licence].filter(Boolean).join(", ") : null),
-    file: manifest.video.name,
+    file: detail.source?.name ?? manifest.video.name,
     duration,
     loudness,
     speech,

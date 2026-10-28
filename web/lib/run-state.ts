@@ -15,8 +15,13 @@ export type RunSource =
   | { kind: "follow"; id: string };
 
 export type RunState = {
-  /** idle: choosing. sending: the upload is on its way, no event yet. lost: the stream broke and could not be followed. */
-  phase: "idle" | "sending" | "running" | "done" | "error" | "lost";
+  /**
+   * idle: choosing. sending: the upload is on its way, no event yet. lost: the stream broke and
+   * could not be followed. stopped: the page following it left before it finished (its owner may resume it).
+   */
+  phase: "idle" | "sending" | "running" | "done" | "error" | "lost" | "stopped";
+  /** The API's words for why it stopped, when phase is "stopped". */
+  stopped: string | null;
   source: RunSource | null;
   /** A refusal answered before any stream (shown next to the picker). */
   refusal: ApiError | null;
@@ -71,6 +76,7 @@ function freshStages(): Record<StageName, StageView> {
 export function initialRun(): RunState {
   return {
     phase: "idle",
+    stopped: null,
     source: null,
     refusal: null,
     lost: null,
@@ -160,7 +166,7 @@ function onEvent(state: RunState, ev: RunEvent, at: number, label?: CueLabel): R
       s.runId = ev.run_id;
       s.duration = ev.duration ?? s.duration;
       s.options = ev.options ?? s.options;
-      if (s.phase === "idle" || s.phase === "sending" || s.phase === "lost") s.phase = "running";
+      if (s.phase === "idle" || s.phase === "sending" || s.phase === "lost" || s.phase === "stopped") s.phase = "running";
       if (ev.resumed) {
         // a resumed attempt runs every stage again (cached ones in a moment)
         s.resumed = true;
@@ -208,6 +214,10 @@ function onEvent(state: RunState, ev: RunEvent, at: number, label?: CueLabel): R
       s.runId ??= ev.run_id;
       s.phase = "done";
       return s;
+    case "stopped":
+      s.stopped = ev.message;
+      s.phase = "stopped";
+      return s;
   }
 }
 
@@ -236,7 +246,7 @@ export function runReducer(state: RunState, action: RunAction): RunState {
  * first event to its last once it has ended, else to now corrected by the observed offset.
  */
 export function elapsedSeconds(s: RunState, now: number): number {
-  const ended = s.phase === "done" || s.phase === "error";
+  const ended = s.phase === "done" || s.phase === "error" || s.phase === "stopped";
   if (s.firstTs !== null && s.lastTs !== null) {
     if (ended) return Math.max(0, s.lastTs - s.firstTs);
     const serverNow = now / 1000 - (s.clockOffset ?? 0);

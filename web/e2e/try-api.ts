@@ -16,6 +16,8 @@ export const RUNNING_ID = "live-20261028-101500-0b5e11";
 export const FAILED_ID = "live-20261028-100000-de4d00";
 export const STOPPED_ID = "live-20261028-104500-5709ed";
 export const STOPPED_TOKEN = "tok-stopped-e2e-2468013579";
+export const RUNNING_TOKEN = "tok-running-e2e-1122334455";
+export const FAILED_TOKEN = "tok-failed-e2e-5544332211";
 /** A run of the sample ed90 whose cues.json has no speech or pauses, and an upload that is merely called ed90.mp4. */
 export const SAMPLE_ID = "live-20261028-111500-5a3e90";
 export const SAMPLE_TOKEN = "tok-sample-e2e-1357924680";

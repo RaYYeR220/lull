@@ -20,6 +20,7 @@ import {
 } from "@/lib/api";
 import type { Recorded } from "@/lib/recorded";
 import { rememberRun } from "@/lib/own-runs";
+import { refusalWords } from "@/lib/refusal-words";
 import { sampleItems, type SampleItem } from "@/lib/samples";
 import { STAGE_COPY } from "@/lib/run-format";
 import { CueNumbers, initialRun, runReducer, type RunSource } from "@/lib/run-state";
@@ -125,6 +126,9 @@ export function TryApp({ intro, recorded }: Props) {
         break;
       case "error":
         a?.now(`The run stopped. ${ev.message}`);
+        break;
+      case "stopped":
+        a?.now(`Stopped: you left before it finished. ${ev.message}`);
         break;
       case "done": {
         const c = ev.summary?.cues ?? {};
@@ -263,6 +267,7 @@ export function TryApp({ intro, recorded }: Props) {
           <RefusalNotice
             key={`${refusal.code}-${refusal.status}-${refusal.message}`}
             kind={refusal.code}
+            heading={refusalWords(refusal, "start")}
             scope={refusal.scope}
             message={refusal.message}
             retryAfter={refusal.retryAfter}
@@ -296,7 +301,16 @@ export function TryApp({ intro, recorded }: Props) {
           <OwnRuns retention={service.status === "ok" ? service.health.retention : null} className={styles.own} />
         </div>
 
-        {!idle ? <RunView run={run} recorded={recorded} headingRef={runHeading} onAgain={again} onReconnect={reconnect} /> : null}
+        {!idle ? (
+          <RunView
+            run={run}
+            recorded={recorded}
+            headingRef={runHeading}
+            onAgain={again}
+            onReconnect={reconnect}
+            canResume={!!run.runId && !!readEditToken(run.runId)}
+          />
+        ) : null}
       </div>
     </>
   );

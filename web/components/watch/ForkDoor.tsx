@@ -6,6 +6,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { Door, Gate } from "@/components/ui/Gate";
 import { ApiError, forkRun, health, isAbort, saveEditToken, saveForkRecord } from "@/lib/api";
 import { rememberRun } from "@/lib/own-runs";
+import { refusalWords } from "@/lib/refusal-words";
 import { studioHref } from "@/lib/routes";
 import styles from "./Watch.module.css";
 
@@ -88,7 +89,10 @@ export function ForkDoor({
     } catch (e) {
       if (isAbort(e)) return;
       if (e instanceof ApiError && (e.code === "unreachable" || e.code === "unavailable")) setPhase({ kind: "down", reason: DOWN });
-      else setPhase({ kind: "refused", message: e instanceof Error ? e.message : String(e) });
+      else {
+        const words = e instanceof ApiError ? refusalWords(e, "fork") : null;
+        setPhase({ kind: "refused", message: words ? `${words} ${(e as ApiError).message}` : e instanceof Error ? e.message : String(e) });
+      }
     }
   };
 

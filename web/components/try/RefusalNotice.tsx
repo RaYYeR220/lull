@@ -12,7 +12,7 @@ import shared from "./shared.module.css";
 import styles from "./RefusalNotice.module.css";
 
 /** The API's refusals, plus the ways a run can end badly once it has started. */
-export type NoticeKind = RefusalCode | "run_timeout" | "failed" | "lost";
+export type NoticeKind = RefusalCode | "run_timeout" | "failed" | "lost" | "stopped";
 
 const BUDGET: Record<string, string> = {
   total: "The live demo’s model budget is spent.",
@@ -57,6 +57,7 @@ const HEADINGS: Record<NoticeKind, string> = {
   run_timeout: "The run took too long and was stopped.",
   failed: "The run stopped.",
   lost: "The connection to this run was lost.",
+  stopped: "Stopped: you left before it finished.",
 };
 
 /** The heading for a notice: plain words for what happened. */
@@ -97,6 +98,8 @@ function Countdown({ seconds, onDone }: { seconds: number; onDone: () => void })
 }
 
 type Props = {
+  /** Said instead of the kind's own heading, when the refusal means something more specific where it happened. */
+  heading?: string | null;
   kind: NoticeKind;
   scope?: string | null;
   /** The stage a failed run stopped in, by name. */
@@ -121,6 +124,7 @@ type Props = {
 /** A refusal or a stopped run, in plain words, with the wait, the way to try again and the recorded runs. */
 export function RefusalNotice({
   kind,
+  heading: said,
   scope,
   stageName,
   message,
@@ -146,7 +150,7 @@ export function RefusalNotice({
   return (
     <section aria-labelledby={`${id}-h`} className={cx(styles.notice, className)} data-notice={kind}>
       <H id={`${id}-h`} ref={heading} tabIndex={-1} className={styles.h}>
-        {noticeHeading(kind, scope, stageName)}
+        {said ?? noticeHeading(kind, scope, stageName)}
       </H>
       <p className={styles.body}>{message}</p>
 

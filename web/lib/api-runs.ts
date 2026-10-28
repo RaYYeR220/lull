@@ -102,6 +102,8 @@ export type RunSource = {
   sampleId: string | null;
   forkedFrom: string | null;
   origin: "sample" | "upload" | null;
+  /** An upload's own file name, as it was sent (the run's copy is an mp4 named after it). */
+  name?: string | null;
 };
 
 /** Where a run stands: being described, done (published), failed, or stopped unfinished (its owner may resume it). */
@@ -157,7 +159,7 @@ function readSource(raw: unknown): RunSource | null {
   // an older API said {kind, id}: the sample's id, or for a fork the run it copies
   if (kind === "sample") return { kind, sampleId: str(raw.sample_id) ?? str(raw.id), forkedFrom: null, origin: null };
   if (kind === "fork") return { kind, sampleId: str(raw.sample_id), forkedFrom: str(raw.forked_from) ?? str(raw.id), origin };
-  if (kind === "upload") return { kind, sampleId: null, forkedFrom: null, origin: null };
+  if (kind === "upload") return { kind, sampleId: null, forkedFrom: null, origin: null, ...(str(raw.name) ? { name: str(raw.name) } : {}) };
   return null;
 }
 

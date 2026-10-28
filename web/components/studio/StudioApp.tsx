@@ -12,6 +12,7 @@ import { ForkDoor } from "@/components/watch/ForkDoor";
 import { API_REFUSALS, ApiError, FORK_TTL_MS, isAbort, readEditToken, readForkRecord, type CueStatus, type ForkRecord } from "@/lib/api";
 import { approveCue, doneOrThrow, editCue, getRun, holdCue, publishRun, type DoneDetail } from "@/lib/api-runs";
 import { cx } from "@/lib/cx";
+import { refusalWords, type RefusalContext } from "@/lib/refusal-words";
 import { followHref, reportHref, runHref, watchHref } from "@/lib/routes";
 import { buildRun, loadRun } from "@/lib/run-load";
 import type { RunData } from "@/lib/run-data";
@@ -176,8 +177,11 @@ export function StudioApp({ id, initial, clip, index }: Props) {
   const openDrawer = useCallback(() => drawerHeading.current?.focus(), []);
 
   const say = (cueId: string, o: Outcome) => setOutcomes((all) => ({ ...all, [cueId]: o }));
-  const refused = (e: unknown): Outcome => {
+  const refused = (e: unknown, context: RefusalContext = "change"): Outcome => {
     if (!(e instanceof ApiError)) return { tone: "refused", text: "The change couldn’t be made. Try again." };
+    // a day's limit, or another change holding the run: said for what it is
+    const words = refusalWords(e, context);
+    if (words) return { tone: "refused", text: e.code === "busy" ? words : `${words} ${e.message}` };
     // the API's own refusals carry their words; anything else is the server's, not a guess
     const own = e.apiCode !== null && API_REFUSALS.has(e.apiCode);
     if (!own && e.status >= 400 && e.status < 500)
@@ -259,7 +263,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
       setRun(await build(detail));
       setPublish({ kind: "done" });
     } catch (e) {
-      setPublish({ kind: "refused", message: refused(e).text, cueIds: e instanceof ApiError ? (e.detail.cueIds ?? []) : [] });
+      setPublish({ kind: "refused", message: refused(e, "publish").text, cueIds: e instanceof ApiError ? (e.detail.cueIds ?? []) : [] });
     } finally {
       inFlight.current = false;
     }
@@ -290,10 +294,12 @@ export function StudioApp({ id, initial, clip, index }: Props) {
             title="This run is still being described."
             doors={
               <Gate label="Follow the run">
-                <Door tone="lit" href={followHref(id)}>
-                  Follow it live
-                </Door>
-                <Door tone="dark" href="/watch">
+                {token ? (
+                  <Door tone="lit" href={followHref(id)}>
+                    Follow it live
+                  </Door>
+                ) : null}
+                <Door tone={token ? "dark" : "lit"} href="/watch">
                   Open a recorded run
                 </Door>
               </Gate>
@@ -304,12 +310,12 @@ export function StudioApp({ id, initial, clip, index }: Props) {
         ) : load.kind === "stopped" ? (
           <RunNotice
             eyebrow="Studio"
-            title="This run hasn’t finished."
+            title={token ? "Stopped: you left before it finished." : "This run hasn’t finished."}
             doors={
               token ? (
                 <Gate label="What next">
                   <Door tone="lit" href={followHref(id)}>
-                    Resume it
+                    Resume
                   </Door>
                   <Door tone="dark" href="/watch">
                     Open a recorded run

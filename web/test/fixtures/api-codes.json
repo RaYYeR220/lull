@@ -5,7 +5,11 @@
       402
     ],
     "busy": [
-      409
+      409,
+      429
+    ],
+    "client_header": [
+      400
     ],
     "disconnected": [
       400

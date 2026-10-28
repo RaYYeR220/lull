@@ -101,10 +101,20 @@ const CUE_ID: Field = { name: "cue_id", type: "path", required: true, what: "The
 const READ_ONLY: Refusal = { status: 403, code: "read_only", when: "The run is a recorded run: make a copy (fork) to edit." };
 const FORBIDDEN: Refusal = { status: 403, code: "forbidden", when: "No Authorization: Bearer with this run's edit token." };
 const NO_RUN: Refusal = { status: 404, code: "not_found", when: "No run, or no cue, with that id." };
-const DESCRIBING: Refusal = { status: 409, code: "busy", when: "The run is still being described.", retryAfter: true };
+const DESCRIBING: Refusal = {
+  status: 409,
+  code: "busy",
+  when: "The run is still being described, or another change to it has held it for more than 2 s.",
+  retryAfter: true,
+};
 const NOT_READY: Refusal = { status: 409, code: "not_ready", when: "The run isn't done (published) yet." };
 const NOT_EDITABLE: Refusal = { status: 409, code: "not_editable", when: "The run's folder lacks what re-checking needs (its source video or stage records)." };
-const EDIT_RATE: Refusal = { status: 429, code: "rate_limited", when: "More than 30 changes a minute from you, or 2,000 a day in all.", retryAfter: true };
+const EDIT_RATE: Refusal = {
+  status: 429,
+  code: "rate_limited",
+  when: "More than 30 changes a minute from you, 200 a day from you (50 publishes), or 2,000 a day in all. A day's limit says “today” in its message.",
+  retryAfter: true,
+};
 
 export const API_REFERENCE: Record<RouteName, EndpointDoc> = {
   health: {
@@ -209,7 +219,11 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":182.4,"summary":{"cu
       { status: 409, code: "busy", when: "Another description is running: one at a time.", retryAfter: true },
       { status: 413, code: "too_large", when: "The file is over 30 MB." },
       { status: 422, code: "format", when: "Not an mp4, mov, webm or mkv." },
-      { status: 422, code: "unsupported", when: "More work than a live run takes: a picture over 1080p, more than one picture, too many sound tracks, or a track besides picture and sound." },
+      {
+        status: 422,
+        code: "unsupported",
+        when: "More work than a live run takes, said in the message: over 1920x1080 or 60 fps, more than one picture or two sound tracks, a subtitle or data track, over 100 Mb/s; or a copy that can't be made.",
+      },
       { status: 422, code: "too_long", when: "Over 60 s (a sample: 45 s)." },
       { status: 422, code: "unreadable", when: "The file can't be read as a video." },
       { status: 422, code: "invalid", when: "Neither or both of file and sample; an unknown mode or voice." },
@@ -225,7 +239,7 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":182.4,"summary":{"cu
   },
   listRuns: {
     group: "Reading runs",
-    summary: "The recorded runs and the 20 most recent runs of the samples, newest first, with where each stands. Uploads are never listed: a run of your own clip opens only by its id.",
+    summary: "The recorded runs, with where each stands. Visitors' runs (samples, uploads and copies) are never listed: each opens only by its id.",
     auth: "none",
     success: {
       status: 200,
@@ -262,19 +276,26 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":182.4,"summary":{"cu
   },
   events: {
     group: "Reading runs",
-    summary: "A run's events: the replay, then the live stream while it is still going.",
+    summary:
+      "A run's events: the replay of a published run (open to anyone), or, for its owner only, the live stream of a run that is going and the resume of one that stopped.",
     auth: "edit-token to resume",
     params: [ID, { name: "after", type: "integer", required: false, what: "Only events after this seq (also read from Last-Event-ID)." }],
     success: {
       status: 200,
       type: "text/event-stream",
-      what: "The same events POST /v1/runs streamed. 204 when nothing is left after `after`. A run that stopped without finishing is resumed, and only for its owner.",
+      what:
+        "The same events POST /v1/runs streamed. A stream whose page leaves stops the run: its last event is stopped, and its owner resumes it with the same GET and the edit token (a 409 busy may come for a few seconds while the stopped run winds down). 204 when nothing is left after `after`.",
       shape: `id: 31
 event: done
-data: {"type":"done","seq":31,…}`,
+data: {"type":"done","seq":31,…}
+
+id: 12
+event: stopped
+data: {"type":"stopped","stage":"watch","seq":12,"message":"The description stopped when the page following it closed. Open it again to carry on: the steps already done are kept."}`,
     },
     refusals: [
-      { status: 403, code: "forbidden", when: "Resuming an unfinished run needs its edit token as a Bearer." },
+      { status: 403, code: "forbidden", when: "Following or resuming a run that isn't published, or replaying a failed one, needs its edit token as a Bearer." },
+      { status: 429, code: "busy", when: "Three streams already follow this run, or eight are open in all.", retryAfter: true },
       { status: 404, code: "not_found", when: "No run with that id, or no progress was recorded for it." },
       { status: 409, code: "busy", when: "Resuming, while another run is going.", retryAfter: true },
       { status: 402, code: "budget", when: "Resuming, past a spend cap." },
@@ -406,7 +427,7 @@ In a dim corridor of cables, …`,
       NO_RUN,
       DESCRIBING,
       NOT_READY,
-      { status: 429, code: "rate_limited", when: "5 copies an hour from you, 100 a day in all.", retryAfter: true },
+      { status: 429, code: "rate_limited", when: "5 copies an hour or 10 a day from you, 100 a day in all. A day's limit says “today” in its message.", retryAfter: true },
       { status: 500, code: "fork_failed", when: "The copy couldn't be made." },
     ],
     example: `curl -s -X POST "$LULL_API/v1/runs/ed90/fork" -H "X-Lull-Client: web"`,

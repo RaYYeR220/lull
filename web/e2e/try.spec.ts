@@ -1,7 +1,7 @@
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { API, RUN_ID, announcements, apiDown, recordAnnouncements, routeApi } from "./try-api";
+import { API, RUN_ID, announcements, apiDown, own, recordAnnouncements, routeApi } from "./try-api";
 
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1440, height: 900 };
@@ -125,6 +125,24 @@ test.describe("try it", () => {
     await expect(own.getByRole("link", { name: "Big Buck Bunny (excerpt)", exact: true })).toHaveAttribute("href", `/run/${RUN_ID}`);
     await expect(own).toContainText("A sample");
     await expect(own.getByRole("link", { name: /^Studio/ })).toHaveAttribute("href", `/studio/${RUN_ID}`);
+  });
+
+  test("a run that stopped because the page left says so, and its owner resumes it (waiting out a busy moment)", async ({ page }) => {
+    await routeApi(page, own("stopped"));
+    await openPicker(page);
+    const follows: number[] = [];
+    page.on("response", (r) => {
+      if (r.url().endsWith(`/v1/runs/${RUN_ID}/events`) || r.url().includes(`/v1/runs/${RUN_ID}/events?`)) follows.push(r.status());
+    });
+    await start(page).click();
+    const notice = page.getByRole("region", { name: "Stopped: you left before it finished." });
+    await expect(notice).toBeVisible({ timeout: 15_000 });
+    await expect(notice).toContainText("Open it again to carry on: the steps already done are kept.");
+    await notice.getByRole("button", { name: "Resume" }).click();
+    // the first try meets the stopped run still winding down (409 busy); the page waits and tries again
+    await expect(page.getByRole("heading", { name: /^Ready to watch/ })).toBeVisible({ timeout: 30_000 });
+    expect(follows[0]).toBe(409);
+    expect(follows).toContain(200);
   });
 
   test("while running, the active stage is lit and finalize shows how far it has checked", async ({ page }) => {

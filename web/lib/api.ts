@@ -87,6 +87,8 @@ export type CueEvent = Meta & {
 export type WarningEvent = Meta & { type: "warning"; kind: string; message: string; count: number | null };
 export type RunErrorEvent = Meta & { type: "error"; kind: string; message: string; scope: string | null };
 export type DoneEvent = Meta & { type: "done"; run_id: string | null; seconds: number | null; summary: RunSummary | null };
+/** The run stopped because the page following it left; its owner can resume it (the steps done are kept). */
+export type StoppedEvent = Meta & { type: "stopped"; message: string };
 
 export type RunEvent =
   | RunStartEvent
@@ -96,7 +98,8 @@ export type RunEvent =
   | CueEvent
   | WarningEvent
   | RunErrorEvent
-  | DoneEvent;
+  | DoneEvent
+  | StoppedEvent;
 
 export type WcagRow = { criterion: string; level: string; name: string; status: string; reasons: string[] };
 
@@ -128,7 +131,7 @@ export const isSearch = (model: string, provider?: string | null) => model.start
 export const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 export const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-const KNOWN_EVENTS: ReadonlySet<string> = new Set(["run", "stage_start", "stage_end", "call", "cue", "warning", "error", "done"]);
+const KNOWN_EVENTS: ReadonlySet<string> = new Set(["run", "stage_start", "stage_end", "call", "cue", "warning", "error", "done", "stopped"]);
 const META_KEYS = new Set(["type", "stage", "ts", "seq", "seconds", "cached"]);
 
 function readSummary(raw: unknown): RunSummary | null {
@@ -259,6 +262,8 @@ export function parseEvent(data: string, sseType = "message"): RunEvent | null {
       };
     case "done":
       return { ...meta, type, run_id: str(raw.run_id), seconds: num(raw.seconds), summary: readSummary(raw.summary) };
+    case "stopped":
+      return { ...meta, type, message: str(raw.message)?.trim() || "The run stopped before it finished." };
     default:
       return null;
   }
@@ -629,13 +634,13 @@ export type RunInput = { sample: string } | { file: File };
 export type RunOptions = { mode: Mode; voice: string };
 
 /** How a stream ended: on a last event, closed without one, or cut off (worth following again). */
-export type StreamEnd = { end: "done" | "error" | "closed" | "dropped"; runId: string | null; lastSeq: number };
+export type StreamEnd = { end: "done" | "error" | "stopped" | "closed" | "dropped"; runId: string | null; lastSeq: number };
 
 /** Drops repeats (a reconnect may replay events already seen) and notes the run id and the ending. */
 class Tracker {
   lastSeq = -1;
   runId: string | null = null;
-  terminal: "done" | "error" | null = null;
+  terminal: "done" | "error" | "stopped" | null = null;
 
   constructor(private readonly onEvent: (ev: RunEvent) => void) {}
 
@@ -647,7 +652,9 @@ class Tracker {
       this.lastSeq = ev.seq;
     }
     if (ev.type === "run") this.runId = ev.run_id;
-    if (ev.type === "done" || ev.type === "error") this.terminal = ev.type;
+    if (ev.type === "done" || ev.type === "error" || ev.type === "stopped") this.terminal = ev.type;
+    // a stop that was resumed: a replay goes on past it
+    else if (this.terminal === "stopped") this.terminal = null;
     this.onEvent(ev);
   }
 
@@ -745,12 +752,18 @@ const RECONNECT_MS = 1000;
  */
 async function followWithToken(url: string, tracker: Tracker, token: string, signal?: AbortSignal): Promise<StreamEnd> {
   let failures = 0;
+  let busy = 0;
   for (;;) {
     const seen = tracker.lastSeq;
     let end: StreamEnd;
     try {
       end = await fetchFollow(url, tracker, signal, token);
     } catch (e) {
+      // a stopped run's thread may take a few seconds to finish before it can be resumed: 409 busy
+      if (e instanceof ApiError && e.code === "busy" && e.status === 409 && busy < RESUME_RETRIES.length) {
+        await sleep(RESUME_RETRIES[busy++]!, signal);
+        continue;
+      }
       if (!(e instanceof ApiError) || e.code !== "unreachable") throw e;
       end = tracker.result("dropped");
     }
@@ -761,7 +774,10 @@ async function followWithToken(url: string, tracker: Tracker, token: string, sig
   }
 }
 
-const STREAM_TYPES = ["run", "stage_start", "stage_end", "call", "cue", "warning", "done", "message"] as const;
+/** Waits between tries while a stopped run can't yet be resumed (409 busy), about 15 s in all. */
+const RESUME_RETRIES = [1000, 2000, 4000, 8000];
+
+const STREAM_TYPES = ["run", "stage_start", "stage_end", "call", "cue", "warning", "done", "stopped", "message"] as const;
 /** Failed reconnects in a row before following gives up and asks the API why. */
 const MAX_RECONNECTS = 3;
 
@@ -807,8 +823,9 @@ export function followRun(
     const onMessage = (e: MessageEvent<string>) => {
       failures = 0;
       tracker.take({ event: e.type, data: e.data, id: e.lastEventId || null });
+      // a stop isn't the end of a replay that resumed after it: the stream's own end says
       const terminal = tracker.terminal;
-      if (terminal) settle(() => resolve(tracker.result(terminal)));
+      if (terminal === "done" || terminal === "error") settle(() => resolve(tracker.result(terminal)));
     };
     for (const type of STREAM_TYPES) es.addEventListener(type, onMessage as EventListener);
 

@@ -6,6 +6,7 @@ import { STAGES, type StageName } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import type { Recorded } from "@/lib/recorded";
 import { STAGE_COPY, clock, megabytes, noteText, usd } from "@/lib/run-format";
+import { refusalWords } from "@/lib/refusal-words";
 import { elapsedSeconds, type RunState } from "@/lib/run-state";
 import { CallFeed } from "./CallFeed";
 import { CueList } from "./CueList";
@@ -43,6 +44,7 @@ const VERB: Record<RunState["phase"], string> = {
   done: "Described",
   error: "Stopped describing",
   lost: "Describing",
+  stopped: "Stopped describing",
 };
 
 function failureKind(kind: string): NoticeKind {
@@ -57,10 +59,12 @@ type Props = {
   headingRef: Ref<HTMLHeadingElement>;
   onAgain: () => void;
   onReconnect: () => void;
+  /** This browser holds the run's edit key: it may resume a stopped run. */
+  canResume?: boolean;
 };
 
 /** A run as it happens: the header, the stages, the timeline and lines, and every model call. */
-export function RunView({ run, recorded, headingRef, onAgain, onReconnect }: Props) {
+export function RunView({ run, recorded, headingRef, onAgain, onReconnect, canResume = false }: Props) {
   const current = run.current;
   const activeCalls = useMemo(() => {
     const n: Partial<Record<StageName, number>> = {};
@@ -161,10 +165,23 @@ export function RunView({ run, recorded, headingRef, onAgain, onReconnect }: Pro
         />
       ) : null}
 
+      {run.phase === "stopped" ? (
+        <RefusalNotice
+          className={styles.notice}
+          level={3}
+          kind="stopped"
+          message={run.stopped ?? "The run stopped before it finished."}
+          onRetry={canResume ? onReconnect : undefined}
+          retryLabel="Resume"
+          recorded={recorded}
+        />
+      ) : null}
+
       {run.phase === "lost" ? (
         <RefusalNotice
           className={styles.notice}
           level={3}
+          heading={run.lost ? refusalWords(run.lost, "follow") : null}
           kind={run.lost?.code === "not_found" ? "not_found" : "lost"}
           message={
             run.lost?.message ??

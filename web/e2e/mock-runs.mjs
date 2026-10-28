@@ -52,6 +52,8 @@ export const FAILED_ID = "live-20261028-100000-de4d00";
 /** An upload that stopped before it finished: its owner (STOPPED_TOKEN) may resume it. */
 export const STOPPED_ID = "live-20261028-104500-5709ed";
 export const STOPPED_TOKEN = "tok-stopped-e2e-2468013579";
+export const RUNNING_TOKEN = "tok-running-e2e-1122334455";
+export const FAILED_TOKEN = "tok-failed-e2e-5544332211";
 
 const show = JSON.parse(readFileSync(path.join(SHOWCASE, "showcase.json"), "utf8"));
 
@@ -492,19 +494,18 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
   if (req.method === "GET" && route === "/v1/runs") {
     if (behaviour === "empty-list") return send(200, []);
     const row = (id, kind, title, status) => ({ id, kind, title, duration: 90, created: "2026-10-28T10:15:00+00:00", status, cost_usd: null, spend: null, cues: null });
-    // uploads (RUN_ID, UPLOAD_ED90_ID, FAILED_ID, STOPPED_ID) open by their id alone
-    return send(200, [
-      row("ed90", "showcase", "ed90.mp4", "done"),
-      row(RUNNING_ID, "live", "ed45.mp4", "running"),
-      row(FORK_ID, "live", "ed90.mp4", "done"),
-      row(SAMPLE_ID, "live", "ed90.mp4", "done"),
-    ]);
+    // the recorded runs only: every visitor's run opens by its id alone
+    return send(200, [row("ed90", "showcase", "ed90.mp4", "done")]);
   }
 
   const m = route.match(/^\/v1\/runs\/([\w.-]+)(\/.*)?$/);
   if (!m) return false;
   const [, id, rest = ""] = m;
 
+  const bearer = (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
+  // following a run that is going, and replaying a failed one, are its owner's
+  if (req.method === "GET" && rest === "/events" && ((id === FAILED_ID && bearer !== FAILED_TOKEN) || (id === RUNNING_ID && bearer !== RUNNING_TOKEN)))
+    return refuse([403, "forbidden", "Only the person who started this run can follow it."]);
   // a run that stopped: its replay ends in the run's own error event
   if (req.method === "GET" && rest === "/events" && id === FAILED_ID) {
     res.writeHead(200, { "Content-Type": "text/event-stream", ...cors });
@@ -525,9 +526,11 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
   if (unfinished && req.method === "GET" && rest === "") {
     const [status, kind] = unfinished;
     const created = "2026-10-28T10:45:00+00:00";
-    const owner = id === STOPPED_ID && (req.headers.authorization ?? "") === `Bearer ${STOPPED_TOKEN}`;
+    const token = { [STOPPED_ID]: STOPPED_TOKEN, [RUNNING_ID]: RUNNING_TOKEN, [FAILED_ID]: FAILED_TOKEN }[id];
+    const owner = (req.headers.authorization ?? "") === `Bearer ${token}`;
     if (!owner) return send(200, { id, status, source: { kind }, created });
-    return send(200, { id, kind: "live", status, source: { kind }, title: "lecture.mp4", duration: 58.2, created, error: null, manifest: null, cues: null, dirty: false, speech: null, gaps: null, wps: 3.05, loudness: null, loudness_hop_s: 0.1, original: null });
+    const error = status === "failed" ? { type: "SpeechError", message: "The speech server didn’t answer in time, so the run stopped at listen.", stage: "listen" } : null;
+    return send(200, { id, kind: "live", status, source: { kind, ...(kind === "upload" ? { name: "lecture.mov" } : {}) }, title: "lecture.mp4", duration: 58.2, created, error, manifest: null, cues: null, dirty: false, speech: null, gaps: null, wps: 3.05, loudness: null, loudness_hop_s: 0.1, original: null });
   }
 
   const run = runOf(scenario, id);

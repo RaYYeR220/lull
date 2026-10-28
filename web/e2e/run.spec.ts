@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { API, FAILED_ID, FORK_ID, RUN_ID, RUN_TOKEN, RUNNING_ID, STOPPED_ID, STOPPED_TOKEN, apiDown, holdToken, own, routeApi } from "./try-api";
+import { API, FAILED_ID, FAILED_TOKEN, FORK_ID, RUN_ID, RUN_TOKEN, RUNNING_ID, RUNNING_TOKEN, STOPPED_ID, STOPPED_TOKEN, apiDown, holdToken, own, routeApi } from "./try-api";
 
 /**
  * A finished live run's page, /run/<id>: loaded from the API (the scripted stand-in,
@@ -106,26 +106,33 @@ test.describe("a finished live run", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("corridor-walk.mp4");
   });
 
-  test("a run still being described links to following it live", async ({ page }) => {
+  test("a run still being described: only the browser that started it may follow it live", async ({ page }) => {
     await routeApi(page, own("run"));
     await page.goto(`/run/${RUNNING_ID}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("This run is still being described.");
+    await expect(page.getByRole("link", { name: "Follow it live" })).toHaveCount(0);
+    await expect(page.getByText("Only the browser that started it can follow it as it happens.")).toBeVisible();
+    await holdToken(page, RUNNING_ID, RUNNING_TOKEN);
+    await page.goto(`/run/${RUNNING_ID}`);
     await expect(page.getByRole("link", { name: "Follow it live" })).toHaveAttribute("href", `/try?run=${RUNNING_ID}`);
   });
 
-  test("a run that stopped says why, in its own words", async ({ page }) => {
+  test("a run that stopped says why, in its own words, to the browser that started it", async ({ page }) => {
     await routeApi(page, own("run"));
     await page.goto(`/run/${FAILED_ID}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("This run stopped before it finished.");
-    await expect(page.getByText("The speech server didn’t answer in time, so the run stopped at listen.")).toBeVisible();
+    await expect(page.getByText("Only the browser that started it can see why it stopped.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Describe a clip" })).toHaveAttribute("href", "/try");
+    await holdToken(page, FAILED_ID, FAILED_TOKEN);
+    await page.goto(`/run/${FAILED_ID}`);
+    await expect(page.getByText("The speech server didn’t answer in time, so the run stopped at listen.")).toBeVisible();
   });
 
   test("an unfinished run says so; only the browser that started it may resume it, with its key", async ({ page }) => {
     await routeApi(page, own("run"));
     await page.goto(`/run/${STOPPED_ID}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("This run hasn’t finished.");
-    await expect(page.getByRole("link", { name: "Resume it" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Resume" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Describe a clip" })).toHaveAttribute("href", "/try");
 
     // the owner: the detail is asked for with the edit key, and the door resumes it
@@ -135,7 +142,8 @@ test.describe("a finished live run", () => {
     });
     await holdToken(page, STOPPED_ID, STOPPED_TOKEN);
     await page.goto(`/run/${STOPPED_ID}`);
-    await expect(page.getByRole("link", { name: "Resume it" })).toHaveAttribute("href", `/try?run=${STOPPED_ID}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Stopped: you left before it finished.");
+    await expect(page.getByRole("link", { name: "Resume" })).toHaveAttribute("href", `/try?run=${STOPPED_ID}`);
     expect(asked).toContain(`Bearer ${STOPPED_TOKEN}`);
   });
 

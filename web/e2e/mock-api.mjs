@@ -11,6 +11,8 @@
 //     mid   the run up to two cues into finalize, then pings until the client leaves
 //     fail  stops in plan with a budget error event
 //     drop  cuts the connection after listen; GET .../events then replays the whole run
+//     stopped  ends at watch with the stopped event (the page left); the owner's GET .../events
+//           first answers 409 busy (the stopped run winding down), then streams the run to done
 //     402 409 413 422-format 422-too_long 422-unreadable 429 503
 //     408 429-one_upload                                         the API's JSON refusals
 //   GET /v1/runs/<id>/events: replays the whole run (the drop and reload cases)
@@ -155,13 +157,21 @@ const REFUSALS = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function stream(req, res, { stopAfter, failAt, dropAfter, step = STEP_MS } = {}) {
+async function stream(req, res, { stopAfter, failAt, dropAfter, stopAt, step = STEP_MS } = {}) {
   res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", ...CORS });
   let open = true;
   res.on("close", () => (open = false)); // the client left (the request's own close fires once its body is read)
   const base = Date.now() / 1000;
   for (const { ev, text } of frames(base)) {
     if (!open) return;
+    if (stopAt && ev.type === "stage_start" && ev.stage === stopAt) {
+      // the page following it left: the run stops, and says so as its last event (live.py)
+      res.write(text);
+      await sleep(step);
+      const st = { type: "stopped", stage: stopAt, message: "The description stopped when the page following it closed. Open it again to carry on: the steps already done are kept.", ts: ev.ts + 1, seq: ev.seq + 1 };
+      res.end(`id: ${st.seq}\nevent: stopped\ndata: ${JSON.stringify(st)}\n\n`);
+      return;
+    }
     if (failAt && ev.type === "stage_start" && ev.stage === failAt) {
       res.write(text);
       await sleep(step);
@@ -194,6 +204,9 @@ function drain(req) {
     req.on("error", resolve);
   });
 }
+
+/** Scenarios whose stopped run has already answered its first resume with 409 busy. */
+const resumedOnce = new Set();
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://mock");
@@ -230,6 +243,7 @@ const server = createServer(async (req, res) => {
     if (scenario === "mid") return stream(req, res, { stopAfter: MID_AFTER });
     if (scenario === "fail") return stream(req, res, { failAt: FAIL_AT });
     if (scenario === "drop") return stream(req, res, { dropAfter: DROP_AFTER });
+    if (scenario.split("--")[0] === "stopped") return stream(req, res, { stopAt: "watch" });
     return stream(req, res);
   }
 
@@ -254,8 +268,13 @@ const server = createServer(async (req, res) => {
   if (req.method === "GET" && follow) {
     if (follow[1] !== RUN_ID) return json(res, 404, { error: "not_found", message: "There is no run with that id." });
     // a run that stopped before it finished: following it resumes it, which only its owner may
-    if (scenario.split("--")[0] === "resume" && req.headers.authorization !== `Bearer ${RUN_TOKEN}`)
+    if (["resume", "stopped"].includes(scenario.split("--")[0]) && req.headers.authorization !== `Bearer ${RUN_TOKEN}`)
       return json(res, 403, { error: "forbidden", message: "Only the person who started this run can resume it." });
+    // a stopped run's thread winds down for a moment before it can be resumed: 409 busy first
+    if (scenario.split("--")[0] === "stopped" && !resumedOnce.has(scenario)) {
+      resumedOnce.add(scenario);
+      return json(res, 409, { error: "busy", message: "Another description is running. Try again in a minute, or open a recorded run." }, { "Retry-After": "60" });
+    }
     const after = Number(url.searchParams.get("after") ?? req.headers["last-event-id"] ?? -1);
     if (after >= frames(0).length - 1) {
       res.writeHead(204, CORS);

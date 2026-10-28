@@ -145,3 +145,53 @@ describe("the two POSTs that start work", () => {
     expect(seen).toEqual({ start: "web", fork: "web" });
   });
 });
+
+describe("the API's final fix", () => {
+  it("a stopped run ends its stream with a stopped event, said in the API's words", async () => {
+    const { parseEvent, followRun } = await import("../lib/api");
+    expect(parseEvent(JSON.stringify({ type: "stopped", stage: "watch", seq: 4, ts: 1, message: "The description stopped when the page following it closed." }))).toMatchObject({
+      type: "stopped",
+      message: "The description stopped when the page following it closed.",
+    });
+    const body = 'id: 0\nevent: run\ndata: {"type":"run","seq":0,"run_id":"live-a"}\n\nid: 1\nevent: stopped\ndata: {"type":"stopped","seq":1,"stage":"listen","message":"Stopped."}\n\n';
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } })));
+    const end = await followRun("live-a", () => {}, undefined, { token: "t" });
+    expect(end.end).toBe("stopped");
+  });
+
+  it("resuming retries a 409 busy for a few seconds while the stopped run's thread finishes", async () => {
+    vi.useFakeTimers();
+    const { followRun } = await import("../lib/api");
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        if (calls < 3) return json(409, { error: "busy", message: "Another description is running." });
+        return new Response('id: 5\nevent: done\ndata: {"type":"done","seq":5,"run_id":"live-a","summary":null}\n\n', { status: 200, headers: { "content-type": "text/event-stream" } });
+      }),
+    );
+    const p = followRun("live-a", () => {}, undefined, { token: "t" });
+    await vi.runAllTimersAsync();
+    expect((await p).end).toBe("done");
+    expect(calls).toBe(3);
+    vi.useRealTimers();
+  });
+
+  it("names a refusal by what it means where it happened", async () => {
+    const { refusalWords } = await import("../lib/refusal-words");
+    const e = (code: string, status: number, message: string) => ({ code, status, message });
+    expect(refusalWords(e("rate_limited", 429, "You have made 10 copies today. Try again tomorrow."), "fork")).toBe("You’ve reached today’s limit for copies.");
+    expect(refusalWords(e("rate_limited", 429, "You have made 200 changes today."), "change")).toBe("You’ve reached today’s limit for changes.");
+    expect(refusalWords(e("rate_limited", 429, "You have started 3 live descriptions in the last hour."), "start")).toBeNull();
+    expect(refusalWords(e("busy", 429, "This run already has 3 viewers."), "follow")).toBe("Too many people are following this run right now.");
+    expect(refusalWords(e("busy", 409, "Another change to this run is being made."), "change")).toBe("Another change to this run is in progress. Try again in a moment.");
+    expect(refusalWords(e("busy", 409, "Another description is running."), "start")).toBeNull();
+    // a bare 409 that the API didn't word (a proxy, an older API) isn't named for it
+    expect(refusalWords({ ...e("busy", 409, "Conflict"), apiCode: null }, "change")).toBeNull();
+  });
+
+  it("an upload's own name is read from its source", () => {
+    expect(readDetail({ ...DONE, source: { kind: "upload", name: "clip.mov" } })!.source).toEqual({ kind: "upload", sampleId: null, forkedFrom: null, origin: null, name: "clip.mov" });
+  });
+});
