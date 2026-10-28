@@ -45,8 +45,17 @@ An edit is finalised in a folder of its own, work/edits/<cue id>-<token>/, so th
 published mix used is never overwritten. A failed edit (an engine error, a spend cap) leaves
 the cue and its take as they were and removes only its own folder. A held edit is stored (the
 cue is held, the reason in its note) and keeps the take it would replace, as `previous`. A newer
-voiced edit removes the takes it supersedes. At startup, edit folders that neither cues.json
-nor studio.json refers to are swept away.
+voiced edit removes the takes it supersedes. Edit folders that neither cues.json nor
+studio.json refers to (left by a crash mid-edit) are swept away by housekeeping.
+
+Housekeeping (Studio.housekeep) runs at startup, hourly while the instance lives, and when
+/v1/health finds it overdue (an instance that slept through its timer). It scans in a thread,
+then removes, one run at a time under the run's lock and hidden from the routes, in a thread:
+uploads older than LULL_UPLOAD_RETENTION_DAYS; forks past their expiry (a day after they were
+made, and never past the upload they came from: a fork of an upload goes with it, its copy of
+the original too); run folders still marked .pending an hour on (an upload or fork that never
+finished); sample runs past the newest KEEP_SAMPLE_RUNS. Nothing the executor is describing,
+a stopped run's thread is finishing, or a change holds is touched.
 
 The engine is reached only through the adapters below (load_context, check_text, edit_context,
 finalize_edit, republish), which rebuild what finalize and publish need from the run's stage
@@ -129,8 +138,10 @@ MAX_EDITS, MAX_PUBLISHES = 2, 1  # re-checked / published at once, across all ru
 OVERLOADED_RETRY_S = 10
 LOCK_WAIT_S = 2.0  # a change waits this long for another change to the same run, then 409
 FORKS_PER_HOUR, FORKS_PER_VISITOR_DAY, FORKS_PER_DAY = 5, 10, 100  # each copies the media
-FORK_TTL_S = 24 * 3600.0  # a fork is removed a day after it was made
-FORK_SWEEP_S = 3600.0
+FORK_TTL_S = 24 * 3600.0  # a fork is removed a day after it was made (or its upload's end)
+HOUSEKEEP_EVERY_S = 3600.0
+PENDING_TTL_S = 3600.0  # a folder still being filled after this long never will be
+KEEP_SAMPLE_RUNS = 50  # visitors' runs of the samples, newest first
 MAX_TEXT = 1000
 MAX_REASON = 300
 MAX_BODY = 64 * 1024
@@ -669,31 +680,78 @@ def _audio_paths(obj: Any) -> list[str]:
     return []
 
 
-def sweep_edits(roots: list[Path]) -> int:
-    """Remove the work/edits/* folders of the runs under `roots` that neither cues.json nor
-    studio.json refers to (takes left by a crash mid-edit). Run before serving: an edit in
-    progress would look the same. Returns how many folders went."""
+def runs_with_edits(roots: list[Path]) -> list[Path]:
+    """The run folders under `roots` that have edit folders."""
+    return [edits.parent.parent for root in roots for edits in root.glob(f"*/{WORK}/{EDITS}")]
+
+
+def sweep_edits(run_dir: Path) -> int:
+    """Remove the run's work/edits/* folders that neither cues.json nor studio.json refers to
+    (takes left by a crash mid-edit). Only under the run's lock: an edit in progress would look
+    the same. Returns how many folders went."""
+    edits = run_dir / WORK / EDITS
+    if not edits.is_dir():
+        return 0
+    refs = _audio_paths(_read_json(run_dir / CUES)) + _audio_paths(_read_json(run_dir / STUDIO))
+    used = set()
+    for ref in refs:
+        p = Path(ref) if Path(ref).is_absolute() else run_dir / ref
+        try:
+            rel = p.resolve().relative_to(edits.resolve())
+        except ValueError:
+            continue
+        if rel.parts:
+            used.add(rel.parts[0])
     removed = 0
-    for root in roots:
-        for edits in root.glob(f"*/{WORK}/{EDITS}"):
-            run_dir = edits.parent.parent
-            refs = _audio_paths(_read_json(run_dir / CUES)) + _audio_paths(
-                _read_json(run_dir / STUDIO)
-            )
-            used = set()
-            for ref in refs:
-                p = Path(ref) if Path(ref).is_absolute() else run_dir / ref
-                try:
-                    rel = p.resolve().relative_to(edits.resolve())
-                except ValueError:
-                    continue
-                if rel.parts:
-                    used.add(rel.parts[0])
-            for d in edits.iterdir():
-                if d.is_dir() and d.name not in used:
-                    shutil.rmtree(d, ignore_errors=True)
-                    removed += 1
+    for d in edits.iterdir():
+        if d.is_dir() and d.name not in used:
+            shutil.rmtree(d, ignore_errors=True)
+            removed += 1
     return removed
+
+
+def _when(text: Any) -> float | None:
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def scan_runs(
+    runs_dir: Path,
+    now: float,
+    *,
+    upload_ttl: float,
+    fork_ttl: float,
+    pending_ttl: float,
+    keep_samples: int,
+) -> list[str]:
+    """The live run folders due to go (see the module notes), oldest reasons first. Reads
+    only; a folder that says nothing about itself is never due."""
+    due: list[str] = []
+    samples: list[tuple[float, str]] = []
+    for d in sorted(runs_dir.iterdir()) if runs_dir.is_dir() else []:
+        if not d.is_dir():
+            continue
+        try:
+            marked = (d / PENDING).stat().st_mtime
+        except OSError:
+            marked = None
+        if marked is not None:
+            if now - marked >= pending_ttl:
+                due.append(d.name)
+            continue
+        req = _dict(_read_json(d / REQUEST))
+        kind = _dict(req.get("source")).get("kind")
+        made = _made_at(d, req)
+        if kind == "upload" and now - made >= upload_ttl:
+            due.append(d.name)
+        elif kind == "fork" and now >= (_when(req.get("expires")) or made + fork_ttl):
+            due.append(d.name)
+        elif kind == "sample":
+            samples.append((made, d.name))
+    samples.sort(reverse=True)
+    return due + [run_id for _, run_id in samples[keep_samples:]]
 
 
 # -- the Studio's state -------------------------------------------------------------------------
@@ -728,48 +786,109 @@ class Studio:
         )
         self.max_edits, self.max_publishes = MAX_EDITS, MAX_PUBLISHES
         self.editing = self.publishing = 0  # across all runs, now
-        self.fork_ttl, self.fork_sweep_every = FORK_TTL_S, FORK_SWEEP_S
+        self.fork_ttl, self.housekeep_every = FORK_TTL_S, HOUSEKEEP_EVERY_S
+        self.pending_ttl, self.keep_sample_runs = PENDING_TTL_S, KEEP_SAMPLE_RUNS
+        self.last_housekeep: float | None = None  # time.monotonic() of the last pass's start
+        self._housekeeping = False
+        self._housekeep_task: asyncio.Task | None = None
         self.upload_ttl = settings.lull_upload_retention_days * DAY  # uploads and their runs
         self.lock_wait = LOCK_WAIT_S
         self._locks: dict[str, asyncio.Lock] = {}
         live.executor.after_run.append(self.after_run)
 
-    def sweep(self) -> int:
-        return sweep_edits([self.settings.runs_dir, self.settings.showcase_dir])
+    def _in_use(self, run_id: str) -> bool:
+        executor = self.live.executor
+        lock = self._locks.get(run_id)
+        return (
+            executor.get(run_id) is not None
+            or executor.lingers(run_id)
+            or (lock is not None and lock.locked())
+        )
 
-    def expire_runs(self, now: float | None = None) -> list[str]:
-        """Remove the uploads made more than upload_ttl ago and the forks made more than
-        fork_ttl ago (what their request.json says they are; a run that says nothing, a
-        sample's run and a recorded run are never removed), but not one the live executor is
-        describing or the Studio is changing right now. Runs on the event loop, so no change
-        can start in between. Returns the run ids removed."""
-        now = time.time() if now is None else now
-        root = self.settings.runs_dir
-        ttl = {"upload": self.upload_ttl, "fork": self.fork_ttl}
+    async def housekeep(self, now: float | None = None) -> list[str]:
+        """One housekeeping pass (see the module notes); the run ids removed. The deciding
+        reads and the deleting run in threads; each removal holds the run's lock and hides the
+        run from the routes (404) while it goes."""
+        if self._housekeeping:
+            return []
+        self._housekeeping = True
+        self.last_housekeep = time.monotonic()
+        try:
+            return await self._housekeep(time.time() if now is None else now)
+        finally:
+            self._housekeeping = False
+
+    async def _housekeep(self, now: float) -> list[str]:
+        due = await anyio.to_thread.run_sync(
+            functools.partial(
+                scan_runs,
+                self.settings.runs_dir,
+                now,
+                upload_ttl=self.upload_ttl,
+                fork_ttl=self.fork_ttl,
+                pending_ttl=self.pending_ttl,
+                keep_samples=self.keep_sample_runs,
+            )
+        )
         gone: list[str] = []
-        for d in sorted(root.iterdir()) if root.is_dir() else []:
-            req = _dict(_read_json(d / REQUEST)) if d.is_dir() else {}
-            keep_for = ttl.get(_dict(req.get("source")).get("kind"))
-            if keep_for is None or now - _made_at(d, req) < keep_for:
+        for run_id in due:
+            if self._in_use(run_id):
                 continue
-            lock = self._locks.get(d.name)
-            if self.live.executor.get(d.name) is not None or (lock is not None and lock.locked()):
-                continue
-            shutil.rmtree(d, ignore_errors=True)
-            self._locks.pop(d.name, None)
-            gone.append(d.name)
+            lock = self.lock(run_id)
+            await lock.acquire()  # free (checked just now): returns at once
+            self.store.removing.add(run_id)
+            try:
+                run_dir = self.settings.runs_dir / run_id
+                await anyio.to_thread.run_sync(
+                    functools.partial(shutil.rmtree, run_dir, ignore_errors=True)
+                )
+            finally:
+                self.store.removing.discard(run_id)
+                lock.release()
+                self._locks.pop(run_id, None)
+            gone.append(run_id)
         if gone:
             self.store.invalidate()
-            log.info("studio: %d uploads and forks expired", len(gone))
+            log.info("housekeeping: %d runs removed", len(gone))
+        roots = [self.settings.runs_dir, self.settings.showcase_dir]
+        swept = 0
+        for run_dir in await anyio.to_thread.run_sync(runs_with_edits, roots):
+            if self._in_use(run_dir.name):
+                continue
+            lock = self.lock(run_dir.name)
+            await lock.acquire()
+            try:
+                swept += await anyio.to_thread.run_sync(sweep_edits, run_dir)
+            finally:
+                lock.release()
+        if swept:
+            log.info("housekeeping: removed %d edit folders nothing refers to", swept)
         return gone
 
-    async def expire_runs_forever(self) -> None:
+    async def housekeeping_forever(self) -> None:
+        """A pass now (startup), then every `housekeep_every` seconds while serving."""
         while True:
-            await asyncio.sleep(self.fork_sweep_every)
             try:
-                self.expire_runs()
+                await self.housekeep()
             except Exception:
-                log.exception("studio: expiring runs failed")
+                log.exception("housekeeping failed")
+            await asyncio.sleep(self.housekeep_every)
+
+    def housekeep_if_overdue(self) -> None:
+        """Start a pass when the last one began more than `housekeep_every` ago: a scaled-to-
+        zero instance runs no timers, so the health check (the keep-warm) starts it."""
+        last = self.last_housekeep
+        running = self._housekeep_task is not None and not self._housekeep_task.done()
+        if running or self._housekeeping or last is None:
+            return
+        if time.monotonic() - last >= self.housekeep_every:
+            self._housekeep_task = asyncio.create_task(self._housekeep_logged())
+
+    async def _housekeep_logged(self) -> None:
+        try:
+            await self.housekeep()
+        except Exception:
+            log.exception("housekeeping failed")
 
     def lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())
@@ -1208,6 +1327,7 @@ def fork_run(
     origin: dict | None = None,
     envelope: Callable[[Path, Path, float | None], object] | None = None,
     spend_before: float = 0.0,
+    expires: float | None = None,
 ) -> None:
     """Copy what the Studio and a new publish need from the published run `src` into the new
     live run folder `dst`, left out of the run list until it is complete: the manifest and
@@ -1215,7 +1335,8 @@ def fork_run(
     records (absolute paths into `src` pointed at `dst`), the takes the cues and the overlay
     use, and the source video when the run keeps it (a recorded run's is found among the
     samples). Not events.jsonl: the fork's history starts with it. No model is called.
-    `spend_before` (what the source had spent) counts against the fork's run cap."""
+    `spend_before` (what the source had spent) counts against the fork's run cap; `expires`
+    (epoch seconds) is when housekeeping removes it."""
     dst.mkdir(parents=True)
     (dst / PENDING).touch()
     manifest = _dict(_read_json(src / MANIFEST))
@@ -1273,6 +1394,7 @@ def fork_run(
         {
             "run_id": run_id,
             "created": _now(),
+            **({"expires": _iso(expires)} if expires is not None else {}),
             "source": {"kind": "fork", "id": src.name, "name": name, **origin},
             **({"input": video} if video else {}),
             "options": {k: options[k] for k in ("mode", "voice") if k in options},
@@ -1284,6 +1406,26 @@ def fork_run(
     )
     _write_json(dst / MANIFEST, {**manifest, "run_id": run_id})  # last: then it is a run
     (dst / PENDING).unlink()
+
+
+def _iso(ts: float) -> str:
+    return datetime.fromtimestamp(ts, UTC).isoformat(timespec="seconds")
+
+
+def fork_expiry(studio: Studio, kind: str, src: Path, now: float) -> float:
+    """When a fork of `src` goes: a day on, but never after the upload it comes from (a fork
+    of an upload, or of a fork of one, keeps a copy of the visitor's video)."""
+    until = now + studio.fork_ttl
+    if kind != "live":
+        return until
+    req = _dict(_read_json(src / REQUEST))
+    source, made = _dict(req.get("source")), _made_at(src, req)
+    if source.get("kind") == "fork":
+        if source.get("origin") != "sample":
+            until = min(until, _when(req.get("expires")) or made + studio.fork_ttl)
+    elif source.get("kind") != "sample":  # an upload (a run that says nothing is taken for one)
+        until = min(until, made + studio.upload_ttl)
+    return until
 
 
 def fork_origin(studio: Studio, kind: str, src: Path) -> dict:
@@ -1330,6 +1472,7 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
                     origin=fork_origin(studio, found[0], src),
                     envelope=studio.live.envelope,
                     spend_before=studio.spent_by(found[0], src),
+                    expires=fork_expiry(studio, found[0], src, time.time()),
                 )  # fmt: skip
             )
         except Exception:

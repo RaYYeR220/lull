@@ -874,7 +874,7 @@ def test_startup_sweeps_edit_folders_nothing_refers_to(make_app, rd):
     }
     (rd / "studio.json").write_text(json.dumps(studio_state))
     with TestClient(make_app()):
-        pass
+        assert _until_gone(edits / "c002-dead")
     assert sorted(p.name for p in edits.iterdir()) == ["c001-live", "c002-prev"]
 
 
@@ -1190,11 +1190,31 @@ def test_an_unmoved_cue_takes_its_override_as_before(sc, rd, template):
 
 
 def _age(d: Path, hours: float) -> None:
+    """Make the run `hours` old: its created time and, for a fork, its expiry move back."""
     from datetime import UTC, datetime, timedelta
 
     req = json.loads((d / "request.json").read_text(encoding="utf-8"))
-    req["created"] = (datetime.now(UTC) - timedelta(hours=hours)).isoformat(timespec="seconds")
+    created = datetime.now(UTC) - timedelta(hours=hours)
+    if "expires" in req:
+        shift = datetime.fromisoformat(req["created"]) - created
+        req["expires"] = (datetime.fromisoformat(req["expires"]) - shift).isoformat()
+    req["created"] = created.isoformat(timespec="seconds")
     (d / "request.json").write_text(json.dumps(req))
+
+
+def _housekeep(app, client=None, now=None) -> list[str]:
+    """One housekeeping pass, on the client's event loop when there is one."""
+    studio = app.state.studio
+    if client is not None:
+        return client.portal.call(studio.housekeep, now)
+    return asyncio.run(studio.housekeep(now))
+
+
+def _until_gone(path: Path, timeout: float = 10.0) -> bool:
+    deadline = time.time() + timeout
+    while path.exists() and time.time() < deadline:
+        time.sleep(0.02)
+    return not path.exists()
 
 
 def test_forks_older_than_a_day_are_removed(make_app, template, data, fast_media):
@@ -1207,7 +1227,7 @@ def test_forks_older_than_a_day_are_removed(make_app, template, data, fast_media
         new = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         _age(data / "runs" / old, 25)
         _age(data / "runs" / new, 23)
-        assert app.state.studio.expire_runs() == [old]
+        assert _housekeep(app, c) == [old]
         assert not (data / "runs" / old).exists()
         assert (data / "runs" / new).is_dir() and plain.is_dir()
         assert c.get(f"/v1/runs/{old}").status_code == 404
@@ -1226,7 +1246,7 @@ def test_a_fork_being_changed_is_not_removed(make_app, template, data, fast_medi
 
     async def held():
         async with studio.lock(fid):
-            return studio.expire_runs()
+            return await studio.housekeep()
 
     assert asyncio.run(held()) == []
     assert (data / "runs" / fid).is_dir()
@@ -1239,16 +1259,12 @@ def test_fork_expiry_runs_at_startup_and_then_on_a_timer(make_app, template, dat
         first = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
     _age(data / "runs" / first, 25)
     app = make_app()
-    app.state.studio.fork_sweep_every = 0.05
+    app.state.studio.housekeep_every = 0.05
     with TestClient(app) as c:
-        assert not (data / "runs" / first).exists()  # at startup
+        assert _until_gone(data / "runs" / first)  # at startup
         second = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         _age(data / "runs" / second, 25)
-        for _ in range(100):
-            if not (data / "runs" / second).exists():
-                break
-            time.sleep(0.05)
-        assert not (data / "runs" / second).exists()  # by the timer, while serving
+        assert _until_gone(data / "runs" / second)  # by the timer, while serving
 
 
 # -- fix round 2: coverage recomputed on any text change; forking a live run -----------------------
@@ -1452,7 +1468,7 @@ def test_uploads_expire_after_7_days_samples_and_showcase_never(make_app, data):
     ]
     app = make_app()
     assert app.state.studio.upload_ttl == 7 * 24 * 3600
-    assert sorted(app.state.studio.expire_runs()) == ["fork-25h", "up-8d"]
+    assert sorted(_housekeep(app)) == ["fork-25h", "up-8d"]
     assert not any(d.exists() for d in gone) and all(d.is_dir() for d in kept)
 
 
@@ -1537,3 +1553,104 @@ def test_a_fork_of_a_recorded_run_carries_its_recorded_spend(make_app, template,
     spend = public_spend(summary)
     expected = spend["model_usd_all_runs"] or spend["model_usd"]
     assert expected and req["spend_before"] == pytest.approx(expected)
+
+
+# -- housekeeping: off the event loop, hourly or when health finds it due --------------------------
+
+
+def test_housekeeping_never_holds_up_requests(make_app, data, monkeypatch):
+    from lull.api import studio as studio_mod
+
+    real = studio_mod.scan_runs
+
+    def slow(*a, **kw):
+        time.sleep(1.5)  # a slow mount
+        return real(*a, **kw)
+
+    monkeypatch.setattr(studio_mod, "scan_runs", slow)
+    app = make_app()
+    with TestClient(app) as c:
+        t0 = time.monotonic()
+        assert c.get("/v1/runs").status_code == 200
+        assert time.monotonic() - t0 < 1.0  # served while the startup pass scans
+
+
+def test_unfinished_folders_older_than_an_hour_go(make_app, data):
+    runs = data / "runs"
+    old, new = runs / "live-20261027-old", runs / "live-20261027-new"
+    for d in (old, new):
+        (d / "input").mkdir(parents=True)
+        (d / "input" / "a.mp4").write_bytes(b"visitor video")
+        (d / ".pending").touch()
+    hour_ago = time.time() - 3601
+    os.utime(old / ".pending", (hour_ago, hour_ago))
+    app = make_app()
+    assert _housekeep(app) == [old.name]
+    assert not old.exists() and new.is_dir()
+
+
+def test_a_fork_of_an_upload_goes_when_the_upload_does(make_app, template, data, fast_media):
+    from datetime import UTC, datetime
+
+    src = place(template, data / "runs")
+    req = json.loads((src / "request.json").read_text(encoding="utf-8"))
+    req["source"] = {"kind": "upload", "name": "clip.mp4"}
+    (src / "request.json").write_text(json.dumps(req))
+    _age(src, 7 * 24 - 2)  # the upload has two hours left
+    app = make_app()
+    with TestClient(app, headers=AUTH) as c:
+        fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+        fork = data / "runs" / fid
+        freq = json.loads((fork / "request.json").read_text(encoding="utf-8"))
+        expires = datetime.fromisoformat(freq["expires"]).timestamp()
+        upload_ends = json.loads((src / "request.json").read_text(encoding="utf-8"))["created"]
+        upload_ends = datetime.fromisoformat(upload_ends).timestamp() + 7 * 24 * 3600
+        assert expires == pytest.approx(upload_ends, abs=2)  # not a day from now
+        assert expires < datetime.now(UTC).timestamp() + 3 * 3600
+        assert (fork / "input" / "clip.mp4").is_file()  # the copied original
+        # three hours on, both are gone, the copy of the original with them
+        assert sorted(_housekeep(app, c, now=time.time() + 3 * 3600)) == sorted([RID, fid])
+        assert not src.exists() and not fork.exists()
+
+
+def test_a_fork_of_a_sample_run_lives_a_day(make_app, template, data, fast_media):
+    from datetime import UTC, datetime
+
+    place(template, data / "showcase")
+    app = make_app()
+    with TestClient(app) as c:
+        fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+    freq = json.loads((data / "runs" / fid / "request.json").read_text(encoding="utf-8"))
+    left = datetime.fromisoformat(freq["expires"]).timestamp() - datetime.now(UTC).timestamp()
+    assert left == pytest.approx(24 * 3600, abs=60)
+
+
+def test_only_the_newest_50_sample_runs_are_kept(make_app, data):
+    app = make_app()
+    assert app.state.studio.keep_sample_runs == 50
+    app.state.studio.keep_sample_runs = 3
+    runs = data / "runs"
+    made = [_live_run(runs, f"s{i}", {"kind": "sample", "id": "ed45"}, hours_old=i)
+            for i in range(5)]  # fmt: skip
+    upload = _live_run(runs, "u-old", {"kind": "upload", "name": "a.mp4"}, 100)
+    assert sorted(_housekeep(app)) == ["s3", "s4"]
+    assert all(d.is_dir() for d in made[:3]) and upload.is_dir()
+
+
+def test_health_runs_housekeeping_when_it_is_due(make_app, template, data, fast_media):
+    place(template, data / "showcase")
+    app = make_app()
+    studio = app.state.studio
+    studio.housekeep_every = 3600.0
+    with TestClient(app) as c:
+        fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+        deadline = time.time() + 10
+        while studio.last_housekeep is None and time.time() < deadline:
+            time.sleep(0.02)
+        _age(data / "runs" / fid, 25)
+        assert c.get("/v1/health").status_code == 200
+        time.sleep(0.3)
+        assert (data / "runs" / fid).is_dir()  # not due yet: health leaves it
+        studio.last_housekeep -= 2 * 3600  # an instance that slept through its timer
+        assert c.get("/v1/health").status_code == 200
+        assert _until_gone(data / "runs" / fid)

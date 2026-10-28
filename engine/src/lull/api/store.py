@@ -109,6 +109,7 @@ class RunStore:
         self.clock = clock
         # whether a run id is being described in this process right now (set by the live side)
         self.active: Callable[[str], bool] = lambda run_id: False
+        self.removing: set[str] = set()  # run ids housekeeping is deleting: not found
         self._lock = threading.Lock()
         self._list: tuple[float, list[dict]] | None = None
         self._json: OrderedDict[Path, tuple[tuple[int, int], Any]] = OrderedDict()
@@ -164,7 +165,7 @@ class RunStore:
 
     def find(self, run_id: str) -> tuple[str, Path] | None:
         """Return (kind, dir) for a run id, or None. Showcase wins over live."""
-        if not RUN_ID_RE.fullmatch(run_id) or run_id in (".", ".."):
+        if not RUN_ID_RE.fullmatch(run_id) or run_id in (".", "..") or run_id in self.removing:
             return None
         for kind, root in (
             ("showcase", self.settings.showcase_dir),

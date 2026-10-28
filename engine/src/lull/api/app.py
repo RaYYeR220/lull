@@ -11,6 +11,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import anyio
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -85,12 +86,8 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         refuse_unverified()
-        studio = app.state.studio
-        swept = studio.sweep()  # before serving: no edit is in progress yet
-        if swept:
-            log.info("startup: removed %d edit folders nothing refers to", swept)
-        studio.expire_runs()  # then every fork_sweep_every seconds while serving
-        timer = asyncio.create_task(studio.expire_runs_forever(), name="run expiry")
+        # housekeeping now and hourly, in the background: the port opens at once
+        timer = asyncio.create_task(app.state.studio.housekeeping_forever(), name="housekeeping")
         try:
             yield
         finally:
@@ -116,12 +113,15 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     )
 
     @app.get("/v1/health")
-    def health():
+    async def health():
         # the cached answer, plus whether a live run is going now (never cached) and how
-        # long uploads and forks are kept (what the site's notice says)
+        # long uploads and forks are kept (what the site's notice says); housekeeping that
+        # is overdue (the instance slept through its timer) starts here
         studio = app.state.studio
+        studio.housekeep_if_overdue()
+        cached = await anyio.to_thread.run_sync(app.state.health.get)
         return {
-            **app.state.health.get(),
+            **cached,
             "live_busy": app.state.live.executor.busy,
             "retention_days": round(studio.upload_ttl / 86400, 3),
             "fork_retention_hours": round(studio.fork_ttl / 3600, 3),
