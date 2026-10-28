@@ -1,0 +1,46 @@
+.guarantee{background:linear-gradient(to bottom,transparent,rgb(var(--night-rgb) / 0) 0%,rgb(13 15 23 / .55) 50%,transparent)}
+
+.intro{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gap);row-gap:var(--s-6);margin-top:var(--s-6)}
+.body{grid-column:1 / span 6}
+.body p{font-size:var(--fs-body-l);line-height:var(--lh-body);color:var(--cream-1);max-width:var(--measure)}
+.body cite{font-style:normal;color:var(--cream-0)}
+
+.rules{grid-column:8 / span 5;list-style:none;align-self:end}
+.rules li{display:grid;grid-template-columns:132px 1fr;gap:16px;padding:14px 0;border-top:1px solid var(--hair)}
+.rules li:last-child{border-bottom:1px solid var(--hair)}
+.k{font-size:var(--fs-small);font-weight:600;color:var(--lamp-0)}
+.v{font-size:15px;line-height:1.5;color:var(--cream-1)}
+.v :global(.t-mono){line-height:inherit;color:var(--cream-0)}
+
+/* the figure: wide and narrow drawings, picked by the figure's own width */
+.figure{margin:var(--s-8) 0 0}
+.host{position:relative;width:100%;container:gfig / inline-size}
+.host svg{display:block;width:100%;overflow:visible}
+.host text{font-family:var(--f-ui)}
+.host .mono{font-family:var(--f-mono);font-size:11px}
+.host .word{font-family:var(--f-display);font-style:italic}
+.fit{display:none}
+.host .narrow{display:none}
+@container gfig (max-width:699.98px){
+  .host .wide{display:none}
+  .host .narrow{display:block}
+}
+
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--s-4) var(--s-7);margin-top:var(--s-6);padding-top:var(--s-4);border-top:1px solid var(--hair)}
+.legend{display:flex;flex-wrap:wrap;gap:10px 22px;list-style:none;font-size:var(--fs-small);color:var(--cream-1)}
+.legend li{display:flex;align-items:center;gap:9px}
+.sw{width:22px;height:10px;flex:none}
+.swSpeech{background:var(--cream-0)}
+.swGuard{background:repeating-linear-gradient(135deg,rgb(var(--cream-rgb) / .55) 0 1px,transparent 1px 4px);outline:1px solid var(--hair-strong)}
+.swWindow{background:rgb(var(--lamp-rgb) / .14);outline:1px solid rgb(var(--lamp-rgb) / .6);outline-offset:-1px}
+.swCue{background:var(--lamp-1)}
+.swGhost{border:1px dashed rgb(var(--cream-rgb) / .5)}
+.note{max-width:46em}
+
+@media (max-width:1100px){
+  .body,.rules{grid-column:1 / -1}
+}
+@media (max-width:760px){
+  .body p{font-size:17px}
+  .rules li{grid-template-columns:1fr;gap:4px}
+}

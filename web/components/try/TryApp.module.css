@@ -1,0 +1,16 @@
+.head{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gap);row-gap:var(--s-6);align-items:end}
+.intro{grid-column:1 / span 7;min-width:0}
+.status{grid-column:9 / span 4;min-width:0}
+
+.work{display:flex;flex-direction:column;gap:var(--s-5);margin-top:var(--s-7)}
+.own{margin-top:var(--s-6)}
+
+@media (max-width:1100px){
+  .intro{grid-column:1 / span 12}
+  .status{grid-column:1 / span 8}
+}
+@media (max-width:760px){
+  .head{row-gap:var(--s-5)}
+  .status{grid-column:1 / span 12}
+  .work{margin-top:var(--s-6);gap:var(--s-4)}
+}

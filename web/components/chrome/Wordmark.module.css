@@ -1,0 +1,2 @@
+.wordmark{text-decoration:none;padding:4px 2px}
+.wordmark.foot{font-size:var(--fs-wordmark-foot);padding:0;align-self:flex-start}

@@ -1,0 +1,32 @@
+.feed{display:flex;flex-direction:column;min-width:0;padding:18px 20px 20px}
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.total{display:flex;flex-direction:column;align-items:flex-end;gap:6px;text-align:right}
+.sum{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:var(--fs-title-s);line-height:1;letter-spacing:var(--tr-title-s);color:var(--cream-0)}
+.sub{font-size:12px;color:var(--cream-2)}
+.empty{margin-top:16px;padding-top:14px;border-top:1px solid var(--hair);font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-2)}
+
+/* spend by model, each with a bar of its share */
+.models{width:100%;margin-top:16px;border-collapse:collapse;font-size:12.5px;line-height:1.35}
+.models th,.models td{padding:9px 0 13px;border-top:1px solid var(--hair-faint);font-weight:400;text-align:left;vertical-align:top}
+.models th{position:relative}
+.models th::after{content:"";position:absolute;left:0;bottom:5px;width:calc(var(--share,0) * 100%);height:2px;background:var(--lamp-2)}
+.models td{padding-left:12px;text-align:right;white-space:nowrap;color:var(--cream-2)}
+.models td.mcost{font-weight:600;color:var(--cream-0)}
+.mname{display:block;font-size:12px;font-weight:500;color:var(--cream-0)}
+.roles{display:block;margin-top:3px;font-size:11.5px;color:var(--cream-2)}
+
+/* every call */
+.list{list-style:none;margin-top:14px;max-height:384px;overflow-y:auto;border-top:1px solid var(--hair);scrollbar-width:thin;scrollbar-color:var(--night-4) transparent}
+.list:focus-visible{outline-offset:-2px}
+.call{display:grid;grid-template-columns:64px minmax(0,1fr) auto;grid-template-areas:"role model cost" "role tok lat";column-gap:12px;row-gap:3px;padding:9px 8px 9px 6px;border-bottom:1px solid var(--hair-faint);border-left:2px solid transparent;font-size:12px;line-height:1.3}
+.newest{border-left-color:var(--lamp-1);background:linear-gradient(90deg,rgb(var(--lamp-rgb) / .07),transparent 80%)}
+.role{grid-area:role;font-weight:600;color:var(--cream-1)}
+.model{grid-area:model;min-width:0;font-size:11.5px;font-weight:500;color:var(--cream-0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tok{grid-area:tok;color:var(--cream-2)}
+.cost{grid-area:cost;text-align:right;font-weight:600;color:var(--cream-0)}
+.lat{grid-area:lat;text-align:right;color:var(--cream-2);white-space:nowrap}
+
+@media (max-width:760px){
+  .feed{padding:16px 14px 18px}
+  .list{max-height:320px}
+}

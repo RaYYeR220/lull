@@ -1,0 +1,29 @@
+/* the finished run: one soft lamp pool over what it produced */
+.result{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:var(--s-5) var(--s-7);padding:26px 20px 28px;border-bottom:1px solid var(--hair);
+  background:radial-gradient(55% 140% at 0% 0%,rgb(var(--lamp-rgb) / .11),rgb(var(--lamp-rgb) / .03) 55%,transparent 80%)}
+
+.h{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:var(--fs-title);line-height:var(--lh-title);letter-spacing:var(--tr-title);color:var(--cream-0)}
+.h:focus{outline:none}
+
+.took{margin-top:10px;font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-1)}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:18px 20px;margin-top:20px}
+.fig{display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:6px;padding-top:12px;border-top:1px solid var(--hair)}
+.fig dd{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:34px;line-height:1;letter-spacing:-.03em;color:var(--cream-0)}
+.fig dt{font-size:12.5px;line-height:1.4;color:var(--cream-2)}
+
+.wcag{margin-top:20px;max-width:46em;font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-1)}
+.crit{font-weight:600;color:var(--cream-0)}
+
+.actions{display:flex;flex-direction:column;justify-content:center;gap:var(--s-4);min-width:0}
+.gate{flex-wrap:wrap}
+.more{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;font-size:15px}
+
+@media (max-width:1100px){
+  .result{grid-template-columns:minmax(0,1fr)}
+  .actions{justify-content:flex-start}
+}
+@media (max-width:760px){
+  .result{padding:20px 14px 22px}
+  .figs{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+  .fig dd{font-size:30px}
+}

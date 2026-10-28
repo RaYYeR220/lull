@@ -1,0 +1,111 @@
+/* The evaluation page: method first, then the numbers with their intervals. */
+.main{position:relative;isolation:isolate;padding:calc(var(--head-h) + var(--s-7)) 0 var(--s-9)}
+.main::before{content:"";position:absolute;z-index:-1;left:0;right:0;top:0;height:560px;pointer-events:none;
+  background:radial-gradient(40% 55% at 22% 32%,rgb(var(--lamp-rgb) / .10),rgb(var(--lamp-rgb) / .03) 55%,transparent 80%)}
+.head{max-width:60rem}
+.eyebrow{margin-bottom:var(--s-4)}
+.title{max-width:15em}
+.headLede{margin-top:var(--s-5)}
+
+.method{display:flex;flex-direction:column;gap:var(--s-4);margin-top:var(--s-7);max-width:44em;padding-left:var(--s-5);border-left:1px solid var(--lamp-2);font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1)}
+.method b{font-weight:600;color:var(--cream-0)}
+
+.empty{margin-top:var(--s-8);padding:var(--s-6);border:1px dashed rgb(var(--lamp-rgb) / .35);
+  background:radial-gradient(60% 90% at 50% 100%,rgb(var(--lamp-rgb) / .08),transparent 75%)}
+.empty .lede{margin-top:var(--s-3)}
+
+.results{margin-top:var(--s-7)}
+/* test data and partial runs say so before any number */
+.fixture,.partial{padding:12px 16px;border:1px solid var(--held);border-left-width:3px;font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-0)}
+.partial{margin-top:var(--s-5);border-color:var(--hair-strong);border-left-color:var(--lamp-2)}
+.fixture b{font-weight:700}
+.generated{margin-top:var(--s-4);font-size:var(--fs-small);color:var(--cream-2)}
+
+.section{margin-top:var(--s-9)}
+.h2{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:clamp(28px,2.4vw,38px);line-height:1.08;letter-spacing:-.025em;color:var(--cream-0)}
+.h3{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:var(--fs-title-s);line-height:1.15;letter-spacing:var(--tr-title-s);color:var(--cream-0)}
+.lede{margin-top:var(--s-3);max-width:44em;font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1)}
+.added{margin-top:var(--s-3);max-width:44em;padding-left:10px;border-left:2px solid var(--edited);font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-1)}
+.note{margin-top:var(--s-4);font-size:var(--fs-small);color:var(--cream-1)}
+.note b{font-weight:600;color:var(--cream-0)}
+.mono{font-family:var(--f-mono);font-size:.92em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.link{font-weight:600;color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.link:hover{text-decoration-color:var(--lamp-1)}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.facts{display:flex;flex-direction:column;margin-top:var(--s-5);border-top:1px solid var(--hair)}
+.facts > div{display:grid;grid-template-columns:220px minmax(0,1fr);gap:4px 24px;padding:11px 0;border-bottom:1px solid var(--hair-faint);font-size:14px;line-height:1.55}
+.facts dt{font-weight:600;color:var(--cream-2)}
+.facts dd{color:var(--cream-1)}
+
+/* the interval chart: a table whose last column draws the row */
+.chart{width:100%;margin-top:var(--s-5);border-collapse:collapse;font-size:14px;line-height:1.45;color:var(--cream-1)}
+.chartCaption{padding-bottom:10px;text-align:left;font-size:12.5px;font-weight:600;color:var(--cream-2)}
+.chart th,.chart td{padding:12px 16px 12px 0;border-top:1px solid var(--hair-faint);text-align:left;vertical-align:middle}
+.chart thead th{border-top:1px solid var(--hair);font-size:12px;font-weight:600;color:var(--cream-2);vertical-align:bottom}
+.chart tbody th{font-weight:500}
+.measureName{display:block;color:var(--cream-0)}
+.measureWhat{display:block;margin-top:2px;font-size:12.5px;font-weight:400;color:var(--cream-2)}
+.chart tbody tr:hover{background:rgb(var(--cream-rgb) / .02)}
+.axisHead,.plotCell{width:34%;min-width:220px;padding-right:12px}
+.axis{position:relative;display:block;height:16px}
+.axis span{position:absolute;bottom:0;translate:-50% 0;font-family:var(--f-mono);font-size:10.5px;font-weight:400;color:var(--cream-2);white-space:nowrap}
+.axis span:first-child{translate:0 0}
+.axis span:last-child{translate:-100% 0}
+.plot{position:relative;display:block;height:20px}
+.grid{position:absolute;top:0;bottom:0;width:1px;background:var(--hair-faint)}
+.grid:first-child{background:var(--night-5)}
+/* the interval: a 2px rule with square ends */
+.whisker{position:absolute;top:9px;height:2px;min-width:1px;background:var(--lamp-2)}
+.whisker::before,.whisker::after{content:"";position:absolute;top:-4px;width:2px;height:10px;background:var(--lamp-2)}
+.whisker::before{left:0}
+.whisker::after{right:0}
+/* the value: an 8px square with a ring in the surface colour */
+.dot{position:absolute;top:6px;width:8px;height:8px;translate:-50% 0;background:var(--lamp-1);box-shadow:0 0 0 2px var(--night-1)}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:var(--s-6);border-top:1px solid var(--hair)}
+.stat{display:flex;flex-direction:column;gap:6px;padding:16px 20px 18px 0}
+.stat + .stat{padding-left:20px;border-left:1px solid var(--hair-faint)}
+.stat dt{font-size:12.5px;font-weight:600;color:var(--cream-2)}
+.statValue{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:var(--fs-numeral-l);line-height:1;letter-spacing:var(--tr-numeral-l);color:var(--cream-0)}
+.statDetail{font-size:13px;line-height:1.5;color:var(--cream-2)}
+
+.tableWrap{margin-top:var(--s-5);overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--night-4) transparent}
+.tableWrap:focus-visible{outline-offset:2px}
+.lede + .table{margin-top:var(--s-5)}
+.table{width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.45;color:var(--cream-1)}
+.table th,.table td{padding:10px 16px 10px 0;border-top:1px solid var(--hair-faint);text-align:left;vertical-align:baseline}
+.table thead th{border-top:1px solid var(--hair);font-size:12px;font-weight:600;color:var(--cream-2)}
+.table tbody th{font-weight:500;color:var(--cream-0);white-space:nowrap}
+.failed{display:block;font-size:12px;color:var(--held)}
+
+.failures{list-style:none;margin-top:var(--s-5);border-top:1px solid var(--hair)}
+.failures li{display:flex;flex-direction:column;gap:6px;padding:16px 0;border-bottom:1px solid var(--hair-faint)}
+.failures p{max-width:46em;font-size:14.5px;line-height:1.55;color:var(--cream-1)}
+
+@media (max-width:1100px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stat:nth-child(3){padding-left:0;border-left:0}
+  .stat:nth-child(n+3){border-top:1px solid var(--hair-faint)}
+}
+@media (max-width:760px){
+  .main{padding-top:calc(var(--head-h) + var(--s-6))}
+  .method{padding-left:var(--s-4)}
+  .facts > div{grid-template-columns:minmax(0,1fr)}
+  /* the chart's table stacks: name, then the numbers, then the drawing */
+  .chart thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .chart tbody tr{display:grid;grid-template-columns:repeat(3,auto);column-gap:14px;padding:12px 0;border-top:1px solid var(--hair-faint)}
+  .chart tbody th{grid-column:1 / -1}
+  .chart th,.chart td{padding:4px 0;border-top:0}
+  .chart .plotCell{grid-column:1 / -1;width:auto;min-width:0}
+  .stats{grid-template-columns:minmax(0,1fr)}
+  .stat,.stat + .stat{padding-left:0;border-left:0}
+  .stat + .stat{border-top:1px solid var(--hair-faint)}
+}
+@media (prefers-reduced-motion:reduce){
+  .link{transition:none}
+}
+.count{color:var(--cream-2);font-weight:400}
+.tag{display:inline-block;margin-left:.4em;font-size:var(--fs-micro);letter-spacing:.02em;color:var(--cream-2);font-weight:400}
+.reference{margin-top:var(--s-5)}
+.verdict{margin-top:var(--s-4);max-width:46em;font-size:var(--fs-body);line-height:1.6;color:var(--cream-1);border-left:2px solid var(--lamp-1);padding-left:var(--s-4)}

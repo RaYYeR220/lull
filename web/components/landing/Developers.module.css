@@ -1,0 +1,38 @@
+.sec{position:relative;isolation:isolate;overflow-x:clip;padding:var(--section-y) 0}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gap);row-gap:var(--s-7);align-items:start}
+.copy{grid-column:1 / span 5}
+.lede{margin-top:var(--s-5)}
+.tools{margin-top:var(--s-6);list-style:none;border-top:1px solid var(--hair)}
+.tools li{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--hair);font-size:14.5px;color:var(--cream-1)}
+.tools li :global(.t-mono){line-height:inherit;color:var(--cream-0)}
+
+.docs{margin-top:var(--s-5);font-size:var(--fs-small)}
+.docsLink{font-weight:600;color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.docsLink:hover{text-decoration-color:var(--lamp-1)}
+
+/* the terminal: night-0 well, three tabs */
+.term{grid-column:7 / span 6;border:1px solid var(--hair-strong);background:var(--night-0)}
+.tabs{display:flex;border-bottom:1px solid var(--hair)}
+.tab{position:relative;height:var(--hit-tab);padding:0 22px;background:transparent;border:0;border-right:1px solid var(--hair);font-size:var(--fs-ui-tab);font-weight:500;color:var(--cream-2);cursor:pointer;transition:color var(--t-hover),background-color var(--t-hover)}
+.tab:hover{color:var(--cream-0)}
+.tab[aria-selected="true"]{color:var(--cream-0);background:rgb(var(--lamp-rgb) / .05)}
+.tab[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--lamp-1)}
+.tab:focus-visible{outline-offset:var(--focus-offset-tab)}
+.panel{padding:26px 28px 30px;min-height:300px}
+.panel[hidden]{display:none}
+.panel pre{margin:0;overflow-x:auto;font-family:var(--f-mono);font-size:var(--fs-code);line-height:var(--lh-code);color:var(--cream-1);tab-size:2;scrollbar-width:thin}
+.panel pre:focus-visible{outline-offset:6px}
+.prompt{color:var(--cream-3);user-select:none}
+.cmd{color:var(--cream-0)}
+.str{color:var(--lamp-0)}
+.flag{color:var(--verified)}
+.note{color:var(--cream-2);font-style:italic}
+.after{margin-top:22px;padding-top:16px;border-top:1px solid var(--hair);font-size:var(--fs-small);color:var(--cream-2)}
+
+@media (max-width:1100px){
+  .copy,.term{grid-column:1 / -1}
+}
+@media (max-width:760px){
+  .tab{padding:0 16px;flex:1}
+  .panel{padding:20px 16px 24px}
+}

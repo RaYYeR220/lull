@@ -1,0 +1,85 @@
+/* One line in full: its evidence, its words against the pause, its checks and the actions. */
+.drawer{display:flex;flex-direction:column;gap:16px;padding:20px 22px 24px;background:linear-gradient(to bottom,rgb(var(--lamp-rgb) / .045),transparent 240px)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.title{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:26px;line-height:1;letter-spacing:var(--tr-title);color:var(--cream-0)}
+.title:focus-visible{outline-offset:6px}
+.where{margin-top:-6px;font-size:13px;line-height:1.5;color:var(--cream-2)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.frame{position:relative;margin:0;aspect-ratio:16 / 9;background:var(--night-0);border:1px solid var(--hair)}
+.img{display:flex;align-items:center;justify-content:center;width:100%;height:100%;object-fit:cover;padding:0;font-size:12.5px;color:var(--cream-2);text-align:center}
+/* the caption sits on a scrim so it reads over any frame */
+.frame figcaption{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;gap:10px;padding:16px 9px 7px;font-size:11.5px;color:var(--cream-1);
+  background:linear-gradient(to top,rgb(13 15 23 / .88),rgb(13 15 23 / 0))}
+
+.line{display:flex;flex-direction:column;gap:10px}
+.label{font-size:12.5px;font-weight:600;line-height:1.2;color:var(--cream-2)}
+/* italic Newsreader: the voice, also while it is being written */
+.text,.said{font-family:var(--f-display);font-optical-sizing:auto;font-style:italic;font-weight:350;font-size:var(--fs-cue-drawer);line-height:1.32;letter-spacing:var(--tr-cue);color:var(--cream-0)}
+.text{display:block;width:100%;min-height:96px;padding:10px 12px;resize:vertical;border:1px solid var(--hair-strong);border-left:2px solid var(--lamp-1);border-radius:var(--radius);background:var(--night-1)}
+.text:focus-visible{outline-offset:2px}
+.text[aria-invalid="true"]{border-left-color:var(--held)}
+.said{text-wrap:pretty}
+.meter{margin-top:2px}
+.warn{font-size:12.5px;line-height:1.45;color:var(--held)}
+
+.actions{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border:1px solid var(--hair-strong);border-radius:var(--radius);background:transparent;
+  font-family:var(--f-ui);font-size:13.5px;font-weight:600;line-height:1.2;color:var(--cream-0);cursor:pointer;transition:border-color var(--t-hover),background-color var(--t-hover)}
+.btn:hover{border-color:rgb(var(--cream-rgb) / .5);background:rgb(var(--cream-rgb) / .03)}
+.btn svg{flex:none}
+.lit{color:var(--night-1);border-color:var(--cream-0);background:linear-gradient(180deg,#fcf6ea 0%,#f3e8d3 100%);box-shadow:0 0 22px -6px rgb(var(--lamp-rgb) / .5)}
+.lit:hover{background:linear-gradient(180deg,#fffaf1 0%,#f7eedc 100%);border-color:var(--cream-0)}
+.btn[aria-disabled="true"]{color:var(--cream-3);border-color:var(--hair);background:transparent;box-shadow:none;cursor:not-allowed}
+.textBtn{padding:0;border:0;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--cream-1);cursor:pointer;
+  text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;min-height:32px}
+.textBtn:hover{text-decoration-color:var(--lamp-1)}
+.why{font-size:12.5px;line-height:1.45;color:var(--cream-2)}
+.hold{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--hair);background:rgb(var(--night-rgb) / .5)}
+.input{width:100%;min-height:40px;padding:0 10px;border:1px solid rgb(var(--cream-rgb) / .45);border-radius:var(--radius);background:var(--night-1);font:inherit;font-size:14px;color:var(--cream-0)}
+.readOnly{display:flex;flex-direction:column;gap:12px}
+
+/* the last action's outcome, said politely */
+.outcome{font-size:13.5px;line-height:1.5;color:var(--cream-1)}
+.outcome:empty{display:none}
+.good{padding-left:10px;border-left:2px solid var(--verified);color:var(--cream-0)}
+.held{padding-left:10px;border-left:2px solid var(--held);color:var(--cream-0)}
+.refused{padding-left:10px;border-left:2px solid var(--held);color:var(--cream-0)}
+.refusedDetail{display:flex;flex-direction:column;gap:8px;margin-top:-6px}
+.checked{font-size:12.5px;line-height:1.45;color:var(--cream-2)}
+.checked q{font-family:var(--f-display);font-style:italic;font-size:15px;color:var(--cream-1)}
+
+.block{border-top:1px solid var(--hair);padding-top:12px}
+.h3{margin-bottom:8px;font-size:12.5px;font-weight:600;line-height:1.2;color:var(--cream-2)}
+.note{font-size:13.5px;line-height:1.5;color:var(--cream-0)}
+.noteHeld .note{padding-left:10px;border-left:2px solid var(--held)}
+
+.claims{list-style:none}
+.claims li{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--hair-faint);font-size:13px;color:var(--cream-1)}
+.claim{display:flex;align-items:baseline;gap:8px;min-width:0}
+.claim svg{flex:none;transform:translateY(1px)}
+.cut .claim > span{text-decoration:line-through;text-decoration-color:var(--held);color:var(--cream-2)}
+.verdict{flex:none;font-size:12px;font-weight:600;white-space:nowrap;text-align:right}
+.at{font-weight:400;color:var(--cream-2)}
+.okMark{color:var(--verified)}
+.cutMark{color:var(--held)}
+
+.findings{list-style:none}
+.findings li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:baseline;gap:4px 10px;padding:7px 0;border-bottom:1px solid var(--hair-faint);font-size:13px;line-height:1.45;color:var(--cream-1)}
+.rule{font-family:var(--f-mono);font-size:11.5px;color:var(--cream-0)}
+.sev{font-size:11.5px;font-weight:600;color:var(--cream-2)}
+.findings li[data-severity="error"] .sev{color:var(--held)}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;list-style:none}
+.chips li{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:3px 9px;border:1px solid var(--hair-strong);font-size:12px;line-height:1.3;color:var(--cream-1)}
+.chips li::before{content:"";flex:none;width:4px;height:4px;background:var(--lamp-2)}
+.cost{font-size:12.5px;line-height:1.45;color:var(--cream-2)}
+.cost b{font-weight:600;color:var(--cream-1)}
+
+@media (max-width:760px){
+  .drawer{padding:18px 14px 22px}
+}
+@media (prefers-reduced-motion:reduce){
+  .btn{transition:none}
+}

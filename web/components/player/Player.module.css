@@ -1,0 +1,3 @@
+.player{display:block;width:100%}
+/* until the element's code arrives: the picture's box, so the page doesn't jump */
+.player:not(:defined){aspect-ratio:16 / 9;background:var(--night-0);border:1px solid var(--hair-strong)}

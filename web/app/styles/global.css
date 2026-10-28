@@ -1,0 +1,109 @@
+/* ===================================================================
+   Base
+   =================================================================== */
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--night-1);color-scheme:dark;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+body{
+  margin:0;min-height:100vh;overflow-x:clip;
+  font-family:var(--f-ui);font-size:var(--fs-body);line-height:var(--lh-body);font-weight:400;
+  color:var(--cream-1);background:var(--night-1);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;
+  font-variant-numeric:lining-nums tabular-nums;
+}
+img,svg,canvas,video{display:block}
+a{color:inherit}
+p,figure,blockquote{margin:0}
+h1,h2,h3,h4{margin:0;font-weight:inherit;font-size:inherit}
+ul,ol,dl,dd{margin:0;padding:0}
+button{font:inherit;color:inherit}
+cite{font-style:italic}
+::selection{background:rgb(var(--lamp-rgb) / .32);color:var(--cream-0)}
+
+/* focus: a warm ring, keyboard only */
+:focus:not(:focus-visible){outline:none}
+:focus-visible{outline:var(--focus-ring);outline-offset:var(--focus-offset)}
+/* landing targets (main, skip destinations) take focus without a ring */
+[tabindex="-1"]:focus{outline:none}
+
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+.skip{position:absolute;left:var(--gutter);top:-80px;z-index:100;padding:12px 18px;background:var(--cream-0);color:var(--night-1);font-weight:600;line-height:1.4;text-decoration:none;transition:top .2s var(--ease-out)}
+.skip:focus{top:12px}
+.skip:focus-visible{outline-color:var(--lamp-1)}
+
+.wrap{width:100%;max-width:var(--grid-max);margin:0 auto;padding:0 var(--gutter)}
+
+/* ruled floor: one hairline every 40px; alternates by section */
+.ruled{background-image:var(--ruled)}
+
+/* ===================================================================
+   Type roles. Italic Newsreader is a voice:
+   quotes and spoken lines only, never emphasis.
+   =================================================================== */
+.t-display-1,.t-display-2,.t-quote,.t-proof,.t-proof-spoken,.t-numeral-xl,.t-numeral-l,.t-verb,.t-title,.t-title-s,.t-step-index,.t-cue,.t-pause,.t-wordmark{
+  font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;color:var(--cream-0)
+}
+.t-display-1{font-size:var(--fs-display-1);line-height:var(--lh-display-1);letter-spacing:var(--tr-display-1);text-wrap:balance}
+.t-display-2{font-size:var(--fs-display-2);line-height:var(--lh-display-2);letter-spacing:var(--tr-display-2);text-wrap:balance}
+.t-quote{font-style:italic;font-size:var(--fs-quote);line-height:var(--lh-quote);letter-spacing:var(--tr-quote);text-indent:-.36em;padding-left:.36em}
+.t-proof{font-size:var(--fs-proof);line-height:var(--lh-proof);letter-spacing:var(--tr-proof);color:var(--cream-1);text-wrap:pretty}
+.t-proof-spoken{font-style:italic;font-size:var(--fs-proof);line-height:var(--lh-proof-spoken);letter-spacing:var(--tr-proof);text-wrap:balance}
+.t-numeral-xl{font-size:var(--fs-numeral-xl);line-height:var(--lh-numeral-xl);letter-spacing:var(--tr-numeral-xl)}
+.t-numeral-l{font-size:var(--fs-numeral-l);line-height:var(--lh-numeral-l);letter-spacing:var(--tr-numeral-l)}
+.t-verb{font-size:var(--fs-verb);line-height:var(--lh-verb);letter-spacing:var(--tr-verb)}
+.t-title{font-size:var(--fs-title);line-height:var(--lh-title);letter-spacing:var(--tr-title)}
+.t-title-s{font-weight:400;font-size:var(--fs-title-s);line-height:var(--lh-title-s);letter-spacing:var(--tr-title-s)}
+.t-step-index{font-style:italic;font-size:var(--fs-step-index);line-height:var(--lh-step-index);color:var(--lamp-1)}
+.t-cue{font-style:italic;font-weight:350;font-size:var(--fs-cue);line-height:var(--lh-cue);letter-spacing:var(--tr-cue);color:var(--lamp-0);text-wrap:pretty}
+.t-pause{font-weight:400;font-size:var(--fs-pause);line-height:1;letter-spacing:var(--tr-pause);color:var(--lamp-0);white-space:nowrap}
+.t-wordmark{font-style:italic;font-size:var(--fs-wordmark);line-height:1;letter-spacing:var(--tr-wordmark)}
+
+/* ledes run at the 34em measure; the hero widens it with --lede-measure:var(--measure-lede) */
+.t-lede{font-size:var(--fs-lede);line-height:var(--lh-lede);color:var(--cream-1);max-width:var(--lede-measure,var(--measure));text-wrap:pretty}
+.t-body{font-size:var(--fs-body);line-height:var(--lh-body);color:var(--cream-1);max-width:var(--measure)}
+.t-body-s{font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1)}
+.t-ui{font-size:var(--fs-ui-nav);font-weight:500;line-height:1.4;letter-spacing:var(--tr-ui);color:var(--cream-1)}
+.t-small{font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-2)}
+.t-micro{font-size:var(--fs-micro);font-weight:600;line-height:var(--lh-micro);letter-spacing:var(--tr-micro);color:var(--cream-2)}
+.t-mono{font-family:var(--f-mono);font-size:var(--fs-mono);line-height:var(--lh-mono);letter-spacing:0;font-variant-numeric:tabular-nums}
+.t-code{font-family:var(--f-mono);font-size:var(--fs-code);line-height:var(--lh-code);color:var(--cream-1);tab-size:2}
+
+/* ===================================================================
+   Entrance: the one orchestrated load moment (H1, lede, gate, hint).
+   Resting state is fully visible; the keyframe only supplies the start,
+   so nothing can be left at opacity 0.
+   =================================================================== */
+@keyframes settle{from{opacity:0;transform:translateY(16px)}}
+.reveal{animation:settle var(--t-enter) var(--ease-out) backwards;animation-delay:var(--reveal-delay,0s)}
+.reveal-1{--reveal-delay:.08s}
+.reveal-2{--reveal-delay:.2s}
+.reveal-3{--reveal-delay:.32s}
+.reveal-4{--reveal-delay:.42s}
+
+/* ===================================================================
+   Reduced motion and print
+   =================================================================== */
+@media (prefers-reduced-motion:reduce){
+  .reveal{animation:none}
+  .skip{transition:none}
+}
+@media print{
+  .reveal{animation:none}
+  /* ink on paper: the night becomes white, cream becomes ink, the lamp and the statuses darken
+     enough to read on white (browsers drop backgrounds when printing) */
+  :root{
+    --night-0:#fff; --night-1:#fff; --night-2:#f6f6f6; --night-3:#eee; --night-4:#ddd; --night-5:#bbb;
+    --cream-0:#111; --cream-1:#222; --cream-2:#444; --cream-3:#555;
+    --lamp-0:#5c4210; --lamp-1:#5c4210; --lamp-2:#5c4210;
+    --verified:#1d5a27; --held:#8a2518; --edited:#253c86;
+    --cream-rgb:17 17 17; --lamp-rgb:92 66 16; --night-rgb:255 255 255;
+  }
+  html{color-scheme:light}
+  html,body{background:#fff;color:#111}
+  /* the page's own content only: no site header, footer, skip link or texture */
+  [data-site-chrome],.skip,[data-grain]{display:none !important}
+  /* a printed report says where each link goes */
+  [data-report] a[href]::after{content:" (" attr(href) ")";font-size:.85em;word-break:break-all}
+  [data-report] section,[data-report] tr{break-inside:avoid}
+}

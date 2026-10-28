@@ -1,0 +1,41 @@
+/* grain: feTurbulence .85, 3 octaves, 200px tile, .065, normal blend */
+.grain{position:fixed;inset:0;z-index:60;pointer-events:none;background-image:var(--grain);background-size:var(--grain-size) var(--grain-size);opacity:var(--grain-opacity)}
+
+.room{position:absolute;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(42% 46% at 92% 4%, rgb(64 78 128 / .30), transparent 72%),
+    radial-gradient(40% 48% at 2% 96%, rgb(44 56 98 / .40), transparent 72%),
+    var(--night-1)}
+/* vignette */
+.room::after{content:"";position:absolute;inset:0;background:radial-gradient(130% 95% at 50% 36%, transparent 52%, rgb(8 9 14 / .62) 100%)}
+/* bottom fade back into the ground */
+.room::before{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;z-index:1;background:linear-gradient(to bottom,transparent,var(--night-1) 92%)}
+
+.lamp{position:absolute;left:50%;top:34%;width:min(1500px,190vw);height:min(1000px,120vh);translate:-50% -50%;
+  background:radial-gradient(closest-side, rgb(var(--lamp-rgb) / .30), rgb(var(--lamp-rgb) / .15) 28%, rgb(var(--lamp-rgb) / .055) 56%, rgb(var(--lamp-rgb) / .015) 78%, transparent);
+  animation:breathe var(--t-breathe) var(--ease-breathe) infinite}
+
+.cone{position:absolute;left:50%;top:0;width:min(1600px,200vw);height:100%;translate:-50% 0;filter:blur(46px);opacity:.9}
+.cone i{position:absolute;inset:0;clip-path:polygon(41% 0,59% 0,94% 100%,6% 100%);
+  background:linear-gradient(to bottom,rgb(var(--lamp-rgb) / .10),rgb(var(--lamp-rgb) / .045) 62%,rgb(var(--lamp-rgb) / .015));
+  animation:breathe-soft var(--t-breathe) var(--ease-breathe) infinite}
+
+/* the floor: 24px pitch at 3%, masked top and bottom */
+.floor{position:absolute;left:0;right:0;bottom:0;height:300px;background:
+  repeating-linear-gradient(to bottom,transparent 0 23px,rgb(var(--cream-rgb) / .03) 23px 24px),
+  linear-gradient(to bottom,transparent,rgb(var(--lamp-rgb) / .03) 40%,transparent);
+  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 30%,#000 70%,transparent);
+  mask-image:linear-gradient(to bottom,transparent,#000 30%,#000 70%,transparent)}
+
+@keyframes breathe{0%,100%{transform:scale(.955);opacity:.8}50%{transform:scale(1.045);opacity:1}}
+@keyframes breathe-soft{0%,100%{opacity:.8}50%{opacity:1}}
+
+:global(.is-still) .lamp,
+:global(.is-still) .cone i{animation-play-state:paused}
+
+@media (prefers-reduced-motion:reduce){
+  .lamp,.cone i{animation:none}
+}
+@media print{
+  .grain,.room{display:none}
+}

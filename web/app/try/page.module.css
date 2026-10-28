@@ -1,0 +1,11 @@
+.main{position:relative;isolation:isolate;padding:calc(var(--head-h) + var(--s-7)) 0 var(--s-9)}
+/* one soft lamp pool over the heading */
+.main::before{content:"";position:absolute;z-index:-1;left:0;right:0;top:0;height:560px;pointer-events:none;
+  background:radial-gradient(40% 55% at 22% 32%,rgb(var(--lamp-rgb) / .10),rgb(var(--lamp-rgb) / .03) 55%,transparent 80%)}
+.title{max-width:12em}
+.lede{margin-top:var(--s-4)}
+.howLong{margin-top:var(--s-3);max-width:40em;font-size:var(--fs-small);line-height:1.55;color:var(--cream-2)}
+
+@media (max-width:760px){
+  .main{padding-top:calc(var(--head-h) + var(--s-6))}
+}

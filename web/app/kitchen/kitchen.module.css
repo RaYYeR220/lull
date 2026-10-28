@@ -1,0 +1,76 @@
+.main{padding-top:var(--head-h)}
+.intro{display:flex;flex-direction:column;gap:var(--s-5);padding-top:var(--s-8);padding-bottom:var(--s-4)}
+
+/* colour */
+.group{margin-top:var(--s-8)}
+.groupTitle{margin-bottom:var(--s-5)}
+.swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--s-5);list-style:none}
+.swatch{display:flex;align-items:flex-start;gap:var(--s-3)}
+.chip{flex:none;width:48px;height:48px;border:1px solid var(--hair-strong)}
+.swatchText{display:flex;flex-direction:column;gap:2px;min-width:0}
+.token{color:var(--cream-0);line-height:1.4}
+.hex{color:var(--cream-2);line-height:1.4}
+.role{max-width:22em}
+
+.hairlines{display:grid;gap:var(--s-5);list-style:none;max-width:720px}
+.hairlines li{display:grid;gap:var(--s-2)}
+.hairLabel span{color:var(--cream-0);margin-right:var(--s-2)}
+
+/* type */
+.typeList{list-style:none;margin-top:var(--s-8);border-top:1px solid var(--hair-strong)}
+.typeRow{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--grid-gap);row-gap:var(--s-3);align-items:baseline;padding:var(--s-6) 0;border-bottom:1px solid var(--hair)}
+.typeMeta{grid-column:1 / span 3;display:flex;flex-direction:column;gap:var(--s-2)}
+.typeRole{color:var(--lamp-0)}
+.typeMeta .typeSpec{flex-direction:column;align-items:flex-start;gap:2px}
+.typeMeta .typeSpec li + li::before{display:none}
+.typeSample{grid-column:4 / -1;min-width:0;overflow-wrap:anywhere}
+
+/* space */
+.space{display:grid;gap:var(--s-3);margin-top:var(--s-8);list-style:none}
+.space li{display:grid;grid-template-columns:64px auto 1fr;align-items:center;gap:var(--s-4)}
+.spaceToken{color:var(--cream-0)}
+.spaceBar{display:block;height:12px;background:rgb(var(--lamp-rgb) / .28);border-left:1px solid var(--lamp-1)}
+.spacePx{color:var(--cream-2)}
+
+/* texture */
+.roomDemo{position:relative;isolation:isolate;overflow:hidden;height:380px;margin-top:var(--s-8);border:1px solid var(--hair-strong);display:flex;align-items:flex-end;padding:var(--s-5)}
+.roomNote{position:relative;z-index:2;max-width:34em;color:var(--cream-1)}
+.ruledDemo{height:200px;margin-top:var(--s-5);border:1px solid var(--hair-strong);padding:var(--s-5)}
+
+/* primitives */
+.prims{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s-8) var(--grid-gap);margin-top:var(--s-8)}
+.prim{display:flex;flex-direction:column;align-items:flex-start;gap:var(--s-4);padding-top:var(--s-5);border-top:1px solid var(--hair-strong)}
+.prim > p{max-width:30em;margin-bottom:var(--s-3)}
+.marks{display:grid;gap:var(--s-3);list-style:none}
+.marks li{display:grid;grid-template-columns:104px auto 1fr;align-items:center;justify-items:start;column-gap:var(--s-4)}
+.heldBlock{display:inline-flex;align-items:center;justify-content:center;width:48px;height:24px;background:var(--hatch-held);color:var(--night-1)}
+.timecodes{display:flex;flex-wrap:wrap;gap:var(--s-5);list-style:none}
+.glyphs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:var(--s-4);width:100%;list-style:none;color:var(--cream-0)}
+.glyphs li{display:flex;align-items:center;gap:var(--s-3)}
+.glyphs span{color:var(--cream-2)}
+
+/* player */
+.player{margin-top:var(--s-8);max-width:1200px}
+
+/* motion */
+.table{width:100%;max-width:960px;margin-top:var(--s-8);border-collapse:collapse;font-size:var(--fs-body-s);color:var(--cream-1)}
+.table th,.table td{padding:var(--s-3) var(--s-4) var(--s-3) 0;text-align:left;vertical-align:baseline;border-bottom:1px solid var(--hair)}
+.table thead th{font-size:var(--fs-small);font-weight:500;color:var(--cream-2);border-bottom-color:var(--hair-strong)}
+.table tbody th{font-weight:400;color:var(--cream-0)}
+.focusNote{margin-top:var(--s-6)}
+
+@media (max-width:1100px){
+  .typeMeta{grid-column:1 / span 4}
+  .typeSample{grid-column:5 / -1}
+  .prims{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .typeMeta,.typeSample{grid-column:1 / -1}
+  .space li{grid-template-columns:52px auto 1fr;gap:var(--s-3)}
+  /* phones: token and value share a line, the use sits beneath; headers stay for screen readers */
+  .table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .table tr{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:var(--s-4);row-gap:4px;padding:var(--s-3) 0;border-bottom:1px solid var(--hair)}
+  .table th,.table td{padding:0;border:0}
+  .table tbody th{white-space:nowrap}
+  .table td:last-child{grid-column:1 / -1}
+}

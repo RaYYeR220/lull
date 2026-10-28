@@ -23,6 +23,10 @@ runs/
 !engine/samples/*.mp4
 *.wav
 *.m4a
+# except the site's showcase media: small 480p exports, committed (scripts/sync-showcase.mjs)
+!web/public/showcase/**/*.mp4
+!web/public/showcase/**/*.wav
+!web/public/showcase/**/*.m4a
 models/
 ui-prototypes/
 mockups/

@@ -1,0 +1,18 @@
+.head{position:absolute;inset:0 0 auto 0;z-index:20}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:var(--s-5);height:var(--head-h)}
+
+.nav ul{display:flex;gap:clamp(18px,2.4vw,36px);list-style:none}
+.link{display:inline-block;padding:8px 0;font-size:var(--fs-ui-nav);font-weight:500;letter-spacing:var(--tr-ui);color:var(--cream-1);text-decoration:none;
+  background:linear-gradient(var(--lamp-1),var(--lamp-1)) no-repeat 0 100% / 0 1px;
+  transition:color var(--t-hover),background-size var(--t-hover) var(--ease-out)}
+.link:hover,
+.link[aria-current="page"]{color:var(--cream-0);background-size:100% 1px}
+
+@media (max-width:760px){
+  .bar{height:auto;padding-top:18px;flex-direction:column;align-items:flex-start;gap:6px}
+  /* five items don't fit 320 px (400 % zoom of 1280): they wrap rather than scroll the page */
+  .nav ul{flex-wrap:wrap;column-gap:18px;row-gap:0}
+}
+@media (max-width:359px){
+  .nav ul{column-gap:14px}
+}

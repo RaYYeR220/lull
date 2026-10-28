@@ -1,0 +1,8 @@
+{
+  "ok": true,
+  "speech": true,
+  "budget": { "spent_today": 0.0332, "cap_day": 0.1, "spent_total": 0.0332, "cap_total": null, "searches_today": 1, "searches_cap_day": 60, "cap_run": 0.1, "searches_cap_run": 3 },
+  "live_busy": false,
+  "retention_days": 7.0,
+  "fork_retention_hours": 24.0
+}
