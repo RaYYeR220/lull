@@ -108,7 +108,8 @@ export function parseShowcase(raw, id) {
     seen.add(c.id);
     if (!STATUSES.includes(c.status)) fail(`cues[${i}].status`, `is not one of ${STATUSES.join(", ")}`);
     if (typeof c.ahead !== "boolean") fail(`cues[${i}].ahead`, "must be a boolean");
-    return { id: c.id, start: c.start, end: c.end, text: c.text, status: c.status, ahead: c.ahead };
+    if (c.extended !== undefined && typeof c.extended !== "boolean") fail(`cues[${i}].extended`, "must be a boolean");
+    return { id: c.id, start: c.start, end: c.end, text: c.text, status: c.status, ahead: c.ahead, ...(c.extended !== undefined ? { extended: c.extended } : {}) };
   });
 
   const out = { id, title: r.title, credit: r.credit, duration: r.duration, loudness, speech, gaps, cues };
@@ -148,8 +149,66 @@ export function parseShowcase(raw, id) {
     if (!isNum(r.costUsd) || r.costUsd < 0) fail("costUsd", "must be a non-negative number");
     out.costUsd = r.costUsd;
   }
+  if (r.summary !== undefined) {
+    if (!isObj(r.summary)) fail("summary", "must be an object");
+    out.summary = parseSummary(r.summary, fail);
+  }
   if (r.interim === true) out.interim = true;
   return out;
+}
+
+const num = (v) => (isNum(v) ? v : null);
+const strs = (v) => (Array.isArray(v) ? v.filter(isStr) : []);
+
+/**
+ * The export's `summary` (engine lull.showcase.run_summary): what the run's report says. A run
+ * published before these were recorded gives empty values: they come back null or empty, and
+ * the report leaves those rows out. Malformed parts are refused with their field named.
+ */
+function parseSummary(s, fail) {
+  const counts = {};
+  if (s.counts !== undefined) {
+    if (!isObj(s.counts)) fail("summary.counts", "must be an object");
+    for (const [k, v] of Object.entries(s.counts)) if (STATUSES.includes(k) && isNum(v)) counts[k] = v;
+  }
+  const cov = isObj(s.coverage) ? s.coverage : {};
+  const list = (key, read) => {
+    if (s[key] === undefined || s[key] === null) return [];
+    if (!Array.isArray(s[key])) fail(`summary.${key}`, "must be an array");
+    return s[key].map((x, i) => {
+      if (!isObj(x)) fail(`summary.${key}[${i}]`, "must be an object");
+      return read(x, i);
+    });
+  };
+  const spend = isObj(s.spend) ? s.spend : {};
+  return {
+    counts,
+    coverage: {
+      importantEvents: num(cov.importantEvents),
+      described: num(cov.described),
+      ratio: num(cov.ratio),
+      describedWithExtended: num(cov.describedWithExtended),
+      ratioWithExtended: num(cov.ratioWithExtended),
+      undescribed: strs(cov.undescribed),
+    },
+    repetitive: list("repetitive", (x) => ({ id: isStr(x.id) ? x.id : "", text: isStr(x.text) ? x.text : null })),
+    f113: list("f113", (x, i) => {
+      if (!isNum(x.start) || !isNum(x.end)) fail(`summary.f113[${i}]`, "must have start and end");
+      return { gapId: isStr(x.gapId) ? x.gapId : "", start: x.start, end: x.end, eventIds: strs(x.eventIds) };
+    }),
+    overlapSeconds: num(s.overlapSeconds),
+    wcag: list("wcag", (x, i) => {
+      if (!isStr(x.criterion) || !isStr(x.status)) fail(`summary.wcag[${i}]`, "must have criterion and status");
+      return { criterion: x.criterion, level: isStr(x.level) ? x.level : "", name: isStr(x.name) ? x.name : "", status: x.status, blockers: strs(x.blockers) };
+    }),
+    models: strs(s.models),
+    spend: {
+      modelUsdThisRun: num(spend.modelUsdThisRun),
+      webSearchesThisRun: num(spend.webSearchesThisRun),
+      webSearchListUsdThisRun: num(spend.webSearchListUsdThisRun),
+      modelUsdAllRunsOfRunId: num(spend.modelUsdAllRunsOfRunId),
+    },
+  };
 }
 
 /** The relative paths a showcase folder must hold for the site to play it, from its raw file. */

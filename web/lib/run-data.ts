@@ -153,7 +153,7 @@ export function fromShowcase(s: Showcase, opts: { hasFrame?: (url: string) => bo
   const cues = number(
     s.cues.map((c) => {
       const frame = showcaseUrl(s.id, `${LAYOUT.keyframes}${c.id}.jpg`);
-      const extended = c.status === "extended";
+      const extended = c.extended ?? c.status === "extended";
       return {
         id: c.id,
         extended,

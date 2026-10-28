@@ -4,7 +4,7 @@ import { cache } from "react";
 import { LAYOUT, SHOWCASE_ID, ShowcaseError, indexEntry, parseIndex, parseShowcase, showcaseUrl } from "./showcase-schema.mjs";
 import type { Showcase, ShowcaseIndexEntry } from "./showcase-schema.mjs";
 
-export type { CueStatus, Showcase, ShowcaseCue, ShowcaseGap, ShowcaseIndexEntry, ShowcaseWord, Verdict, VerifyExample } from "./showcase-schema.mjs";
+export type { CueStatus, Showcase, ShowcaseCue, ShowcaseGap, ShowcaseIndexEntry, ShowcaseSummary, ShowcaseWord, Verdict, VerifyExample } from "./showcase-schema.mjs";
 export { parseShowcase };
 
 /** Where the shipped showcases live: public/showcase/<id>/, listed in public/showcase/index.json. */

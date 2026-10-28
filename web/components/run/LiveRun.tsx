@@ -10,7 +10,8 @@ import { RunFiles } from "@/components/watch/RunFiles";
 import { WatchRun } from "@/components/watch/WatchRun";
 import { ApiError, isAbort, readEditToken } from "@/lib/api";
 import { cx } from "@/lib/cx";
-import { followHref, studioHref } from "@/lib/routes";
+import Link from "next/link";
+import { followHref, reportHref, studioHref } from "@/lib/routes";
 import { loadRun, type Loaded } from "@/lib/run-load";
 import { voicedLines, type RunData } from "@/lib/run-data";
 import type { ShowcaseIndexEntry } from "@/lib/showcase-schema.mjs";
@@ -83,6 +84,9 @@ function Head({ data }: { data: RunData }) {
                 </span>,
               ]
             : []),
+          <Link key="report" href={reportHref(data.id, "live")} className={page.metaLink} prefetch={false}>
+            Conformance report
+          </Link>,
         ]}
       />
     </header>

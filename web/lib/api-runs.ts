@@ -69,6 +69,8 @@ export type ManifestSummary = {
   lintWarnings: { cueId: string; rule: string; message: string }[] | null;
   costUsd: number | null;
   costPerMin: number | null;
+  /** The API's split of the spend: model calls in USD, web searches in credits. */
+  spend: { modelsUsd: number | null; tavilyCredits: number | null } | null;
   calls: CallGroup[] | null;
   wcag: WcagStatus[] | null;
   reviewed: boolean | null;
@@ -182,6 +184,7 @@ function readSummary(raw: unknown): ManifestSummary {
       : null,
     costUsd: num(s.cost_usd),
     costPerMin: num(s.cost_per_min),
+    spend: isObj(s.spend) ? { modelsUsd: num(s.spend.models_usd), tavilyCredits: num(s.spend.tavily_credits) } : null,
     calls: Array.isArray(s.calls_by_role_model)
       ? s.calls_by_role_model.filter(isObj).flatMap((g) =>
           str(g.role) && str(g.model) ? [{ role: g.role as string, model: g.model as string, calls: num(g.calls) ?? 0, costUsd: num(g.cost_usd) }] : [],

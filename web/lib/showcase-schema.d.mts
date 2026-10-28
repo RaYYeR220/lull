@@ -4,7 +4,41 @@ export type CueStatus = "verified" | "approved" | "edited" | "held" | "extended"
 export type Verdict = "supported" | "not_visible" | "contradicted";
 
 export type ShowcaseGap = { id: string; start: number; end: number; capacity: number };
-export type ShowcaseCue = { id: string; start: number; end: number; text: string; status: CueStatus; ahead: boolean };
+export type ShowcaseCue = {
+  id: string;
+  start: number;
+  end: number;
+  text: string;
+  status: CueStatus;
+  ahead: boolean;
+  /** The picture holds while it plays (newer exports say so; older ones only by status). */
+  extended?: boolean;
+};
+
+/** What the run's report says (the export's `summary`); empty values when the run predates them. */
+export type ShowcaseSummary = {
+  counts: Partial<Record<CueStatus, number>>;
+  coverage: {
+    importantEvents: number | null;
+    described: number | null;
+    ratio: number | null;
+    describedWithExtended: number | null;
+    ratioWithExtended: number | null;
+    undescribed: string[];
+  };
+  repetitive: { id: string; text: string | null }[];
+  f113: { gapId: string; start: number; end: number; eventIds: string[] }[];
+  overlapSeconds: number | null;
+  wcag: { criterion: string; level: string; name: string; status: string; blockers: string[] }[];
+  models: string[];
+  spend: {
+    modelUsdThisRun: number | null;
+    webSearchesThisRun: number | null;
+    /** Notional: what the searches would cost at list price; not charged. */
+    webSearchListUsdThisRun: number | null;
+    modelUsdAllRunsOfRunId: number | null;
+  };
+};
 export type ShowcaseWord = { text: string; start: number; end: number };
 export type VerifyExample = {
   /** The cue the draft became, when the export names it. */
@@ -42,6 +76,8 @@ export type Showcase = {
   verifyExample?: VerifyExample;
   /** Model spend under the run's id, USD: the whole run, every call it made. */
   costUsd?: number;
+  /** What the run's report says, when the export carries it. */
+  summary?: ShowcaseSummary;
   /** Set on a placeholder that is not an engine export; a production build refuses it. */
   interim?: true;
 };

@@ -9,7 +9,8 @@ import { RunChecks } from "@/components/watch/RunChecks";
 import { RunFiles } from "@/components/watch/RunFiles";
 import { WatchRun } from "@/components/watch/WatchRun";
 import { cx } from "@/lib/cx";
-import { studioHref } from "@/lib/routes";
+import Link from "next/link";
+import { reportHref, studioHref } from "@/lib/routes";
 import { voicedLines } from "@/lib/run-data";
 import { loadIndex, loadShowcase } from "@/lib/showcase";
 import { creditParts, plural, voicedCues } from "@/lib/showcase-derive";
@@ -85,6 +86,9 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
                           </span>,
                         ]
                       : []),
+                    <Link key="report" href={reportHref(s.id, "recorded")} className={styles.metaLink}>
+                      Conformance report
+                    </Link>,
                   ]}
                 />
               </header>

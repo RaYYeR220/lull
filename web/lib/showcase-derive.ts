@@ -56,7 +56,7 @@ export function numberedCues(s: Pick<Showcase, "cues" | "gaps">): NumberedCue[] 
   return [...s.cues]
     .sort((a, b) => a.start - b.start || a.id.localeCompare(b.id))
     .map((c) => {
-      const kind = c.status === "extended" ? "extended" : "standard";
+      const kind = (c.extended ?? c.status === "extended") ? "extended" : "standard";
       const n = ++count[kind];
       return { ...c, kind, n, label: kind === "extended" ? `Extended ${n}` : `Cue ${n}`, gap: kind === "standard" ? gapOf(c, s.gaps) : undefined };
     });

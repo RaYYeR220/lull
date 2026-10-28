@@ -12,7 +12,7 @@ import { ForkDoor } from "@/components/watch/ForkDoor";
 import { API_REFUSALS, ApiError, FORK_TTL_MS, isAbort, readEditToken, readForkRecord, type CueStatus, type ForkRecord } from "@/lib/api";
 import { approveCue, editCue, getRun, holdCue, publishRun, type RunDetail } from "@/lib/api-runs";
 import { cx } from "@/lib/cx";
-import { followHref, runHref, watchHref } from "@/lib/routes";
+import { followHref, reportHref, runHref, watchHref } from "@/lib/routes";
 import { buildRun, loadRun } from "@/lib/run-load";
 import type { RunData } from "@/lib/run-data";
 import type { Showcase, ShowcaseIndexEntry } from "@/lib/showcase-schema.mjs";
@@ -393,6 +393,9 @@ export function StudioApp({ id, initial, clip, index }: Props) {
           <p className={styles.links}>
             <a href={recorded ? watchHref(id) : runHref(id)} className={styles.metaLink}>
               Watch it described
+            </a>
+            <a href={reportHref(id, recorded ? "recorded" : "live")} className={styles.metaLink}>
+              Conformance report
             </a>
           </p>
         </div>

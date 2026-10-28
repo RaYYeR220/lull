@@ -389,3 +389,29 @@ test.describe("benchmarks screens @screens", () => {
     });
   }
 });
+
+/**
+ * Conformance reports: the recorded run's (from its export) and a live run's (from the
+ * scripted API). e2e/__screens__/report-<which>-<size>(-full).png.
+ */
+test.describe("report screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 90_000 });
+
+  for (const size of SIZES) {
+    test(`reports at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await page.goto("/watch/ed90/report");
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `report-ed90-${size.name}.png`) });
+      await fullPage(page, `report-ed90-${size.name}-full.png`);
+      await routeApi(page, "run");
+      await page.goto("/run/live-20261027-214500-a1b2c3/report");
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("corridor-walk.mp4");
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(300);
+      await fullPage(page, `report-live-${size.name}-full.png`);
+    });
+  }
+});

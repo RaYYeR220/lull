@@ -20,6 +20,8 @@
 .credit a{color:var(--cream-1);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
 .credit a:hover{text-decoration-color:var(--lamp-1)}
 .meta{margin-top:var(--s-3)}
+.metaLink{color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.metaLink:hover{text-decoration-color:var(--lamp-1)}
 
 /* the library: one card per recorded run */
 .shelf{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:var(--s-6);margin-top:var(--s-8)}

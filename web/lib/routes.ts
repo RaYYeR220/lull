@@ -9,3 +9,6 @@ export const followHref = (id: string) => `/try?run=${encodeURIComponent(id)}`;
 
 /** The page that reviews and edits a run's cues. */
 export const studioHref = (id: string) => `/studio/${encodeURIComponent(id)}`;
+
+/** A run's conformance report: a recorded run's from its export, a live run's from the API. */
+export const reportHref = (id: string, kind: "recorded" | "live") => `${kind === "recorded" ? watchHref(id) : runHref(id)}/report`;
