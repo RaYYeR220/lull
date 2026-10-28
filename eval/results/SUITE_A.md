@@ -82,7 +82,7 @@ Notes: the pre-registered hallucination metric judges the claims' content only; 
 
 ## Supplementary: the unsupported claims (added after the scored run, no new calls)
 
-Every claim the pre-registered hallucination metric counted as unsupported, with its kind as the run's cues.json records it and a class from a manual review: each claim read against the slide on screen at its cue (key.json slide inventory and style text) and the slide image in suite_a/out/<lecture>/slide_<n>.png; done after the scored run, no model calls. Made from the scored results (`suite_a.json`, sha256 `e3e27ed37bf3`) and the judge answers already given; the pre-registered number is unchanged.
+Every claim the pre-registered hallucination metric counted as unsupported, with its kind as the run's cues.json records it and a class from a manual review: each claim read against the slide on screen at its cue (key.json slide inventory and style text) and the slide image in suite_a/out/<lecture>/slide_<n>.png; done after the scored run, no model calls. Made from the scored results (`suite_a.json`, sha256 `4d60aef6bf50`) and the judge answers already given; the pre-registered number is unchanged.
 
 | measure | value |
 |---|---|

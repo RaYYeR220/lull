@@ -9841,7 +9841,7 @@
     }
   ],
   "bundle": {
-    "path": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\bundles\\suite_a_results_20261028T115030Z.tar.gz",
+    "path": "eval/suite_a/out/bundles/suite_a_results_20261028T115030Z.tar.gz",
     "sha256": "fa68a2d5d8f1e5f38a56d8f7d7cde53c25d35ae2e95a96856abf8a2b6ac10a22"
   }
 }

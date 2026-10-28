@@ -2,7 +2,7 @@
   "added": "after the scored run; no new model calls",
   "source": {
     "file": "suite_a.json",
-    "sha256": "e3e27ed37bf358fcf9aacf207a0a1e651990cb6a0f734248feeb8a876a85762a",
+    "sha256": "4d60aef6bf5089efb72749d79601c181276e792882ff02c26e3faffca5494f1a",
     "invocation": {
       "stamp": "20261028T115030Z",
       "mode": "all",

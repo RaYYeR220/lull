@@ -9845,7 +9845,7 @@
         }
       ],
       "bundle": {
-        "path": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\bundles\\suite_a_results_20261028T115030Z.tar.gz",
+        "path": "eval/suite_a/out/bundles/suite_a_results_20261028T115030Z.tar.gz",
         "sha256": "fa68a2d5d8f1e5f38a56d8f7d7cde53c25d35ae2e95a96856abf8a2b6ac10a22"
       }
     },
@@ -9873,7 +9873,7 @@
       "runs": [
         {
           "video": "elephants_dream",
-          "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\ed2",
+          "path": "ed2",
           "run_id": "final-ed2",
           "offset_s": 0.0,
           "clip": [
@@ -10604,7 +10604,7 @@
         },
         {
           "video": "woodshole",
-          "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\woodshole",
+          "path": "woodshole",
           "run_id": "final-woodshole",
           "offset_s": 0.0,
           "clip": [
@@ -10810,7 +10810,7 @@
         },
         {
           "video": "aquatic_connectivity",
-          "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\aquatic_connectivity",
+          "path": "aquatic_connectivity",
           "run_id": "final-aquatic_connectivity",
           "offset_s": 0.0,
           "clip": [
@@ -10992,7 +10992,7 @@
         },
         {
           "video": "csc_intro",
-          "path": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\csc_intro",
+          "path": "csc_intro",
           "run_id": "final-csc_intro",
           "offset_s": 0.0,
           "clip": [
@@ -42984,93 +42984,93 @@
         "inputs": [
           {
             "label": "a01",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a01-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a01-20261028T115030Z",
             "run_id": "suite-a-a01-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a01\\video.mp4"
+            "video": "eval/suite_a/out/a01/video.mp4"
           },
           {
             "label": "a02",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a02-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a02-20261028T115030Z",
             "run_id": "suite-a-a02-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a02\\video.mp4"
+            "video": "eval/suite_a/out/a02/video.mp4"
           },
           {
             "label": "a03",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a03-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a03-20261028T115030Z",
             "run_id": "suite-a-a03-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a03\\video.mp4"
+            "video": "eval/suite_a/out/a03/video.mp4"
           },
           {
             "label": "a04",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a04-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a04-20261028T115030Z",
             "run_id": "suite-a-a04-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a04\\video.mp4"
+            "video": "eval/suite_a/out/a04/video.mp4"
           },
           {
             "label": "a05",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a05-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a05-20261028T115030Z",
             "run_id": "suite-a-a05-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a05\\video.mp4"
+            "video": "eval/suite_a/out/a05/video.mp4"
           },
           {
             "label": "a06",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a06-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a06-20261028T115030Z",
             "run_id": "suite-a-a06-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a06\\video.mp4"
+            "video": "eval/suite_a/out/a06/video.mp4"
           },
           {
             "label": "a07",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a07-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a07-20261028T115030Z",
             "run_id": "suite-a-a07-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a07\\video.mp4"
+            "video": "eval/suite_a/out/a07/video.mp4"
           },
           {
             "label": "a08",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a08-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a08-20261028T115030Z",
             "run_id": "suite-a-a08-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a08\\video.mp4"
+            "video": "eval/suite_a/out/a08/video.mp4"
           },
           {
             "label": "a09",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a09-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a09-20261028T115030Z",
             "run_id": "suite-a-a09-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a09\\video.mp4"
+            "video": "eval/suite_a/out/a09/video.mp4"
           },
           {
             "label": "a10",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a10-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a10-20261028T115030Z",
             "run_id": "suite-a-a10-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a10\\video.mp4"
+            "video": "eval/suite_a/out/a10/video.mp4"
           },
           {
             "label": "a11",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a11-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a11-20261028T115030Z",
             "run_id": "suite-a-a11-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a11\\video.mp4"
+            "video": "eval/suite_a/out/a11/video.mp4"
           },
           {
             "label": "a12",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\runs\\suite-a-a12-20261028T115030Z",
+            "run_dir": "eval/suite_a/out/runs/suite-a-a12-20261028T115030Z",
             "run_id": "suite-a-a12-20261028T115030Z",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-eval\\eval\\suite_a\\out\\a12\\video.mp4"
+            "video": "eval/suite_a/out/a12/video.mp4"
           },
           {
             "label": "ed90",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\ed90",
+            "run_dir": "ed90",
             "run_id": "final-ed90",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\inputs\\ed90.mp4"
+            "video": "ed90.mp4"
           },
           {
             "label": "bbb120",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\bbb120",
+            "run_dir": "bbb120",
             "run_id": "final-bbb120",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\inputs\\bbb120.mp4"
+            "video": "bbb120.mp4"
           },
           {
             "label": "tos180",
-            "run_dir": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\tos180",
+            "run_dir": "tos180",
             "run_id": "final-tos180",
-            "video": "C:\\Users\\egori\\Desktop\\projects\\lull-runs\\final\\inputs\\tos180.mp4"
+            "video": "tos180.mp4"
           }
         ],
         "metrics": {
