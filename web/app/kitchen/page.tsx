@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Footer } from "@/components/chrome/Footer";
@@ -136,7 +137,14 @@ const MEDIA = `/showcase/${SHOWCASE_ID}`;
 const STATUSES = Object.keys(STATUS) as Status[];
 const GLYPHS: GlyphName[] = ["ok", "out", "held", "edit", "approved", "extended", "play", "pause", "replay"];
 
+/**
+ * The design-token page is for building the site, not for visitors: a production build serves
+ * it only when LULL_KITCHEN=1 (the e2e build sets it, for the player and token checks).
+ */
+const KITCHEN = process.env.NODE_ENV !== "production" || process.env.LULL_KITCHEN === "1";
+
 export default function Kitchen() {
+  if (!KITCHEN) notFound();
   return (
     <>
       <Nav />

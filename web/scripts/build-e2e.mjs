@@ -15,6 +15,8 @@ const env = {
   NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
   LULL_BENCHMARKS_FILE: "e2e/fixtures/benchmarks.sample.json",
   LULL_E2E_BUILD: "1",
+  // the design-token page, which the player and token checks use
+  LULL_KITCHEN: "1",
 };
 const r = spawnSync("pnpm", ["build"], { stdio: "inherit", env, shell: process.platform === "win32" });
 process.exit(r.status ?? 1);

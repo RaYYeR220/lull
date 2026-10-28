@@ -47,6 +47,16 @@ function collectErrors(page: Page): string[] {
  */
 const REFLOW = ["/", "/try", "/watch", "/watch/ed90", "/watch/ed90/report", "/studio", "/studio/ed90", "/developers", "/benchmarks", `/run/${RUN_ID}`, `/run/${RUN_ID}/report`];
 
+test("after moving to another page in the site, the next Tab is in that page's content", async ({ page }) => {
+  await page.goto("/", { waitUntil: "networkidle" });
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Developers" }).click();
+  await expect(page).toHaveURL(/\/developers$/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator("main#main")).toBeFocused();
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => !!document.activeElement?.closest("main"))).toBe(true);
+});
+
 for (const width of [320, 390]) {
   test(`no page scrolls sideways at ${width}px`, async ({ page }) => {
     test.setTimeout(120_000);
