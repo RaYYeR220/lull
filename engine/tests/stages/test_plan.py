@@ -474,3 +474,34 @@ def test_near_duplicates_never_chain_past_30_s():
     by_id = {e.id: e for e in events}
     for dropped, kept in result.duplicates.items():
         assert abs(by_id[dropped].t_start - by_id[kept].t_start) <= 30.0
+
+
+def test_numbered_or_differently_quoted_lines_are_never_near_duplicates():
+    """Step 1/2/3 slides, years, chapter numbers and different quoted text are different
+    content even when the template-like short lines share most words."""
+    slides = [
+        _ev("e040", 0.0, 4.0, "slide", "A slide.", sal=5, verb="Step 1"),
+        _ev("e041", 5.0, 9.0, "slide", "A slide.", sal=5, verb="Step 2"),
+        _ev("e042", 10.0, 14.0, "slide", "A slide.", sal=5, verb="Step 3"),
+        _ev("e043", 15.0, 16.0, "chart", "A chart.", sal=4),
+        _ev("e044", 17.0, 18.0, "chart", "A chart.", sal=4),
+        _ev("e045", 19.0, 20.0, "slide", "A title.", sal=4),
+        _ev("e046", 21.0, 22.0, "slide", "A title.", sal=4),
+        _ev("e047", 23.0, 24.0, "on_screen_text", "A sign.", sal=4),
+        _ev("e048", 25.0, 26.0, "on_screen_text", "A sign.", sal=4),
+        _ev("e049", 27.0, 28.0, "slide", "A slide.", sal=4, verb="Step 3"),  # repeats e042
+    ]  # fmt: skip
+    answer = {"cast": [], "items": [
+        _item("e040", 4, 'A slide reads: "Step 1".'),
+        _item("e041", 4, 'A slide reads: "Step 2".'),
+        _item("e042", 4, 'A slide reads: "Step 3".'),
+        _item("e043", 3, "Sales for 2019 rise sharply."),
+        _item("e044", 3, "Sales for 2020 rise sharply."),
+        _item("e045", 3, "The title Chapter One appears."),
+        _item("e046", 3, "The title Chapter Two appears."),
+        _item("e047", 3, 'A sign reads "Exit" above the door.'),
+        _item("e048", 3, 'A sign reads "Enter" above the door.'),
+        _item("e049", 2, 'A slide reads: "Step 3".'),
+    ]}  # fmt: skip
+    result, _ = _run(answer, events=slides)
+    assert result.duplicates == {"e049": "e042"}  # the same step shown again: still a repeat

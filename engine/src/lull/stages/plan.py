@@ -39,6 +39,13 @@ _STOP = frozenset(
     "a an the and or of to in on at by for from with into onto is are its their".split()
 )
 _WORD = re.compile(r"\w+")
+_QUOTED = re.compile(r'"([^"]*)"|“([^”]*)”')
+_NUMBER_WORDS = frozenset(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+    "fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty seventy "
+    "eighty ninety hundred thousand million first second third fourth fifth sixth seventh "
+    "eighth ninth tenth ii iii iv vi vii viii ix".split()
+)
 
 
 def budget(n_sent: int) -> tuple[int, float]:
@@ -311,10 +318,12 @@ def _tokens(text: str) -> set[str]:
 
 
 def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanResult:
-    """The plan without items that repeat another (ruling, Task 16).
+    """The plan without items that repeat another.
 
     Two items are near-duplicates when their short lines (else their first variants) have a
-    token Jaccard of at least DUP_JACCARD and their visuals start at most DUP_WINDOW_S apart.
+    token Jaccard of at least DUP_JACCARD and their visuals start at most DUP_WINDOW_S apart,
+    unless they say different numbers, quote different text, or their events show different
+    on-screen text (`_different`): "Step 1" and "Step 2" are two slides, not one shown twice.
     Items are kept highest priority first (the earlier visual on a tie); an item alike to one
     already kept is dropped and recorded in `duplicates` as dropped -> kept, so every twin is
     within DUP_WINDOW_S of what it stands for (no chains) and coverage can count it with it.
@@ -322,9 +331,11 @@ def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanR
     """
     by_id = {e.id: e for e in events}
     words: dict[str, set[str]] = {}
+    lines: dict[str, str] = {}
     for v in result.variants:  # the short line, else the first variant the event has
         if v.event_id not in words or v.length == "short":
             words[v.event_id] = _tokens(v.text)
+            lines[v.event_id] = v.text
     order = sorted(
         (by_id[eid] for eid in result.priority if eid in by_id and eid in words),
         key=lambda e: (-result.priority[e.id], e.t_start, e.id),
@@ -337,6 +348,7 @@ def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanR
             for k in kept
             if abs(e.t_start - k.t_start) <= DUP_WINDOW_S + _EPS
             and _jaccard(words[e.id], words[k.id]) >= DUP_JACCARD - _EPS
+            and not _different(e, k, lines[e.id], lines[k.id])
         ]
         if alike:  # the closest kept twin
             dup[e.id] = min(alike, key=lambda k: (abs(e.t_start - k.t_start), k.t_start)).id
@@ -352,6 +364,24 @@ def drop_near_duplicates(result: PlanResult, events: list[VisualEvent]) -> PlanR
             "duplicates": dup,
         }
     )
+
+
+def _numbers(text: str) -> set[str]:
+    return {t for t in _WORD.findall(text.lower()) if t in _NUMBER_WORDS or any(c.isdigit()
+            for c in t)}  # fmt: skip
+
+
+def _quotes(text: str) -> set[str]:
+    return {" ".join((a or b).lower().split()) for a, b in _QUOTED.findall(text)}
+
+
+def _different(a: VisualEvent, b: VisualEvent, line_a: str, line_b: str) -> bool:
+    """Two look-alike lines that still describe different content: they say different
+    numbers or quote different text, or their events show different on-screen text."""
+    if _numbers(line_a) != _numbers(line_b) or _quotes(line_a) != _quotes(line_b):
+        return True
+    shown_a, shown_b = (" ".join((e.verbatim_text or "").lower().split()) for e in (a, b))
+    return bool(shown_a and shown_b and shown_a != shown_b)
 
 
 def _jaccard(a: set[str], b: set[str]) -> float:
