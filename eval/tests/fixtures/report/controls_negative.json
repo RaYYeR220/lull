@@ -1,0 +1,446 @@
+{
+  "_fixture": "FIXTURE: synthetic negative-control output for the report's tests (no control was run).",
+  "control": "negative",
+  "complete": true,
+  "date": "2026-10-28T06:00:00+00:00",
+  "git_commit": "f30231c37c0d7a7a07593f8d9ba3a8decbbdb129",
+  "preregistration": {
+    "tag": "controls-prereg-2",
+    "commit": "f30231c37c0d7a7a07593f8d9ba3a8decbbdb129",
+    "committed": "2026-10-28T05:21:36+01:00"
+  },
+  "verifier": {
+    "model": "nvidia/Nemotron-3.5-Super-VL",
+    "temperature": 0.2,
+    "max_tokens": 1500
+  },
+  "inputs": [],
+  "metrics": {
+    "cues": 5,
+    "by_rule": {
+      "another slide": {
+        "rows": 3,
+        "false_accept": {
+          "value": 0.6666666666666666,
+          "num": 2.0,
+          "den": 3.0,
+          "ci95": [
+            0.0,
+            1.0
+          ]
+        },
+        "false_accept_claims": {
+          "value": 0.75,
+          "num": 3.0,
+          "den": 4.0,
+          "ci95": [
+            0.0,
+            1.0
+          ]
+        },
+        "true_accept": {
+          "value": 1.0,
+          "num": 3.0,
+          "den": 3.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "other events, 30 s away": {
+        "rows": 1,
+        "false_accept": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 1.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "false_accept_claims": {
+          "value": 0.0,
+          "num": 0.0,
+          "den": 1.0,
+          "ci95": [
+            0.0,
+            0.0
+          ]
+        },
+        "true_accept": {
+          "value": 1.0,
+          "num": 1.0,
+          "den": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "other video": {
+        "rows": 1,
+        "false_accept": {
+          "value": 1.0,
+          "num": 1.0,
+          "den": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        },
+        "false_accept_claims": {
+          "value": 1.0,
+          "num": 1.0,
+          "den": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        },
+        "true_accept": {
+          "value": 1.0,
+          "num": 1.0,
+          "den": 1.0,
+          "ci95": [
+            1.0,
+            1.0
+          ]
+        }
+      }
+    },
+    "headline": {
+      "rules": [
+        "another slide",
+        "other events, 30 s away"
+      ],
+      "upper_bound": true,
+      "rows": 4,
+      "false_accept": {
+        "value": 0.5,
+        "num": 2.0,
+        "den": 4.0,
+        "ci95": [
+          0.0,
+          1.0
+        ]
+      },
+      "false_accept_claims": {
+        "value": 0.6,
+        "num": 3.0,
+        "den": 5.0,
+        "ci95": [
+          0.0,
+          1.0
+        ]
+      },
+      "true_accept": {
+        "value": 1.0,
+        "num": 4.0,
+        "den": 4.0,
+        "ci95": [
+          1.0,
+          1.0
+        ]
+      },
+      "discriminative_false_accept": {
+        "value": 0.3333333333333333,
+        "num": 1.0,
+        "den": 3.0,
+        "ci95": [
+          0.0,
+          1.0
+        ]
+      },
+      "suite_a_rows": 3
+    }
+  },
+  "rows": [
+    {
+      "video": "a01",
+      "run_id": "suite-a-a01-FIXTURE",
+      "cue_id": "c001",
+      "track": "standard",
+      "text": "Synthetic cue c001 for the report's tests.",
+      "true_window": [
+        0.0,
+        8.0
+      ],
+      "mismatch": {
+        "video": "a01",
+        "window": [
+          20.0,
+          28.0
+        ],
+        "rule": "another slide",
+        "slide": 3
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "event_overlap": {
+        "e3": 8.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a01-v01"
+      ]
+    },
+    {
+      "video": "a01",
+      "run_id": "suite-a-a01-FIXTURE",
+      "cue_id": "c002",
+      "track": "standard",
+      "text": "Synthetic cue c002 for the report's tests.",
+      "true_window": [
+        0.0,
+        8.0
+      ],
+      "mismatch": {
+        "video": "a01",
+        "window": [
+          20.0,
+          28.0
+        ],
+        "rule": "another slide",
+        "slide": 3
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "not_visible",
+          "at": null
+        }
+      ],
+      "event_overlap": {
+        "e3": 8.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1
+      ],
+      "discriminative": false,
+      "discriminative_facts": []
+    },
+    {
+      "video": "a02",
+      "run_id": "suite-a-a02-FIXTURE",
+      "cue_id": "c001",
+      "track": "standard",
+      "text": "Synthetic cue c001 for the report's tests.",
+      "true_window": [
+        0.0,
+        8.0
+      ],
+      "mismatch": {
+        "video": "a02",
+        "window": [
+          20.0,
+          28.0
+        ],
+        "rule": "another slide",
+        "slide": 3
+      },
+      "true": {
+        "claims": 2,
+        "supported": 2,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 2,
+        "supported": 2,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        },
+        {
+          "text": "claim 1",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        },
+        {
+          "text": "claim 1",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "event_overlap": {
+        "e3": 8.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1
+      ],
+      "discriminative": false,
+      "discriminative_facts": []
+    },
+    {
+      "video": "woodshole",
+      "run_id": "suite-a-woodshole-FIXTURE",
+      "cue_id": "c004",
+      "track": "standard",
+      "text": "Synthetic cue c004 for the report's tests.",
+      "true_window": [
+        0.0,
+        8.0
+      ],
+      "mismatch": {
+        "video": "woodshole",
+        "window": [
+          20.0,
+          28.0
+        ],
+        "rule": "other events, 30 s away",
+        "slide": 3
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 0,
+        "fully_supported": false
+      },
+      "true_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "contradicted",
+          "at": null
+        }
+      ],
+      "event_overlap": {
+        "e3": 8.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": false,
+      "true_slides": [
+        1
+      ],
+      "discriminative": null,
+      "discriminative_facts": []
+    },
+    {
+      "video": "a03",
+      "run_id": "suite-a-a03-FIXTURE",
+      "cue_id": "c003",
+      "track": "standard",
+      "text": "Synthetic cue c003 for the report's tests.",
+      "true_window": [
+        0.0,
+        8.0
+      ],
+      "mismatch": {
+        "video": "a04",
+        "window": [
+          20.0,
+          28.0
+        ],
+        "rule": "other video",
+        "slide": 3
+      },
+      "true": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "mismatched": {
+        "claims": 1,
+        "supported": 1,
+        "fully_supported": true
+      },
+      "true_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "mismatched_claims": [
+        {
+          "text": "claim 0",
+          "verdict": "supported",
+          "at": null
+        }
+      ],
+      "event_overlap": {
+        "e3": 8.0
+      },
+      "cue_event_overlap": {},
+      "suite_a": true,
+      "true_slides": [
+        1
+      ],
+      "discriminative": true,
+      "discriminative_facts": [
+        "a03-v02"
+      ]
+    }
+  ],
+  "skipped": [],
+  "spend_usd": 0.0
+}

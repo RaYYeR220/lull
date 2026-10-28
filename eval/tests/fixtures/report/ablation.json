@@ -1,0 +1,550 @@
+{
+  "_fixture": "FIXTURE: synthetic ablation output for the report's tests (no ablation was run).",
+  "control": "ablation",
+  "complete": true,
+  "date": "2026-10-28T06:30:00+00:00",
+  "git_commit": "f30231c37c0d7a7a07593f8d9ba3a8decbbdb129",
+  "preregistration": {
+    "controls": {
+      "tag": "controls-prereg-2",
+      "commit": "f30231c37c0d7a7a07593f8d9ba3a8decbbdb129",
+      "committed": "2026-10-28T05:21:36+01:00"
+    },
+    "suite_a": {
+      "tag": "suite-a-prereg",
+      "commit": "194d4d0803aa4a9195abbb450b35d7d132631ae1",
+      "committed": "2026-10-28T02:12:13+01:00"
+    }
+  },
+  "engine_fingerprint": "0.2.0+FIXTURE",
+  "verification": "disabled",
+  "with_arm": {
+    "results": "results/suite_a.json",
+    "date": "2026-10-28T05:00:00+00:00",
+    "invocation": "FIXTURE"
+  },
+  "claim_split": {
+    "with": 1.0,
+    "without": 0.0
+  },
+  "comparison": {
+    "hallucination_claims": {
+      "with": 0.05,
+      "without": 0.15,
+      "difference": 0.09999999999999999,
+      "ci95": [
+        0.09999999999999999,
+        0.1
+      ],
+      "videos": 12
+    },
+    "hallucination_cues": {
+      "with": 0.16666666666666666,
+      "without": 0.5,
+      "difference": 0.33333333333333337,
+      "ci95": [
+        0.33333333333333326,
+        0.33333333333333337
+      ],
+      "videos": 12
+    },
+    "hallucination_voiced_text": {
+      "with": 0.1,
+      "without": 0.2,
+      "difference": 0.1,
+      "ci95": [
+        0.09999999999999999,
+        0.10000000000000002
+      ],
+      "videos": 12
+    },
+    "voiced_cues_with_unsupported": {
+      "with": 0.16666666666666666,
+      "without": 0.5,
+      "difference": 0.33333333333333337,
+      "ci95": [
+        0.33333333333333326,
+        0.33333333333333337
+      ],
+      "videos": 12
+    },
+    "recall_standard": {
+      "with": 0.375,
+      "without": 0.375,
+      "difference": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "videos": 12
+    },
+    "recall_with_extended": {
+      "with": 0.525,
+      "without": 0.525,
+      "difference": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "videos": 12
+    },
+    "decoys_stated": {
+      "with": 0.0,
+      "without": 0.0,
+      "difference": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "videos": 12
+    }
+  },
+  "headline": "hallucination_voiced_text",
+  "videos": [
+    {
+      "id": "a01",
+      "hallucination": {
+        "claims": [
+          3,
+          20
+        ],
+        "cues": [
+          3,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          4,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          3,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          7,
+          20
+        ],
+        "with_extended": [
+          10,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a02",
+      "hallucination": {
+        "claims": [
+          4,
+          20
+        ],
+        "cues": [
+          4,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          5,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          4,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          8,
+          20
+        ],
+        "with_extended": [
+          11,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a03",
+      "hallucination": {
+        "claims": [
+          2,
+          20
+        ],
+        "cues": [
+          2,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          3,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          2,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          9,
+          20
+        ],
+        "with_extended": [
+          12,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a04",
+      "hallucination": {
+        "claims": [
+          3,
+          20
+        ],
+        "cues": [
+          3,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          4,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          3,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          6,
+          20
+        ],
+        "with_extended": [
+          9,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a05",
+      "hallucination": {
+        "claims": [
+          4,
+          20
+        ],
+        "cues": [
+          4,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          5,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          4,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          7,
+          20
+        ],
+        "with_extended": [
+          10,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a06",
+      "hallucination": {
+        "claims": [
+          2,
+          20
+        ],
+        "cues": [
+          2,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          3,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          2,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          8,
+          20
+        ],
+        "with_extended": [
+          11,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a07",
+      "hallucination": {
+        "claims": [
+          3,
+          20
+        ],
+        "cues": [
+          3,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          4,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          3,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          9,
+          20
+        ],
+        "with_extended": [
+          12,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a08",
+      "hallucination": {
+        "claims": [
+          4,
+          20
+        ],
+        "cues": [
+          4,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          5,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          4,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          6,
+          20
+        ],
+        "with_extended": [
+          9,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a09",
+      "hallucination": {
+        "claims": [
+          2,
+          20
+        ],
+        "cues": [
+          2,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          3,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          2,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          7,
+          20
+        ],
+        "with_extended": [
+          10,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a10",
+      "hallucination": {
+        "claims": [
+          3,
+          20
+        ],
+        "cues": [
+          3,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          4,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          3,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          8,
+          20
+        ],
+        "with_extended": [
+          11,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a11",
+      "hallucination": {
+        "claims": [
+          4,
+          20
+        ],
+        "cues": [
+          4,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          5,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          4,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          9,
+          20
+        ],
+        "with_extended": [
+          12,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    },
+    {
+      "id": "a12",
+      "hallucination": {
+        "claims": [
+          2,
+          20
+        ],
+        "cues": [
+          2,
+          6
+        ]
+      },
+      "supplementary": {
+        "hallucination_voiced_text": [
+          3,
+          20
+        ],
+        "voiced_cues_with_unsupported": [
+          2,
+          6
+        ]
+      },
+      "recall": {
+        "standard": [
+          6,
+          20
+        ],
+        "with_extended": [
+          9,
+          20
+        ]
+      },
+      "decoys": {
+        "stated": [],
+        "of": 4
+      }
+    }
+  ],
+  "spend_usd": 0.0
+}

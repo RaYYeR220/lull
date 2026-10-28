@@ -623,3 +623,23 @@ Expected spend:
 - No names are passed to the verifier, whereas the pipeline passes the cast names a line uses.
 - The ablation's two arms ran at different times (the with-arm is the Suite A counting run),
   and the remote models may change in between.
+
+## Results report
+
+`python report.py` (from `eval/`) writes `RESULTS.md` from the complete results in `results/`:
+Suite A, Suite B, the negative control and the ablation, each only when its scorer marked it
+complete (never a smoke or a partial run), with the pre-registration tag, commit and key or
+reference-set sha256, the model ids, the scoring commit and date, the hardware, every number
+with its 95 % interval, the deviations and the known failures. `--out-web PATH` also writes
+the website's `benchmarks.json` (`{generated_at, git_commit, suites: {suite_a, suite_b,
+controls: {negative, ablation}}, known_failures}`, each suite its scorer's own object).
+
+Before writing, every included result is checked with its suite's own pre-registration check,
+and must name the same tag, commit and key or reference set. `--out-web` also refuses while
+`eval/` or `engine/` has uncommitted changes, when nothing is complete, and when the file
+would fail the site's validator: `report_schema.py` is a Python port of
+`lull-web/web/lib/benchmarks-schema.ts`, and the tests also run the site's own validator
+through node when node and the site are present. Known failures are generated from the data:
+failed runs, judge problems, held-cue reason classes with counts, Suite B's unresolved ASR
+terms, every negative-control false accept, and the "Deviations" sections above for the
+included suites. They are followed by the hand-kept `known_failures.md`.

@@ -1,0 +1,1027 @@
+{
+  "fixture": true,
+  "generated_at": "2026-10-28T02:31:00+00:00",
+  "git_commit": "439ebeab39857496d472bf27acd5b2a16e64ad01",
+  "suites": {
+    "suite_a": {
+      "suite": "A",
+      "complete": false,
+      "note": "partial run (a smoke on a subset): not Suite A results",
+      "date": "2026-10-28T02:29:35+00:00",
+      "git_commit": "439ebeab39857496d472bf27acd5b2a16e64ad01",
+      "git_dirty": false,
+      "preregistration": {
+        "tag": "suite-a-prereg",
+        "commit": "194d4d0803aa4a9195abbb450b35d7d132631ae1",
+        "committed": "2026-10-28T02:12:13+01:00"
+      },
+      "key_sha256": "354967ad20310ab6013c5fd884520f57120dbaa56d81b927f2d0c3ec35b7ce96",
+      "ledger_calls_after_preregistration": true,
+      "engine_fingerprint": "0.2.0+f861597faa9b7766",
+      "judge_model": "nvidia/Nemotron-3-Ultra-550b-a55b",
+      "judge": {
+        "temperature": 0,
+        "thinking": true,
+        "max_tokens": 16000,
+        "note": "the primary judge is also the engine's planner (plan stage)"
+      },
+      "second_judge_model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+      "second_judge": {
+        "model": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        "thinking": false,
+        "temperature": 0,
+        "aggregate": {
+          "recall": {
+            "value": 0.2926829268292683,
+            "num": 12,
+            "den": 41,
+            "ci95": [
+              0.11764705882352941,
+              0.4166666666666667
+            ]
+          },
+          "hallucination": {
+            "value": 0,
+            "num": 0,
+            "den": 27,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "hallucination_voiced_text": {
+            "value": 0.5833333333333334,
+            "num": 7,
+            "den": 12,
+            "ci95": [
+              0.5,
+              0.625
+            ]
+          }
+        },
+        "agreement": {
+          "facts": {
+            "n": 41,
+            "agree": 38,
+            "agreement": 0.926829268292683,
+            "kappa": 0.8093023255813955
+          },
+          "claims": {
+            "n": 27,
+            "agree": 27,
+            "agreement": 1,
+            "kappa": null
+          },
+          "voiced_cues": {
+            "n": 7,
+            "agree": 7,
+            "agreement": 1,
+            "kappa": 1
+          }
+        }
+      },
+      "engine_models": [
+        "nvidia/Nemotron-3-Ultra-550b-a55b",
+        "nvidia/Nemotron-3.5-Super-VL",
+        "nvidia/Nemotron-3_5-Lightning"
+      ],
+      "run_options": {
+        "mode": "standard",
+        "profile": "education",
+        "voice": "Sofia",
+        "research": false,
+        "source_url": null
+      },
+      "hardware": {
+        "os": "Windows-11-10.0.26300-SP0",
+        "python": "3.13.13",
+        "cpu": "AMD Ryzen 5 5600X 6-Core Processor",
+        "cpu_count": 12,
+        "gpus": [
+          "NVIDIA GeForce RTX 4060, 8188 MiB, 610.88"
+        ],
+        "speech_server": "http://127.0.0.1:8089 (local)",
+        "models": "remote: Nebius Token Factory"
+      },
+      "spend_usd": 0.228528,
+      "aggregate": {
+        "videos": 2,
+        "failed_runs": [],
+        "minutes": 1.483,
+        "silence_s": 45.498,
+        "pauses": 16,
+        "pauses_ge_2s": 13,
+        "overlap_s_total": 0,
+        "extended_freeze_in_speech": 0,
+        "capacity_violations": 0,
+        "recall_standard": {
+          "value": 0.07317073170731707,
+          "num": 3,
+          "den": 41,
+          "ci95": [
+            0.058823529411764705,
+            0.08333333333333333
+          ]
+        },
+        "recall_tie_aware_standard": {
+          "value": 0.07317073170731707,
+          "num": 3,
+          "den": 41,
+          "ci95": [
+            0.058823529411764705,
+            0.08333333333333333
+          ]
+        },
+        "recall_tie_aware_with_extended": {
+          "value": 0.21951219512195122,
+          "num": 9,
+          "den": 41,
+          "ci95": [
+            0.11764705882352941,
+            0.2916666666666667
+          ]
+        },
+        "recall_with_extended": {
+          "value": 0.21951219512195122,
+          "num": 9,
+          "den": 41,
+          "ci95": [
+            0.11764705882352941,
+            0.2916666666666667
+          ]
+        },
+        "timely_recall_with_extended": {
+          "value": 0.07317073170731707,
+          "num": 3,
+          "den": 41,
+          "ci95": [
+            0.058823529411764705,
+            0.08333333333333333
+          ]
+        },
+        "hallucination_claims": {
+          "value": 0,
+          "num": 0,
+          "den": 27,
+          "ci95": [
+            0,
+            0
+          ]
+        },
+        "hallucination_cues": {
+          "value": 0,
+          "num": 0,
+          "den": 7,
+          "ci95": [
+            0,
+            0
+          ]
+        },
+        "redundancy_cues": {
+          "value": 0,
+          "num": 0,
+          "den": 7,
+          "ci95": [
+            0,
+            0
+          ]
+        },
+        "spoken_facts_restated": {
+          "value": 0.1,
+          "num": 1,
+          "den": 10,
+          "ci95": [
+            0,
+            0.16666666666666666
+          ]
+        },
+        "decoys_stated": 0,
+        "decoys_total": 8,
+        "decoy_number_hits": 0,
+        "hallucination_voiced_text": {
+          "value": 0.7142857142857143,
+          "num": 10,
+          "den": 14,
+          "ci95": [
+            0.6,
+            0.7777777777777778
+          ]
+        },
+        "voiced_unverifiable": {
+          "value": 0,
+          "num": 0,
+          "den": 14,
+          "ci95": [
+            0,
+            0
+          ]
+        },
+        "voiced_cues_with_unsupported": {
+          "value": 0.42857142857142855,
+          "num": 3,
+          "den": 7,
+          "ci95": [
+            0.3333333333333333,
+            0.5
+          ]
+        },
+        "claims_not_in_cue_text": {
+          "value": 0.5185185185185185,
+          "num": 14,
+          "den": 27,
+          "ci95": [
+            0.25,
+            0.7333333333333333
+          ]
+        },
+        "hallucination_claims_in_cue_text": {
+          "value": 0,
+          "num": 0,
+          "den": 13,
+          "ci95": [
+            0,
+            0
+          ]
+        },
+        "decoys_absent_part": 0,
+        "recall_by_kind": {
+          "bullet": {
+            "standard": {
+              "value": 0,
+              "num": 0,
+              "den": 21,
+              "ci95": [
+                0,
+                0
+              ]
+            },
+            "with_extended": {
+              "value": 0,
+              "num": 0,
+              "den": 21,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          },
+          "chart_trend": {
+            "standard": {
+              "value": 0,
+              "num": 0,
+              "den": 2,
+              "ci95": [
+                0,
+                0
+              ]
+            },
+            "with_extended": {
+              "value": 0,
+              "num": 0,
+              "den": 2,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          },
+          "chart_value": {
+            "standard": {
+              "value": 0,
+              "num": 0,
+              "den": 4,
+              "ci95": [
+                0,
+                0
+              ]
+            },
+            "with_extended": {
+              "value": 0.25,
+              "num": 1,
+              "den": 4,
+              "ci95": [
+                0,
+                0.5
+              ]
+            }
+          },
+          "label": {
+            "standard": {
+              "value": 0,
+              "num": 0,
+              "den": 8,
+              "ci95": [
+                0,
+                0
+              ]
+            },
+            "with_extended": {
+              "value": 0.25,
+              "num": 2,
+              "den": 8,
+              "ci95": [
+                0,
+                0.4
+              ]
+            }
+          },
+          "title": {
+            "standard": {
+              "value": 0.5,
+              "num": 3,
+              "den": 6,
+              "ci95": [
+                0.5,
+                0.5
+              ]
+            },
+            "with_extended": {
+              "value": 1,
+              "num": 6,
+              "den": 6,
+              "ci95": [
+                1,
+                1
+              ]
+            }
+          }
+        },
+        "exact_title_standard": {
+          "value": 0.5,
+          "num": 3,
+          "den": 6,
+          "ci95": [
+            0.5,
+            0.5
+          ]
+        },
+        "exact_chart_value_standard": {
+          "value": 0,
+          "num": 0,
+          "den": 4,
+          "ci95": [
+            0,
+            0
+          ]
+        },
+        "exact_title_with_extended": {
+          "value": 1,
+          "num": 6,
+          "den": 6,
+          "ci95": [
+            1,
+            1
+          ]
+        },
+        "exact_chart_value_with_extended": {
+          "value": 0.25,
+          "num": 1,
+          "den": 4,
+          "ci95": [
+            0,
+            0.5
+          ]
+        },
+        "exact_tie_aware_chart_value_standard": {
+          "value": 0,
+          "num": 0,
+          "den": 4,
+          "ci95": [
+            0,
+            0
+          ]
+        },
+        "exact_tie_aware_chart_value_with_extended": {
+          "value": 0.25,
+          "num": 1,
+          "den": 4,
+          "ci95": [
+            0,
+            0.5
+          ]
+        },
+        "cost": {
+          "model_usd": 0.035271,
+          "tavily_usd": 0,
+          "model_usd_per_min": 0.023789,
+          "tavily_usd_per_min": 0,
+          "per_min_ci95": [
+            0.02276812191103789,
+            0.025015841584158417
+          ]
+        },
+        "processing": {
+          "seconds": 130.02,
+          "s_per_min": 87.7,
+          "s_per_min_ci95": [
+            82.77800658978583,
+            93.6059405940594
+          ]
+        },
+        "cue_counts": {
+          "verified": 4,
+          "edited": 0,
+          "approved": 0,
+          "held": 0,
+          "extended": 3
+        }
+      },
+      "judge_probe": {
+        "videos": [
+          "a01"
+        ],
+        "total": {
+          "facts_credited_to_own_cue": [
+            24,
+            24
+          ],
+          "decoys_credited_to_own_cue": [
+            4,
+            4
+          ],
+          "fact_claims_supported": [
+            24,
+            24
+          ],
+          "decoy_claims_unsupported": [
+            4,
+            4
+          ],
+          "negatives_not_credited": [
+            15,
+            15
+          ],
+          "negative_claims_unsupported": [
+            6,
+            6
+          ],
+          "by_negative_type": {
+            "bullet_partial": [
+              3,
+              3
+            ],
+            "gist_only": [
+              6,
+              6
+            ],
+            "title_swap": [
+              4,
+              4
+            ],
+            "wrong_value": [
+              2,
+              2
+            ]
+          },
+          "cross_credits": {
+            "fact_to_other_fact_cue": 0,
+            "decoy_to_fact_cue": 0,
+            "fact_to_decoy_cue": 0
+          }
+        },
+        "voiced": {
+          "total": {
+            "sensitivity": [
+              2,
+              2
+            ],
+            "specificity": [
+              3,
+              3
+            ],
+            "by_type": {
+              "invented_bullet": [
+                1,
+                1
+              ],
+              "positive": [
+                2,
+                2
+              ],
+              "swapped_label": [
+                1,
+                1
+              ],
+              "wrong_number": [
+                1,
+                1
+              ]
+            }
+          },
+          "second_judge_total": {
+            "sensitivity": [
+              2,
+              2
+            ],
+            "specificity": [
+              3,
+              3
+            ],
+            "by_type": {
+              "invented_bullet": [
+                1,
+                1
+              ],
+              "positive": [
+                2,
+                2
+              ],
+              "swapped_label": [
+                1,
+                1
+              ],
+              "wrong_number": [
+                1,
+                1
+              ]
+            }
+          }
+        }
+      },
+      "videos": [
+        {
+          "id": "a01",
+          "subject": "biology",
+          "duration_s": 48.56,
+          "run_id": "suite-a-a01-20261028T011729Z",
+          "engine_fingerprint": "0.2.0+f861597faa9b7766",
+          "started_utc": "2026-10-28T01:17:29+00:00",
+          "finished_utc": null,
+          "failed": null,
+          "silence": {
+            "seconds": 25.5716,
+            "pauses": 9,
+            "pauses_ge_2s": 7
+          },
+          "published": {
+            "standard": 2,
+            "extended": 2
+          },
+          "overlap_s": 0,
+          "extended_freeze_in_speech": [],
+          "capacity_violations": [],
+          "exact_match": {
+            "standard": {
+              "title": {
+                "matched": 2,
+                "of": 4
+              },
+              "chart_value": {
+                "matched": 0,
+                "of": 2
+              }
+            },
+            "with_extended": {
+              "title": {
+                "matched": 4,
+                "of": 4
+              },
+              "chart_value": {
+                "matched": 1,
+                "of": 2
+              }
+            }
+          },
+          "decoy_number_hits": [],
+          "cost_model_usd": 0.018427,
+          "cost_tavily_usd": 0,
+          "processing_s": 66.995,
+          "calls": 11,
+          "cue_counts": {
+            "verified": 2,
+            "edited": 0,
+            "approved": 0,
+            "held": 0,
+            "extended": 2
+          },
+          "engine_overlap_s": 0,
+          "engine_coverage": {
+            "important_events": 4,
+            "salient_events": 4,
+            "described": 2,
+            "ratio": 0.5,
+            "described_with_extended": 4,
+            "ratio_with_extended": 1,
+            "undescribed": [],
+            "repetitive": []
+          },
+          "engine_models": [
+            "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "nvidia/Nemotron-3.5-Super-VL",
+            "nvidia/Nemotron-3_5-Lightning"
+          ],
+          "extended_produced": true,
+          "recall": {
+            "standard": [
+              2,
+              24
+            ],
+            "with_extended": [
+              7,
+              24
+            ],
+            "timely_with_extended": [
+              2,
+              24
+            ],
+            "by_kind": {
+              "bullet": {
+                "standard": [
+                  0,
+                  12
+                ],
+                "with_extended": [
+                  0,
+                  12
+                ]
+              },
+              "chart_trend": {
+                "standard": [
+                  0,
+                  1
+                ],
+                "with_extended": [
+                  0,
+                  1
+                ]
+              },
+              "chart_value": {
+                "standard": [
+                  0,
+                  2
+                ],
+                "with_extended": [
+                  1,
+                  2
+                ]
+              },
+              "label": {
+                "standard": [
+                  0,
+                  5
+                ],
+                "with_extended": [
+                  2,
+                  5
+                ]
+              },
+              "title": {
+                "standard": [
+                  2,
+                  4
+                ],
+                "with_extended": [
+                  4,
+                  4
+                ]
+              }
+            }
+          },
+          "decoys": {
+            "stated": [],
+            "of": 4,
+            "by_decoy": {
+              "a01-d01": [],
+              "a01-d02": [],
+              "a01-d03": [],
+              "a01-d04": []
+            }
+          },
+          "hallucination": {
+            "claims": [
+              0,
+              12
+            ],
+            "by_track": {
+              "standard": [
+                0,
+                6
+              ],
+              "extended": [
+                0,
+                6
+              ]
+            },
+            "cues": [
+              0,
+              4
+            ]
+          },
+          "redundancy": {
+            "cues": [
+              0,
+              4
+            ],
+            "redundant_cues": [],
+            "spoken_facts_restated": [
+              0,
+              4
+            ]
+          },
+          "supplementary": {
+            "recall_tie_aware": {
+              "standard": [
+                2,
+                24
+              ],
+              "with_extended": [
+                7,
+                24
+              ]
+            },
+            "exact_tie_aware": {
+              "standard": {
+                "title": {
+                  "matched": 2,
+                  "of": 4
+                },
+                "chart_value": {
+                  "matched": 0,
+                  "of": 2
+                }
+              },
+              "with_extended": {
+                "title": {
+                  "matched": 4,
+                  "of": 4
+                },
+                "chart_value": {
+                  "matched": 1,
+                  "of": 2
+                }
+              }
+            },
+            "claims_not_in_cue_text": [
+              3,
+              12
+            ],
+            "unsupported_claims_in_cue_text": [
+              0,
+              9
+            ],
+            "decoys_absent_part": [],
+            "hallucination_voiced_text": [
+              7,
+              9
+            ],
+            "voiced_unverifiable": [
+              0,
+              9
+            ],
+            "voiced_cues_with_unsupported": [
+              2,
+              4
+            ]
+          },
+          "judge_problems": []
+        },
+        {
+          "id": "a02",
+          "subject": "economics",
+          "duration_s": 40.4,
+          "run_id": "suite-a-a02-20261028T011729Z",
+          "engine_fingerprint": "0.2.0+f861597faa9b7766",
+          "started_utc": "2026-10-28T01:17:29+00:00",
+          "finished_utc": null,
+          "failed": null,
+          "silence": {
+            "seconds": 19.926,
+            "pauses": 7,
+            "pauses_ge_2s": 6
+          },
+          "published": {
+            "standard": 2,
+            "extended": 1
+          },
+          "overlap_s": 0,
+          "extended_freeze_in_speech": [],
+          "capacity_violations": [],
+          "exact_match": {
+            "standard": {
+              "title": {
+                "matched": 1,
+                "of": 2
+              },
+              "chart_value": {
+                "matched": 0,
+                "of": 2
+              }
+            },
+            "with_extended": {
+              "title": {
+                "matched": 2,
+                "of": 2
+              },
+              "chart_value": {
+                "matched": 0,
+                "of": 2
+              }
+            }
+          },
+          "decoy_number_hits": [],
+          "cost_model_usd": 0.016844,
+          "cost_tavily_usd": 0,
+          "processing_s": 63.028,
+          "calls": 13,
+          "cue_counts": {
+            "verified": 2,
+            "edited": 0,
+            "approved": 0,
+            "held": 0,
+            "extended": 1
+          },
+          "engine_overlap_s": 0,
+          "engine_coverage": {
+            "important_events": 3,
+            "salient_events": 3,
+            "described": 2,
+            "ratio": 0.667,
+            "described_with_extended": 3,
+            "ratio_with_extended": 1,
+            "undescribed": [],
+            "repetitive": []
+          },
+          "engine_models": [
+            "nvidia/Nemotron-3-Ultra-550b-a55b",
+            "nvidia/Nemotron-3.5-Super-VL",
+            "nvidia/Nemotron-3_5-Lightning"
+          ],
+          "extended_produced": true,
+          "recall": {
+            "standard": [
+              1,
+              17
+            ],
+            "with_extended": [
+              2,
+              17
+            ],
+            "timely_with_extended": [
+              1,
+              17
+            ],
+            "by_kind": {
+              "bullet": {
+                "standard": [
+                  0,
+                  9
+                ],
+                "with_extended": [
+                  0,
+                  9
+                ]
+              },
+              "chart_trend": {
+                "standard": [
+                  0,
+                  1
+                ],
+                "with_extended": [
+                  0,
+                  1
+                ]
+              },
+              "chart_value": {
+                "standard": [
+                  0,
+                  2
+                ],
+                "with_extended": [
+                  0,
+                  2
+                ]
+              },
+              "label": {
+                "standard": [
+                  0,
+                  3
+                ],
+                "with_extended": [
+                  0,
+                  3
+                ]
+              },
+              "title": {
+                "standard": [
+                  1,
+                  2
+                ],
+                "with_extended": [
+                  2,
+                  2
+                ]
+              }
+            }
+          },
+          "decoys": {
+            "stated": [],
+            "of": 4,
+            "by_decoy": {
+              "a02-d01": [],
+              "a02-d02": [],
+              "a02-d03": [],
+              "a02-d04": []
+            }
+          },
+          "hallucination": {
+            "claims": [
+              0,
+              15
+            ],
+            "by_track": {
+              "standard": [
+                0,
+                10
+              ],
+              "extended": [
+                0,
+                5
+              ]
+            },
+            "cues": [
+              0,
+              3
+            ]
+          },
+          "redundancy": {
+            "cues": [
+              0,
+              3
+            ],
+            "redundant_cues": [],
+            "spoken_facts_restated": [
+              1,
+              6
+            ]
+          },
+          "supplementary": {
+            "recall_tie_aware": {
+              "standard": [
+                1,
+                17
+              ],
+              "with_extended": [
+                2,
+                17
+              ]
+            },
+            "exact_tie_aware": {
+              "standard": {
+                "title": {
+                  "matched": 1,
+                  "of": 2
+                },
+                "chart_value": {
+                  "matched": 0,
+                  "of": 2
+                }
+              },
+              "with_extended": {
+                "title": {
+                  "matched": 2,
+                  "of": 2
+                },
+                "chart_value": {
+                  "matched": 0,
+                  "of": 2
+                }
+              }
+            },
+            "claims_not_in_cue_text": [
+              11,
+              15
+            ],
+            "unsupported_claims_in_cue_text": [
+              0,
+              4
+            ],
+            "decoys_absent_part": [],
+            "hallucination_voiced_text": [
+              3,
+              5
+            ],
+            "voiced_unverifiable": [
+              0,
+              5
+            ],
+            "voiced_cues_with_unsupported": [
+              1,
+              3
+            ]
+          },
+          "judge_problems": []
+        }
+      ]
+    }
+  },
+  "known_failures": [
+    {
+      "title": "Extended lines froze before their slide",
+      "detail": "In the smoke run the listen stage widened narration spans, so an extended line could freeze the picture on the slide before the one it describes. Test data: taken from the smoke, not from a scored run."
+    },
+    {
+      "title": "Slide titles only in the standard track",
+      "detail": "With too few speech-free windows per lecture, the standard track voiced slide titles and little else. Test data: taken from the smoke, not from a scored run."
+    }
+  ]
+}
