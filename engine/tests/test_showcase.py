@@ -326,3 +326,14 @@ def test_the_command_says_the_cost_is_per_run_id():
     r = CliRunner().invoke(cli.app, ["export-showcase", "--help"], terminal_width=200)
     text = " ".join(r.output.split())
     assert r.exit_code == 0 and "costUsd" in text and "every run under that run id" in text
+
+
+# -- Task 17 ------------------------------------------------------------------------------------
+
+
+def test_exporting_into_the_run_folder_itself_is_refused_before_anything_goes(run_dir):
+    before = sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*"))
+    for out in (run_dir, run_dir / ".", run_dir / "keyframes" / ".."):
+        with pytest.raises(ShowcaseError, match="run folder"):
+            export_showcase(run_dir, out)
+    assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*")) == before
