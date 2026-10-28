@@ -48,8 +48,7 @@ export default async function WatchIndex() {
             {shows.map((s) => {
               const cues = numberedCues(s);
               const lines = cues.filter((c) => c.kind === "standard" && c.status !== "held").length;
-              const held = lineCounts(s).held;
-              const extended = cues.filter((c) => c.kind === "extended").length;
+              const { held, extended } = lineCounts(s); // a held extended line is held, not extended
               const frame = cardFrame(s.id, cues);
               const credit = creditParts(s.credit);
               return (

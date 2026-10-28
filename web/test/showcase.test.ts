@@ -5,6 +5,7 @@ import { parseIndex, parseShowcase, requiredFiles } from "../lib/showcase-schema
 import {
   closeUp,
   creditParts,
+  draftSegments,
   linesInsidePauses,
   numberedCues,
   spend,
@@ -29,28 +30,37 @@ describe("the shipped showcase is the engine's real export", () => {
     expect(show.words?.[0]).toEqual({ text: "Safe", start: 0.24, end: 0.8 });
     expect(show.audio).toEqual({ original: "/showcase/ed90/video.mp4", described: "/showcase/ed90/described-audio.m4a" });
     expect(show.cueAudioBase).toBe("/showcase/ed90/audio/");
-    expect(show.verifyExample?.cueId).toBe("c013");
+    expect(show.verifyExample?.cueId).toBe("c010");
   });
 
   it("lists in the index exactly as its showcase.json reads", () => {
     const index = parseIndex(JSON.parse(readFileSync(path.join(ROOT, "index.json"), "utf8")));
-    expect(index).toEqual([{ id: "ed90", title: show.title, credit: show.credit, duration: show.duration, cues: show.cues.length, held: 4, costUsd: show.costUsd }]);
+    expect(index.map((e) => e.id)).toEqual(["ed90", "bbb120", "tos180"]);
+    for (const e of index) {
+      const s = parseShowcase(JSON.parse(readFileSync(path.join(ROOT, e.id, "showcase.json"), "utf8")), e.id);
+      expect(e).toEqual({ id: e.id, title: s.title, credit: s.credit, duration: s.duration, cues: s.cues.length, held: s.summary?.counts.held, costUsd: s.costUsd });
+      // every recorded run is credited with its licence
+      expect(creditParts(s.credit).licence).not.toBeNull();
+    }
+    expect(index[0]).toMatchObject({ cues: 13, held: 1 });
   });
 
   it("names every file the player needs", () => {
     const files = requiredFiles(raw);
     expect(files).toEqual(expect.arrayContaining(["showcase.json", "video.mp4", "described-audio.m4a", "descriptions.vtt", "extended.vtt", "audio/c001.m4a", "audio/x002.m4a"]));
-    expect(files.filter((f) => f.startsWith("audio/"))).toHaveLength(show.cues.length);
+    // a recording for every line but the held ones
+    expect(files.filter((f) => f.startsWith("audio/"))).toHaveLength(show.cues.filter((c) => c.status !== "held").length);
+    expect(files).not.toContain("audio/c002.m4a");
   });
 });
 
 describe("what the pages derive from the run", () => {
   it("voices standard lines only, none over speech, each inside its pause", () => {
     const voiced = voicedCues(show);
-    expect(voiced.map((c) => c.id)).toEqual(["c001", "c002", "c005", "c006", "c007", "c008", "c011", "c013"]);
+    expect(voiced.map((c) => c.id)).toEqual(["c001", "c003", "c004", "c005", "c006", "c008", "c010", "c011", "c012", "c013"]);
     expect(voiced.every((c) => c.status !== "held" && c.status !== "extended")).toBe(true);
     expect(speechOverlap(show)).toEqual({ cues: 0, seconds: 0 });
-    expect(linesInsidePauses(show)).toEqual({ inside: 8, of: 8 });
+    expect(linesInsidePauses(show)).toEqual({ inside: 10, of: 10 });
   });
 
   it("numbers standard and extended lines apart, in time order", () => {
@@ -60,28 +70,54 @@ describe("what the pages derive from the run", () => {
       "x002=Extended 2",
       "c001=Cue 1",
       "c002=Cue 2",
-      "c005=Cue 3",
-      "c006=Cue 4",
-      "c007=Cue 5",
-      "c008=Cue 6",
-      "c011=Cue 7",
-      "c013=Cue 8",
+      "c003=Cue 3",
+      "c004=Cue 4",
+      "c005=Cue 5",
+      "c006=Cue 6",
+      "c008=Cue 7",
+      "c010=Cue 8",
+      "c011=Cue 9",
+      "c012=Cue 10",
+      "c013=Cue 11",
     ]);
   });
 
   it("finds the verify example's cue by its id, and the spoken line is that cue's text", () => {
     const cue = verifiedCue(show);
-    expect(cue?.id).toBe("c013");
+    expect(cue?.id).toBe("c010");
     expect(cue?.label).toBe("Cue 8");
-    expect(cue?.text).toBe("Both figures fall through the wires into darkness.");
-    // cutting the claim the frames didn't show leaves the draft's own words
-    expect(show.verifyExample && spokenFromDraft(show.verifyExample)).toBe("And both figures fall through the wires into darkness.");
+    expect(cue?.text).toBe("Both stand facing each other, gesturing.");
+    // cutting the claim the frames didn't show leaves the draft's own words, and no dangling "and"
+    expect(show.verifyExample && spokenFromDraft(show.verifyExample)).toBe(cue?.text);
   });
 
   it("falls back to the claims when the export names no cue", () => {
     const r = clone();
     delete r.verifyExample.cueId;
-    expect(verifiedCue(parseShowcase(r, "ed90"))?.id).toBe("c013");
+    r.verifyExample.claims = [
+      { text: "facing each other", verdict: "supported" },
+      { text: "gesturing", verdict: "supported" },
+      { text: "talking", verdict: "not_visible" },
+    ];
+    expect(verifiedCue(parseShowcase(r, "ed90"))?.id).toBe("c010");
+  });
+
+  it("marks the draft claim by claim, whole words only, the whole-line claim left out", () => {
+    const v = show.verifyExample!;
+    expect(v.cue).toBe("Both stand facing each other, gesturing and talking.");
+    const marked = draftSegments(v).map((s) => (s.verdict ? `[${s.text}:${s.verdict}]` : s.text)).join("");
+    // "talk" marks all of "talking", "gesture" all of "gesturing"; the claim that is the whole
+    // line doesn't strike everything
+    expect(marked).toBe("[Both stand:supported] [facing each other:supported], [gesturing:supported] and [talking:not_visible].");
+  });
+
+  it("places an unsupported claim over a supported one it overlaps", () => {
+    const v = { cue: "A man in a red coat waves.", claims: [{ text: "a man in a red coat", verdict: "supported" as const }, { text: "red", verdict: "contradicted" as const }] };
+    expect(draftSegments(v).map((s) => (s.verdict ? `[${s.text}:${s.verdict}]` : s.text)).join("")).toBe("A man in a [red:contradicted] coat waves.");
+    expect(spokenFromDraft({ cue: "She waves, smiling, and walks off.", claims: [{ text: "smiling", verdict: "not_visible" }] })).toBe("She waves, and walks off.");
+    expect(spokenFromDraft({ cue: "The car stops while it rains.", claims: [{ text: "it rains", verdict: "not_visible" }] })).toBe("The car stops.");
+    // "the" is not a stem of "there"
+    expect(draftSegments({ cue: "There it is.", claims: [{ text: "the", verdict: "supported" }] })).toEqual([{ text: "There it is." }]);
   });
 
   it("closes up on a pause one guard from words on both sides", () => {
@@ -119,14 +155,15 @@ describe("what the pages derive from the run", () => {
     expect(creditParts(show.credit)).toEqual({
       before: "Elephants Dream (2006), Blender Foundation / Netherlands Media Art Institute, ",
       licence: { label: "CC BY 2.5", url: "https://creativecommons.org/licenses/by/2.5/" },
-      after: "",
+      after: "; excerpt 1:00-2:30",
     });
     expect(creditParts("Big Buck Bunny (2008), Blender Foundation, CC BY-SA 3.0 (excerpt)").licence?.url).toBe("https://creativecommons.org/licenses/by-sa/3.0/");
     expect(creditParts("USGS, public domain")).toEqual({ before: "USGS, public domain", licence: null, after: "" });
   });
 
   it("says the run's spend as a figure and in words", () => {
-    expect(spend(show.costUsd ?? 0)).toEqual({ figure: "$0.05", words: "About five cents" });
+    expect(spend(show.costUsd ?? 0)).toEqual({ figure: "$0.04", words: "About four cents" });
+    expect(spend(0.047979)).toEqual({ figure: "$0.05", words: "About five cents" });
     expect(spend(0.004)).toEqual({ figure: "<$0.01", words: "Under a cent" });
   });
 });

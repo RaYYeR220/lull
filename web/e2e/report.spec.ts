@@ -16,18 +16,18 @@ test.describe("conformance reports", () => {
     await expect(page.locator("[data-no-summary]")).toHaveCount(0);
     const wcag = page.getByRole("region", { name: "WCAG audio description" });
     for (const c of ["1.2.3", "1.2.5", "1.2.7"]) await expect(wcag.locator(`[data-criterion="${c}"]`)).toContainText("Needs review");
-    await expect(wcag.locator('[data-criterion="1.2.5"]')).toContainText("4 descriptions held for review");
-    await expect(wcag.locator('[data-criterion="1.2.5"]')).toContainText("7 important events undescribed (8 of 15 described)");
+    await expect(wcag.locator('[data-criterion="1.2.5"]')).toContainText("1 description held for review");
+    await expect(wcag.locator('[data-criterion="1.2.5"]')).toContainText("3 important events undescribed (7 of 10 described)");
     // the export's summary doesn't say whether a person reviewed the lines: nothing is claimed
     await expect(wcag.locator("[data-reviewed]")).toHaveCount(0);
-    await expect(page.locator('[data-fact="coverage"]')).toContainText("8 of 15 (53 %) in the standard track; 10 of 15 (67 %) with the extended track");
+    await expect(page.locator('[data-fact="coverage"]')).toContainText("7 of 10 (70 %) in the standard track; 9 of 10 (90 %) with the extended track");
     await expect(page.getByRole("region", { name: "Timing" }).locator('[data-fact="overlap"]')).toContainText("0.000 s");
-    await expect(page.locator('[data-fact="f113"]').getByRole("listitem")).toHaveCount(3);
+    await expect(page.locator('[data-fact="f113"]').getByRole("listitem")).toHaveCount(1);
     const lines = page.getByRole("list", { name: "Lines by status" });
-    await expect(lines).toContainText("8");
+    await expect(lines).toContainText("10");
     await expect(lines).toContainText("held");
     await expect(page.getByText("Counted from the published lines.")).toHaveCount(0);
-    await expect(page.locator('[data-fact="spend"]').first()).toContainText("$0.0480");
+    await expect(page.locator('[data-fact="spend"]').first()).toContainText("$0.0387");
     await expect(page.getByRole("link", { name: "Watch it described" })).toHaveAttribute("href", "/watch/ed90");
   });
 

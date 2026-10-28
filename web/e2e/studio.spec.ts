@@ -44,31 +44,33 @@ async function axe(page: Page, where: string) {
 test.describe("the studio, editing a copy", () => {
   test("opens the copy with its timeline, the chosen line in the drawer and the run's summary", async ({ page }) => {
     const errors = pageErrors(page);
-    await openCopy(page, "c013");
+    await openCopy(page, "c010");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Elephants Dream");
     await expect(page.getByText("Studio, your run")).toBeVisible();
     await expect(page.getByText(/This copy is kept until/)).toHaveCount(0); // no record of when it was made in this test
     // the summary, from the run's own published summary
     await expect(page.getByText("6 of 6", { exact: true })).toBeVisible();
-    await expect(page.getByRole("list", { name: "WCAG statuses" }).getByRole("listitem").filter({ hasText: "1.2.5" })).toContainText("Met (automated checks)");
+    // the copy keeps the recorded run's held line, so WCAG waits for review
+    await expect(page.getByRole("list", { name: "WCAG statuses" }).getByRole("listitem").filter({ hasText: "1.2.5" })).toContainText("Needs review");
+    await expect(page.getByRole("list", { name: "WCAG statuses" }).getByRole("listitem").filter({ hasText: "1.2.5" })).toContainText("1 description held for review");
     await page.getByText("Moments the planner rated as repeats, not counted as missing").click();
     await expect(page.getByText("Wire figures sway in the background.")).toBeVisible();
 
     // the timeline: soundtrack (lent by the recorded run of the clip), speech, pauses and lines
-    await expect(page.getByRole("listbox", { name: "Lines, in time order" }).getByRole("option")).toHaveCount(10);
-    await expect(option(page, "c013")).toHaveAttribute("aria-selected", "true");
-    await expect(option(page, "c013")).toHaveAccessibleName(/^Cue 8, Verified, at 1:23\.21: Both figures fall through the wires into darkness\.$/);
+    await expect(page.getByRole("listbox", { name: "Lines, in time order" }).getByRole("option")).toHaveCount(13);
+    await expect(option(page, "c010")).toHaveAttribute("aria-selected", "true");
+    await expect(option(page, "c010")).toHaveAccessibleName(/^Cue 8, Verified, at 1:07\.60: Both stand facing each other, gesturing\.$/);
     await expect(page.getByText("The soundtrack levels are from the recorded run of this clip, Elephants Dream.")).toBeVisible();
 
     // the drawer: where it sits, its frame, words against the pause, claims, note, provenance
     await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 8");
-    await expect(drawer(page)).toContainText("In the pause from 1:23.21 to 1:28.00, 4.79 s.");
+    await expect(drawer(page)).toContainText("In the pause from 1:07.60 to 1:10.92, 3.32 s.");
     await expect(drawer(page).getByRole("img")).toHaveCount(0); // decorative frame: alt=""
-    await expect(drawer(page).locator("img")).toHaveAttribute("src", `${API}/v1/runs/${FORK_ID}/files/keyframes/c013.jpg`);
-    await expect(line(page)).toHaveValue("Both figures fall through the wires into darkness.");
-    await expect(line(page)).toHaveAccessibleDescription(/8 of 14 words/);
-    await expect(drawer(page).getByText("removed “The platform breaks apart” (not visible in the frames)")).toBeVisible();
-    await expect(drawer(page).getByRole("listitem").filter({ hasText: "both figures fall" })).toContainText("Seen at 1:23.81");
+    await expect(drawer(page).locator("img")).toHaveAttribute("src", `${API}/v1/runs/${FORK_ID}/files/keyframes/c010.jpg`);
+    await expect(line(page)).toHaveValue("Both stand facing each other, gesturing.");
+    await expect(line(page)).toHaveAccessibleDescription(/6 of 10 words/);
+    await expect(drawer(page).getByText("removed “talk” (not visible in the frames)")).toBeVisible();
+    await expect(drawer(page).getByRole("listitem").filter({ hasText: "both stand" })).toContainText("Seen at 1:08.20");
     await expect(drawer(page).getByRole("list", { name: "Who made this line" })).toContainText("Checked by Nemotron 3.5 Super VL");
     await expect(drawer(page).getByRole("list", { name: "Who made this line" })).toContainText("Voiced by Magpie TTS Multilingual");
 
@@ -79,7 +81,7 @@ test.describe("the studio, editing a copy", () => {
   });
 
   test("the word budget follows the text as it is typed", async ({ page }) => {
-    await openCopy(page, "c002");
+    await openCopy(page, "c003");
     await line(page).fill("The two people stand among hanging wires and cables, looking up at a tall shaft full of moving lights.");
     await expect(line(page)).toHaveAccessibleDescription(/4 words over: 19 of 15/);
     await expect(line(page)).toHaveAttribute("aria-invalid", "true");
@@ -87,7 +89,7 @@ test.describe("the studio, editing a copy", () => {
     await line(page).fill("Two people stand among wires.");
     await expect(line(page)).toHaveAccessibleDescription(/5 of 15 words/);
     await drawer(page).getByRole("button", { name: "Undo my changes" }).click();
-    await expect(line(page)).toHaveValue("A second person with dark hair and light shirt enters behind the first.");
+    await expect(line(page)).toHaveValue("In a moment, a dark chamber with metal platforms and hanging objects.");
   });
 
   test("an edit is checked again and comes back edited, with its checks; the run then needs publishing", async ({ page }) => {
@@ -95,16 +97,16 @@ test.describe("the studio, editing a copy", () => {
     page.on("request", (r) => {
       if (r.method() === "PATCH") patched.push({ auth: r.headers()["authorization"], body: r.postData() ?? undefined });
     });
-    await openCopy(page, "c002", "slow");
+    await openCopy(page, "c003", "slow");
     await line(page).fill("The two people stand among hanging wires, the man looking up.");
     await expect(line(page)).toHaveAccessibleDescription(/11 of 15 words/);
     await save(page).click();
     await expect(outcome(page)).toContainText("Checking the new line: writing rules, then the frames, then the voice.");
-    await expect(outcome(page)).toHaveText("Cue 2 is edited: it passed the frame check and was voiced again.", { timeout: 15_000 });
+    await expect(outcome(page)).toHaveText("Cue 3 is edited: it passed the frame check and was voiced again.", { timeout: 15_000 });
     expect(patched).toEqual([{ auth: `Bearer ${FORK_TOKEN}`, body: JSON.stringify({ text: "The two people stand among hanging wires, the man looking up." }) }]);
 
     await expect(drawer(page).locator("[data-status]").first()).toHaveAttribute("data-status", "edited");
-    await expect(option(page, "c002")).toHaveAttribute("data-status", "edited");
+    await expect(option(page, "c003")).toHaveAttribute("data-status", "edited");
     // the reviewer warning the API's lint found, and who wrote it now
     await expect(drawer(page).getByRole("region", { name: "Writing checks" })).toContainText("R14-gender");
     await expect(drawer(page).getByRole("region", { name: "Writing checks" })).toContainText("Advice");
@@ -120,7 +122,7 @@ test.describe("the studio, editing a copy", () => {
     await openCopy(page, "c005");
     await line(page).fill("A metal door opens behind the two on the walkway.");
     await save(page).click();
-    await expect(outcome(page)).toHaveText(/Cue 3 is held: says a door; the frames show no door\./, { timeout: 15_000 });
+    await expect(outcome(page)).toHaveText(/Cue 5 is held: says a door; the frames show no door\./, { timeout: 15_000 });
     await expect(option(page, "c005")).toHaveAttribute("data-status", "held");
     await expect(drawer(page).getByRole("region", { name: "Why it is held" })).toContainText("says a door; the frames show no door");
     await expect(drawer(page).getByRole("listitem").filter({ hasText: "a door" })).toContainText("Not visible, cut");
@@ -128,7 +130,7 @@ test.describe("the studio, editing a copy", () => {
   });
 
   test("a line that breaks a writing rule is refused before any check, with what to fix", async ({ page }) => {
-    await openCopy(page, "c002");
+    await openCopy(page, "c003");
     await line(page).fill("we see wires all around the two people");
     await save(page).click();
     await expect(outcome(page)).toHaveText("This description breaks R7-person. Fix it and save again.", { timeout: 15_000 });
@@ -136,7 +138,7 @@ test.describe("the studio, editing a copy", () => {
     await expect(drawer(page).getByRole("list", { name: "What the writing check found" })).toContainText("Must fix");
     await expect(drawer(page).getByText("Checked as")).toContainText("We see wires all around the two people.");
     // nothing changed: the line keeps its status and the draft stays for fixing
-    await expect(option(page, "c002")).toHaveAttribute("data-status", "verified");
+    await expect(option(page, "c003")).toHaveAttribute("data-status", "verified");
     await expect(line(page)).toHaveValue("we see wires all around the two people");
   });
 
@@ -151,13 +153,14 @@ test.describe("the studio, editing a copy", () => {
     await expect(drawer(page).getByRole("list", { name: "Who made this line" })).toContainText("Approved by a person");
 
     await option(page, "c005").click();
-    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 3");
+    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 5");
     await drawer(page).getByRole("button", { name: "Hold…" }).click();
     await drawer(page).getByRole("textbox", { name: "Why hold it? (optional)" }).fill("the walkway isn't in the frame");
     await drawer(page).getByRole("button", { name: "Hold this line" }).click();
-    await expect(outcome(page)).toHaveText("Cue 3 is held: held by a reviewer: the walkway isn't in the frame. It won’t be voiced until it is edited.", { timeout: 15_000 });
+    await expect(outcome(page)).toHaveText("Cue 5 is held: held by a reviewer: the walkway isn't in the frame. It won’t be voiced until it is edited.", { timeout: 15_000 });
     await expect(option(page, "c005")).toHaveAttribute("data-status", "held");
-    await expect(page.getByRole("list", { name: "Lines by status" })).toContainText("1 held");
+    // the recorded run's own held line, and this one
+    await expect(page.getByRole("list", { name: "Lines by status" })).toContainText("2 held");
   });
 
   test("publish goes through, and the run is clean again", async ({ page }) => {
@@ -166,7 +169,7 @@ test.describe("the studio, editing a copy", () => {
     await expect(outcome(page)).toHaveText("Cue 1 is approved.", { timeout: 15_000 });
     await publish(page).click();
     await expect(page.getByRole("status").filter({ hasText: /^Published/ })).toHaveText(
-      "Published: the files now carry 10 lines, and coverage and WCAG are worked out again.",
+      "Published: the files now carry 12 lines, and coverage and WCAG are worked out again.",
       { timeout: 15_000 },
     );
     await expect(page.getByText("Changed since the last publish")).toHaveCount(0);
@@ -176,9 +179,9 @@ test.describe("the studio, editing a copy", () => {
   });
 
   test("the overlap gate stops a publish: nothing is written and the lines are named", async ({ page }) => {
-    await openCopy(page, "c002", "overlap");
+    await openCopy(page, "c003", "overlap");
     await drawer(page).getByRole("button", { name: "Approve" }).click();
-    await expect(outcome(page)).toHaveText("Cue 2 is approved.", { timeout: 15_000 });
+    await expect(outcome(page)).toHaveText("Cue 3 is approved.", { timeout: 15_000 });
     await publish(page).click();
     await expect(page.getByRole("status").filter({ hasText: /Nothing was published/ })).toHaveText(
       "Nothing was published: these descriptions would overlap speech, the edge of their pause or each other.",
@@ -202,8 +205,8 @@ test.describe("the studio, editing a copy", () => {
   test("choosing a line in the list opens it and moves the player there", async ({ page }) => {
     await openCopy(page, "c001");
     await waitReady(page);
-    await page.getByRole("region", { name: "Every line" }).getByRole("button", { name: /Cue 7/ }).click();
-    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 7");
+    await page.getByRole("region", { name: "Every line" }).getByRole("button", { name: /Cue 9\b/ }).click();
+    await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 9");
     await expect(option(page, "c011")).toHaveAttribute("aria-selected", "true");
     await expect.poll(() => page.locator("lull-player").evaluate((el) => (el as unknown as { currentTime: number }).currentTime)).toBeCloseTo(72.2, 1);
     await expect(page).toHaveURL(/\?cue=c011$/);
@@ -223,7 +226,7 @@ test.describe("the studio, editing a copy", () => {
     await expect(option(page, "c002")).toHaveAttribute("aria-selected", "true");
     await expect(drawer(page).getByRole("heading", { level: 2 })).toHaveText("Cue 2");
     await page.keyboard.press("j");
-    await expect(option(page, "c005")).toBeFocused();
+    await expect(option(page, "c003")).toBeFocused();
     await page.keyboard.press("k");
     await expect(option(page, "c002")).toBeFocused();
     await page.keyboard.press("Home");
@@ -239,9 +242,11 @@ test.describe("the studio, editing a copy", () => {
     await expect(page.getByRole("button", { name: "Whole clip" })).toBeDisabled();
     // Enter opens the line: focus on the drawer's heading, then on to the text
     await page.keyboard.press("ArrowLeft");
+    await expect(option(page, "c012")).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
     await expect(option(page, "c011")).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(drawer(page).getByRole("heading", { level: 2, name: "Cue 7" })).toBeFocused();
+    await expect(drawer(page).getByRole("heading", { level: 2, name: "Cue 9" })).toBeFocused();
     for (let i = 0; i < 6 && !(await line(page).evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
     await expect(line(page)).toBeFocused();
     await page.keyboard.press("ControlOrMeta+a");
@@ -249,7 +254,7 @@ test.describe("the studio, editing a copy", () => {
     await page.keyboard.press("Tab");
     await expect(save(page)).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(outcome(page)).toHaveText("Cue 7 is edited: it passed the frame check and was voiced again. Sped up to 1.08x to fit its pause.", { timeout: 15_000 });
+    await expect(outcome(page)).toHaveText("Cue 9 is edited: it passed the frame check and was voiced again. Sped up to 1.08x to fit its pause.", { timeout: 15_000 });
     // the button kept the focus through the check
     await expect(save(page)).toBeFocused();
   });
@@ -275,12 +280,12 @@ test.describe("the studio, editing a copy", () => {
 
 test.describe("the studio, when things go wrong or go twice", () => {
   test("a change that is saved but can't be read back says so, and keeps the draft", async ({ page }) => {
-    await openCopy(page, "c002", "reread500");
+    await openCopy(page, "c003", "reread500");
     await line(page).fill("The two people stand among hanging wires.");
     await save(page).click();
     await expect(outcome(page)).toHaveText("Saved, but the page couldn’t reload the run. Reload to see its current state.", { timeout: 15_000 });
     // nothing claimed from the stale copy: the line still shows what was last read, and the draft stays
-    await expect(option(page, "c002")).toHaveAttribute("data-status", "verified");
+    await expect(option(page, "c003")).toHaveAttribute("data-status", "verified");
     await expect(line(page)).toHaveValue("The two people stand among hanging wires.");
 
     await option(page, "c001").click();
@@ -415,14 +420,14 @@ test.describe("the studio, borrowing only what the API vouches for", () => {
 
   test("an upload that is merely called ed90.mp4 borrows nothing", async ({ page }) => {
     await routeApi(page, own());
-    await page.goto(`/studio/${UPLOAD_ED90_ID}?cue=c002`);
+    await page.goto(`/studio/${UPLOAD_ED90_ID}?cue=c003`);
     await expect(drawer(page)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("ed90.mp4");
     await expect(page.locator("lull-player")).toHaveAttribute("src", `${API}/v1/runs/${UPLOAD_ED90_ID}/files/described.mp4`);
     await expect(page.locator("lull-player")).toHaveAttribute("sound", "described");
     await expect(page.locator("[class*='h_wave'], [class*='h_gaps'], [class*='h_speech']")).toHaveCount(0);
     await expect(page.getByText(/from the recorded run of this clip/)).toHaveCount(0);
-    await expect(drawer(page).getByText("13 words", { exact: true })).toBeVisible();
+    await expect(drawer(page).getByText("12 words", { exact: true })).toBeVisible();
     await page.goto(`/run/${UPLOAD_ED90_ID}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("ed90.mp4");
     await expect(page.locator("lull-player")).toHaveAttribute("sound", "described");
@@ -451,22 +456,22 @@ test.describe("the studio, read-only", () => {
 
   test("the recorded run is read-only, with the API's checks on each line", async ({ page }) => {
     await routeApi(page, own());
-    await page.goto("/studio/ed90?cue=c013");
+    await page.goto("/studio/ed90?cue=c010");
     await expect(page.getByText("Studio, recorded run")).toBeVisible();
     await expect(page.getByText("Recorded run, read-only")).toBeVisible();
     // the summary is the run's own, as its export carries it
-    await expect(page.getByText("8 of 15", { exact: true })).toBeVisible();
+    await expect(page.getByText("7 of 10", { exact: true })).toBeVisible();
     await expect(page.getByRole("list", { name: "WCAG statuses" }).getByRole("listitem").filter({ hasText: "1.2.5" })).toContainText("Needs review");
-    await expect(drawer(page).getByRole("listitem").filter({ hasText: "both figures fall" })).toContainText("Seen at 1:23.81");
+    await expect(drawer(page).getByRole("listitem").filter({ hasText: "both stand" })).toContainText("Seen at 1:08.20");
     await expect(drawer(page).getByText(/A recorded run stays as it was made/)).toBeVisible();
     await expect(line(page)).toHaveCount(0);
   });
 
   test("the recorded run still opens with the live service down, from its own files", async ({ page }) => {
     await apiDown(page);
-    await page.goto("/studio/ed90?cue=c013");
+    await page.goto("/studio/ed90?cue=c010");
     await expect(page.getByText(/The live service didn’t answer for this run, so each line’s claims, writing checks and notes aren’t shown/)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("listbox", { name: "Lines, in time order" }).getByRole("option")).toHaveCount(10);
+    await expect(page.getByRole("listbox", { name: "Lines, in time order" }).getByRole("option")).toHaveCount(13);
     // the recorded export keeps the verifier's ruling on one draft
     await expect(drawer(page).getByRole("heading", { level: 3, name: "Claims in the first draft, against the frames" })).toBeVisible();
     await expect(drawer(page).getByRole("button", { name: "Make an editable copy" })).toBeDisabled();

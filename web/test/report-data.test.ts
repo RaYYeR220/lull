@@ -28,14 +28,14 @@ describe("a recorded run's report", () => {
     const r = showcaseReport(s, fromShowcase(s));
     expect(r.noSummary).toBe(false);
     expect(r.countsFrom).toBe("summary");
-    expect(r.counts).toMatchObject({ verified: 8, held: 4, extended: 2 });
+    expect(r.counts).toMatchObject({ verified: 10, held: 1, extended: 2 });
     expect(r.wcag?.map((w) => [w.criterion, w.status])).toEqual([
       ["1.2.3", "needs review"],
       ["1.2.5", "needs review"],
       ["1.2.7", "needs review"],
     ]);
-    expect(r.coverage).toMatchObject({ important: 15, described: 8, describedWithExtended: 10 });
-    expect(r.f113?.map((f) => f.gapId)).toEqual(["g003", "g004", "g012"]);
+    expect(r.coverage).toMatchObject({ important: 10, described: 7, describedWithExtended: 9, undescribed: ["e005"] });
+    expect(r.f113?.map((f) => f.gapId)).toEqual(["g002"]);
     expect(r.overlapSeconds).toBe(0);
   });
 
@@ -49,8 +49,9 @@ describe("a recorded run's report", () => {
     expect(r.overlapSeconds).toBeNull();
     expect(r.reviewed).toBeNull();
     expect(r.countsFrom).toBe("lines");
-    expect(r.counts).toEqual({ verified: 8, extended: 2 });
-    expect(r.spend).toEqual([{ name: "Model calls", value: "$0.0480", note: "As the export gives it." }]);
+    // the one held line it lists is counted too
+    expect(r.counts).toEqual({ verified: 10, extended: 2, held: 1 });
+    expect(r.spend).toEqual([{ name: "Model calls", value: "$0.0387", note: "As the export gives it." }]);
   });
 
   it("with the export's summary: every row from it, spend labelled as the engine labels it", () => {

@@ -55,9 +55,14 @@ test.describe("landing", () => {
   test("says only what the run's data backs: its held lines, and that it waits for review", async ({ page }) => {
     await page.goto("/");
     const studio = page.locator("#studio");
-    await expect(studio.getByRole("list", { name: "Cue statuses" })).toContainText("4 held");
-    await expect(studio.getByText("Publish, 4 cues held")).toBeVisible();
-    await expect(page.locator("#library [data-review-state]")).toHaveText("Needs review in the studio: 4 held, none approved yet");
+    await expect(studio.getByRole("list", { name: "Cue statuses" })).toContainText("1 held");
+    await expect(studio.getByText("Publish, 1 cue held")).toBeVisible();
+    await expect(page.locator("#library [data-review-state]")).toHaveText("Needs review in the studio: 1 held, none approved yet");
+    // the refusal marks whole words of the draft, and what was spoken is the published line
+    const refusal = page.locator("#refusal");
+    await expect(refusal.locator(".t-proof-spoken")).toHaveText("Both stand facing each other, gesturing.");
+    await expect(refusal.getByText("talking", { exact: true })).toBeVisible();
+    await expect(refusal).toContainText("Unsupported claim removed.");
     await expect(page.getByText(/course library/)).toHaveCount(0);
     await expect(page.getByText(/Reviewed and approved/)).toHaveCount(0);
   });

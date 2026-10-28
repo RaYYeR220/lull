@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { isInside, syncShowcase, writeIndex } from "../scripts/sync-showcase.mjs";
+import { MAX_VIDEO_BYTES, isInside, reencodeArgs, syncShowcase, writeIndex } from "../scripts/sync-showcase.mjs";
 
 const SCRIPT = path.join(__dirname, "..", "scripts", "sync-showcase.mjs");
 const REAL = JSON.parse(readFileSync(path.join(__dirname, "..", "public", "showcase", "ed90", "showcase.json"), "utf8")) as Record<string, unknown>;
@@ -63,7 +63,7 @@ describe("sync-showcase", () => {
     // nothing the site doesn't play
     for (const stray of ["report.html", "notes.txt", "audio/c999.m4a", "keyframes/c999.jpg"]) expect(copied).not.toContain(stray);
     expect(readFileSync(path.join(dest, "ed90", "showcase.json"))).toEqual(readFileSync(path.join(src, "showcase.json")));
-    expect(index).toEqual([{ id: "ed90", title: "Elephants Dream", credit: REAL.credit, duration: 90, cues: 10, held: 4, costUsd: 0.047979 }]);
+    expect(index).toEqual([{ id: "ed90", title: "Elephants Dream", credit: REAL.credit, duration: 90, cues: 13, held: 1, costUsd: 0.038668 }]);
     expect(JSON.parse(readFileSync(path.join(dest, "index.json"), "utf8"))).toEqual(index);
   });
 
@@ -129,6 +129,39 @@ describe("sync-showcase", () => {
     expect(isInside(root, work)).toBe(false);
   });
 
+  it("re-encodes a video over the limit on the way in, and leaves a smaller one as it is", () => {
+    const calls: string[][] = [];
+    const encode = (from: string, to: string) => {
+      calls.push([path.basename(from), path.basename(to)]);
+      writeFileSync(to, Buffer.from([7]));
+    };
+    const small = syncShowcase({ src: makeExport("small"), id: "ed90", dest, maxVideoBytes: 4, encode });
+    expect(calls).toEqual([]);
+    expect(small.video).toEqual({ bytes: 4, reencoded: false });
+    const big = syncShowcase({ src: makeExport("big"), id: "ed90", dest, maxVideoBytes: 3, encode });
+    expect(calls).toEqual([["video.mp4", ".small-video.mp4"]]);
+    expect(big.video).toEqual({ bytes: 1, reencoded: true, from: 4 });
+    expect(readFileSync(path.join(dest, "ed90", "video.mp4"))).toEqual(Buffer.from([7]));
+    expect(listed(path.join(dest, "ed90"))).toEqual(big.files);
+  });
+
+  it("keeps the site's copy when re-encoding fails", () => {
+    syncShowcase({ src: makeExport("before"), id: "ed90", dest });
+    const fail = () => {
+      throw new Error("no ffmpeg");
+    };
+    expect(() => syncShowcase({ src: makeExport("after"), id: "ed90", dest, maxVideoBytes: 1, encode: fail })).toThrow(/no ffmpeg/);
+    expect(readFileSync(path.join(dest, "ed90", "video.mp4"))).toEqual(Buffer.from([0, 1, 2, 9]));
+  });
+
+  it("re-encodes to at most 480 lines at CRF 30, the audio copied so the timing stays", () => {
+    const args = reencodeArgs("in.mp4", "out.mp4");
+    expect(args).toEqual(expect.arrayContaining(["-i", "in.mp4", "out.mp4", "scale=-2:'min(480,ih)'", "libx264", "30", "copy", "+faststart"]));
+    expect(args[args.indexOf("-crf") + 1]).toBe("30");
+    expect(args[args.indexOf("-c:a") + 1]).toBe("copy");
+    expect(MAX_VIDEO_BYTES).toBe(15 * 1024 * 1024);
+  });
+
   it("refuses an interim placeholder", () => {
     const src = makeExport("interim", (j) => (j.interim = true));
     expect(() => syncShowcase({ src, id: "ed90", dest })).toThrow(/interim placeholder, not an engine export/);
@@ -141,8 +174,8 @@ describe("sync-showcase", () => {
   });
 
   it("names the files the player needs that the export lacks", () => {
-    const src = makeExport("short", undefined, { skip: ["audio/c007.m4a", "extended.vtt"] });
-    expect(() => syncShowcase({ src, id: "ed90", dest })).toThrow(/missing audio\/c007\.m4a, extended\.vtt|missing extended\.vtt, audio\/c007\.m4a/);
+    const src = makeExport("short", undefined, { skip: ["audio/c008.m4a", "extended.vtt"] });
+    expect(() => syncShowcase({ src, id: "ed90", dest })).toThrow(/missing audio\/c008\.m4a, extended\.vtt|missing extended\.vtt, audio\/c008\.m4a/);
     expect(existsSync(path.join(dest, "ed90"))).toBe(false);
   });
 

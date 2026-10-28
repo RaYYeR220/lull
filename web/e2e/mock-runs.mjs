@@ -111,8 +111,9 @@ function ed90() {
     created: "2026-10-27T18:40:12+00:00",
     voice: "Sofia",
     cost: show.costUsd,
-    cues: show.cues.filter((c) => c.status !== "extended").map((c) => cue(c, false)),
-    extended: show.cues.filter((c) => c.status === "extended").map((c) => cue(c, true)),
+    // a held extended line is still an extended line
+    cues: show.cues.filter((c) => !(c.extended ?? c.status === "extended")).map((c) => cue(c, false)),
+    extended: show.cues.filter((c) => c.extended ?? c.status === "extended").map((c) => cue(c, true)),
     gaps,
     speech: show.speech.map(([start, end]) => ({ start, end })),
     clip: true,

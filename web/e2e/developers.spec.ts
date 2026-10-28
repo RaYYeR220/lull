@@ -100,7 +100,7 @@ test.describe("the developer page", () => {
     await expect.poll(async () => (await state()).video, { timeout: 15_000 }).toBe("ready");
     // the transcript fills from the fetched track
     await page.locator("lull-player").getByRole("button", { name: "Transcript" }).click();
-    await expect(page.locator("lull-player").getByRole("region", { name: "Descriptions transcript" })).toContainText("A second person with dark hair");
+    await expect(page.locator("lull-player").getByRole("region", { name: "Descriptions transcript" })).toContainText("The bald person and a younger person with dark hair walk through a doorway");
     expect(failed.filter((f) => !/ERR_ABORTED/.test(f))).toEqual([]);
     // the headers that make it work
     for (const p of ["/player.js", "/showcase/ed90/descriptions.vtt", "/showcase/ed90/audio/c001.m4a"]) {

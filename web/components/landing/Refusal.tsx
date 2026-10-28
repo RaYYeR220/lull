@@ -16,7 +16,9 @@ const MARK: Record<Verdict, { word: string; aside: string }> = {
 export function Refusal({ showcase }: { showcase: Showcase }) {
   const v = showcase.verifyExample;
   const match = verifiedCue(showcase);
-  const cut = v ? v.claims.filter((c) => c.verdict !== "supported").length : 0;
+  const segments = v ? draftSegments(v) : [];
+  // the cuts the reader sees in the draft; the claims' own count when none of them is found in it
+  const cut = segments.filter((s) => s.verdict && s.verdict !== "supported").length || (v ? v.claims.filter((c) => c.verdict !== "supported").length : 0);
 
   return (
     <Section id="refusal" eyebrow="The refusal" heading="A line it can’t prove, it doesn’t say." headCols={8}>
@@ -28,7 +30,7 @@ export function Refusal({ showcase }: { showcase: Showcase }) {
               <span>Checked claim by claim against its frames</span>
             </p>
             <p className={cx("t-proof", styles.draft)}>
-              {draftSegments(v).map((seg, i) => {
+              {segments.map((seg, i) => {
                 if (!seg.verdict) return seg.text;
                 const ok = seg.verdict === "supported";
                 return (

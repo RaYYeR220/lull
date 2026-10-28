@@ -40,13 +40,34 @@ test.describe("the library", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Recorded runs, ready to watch.");
     const cards = page.getByRole("main").getByRole("listitem").filter({ has: page.getByRole("heading", { level: 2 }) });
     await expect(cards).toHaveCount(index.length);
-    for (const e of index) await expect(page.getByRole("link", { name: e.title })).toHaveAttribute("href", `/watch/${e.id}`);
+    for (const e of index) {
+      await expect(page.getByRole("link", { name: e.title, exact: true })).toHaveAttribute("href", `/watch/${e.id}`);
+      // credited with its licence on the card
+      await expect(cards.filter({ has: page.getByRole("link", { name: e.title, exact: true }) })).toContainText(e.credit);
+    }
+    expect(index.map((e) => e.id)).toEqual(["ed90", "bbb120", "tos180"]);
+    // the clip the engine was tuned on says so wherever its title shows
+    await expect(page.getByRole("link", { name: "Tears of Steel (development clip, used to tune the engine)" })).toBeVisible();
     // the nav's Library is this page
     await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" })).toHaveAttribute("aria-current", "page");
     await routeApi(page, "ok");
     await page.getByRole("link", { name: "Elephants Dream" }).click();
     await expect(page).toHaveURL(/\/watch\/ed90$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Elephants Dream");
+  });
+
+  test("every recorded run has its page: credited, its licence linked, its held lines in the script with the reason", async ({ page }) => {
+    await routeApi(page, "ok");
+    for (const e of index) {
+      const s = parseShowcase(JSON.parse(readFileSync(path.join(PUBLIC, "showcase", e.id, "showcase.json"), "utf8")), e.id);
+      await page.goto(`/watch/${e.id}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(s.title);
+      await expect(page.getByRole("link", { name: /^CC BY \d\.\d \(opens in a new tab\)$/ })).toHaveAttribute("href", /^https:\/\/creativecommons\.org\/licenses\/by\//);
+      const held = s.cues.filter((c) => c.status === "held");
+      await expect(page.locator('li[data-line][data-status="held"]')).toHaveCount(held.length);
+      for (const c of held) if (c.note) await expect(page.locator(`[data-line="${c.id}"]`)).toContainText(c.note);
+      await expect(page.getByRole("list", { name: "This run" }).or(page.getByRole("region", { name: "What was checked" })).first()).toBeVisible();
+    }
   });
 
   test("an id that isn't a recorded run is not found", async ({ page }) => {
@@ -94,7 +115,7 @@ test.describe("a recorded run's page", () => {
       await expect(line).toContainText(c.text);
       await expect(line.locator("[data-status]")).toHaveAttribute("data-status", c.status);
     }
-    await expect(row(page, "x001")).toContainText("video holds 6.78 s");
+    await expect(row(page, "x001")).toContainText("video holds 4.83 s");
     await expect(row(page, "c001")).toContainText("18 of 20 words");
   });
 
@@ -108,8 +129,8 @@ test.describe("a recorded run's page", () => {
     await expect(row(page, "c005").getByRole("button")).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await page.keyboard.press("Enter");
-    await expect.poll(() => clock(page)).toBeCloseTo(cues.find((c) => c.id === "c002")!.start, 1);
-    await expect(row(page, "c002").getByRole("button")).toHaveAttribute("aria-current", "true");
+    await expect.poll(() => clock(page)).toBeCloseTo(cues.find((c) => c.id === "c004")!.start, 1);
+    await expect(row(page, "c004").getByRole("button")).toHaveAttribute("aria-current", "true");
     await expect(row(page, "c005").getByRole("button")).not.toHaveAttribute("aria-current", "true");
     // an extended line: its freeze point
     await row(page, "x002").getByRole("button").click();
@@ -142,16 +163,18 @@ test.describe("a recorded run's page", () => {
     await page.goto("/watch/ed90");
     const checks = page.getByRole("region", { name: "What was checked" });
     await expect(checks.getByRole("definition").filter({ hasText: /^0\.00 s$/ })).toHaveCount(1);
-    await expect(checks).toContainText("8 of 8");
-    await expect(checks).toContainText("8 of 13 pauses carry a line");
-    // the export's summary counts the four lines it held for review, though it doesn't list them
-    await expect(checks).toContainText("8 of 12");
-    await expect(checks).toContainText("4 held for review and not voiced; this export doesn’t list them.");
+    await expect(checks).toContainText("10 of 10");
+    await expect(checks).toContainText("10 of 13 pauses carry a line");
+    // every line goes through the frame check, the extended ones too; the one held is listed
+    await expect(checks).toContainText("12 of 13");
+    await expect(checks).toContainText("1 held for review and not voiced; each is in the script with the reason.");
     await expect(checks).toContainText("Needs review");
-    await expect(page.locator("[data-held-elsewhere]")).toContainText("4 more lines were held for review and not voiced.");
-    await expect(page.getByRole("list", { name: "This run" })).toContainText("4 held for review");
+    await expect(page.locator("[data-held-elsewhere]")).toHaveCount(0);
+    await expect(row(page, "c002").locator("[data-status]")).toHaveAttribute("data-status", "held");
+    await expect(row(page, "c002")).toContainText("does not fit: 5.85 s voiced for a 5.14 s pause");
+    await expect(page.getByRole("list", { name: "This run" })).toContainText("1 held for review");
     await expect(checks).toContainText("Not yet");
-    await expect(checks).toContainText("$0.05");
+    await expect(checks).toContainText("$0.04");
     await expect(checks).toContainText("For the full run");
   });
 
@@ -231,8 +254,8 @@ test.describe("a recorded run's page", () => {
       await page.emulateMedia({ reducedMotion: "reduce" });
       await page.goto("/watch/ed90", { waitUntil: "networkidle" });
       await waitReady(page);
-      await row(page, "c002").getByRole("button").click();
-      await expect(row(page, "c002").getByRole("button")).toHaveAttribute("aria-current", "true");
+      await row(page, "c003").getByRole("button").click();
+      await expect(row(page, "c003").getByRole("button")).toHaveAttribute("aria-current", "true");
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations
         .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
@@ -241,6 +264,10 @@ test.describe("a recorded run's page", () => {
     }
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
       await page.setViewportSize(viewport);
+      await page.goto("/watch/tos180", { waitUntil: "networkidle" });
+      const run = await new AxeBuilder({ page }).analyze();
+      const blockingRun = run.violations.filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical").map((v) => v.id);
+      expect(blockingRun, `tos180 at ${viewport.width}px`).toEqual([]);
       await page.goto("/watch", { waitUntil: "networkidle" });
       const results = await new AxeBuilder({ page }).analyze();
       const blocking = results.violations.filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical").map((v) => v.id);
@@ -250,7 +277,7 @@ test.describe("a recorded run's page", () => {
 
   test("has no horizontal scroll at 390px", async ({ page }) => {
     await page.setViewportSize(PHONE);
-    for (const route of ["/watch/ed90", "/watch"]) {
+    for (const route of ["/watch/ed90", "/watch/tos180", "/watch"]) {
       await page.goto(route, { waitUntil: "networkidle" });
       const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
       expect(scrollWidth, route).toBeLessThanOrEqual(clientWidth);

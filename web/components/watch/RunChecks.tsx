@@ -68,9 +68,11 @@ export function RunChecks({ run }: { run: RunData }) {
     });
   }
   const { passed, held, heldListed, reviewed } = lines;
+  // every line goes through the frame check, extended ones too, and a held line can be either kind
+  const checked = passed + lines.extended;
   checks.push({
     name: "Passed the frame check",
-    value: held === null ? plural(passed, "line") : `${passed} of ${passed + held}`,
+    value: held === null ? plural(checked, "line") : `${checked} of ${checked + held}`,
     detail:
       held === null
         ? "Each voiced line was checked claim by claim against its frames. This export doesn’t record whether any line was held."
@@ -89,7 +91,7 @@ export function RunChecks({ run }: { run: RunData }) {
   }
   checks.push({
     name: "Reviewed by a person",
-    value: reviewed ? `${reviewed} of ${passed + lines.extended}` : "Not yet",
+    value: reviewed ? `${reviewed} of ${checked}` : "Not yet",
     detail: reviewed
       ? "Lines a person approved or rewrote in the studio."
       : "No line has been approved or edited by a person yet. The lines are checked by the engine and voiced with synthetic speech.",

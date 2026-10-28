@@ -200,27 +200,75 @@ export function closeUp(s: Showcase): CloseUp | null {
 
 export type DraftSegment = { text: string; verdict?: Verdict };
 
-/** The draft cut into plain runs and claims, in reading order. Claims not found in the draft are skipped. */
-export function draftSegments(v: NonNullable<Showcase["verifyExample"]>): DraftSegment[] {
-  const out: DraftSegment[] = [];
-  const lower = v.cue.toLowerCase();
-  let at = 0;
-  for (const c of v.claims) {
-    const i = lower.indexOf(c.text.toLowerCase(), at);
-    if (i < 0) continue;
-    if (i > at) out.push({ text: v.cue.slice(at, i) });
-    out.push({ text: v.cue.slice(i, i + c.text.length), verdict: c.verdict });
-    at = i + c.text.length;
+const WORD = /[a-z0-9']+/gi;
+/** "gestur" for "gesture", "talk" for "talking": a word without its ending, when enough is left. */
+const stem = (w: string) => {
+  const s = w.replace(/(?:ing|ed|es|e|s)$/, "");
+  return s.length >= 3 ? s : w;
+};
+const ENDING = /^(?:ing|ed|es|e|s|d)?$/;
+/** A claim's word against the draft's: the same word, or the same stem with another ending. */
+function sameWord(draft: string, claim: string): boolean {
+  if (draft === claim) return true;
+  const s = stem(claim);
+  return s.length >= 3 && draft.startsWith(s) && ENDING.test(draft.slice(s.length));
+}
+
+/**
+ * Where a claim sits in the draft: its words in a row, each a whole draft word or that word with
+ * another ending ("talk" in "talking"). The claim's own wording can differ from the draft's
+ * ("face" for "facing"); one that doesn't line up with the draft's words isn't found.
+ */
+function claimSpan(cue: string, claim: string): [number, number] | null {
+  const words = [...cue.matchAll(WORD)].map((m) => ({ w: m[0].toLowerCase(), start: m.index, end: m.index + m[0].length }));
+  const want = (claim.toLowerCase().match(WORD) ?? []) as string[];
+  if (!want.length) return null;
+  for (let i = 0; i + want.length <= words.length; i++) {
+    const run = words.slice(i, i + want.length);
+    if (want.every((w, k) => sameWord(run[k]?.w ?? "", w))) return [run[0]?.start ?? 0, run[run.length - 1]?.end ?? 0];
   }
-  if (at < v.cue.length) out.push({ text: v.cue.slice(at) });
+  return null;
+}
+
+/**
+ * The draft cut into plain runs and claims, in reading order. The verifier's claims overlap (a
+ * phrase, then each word of it, then the whole line), so a claim that is the whole line is left
+ * out when others were found, an unsupported claim is placed before a supported one it overlaps,
+ * and otherwise the first in reading order wins. Claims not found in the draft are skipped.
+ */
+export function draftSegments(v: NonNullable<Showcase["verifyExample"]>): DraftSegment[] {
+  const cue = v.cue;
+  const words = [...cue.matchAll(WORD)];
+  const lastWord = words[words.length - 1];
+  const first = words[0]?.index ?? 0;
+  const last = lastWord ? lastWord.index + lastWord[0].length : cue.length;
+  let found = v.claims.flatMap((c) => {
+    const at = claimSpan(cue, c.text);
+    return at ? [{ start: at[0], end: at[1], verdict: c.verdict }] : [];
+  });
+  if (found.length > 1) found = found.filter((f) => !(f.start <= first && f.end >= last));
+  const taken: typeof found = [];
+  const byPlace = (a: (typeof found)[number], b: (typeof found)[number]) => a.start - b.start || b.end - a.end;
+  for (const group of [found.filter((f) => f.verdict !== "supported"), found.filter((f) => f.verdict === "supported")])
+    for (const f of [...group].sort(byPlace)) if (!taken.some((t) => f.start < t.end && t.start < f.end)) taken.push(f);
+  taken.sort(byPlace);
+  const out: DraftSegment[] = [];
+  let at = 0;
+  for (const t of taken) {
+    if (t.start > at) out.push({ text: cue.slice(at, t.start) });
+    out.push({ text: cue.slice(t.start, t.end), verdict: t.verdict });
+    at = t.end;
+  }
+  if (at < cue.length) out.push({ text: cue.slice(at) });
   return out;
 }
 
-/** The draft with every unsupported claim cut, as the verifier leaves it. */
+/** The draft with every unsupported claim cut, as the verifier leaves it: no dangling "and" or comma. */
 export function spokenFromDraft(v: NonNullable<Showcase["verifyExample"]>): string {
+  const trim = (t: string) => t.replace(/\s+$/, "").replace(/(?:[,;:]?\s*\b(?:and|or|but|while|as|with|then))+$/i, "").replace(/[,;:]$/, "");
   let line = "";
   for (const seg of draftSegments(v)) {
-    if (seg.verdict && seg.verdict !== "supported") line = line.replace(/[,;:]?\s*$/, "");
+    if (seg.verdict && seg.verdict !== "supported") line = trim(line);
     else line += seg.text;
   }
   line = line.replace(/\s+([.,;:!?])/g, "$1").replace(/\s{2,}/g, " ").trim();

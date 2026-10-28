@@ -126,8 +126,8 @@ export function Horizon({ data }: { data: HorizonData }) {
     }));
     const gapLabels = [...overlay.querySelectorAll<HTMLElement>("[data-gap]")];
     const shown = cues.map(() => "");
-    // the first later line that needs a line's room: once it starts, the earlier line rests
-    let coveredBy = cues.map(() => -1);
+    // where each line sits on the stage, [left, right]
+    let placed: (readonly [number, number])[] = cues.map(() => [0, 0] as const);
     const frame: HorizonFrame = {
       width: 0,
       height: 0,
@@ -176,7 +176,7 @@ export function Horizon({ data }: { data: HorizonData }) {
         }
         return [left, left + w] as const;
       });
-      coveredBy = boxes.map(([a, b], i) => boxes.findIndex(([c, d], j) => j > i && c < b + LINE_GAP && d > a - LINE_GAP));
+      placed = boxes;
       // left to right: a label shows when it fits over its pause and clears the last one shown
       let lastRight = -Infinity;
       gapLabels.forEach((el, i) => {
@@ -191,14 +191,31 @@ export function Horizon({ data }: { data: HorizonData }) {
       shown.fill("");
     };
 
+    /**
+     * Which started lines rest: from the latest back, a line shows unless it would overlap one
+     * already showing to its right. A line hidden this way frees its room, so an earlier line
+     * it covered can show again: the stage keeps as many lines as fit, never two on top of each other.
+     */
+    const restingLines = () => {
+      const rests = cues.map(() => false);
+      const kept: (readonly [number, number])[] = [];
+      for (let i = cues.length - 1; i >= 0; i--) {
+        if ((frame.progress[i] ?? 0) <= 0) continue;
+        const [a, b] = placed[i] ?? [0, 0];
+        if (kept.some(([c, d]) => c < b + LINE_GAP && d > a - LINE_GAP)) rests[i] = true;
+        else kept.push([a, b]);
+      }
+      return rests;
+    };
+
     const updateLines = (started: boolean) => {
       let now = -1;
+      const resting = restingLines();
       cues.forEach((c, i) => {
         const line = lines[i];
         const p = frame.progress[i] ?? 0;
         const k = p >= 1 ? c.text.length : Math.floor(c.text.length * p);
-        const by = coveredBy[i] ?? -1;
-        const rests = by !== -1 && (frame.progress[by] ?? 0) > 0;
+        const rests = resting[i] ?? false;
         const key = `${k}|${rests ? 1 : 0}`;
         if (line && key !== shown[i]) {
           shown[i] = key;

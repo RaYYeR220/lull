@@ -89,7 +89,7 @@ test.describe("a finished live run", () => {
     // the API's own copy of the video
     await expect(player(page)).toHaveAttribute("src", `${API}/v1/runs/${FORK_ID}/original`);
     await expect(player(page)).not.toHaveAttribute("sound", /./);
-    await expect(page.locator("[data-line]")).toHaveCount(10);
+    await expect(page.locator("[data-line]")).toHaveCount(13);
   });
 
   test("says when it is loading", async ({ page }) => {

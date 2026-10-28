@@ -75,17 +75,17 @@ describe("a recorded run", () => {
   const run = fromShowcase(show);
 
   it("numbers lines in time order, standard and extended apart, each in its pause", () => {
-    expect(run.cues.map((c) => c.label)).toEqual(["Extended 1", "Extended 2", "Cue 1", "Cue 2", "Cue 3", "Cue 4", "Cue 5", "Cue 6", "Cue 7", "Cue 8"]);
+    expect(run.cues.map((c) => c.label)).toEqual(["Extended 1", "Extended 2", ...Array.from({ length: 11 }, (_, i) => `Cue ${i + 1}`)]);
     const first = run.cues.find((c) => c.id === "c001")!;
     expect(first.gap).toEqual({ id: "g001", start: 9, end: 15.64, capacity: 20 });
     expect(first.frame).toBe("/showcase/ed90/keyframes/c001.jpg");
-    expect(voicedLines(run)).toHaveLength(8);
+    expect(voicedLines(run)).toHaveLength(10);
   });
 
   it("keeps the verify example's verdicts on its own line, marked as the draft's", () => {
-    const c013 = run.cues.find((c) => c.id === "c013")!;
-    expect(c013.claimsOf).toBe("draft");
-    expect(c013.claims?.map((k) => k.verdict)).toEqual(["not_visible", "supported"]);
+    const c010 = run.cues.find((c) => c.id === "c010")!;
+    expect(c010.claimsOf).toBe("draft");
+    expect(c010.claims?.filter((k) => k.verdict !== "supported").map((k) => k.text)).toEqual(["both talk", "talk", "Both stand facing each other, gesturing and talking"]);
     expect(run.cues.find((c) => c.id === "c001")!.claims).toBeNull();
   });
 
