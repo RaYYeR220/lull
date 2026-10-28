@@ -357,3 +357,22 @@ def test_probe_scores_count_own_cue_credit():
     assert s["decoys_credited_to_own_cue"] == [2, 2]
     assert s["fact_claims_supported"] == [3, 3]
     assert s["decoy_claims_unsupported"] == [2, 2]
+
+
+def test_claim_in_text_ignores_framing_words():
+    from suite_a.score import claim_in_text
+
+    text = "Glycolysis and Krebs Cycle."
+    assert claim_in_text("The slide is titled Glycolysis and Krebs Cycle.", text)
+    assert not claim_in_text("The slide lists Glycolysis occurs in cytoplasm.", text)
+    assert claim_in_text("A slide appears", text)
+
+
+def test_diagnostics_count_claims_the_text_does_not_say():
+    cj = cues_json()
+    cj["cues"][0]["claims"].append({"text": "The slide lists Oxygen helps", "verdict": "x"})
+    v = verdicts()
+    v["claims"]["claims"].append({"key": "c001#2", "reason": "", "verdict": "supported"})
+    m = video_metrics(ENTRY, run_record(), cj, v)
+    assert m["diagnostics"]["claims_not_in_cue_text"] == [1, 5]
+    assert m["diagnostics"]["unsupported_claims_in_cue_text"][1] == 4

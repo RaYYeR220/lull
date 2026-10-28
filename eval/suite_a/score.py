@@ -42,7 +42,7 @@ import numpy as np
 from suite_a.render import KEY_PATH, KEY_SHA_PATH, OUT, sha256_file
 from suite_a.specs import write_json
 from suite_a.style import STYLE_TEXT
-from suite_a.text import contains_phrase, numbers_in, same_number
+from suite_a.text import contains_phrase, content_words, numbers_in, same_number
 
 HERE = Path(__file__).resolve().parent
 EVAL_ROOT = HERE.parent
@@ -164,6 +164,20 @@ def capacity_violations(standard: list[dict], gaps: list[dict]) -> list[str]:
         if w is None or s < w[0] - 1e-3 or e > w[1] + 1e-3:
             bad.append(c["id"])
     return bad
+
+
+FRAMING = frozenset(
+    "slide titled title list lists listed show shows shown read reads reading appear appears "
+    "display displays displayed screen".split()
+)
+
+
+def claim_in_text(claim: str, text: str) -> bool:
+    """A claim the cue's text says: at least half of its content words (framing words such as
+    "slide", "lists" or "reads" left out) occur in the text. A claim with only framing words
+    counts as said."""
+    words = content_words(claim) - FRAMING
+    return not words or len(words & content_words(text)) / len(words) >= 0.5
 
 
 def title_match(title: str, texts: list[str]) -> bool:
@@ -616,6 +630,15 @@ def video_metrics(entry: dict, run: dict, cues_json: dict | None, verdicts: dict
         "by_track": unsupported_by_track,
         "cues": [len(bad_cues), len(cues)],
     }
+    # supplementary, not pre-registered: claims the run attached to a cue that its text does
+    # not say (the verifier's split may add some), and the rate over the claims it does say
+    text_of = {c["id"]: c["text"] for c in cues}
+    in_text = [x for x in judged_claims if claim_in_text(x["claim"], text_of[x["cue"]])]
+    m["diagnostics"] = {
+        "claims_not_in_cue_text": [len(judged_claims) - len(in_text), len(judged_claims)],
+        "unsupported_claims_in_cue_text": [
+            sum(x["verdict"] != "supported" for x in in_text), len(in_text)],
+    }  # fmt: skip
     restate, rep = by_id(verdicts["claims"].get("cues", []))
     problems += [f"cue {i} judged twice" for i in rep]
     redundant = [c["id"] for c in cues if (restate.get(c["id"]) or {}).get("restates_narration")]
@@ -664,6 +687,10 @@ def aggregate(videos: list[dict]) -> dict:
         "hallucination_claims": ratio(["hallucination", "claims"]),
         "hallucination_cues": ratio(["hallucination", "cues"]),
         "redundancy_cues": ratio(["redundancy", "cues"]),
+        "claims_not_in_cue_text": ratio(["diagnostics", "claims_not_in_cue_text"]),
+        "hallucination_claims_in_cue_text": ratio(
+            ["diagnostics", "unsupported_claims_in_cue_text"]
+        ),
         "spoken_facts_restated": ratio(["redundancy", "spoken_facts_restated"]),
         "decoys_stated": sum(len(v.get("decoys", {}).get("stated", [])) for v in videos),
         "decoys_total": sum(v.get("decoys", {}).get("of", 0) for v in videos),
@@ -923,6 +950,10 @@ def markdown(result: dict) -> str:
         f"{_pct(a['exact_chart_value_standard'])} / {_pct(a['exact_chart_value_with_extended'])} |",
         f"| hallucination, claims | {_pct(a['hallucination_claims'])} |",
         f"| hallucination, cues with an unsupported claim | {_pct(a['hallucination_cues'])} |",
+        f"| (supplementary) claims the cue text does not say | "
+        f"{_pct(a['claims_not_in_cue_text'])} |",
+        f"| (supplementary) hallucination over claims the text says | "
+        f"{_pct(a['hallucination_claims_in_cue_text'])} |",
         f"| absent decoys stated (judge) | {a['decoys_stated']}/{a['decoys_total']} |",
         f"| decoy numbers in cues (deterministic) | {a['decoy_number_hits']} |",
         f"| redundancy, cues restating narration | {_pct(a['redundancy_cues'])} |",
