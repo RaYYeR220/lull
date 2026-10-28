@@ -47,6 +47,9 @@ def app(settings, monkeypatch, tmp_path, data):
     live = app.state.live
     live.probe, live.transcode, live.runner = fake_probe, fake_transcode, Script()
     live.envelope = None
+    agents = app.state.agents
+    agents.real_visitor = agents.visitor
+    agents.visitor = lambda ctx: "visitor-test"  # in-process there is no address to key on
     yield app
     get_settings.cache_clear()
 
@@ -244,6 +247,8 @@ def test_a_real_sample_run_end_to_end(app, live, data, tmp_path, tone_slides, fa
 def test_mcp_answers_on_the_api_over_streamable_http(app, live):
     """initialize and tools/list over HTTP at /mcp, and a describe whose limits are keyed to
     the visitor's address like the REST API's."""
+    app.state.agents.visitor = app.state.agents.real_visitor
+    app.state.settings.lull_public_url = "http://api.test"  # the host /mcp answers to
     live.limiter = RateLimiter(per_client=1, client_window=3600, per_day=1000)
     with TestClient(app, headers=CLIENT) as c:
 
@@ -463,6 +468,183 @@ def test_sample_starts_are_bounded_by_the_slots_and_refusals(app, live):
 
     assert asyncio.run(go()).error == "uploads_busy"
     live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
-    live.refusals.hit(live.limiter.client_key("in-process"))
+    live.refusals.hit("visitor-test")
     r = call(app.state.agents, "describe_video", {"sample_id": "street"})
     assert r.is_error and "rate_limited" in text(r)
+
+
+# -- leaving a describe over real HTTP stops the run -----------------------------------------------
+
+
+@pytest.fixture
+def served(app):
+    """The app on a real uvicorn server (a thread), so a client can drop its connection."""
+    import socket
+    import time
+
+    import uvicorn
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning", lifespan="on"))
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+    thread.start()
+    deadline = time.time() + 20
+    while not server.started and time.time() < deadline:
+        time.sleep(0.05)
+    assert server.started
+    yield f"http://127.0.0.1:{port}"
+    server.should_exit = True
+    thread.join(20)
+
+
+def _stopped(app, live, timeout=10.0) -> str:
+    import time
+
+    from lull.api import facts
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        runs = [d for d in (app.state.settings.runs_dir).iterdir() if d.is_dir()]
+        if runs and not live.executor.lock.locked():
+            return facts.run_status(runs[0], live.executor.get(runs[0].name) is not None)
+        time.sleep(0.05)
+    return "still running"
+
+
+def _wait_busy(live) -> None:
+    import time
+
+    deadline = time.time() + 20
+    while not live.executor.busy and time.time() < deadline:
+        time.sleep(0.02)
+    assert live.executor.busy
+
+
+@pytest.mark.parametrize("mode", ["legacy", "auto"])
+def test_a_client_that_cancels_a_describe_stops_the_run(app, live, served, mode):
+    app.state.agents.visitor = app.state.agents.real_visitor
+    gate = threading.Event()
+    live.runner = Script(staged, gate=gate, gate_at=1)
+
+    async def go():
+        async with Client(f"{served}/mcp", mode=mode) as c:
+            task = asyncio.create_task(c.call_tool("describe_video", {"sample_id": "street"}))
+            await asyncio.to_thread(_wait_busy, live)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    asyncio.run(go())
+    try:
+        assert _stopped(app, live) == "stopped"
+    finally:
+        gate.set()
+
+
+def test_a_dropped_connection_stops_the_run(app, live, served):
+    """No MCP cancel at all: the HTTP connection just goes away mid-run."""
+    import httpx
+
+    app.state.agents.visitor = app.state.agents.real_visitor
+    gate = threading.Event()
+    live.runner = Script(staged, gate=gate, gate_at=1)
+    call = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "describe_video", "arguments": {"sample_id": "street"},
+                       "_meta": {"progressToken": "p1"}}}  # fmt: skip
+    headers = {"Accept": "application/json, text/event-stream",
+               "MCP-Protocol-Version": "2025-06-18"}  # fmt: skip
+    with httpx.Client(timeout=30) as c:
+        with c.stream("POST", f"{served}/mcp", json=call, headers=headers) as r:
+            assert r.status_code == 200, r.read()
+            _wait_busy(live)
+            for line in r.iter_lines():
+                if "progress" in line:
+                    break  # the first progress note arrived: now leave
+    try:
+        assert _stopped(app, live) == "stopped"
+    finally:
+        gate.set()
+
+
+# -- who may call /mcp -----------------------------------------------------------------------------
+
+INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                   "clientInfo": {"name": "t", "version": "1"}}}  # fmt: skip
+MCP_HEADERS = {"Accept": "application/json, text/event-stream"}
+
+
+def _post_mcp(app, *, public="http://api.test", **headers):
+    app.state.settings.lull_public_url = public
+    with TestClient(app, base_url="http://api.test") as c:
+        return c.post("/mcp", json=INIT, headers={**MCP_HEADERS, **headers})
+
+
+def test_an_origin_must_be_one_of_the_sites(app):
+    r = _post_mcp(app, Origin="http://evil.test")
+    assert r.status_code == 403 and r.json()["error"] == "origin" and r.json()["message"]
+    assert _post_mcp(app, Origin="http://web.test").status_code == 200  # LULL_WEB_ORIGINS
+    assert _post_mcp(app).status_code == 200  # no Origin: not a browser
+
+
+def test_mcp_answers_its_own_host_only(app):
+    assert _post_mcp(app, Host="evil.test").status_code == 421
+    r = _post_mcp(app, Host="evil.test")
+    assert r.json()["error"] == "host"
+    assert _post_mcp(app, public="").status_code == 421  # no LULL_PUBLIC_URL: localhost only
+
+
+def test_a_large_mcp_body_is_413(app):
+    app.state.settings.lull_public_url = "http://api.test"
+    big = {**INIT, "pad": "x" * 70_000}
+    with TestClient(app, base_url="http://api.test") as c:
+        r = c.post("/mcp", json=big, headers=MCP_HEADERS)
+    assert r.status_code == 413 and r.json()["error"] == "too_large"
+
+
+def test_links_come_from_lull_public_url_never_from_the_host(app, data, make_run):
+    make_run(data / "runs", "r1")
+    agents = app.state.agents
+    app.state.settings.lull_public_url = ""
+    files = call(agents, "get_tracks", {"run_id": "r1"}).structured_content["files"]
+    assert files["descriptions.vtt"] == "/v1/runs/r1/files/descriptions.vtt"
+    app.state.settings.lull_public_url = "https://lull.example,https://smoke---lull.example"
+    files = call(agents, "get_tracks", {"run_id": "r1"}).structured_content["files"]
+    assert files["descriptions.vtt"] == "https://lull.example/v1/runs/r1/files/descriptions.vtt"
+
+
+def test_startup_warns_without_lull_public_url(app, caplog):
+    app.state.settings.lull_public_url = ""
+    with caplog.at_level(logging.WARNING), TestClient(app):
+        pass
+    assert "LULL_PUBLIC_URL" in caplog.text
+
+
+def test_a_caller_with_no_address_is_refused_not_pooled(app, live):
+    app.state.agents.visitor = app.state.agents.real_visitor  # in-process: no address
+    r = call(app.state.agents, "describe_video", {"sample_id": "street"})
+    assert r.is_error and "unknown_client" in text(r) and live.runner.jobs == []
+
+
+def test_local_errors_are_scrubbed_like_the_apis(local, tmp_path):
+    video = tmp_path / "secret-folder" / "talk.mp4"
+    video.parent.mkdir()
+    video.write_bytes(b"DUR=12;")
+    local.lull.runner = Script(
+        staged, exc=lambda job: RuntimeError(f"ffmpeg failed on {job.video}"), manifest=False
+    )
+    out = call(local, "describe_video", {"path": str(video)}).structured_content
+    assert out["status"] == "failed" and "talk.mp4" in out["error"]
+    assert str(tmp_path) not in out["error"] and "secret-folder" not in out["error"]
+
+
+def test_describe_says_it_blocks_and_streams_progress(app, local):
+    async def go(server):
+        async with Client(server) as c:
+            return {t.name: t for t in (await c.list_tools()).tools}["describe_video"]
+
+    for server in (app.state.agents, local):
+        d = asyncio.run(go(server)).description
+        assert "progress" in d and "5 minutes" in d

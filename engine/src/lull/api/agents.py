@@ -8,8 +8,12 @@ Two servers, two trust levels:
   samples and existing run ids only: it never fetches a URL, never reads a path and takes no
   upload (a fetch from the platform could reach its metadata server and internal addresses).
   Every call goes through the live executor, the spend caps, the per-visitor limits (keyed by
-  the visitor's address, as the REST API keys them) and the REST API's run-id rules. An
-  argument a tool does not declare is refused, not ignored (StrictArguments).
+  the visitor's address, as the REST API keys them; a caller without one is refused, never
+  pooled) and the REST API's run-id rules. An argument a tool does not declare is refused,
+  not ignored (StrictArguments). /mcp answers only the hosts in LULL_PUBLIC_URL (and
+  localhost), a browser Origin only from LULL_WEB_ORIGINS, and bodies up to MAX_BODY bytes
+  (McpEndpoint, and the SDK's DNS-rebinding protection behind it). Leaving a describe (the
+  call cancelled or the connection dropped) cancels it, and the run stops as a REST one does.
 - local_server(): `lull mcp` over stdio, on the user's machine with their own keys and caps.
   describe_video also takes a local file path (an existing regular file of a video type);
   runs go under LULL_HOME/runs; review_queue lists the runs with lines held for a person.
@@ -25,11 +29,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import stat
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 import anyio
 from mcp.server.mcpserver import Context, MCPServer
@@ -42,6 +48,7 @@ from starlette.types import Receive, Scope, Send
 from lull import media
 from lull.api import facts
 from lull.api import live as live_mod
+from lull.api.clean import Scrubber, default_roots
 from lull.api.live import FORMATS, Job, Live, LiveError, RunStopped, client_ip
 from lull.api.settings import ApiSettings
 from lull.api.spend import public_spend
@@ -55,6 +62,12 @@ from lull.types import RunOptions
 log = logging.getLogger(__name__)
 
 PATH = "/mcp"
+MAX_BODY = 64 * 1024  # a JSON-RPC request; nothing here takes media
+LOCALHOSTS = ("127.0.0.1", "localhost", "[::1]")
+BLOCKS = (
+    "It blocks while the run goes (a few minutes; allow at least 5 minutes, or have the "
+    "client reset its timeout on each progress notification) and sends progress per stage."
+)
 STAGES = ("listen", "watch", "research", "plan", "schedule", "finalize", "publish")
 TRACK_FILES = (
     "descriptions.vtt", "extended.vtt", "described-audio.m4a", "described.mp4", "extended.mp4",
@@ -407,19 +420,11 @@ def _request(ctx: Context) -> Any:
         return None
 
 
-def _base_url(ctx: Context, settings: ApiSettings) -> str:
-    """Where this API answers: LULL_PUBLIC_URL, else the request's own scheme and host (the
-    forwarded scheme behind trusted proxies); "" when there is no HTTP request (in-process)."""
-    if settings.lull_public_url:
-        return settings.lull_public_url.rstrip("/")
-    request = _request(ctx)
-    headers = getattr(request, "headers", None)
-    if request is None or headers is None or not headers.get("host"):
-        return ""
-    scheme = request.url.scheme
-    if settings.lull_proxy_hops > 0:
-        scheme = headers.get("x-forwarded-proto", scheme).split(",")[0].strip() or scheme
-    return f"{scheme}://{headers['host']}"
+def _base_url(settings: ApiSettings) -> str:
+    """Where this API answers: the first LULL_PUBLIC_URL, never a request's Host header (a
+    caller could name any host); "" (relative links) when it is not set."""
+    urls = settings.public_urls
+    return urls[0] if urls else ""
 
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
@@ -434,10 +439,16 @@ def hosted_server(live: Live, store: RunStore, settings: ApiSettings) -> MCPServ
         middleware=[StrictArguments(HOSTED_ARGS)],
     )
 
-    def visitor(ctx: Context) -> str:
+    def visitor(ctx: Context) -> str | None:
+        """The caller's limiter key, from its address as the REST API takes it; None when there
+        is no address (no HTTP request, an unknown peer): refused, never pooled."""
         request = _request(ctx)
-        ip = client_ip(request, settings.lull_proxy_hops) if request is not None else "in-process"
-        return live.limiter.client_key(ip)
+        if request is None or getattr(request, "client", None) is None:
+            return None
+        ip = client_ip(request, settings.lull_proxy_hops)
+        return None if ip == "unknown" else live.limiter.client_key(ip)
+
+    server.visitor = visitor  # type: ignore[attr-defined]  (tests name the visitor)
 
     @server.tool(annotations=READ_ONLY)
     def list_samples() -> Samples:
@@ -463,10 +474,18 @@ def hosted_server(live: Live, store: RunStore, settings: ApiSettings) -> MCPServ
         status, cue counts, coverage, the WCAG 1.2.3/1.2.5/1.2.7 rows, model spend and
         searches, and an edit token that owns the run (hand it to a person for the Studio).
         Refused with the API's codes: busy (another description is running), rate_limited,
-        budget (the demo's spend cap), sample (unknown id)."""
+        budget (the demo's spend cap), sample (unknown id). It blocks while the run goes (a
+        few minutes; allow at least 5 minutes, or have the client reset its timeout on each
+        progress notification); leaving the call stops the run."""
+        key = server.visitor(ctx)  # type: ignore[attr-defined]
+        if key is None:
+            raise ToolError(
+                "unknown_client: This server could not tell where the call comes from, so it "
+                "starts nothing for it."
+            )
         try:
             started = await live_mod.start_sample(
-                live, visitor(ctx), sample_id, RunOptions(mode=mode, voice="Sofia")
+                live, key, sample_id, RunOptions(mode=mode, voice="Sofia")
             )
         except LiveError as e:
             raise _refused(e) from None
@@ -479,13 +498,12 @@ def hosted_server(live: Live, store: RunStore, settings: ApiSettings) -> MCPServ
     @server.tool(annotations=READ_ONLY)
     def get_tracks(
         run_id: Annotated[str, Field(description="A run id from describe_video.")],
-        ctx: Context,
     ) -> Tracks:
         """The description cues of a finished run as text with timecodes and status (verified,
         held, extended, edited, approved; held lines carry why), and the URLs of its
         description tracks: descriptions.vtt, extended.vtt, described-audio.m4a and
         described.mp4 (extended.mp4 when it was made)."""
-        base = _base_url(ctx, settings)
+        base = _base_url(settings)
         return tracks(store, run_id, lambda d, name: f"{base}/v1/runs/{d.name}/files/{name}")
 
     @server.tool(annotations=READ_ONLY)
@@ -509,21 +527,53 @@ def _samples(settings: ApiSettings) -> Samples:
     )
 
 
-OPEN_HOSTS = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+def allowed_hosts(settings: ApiSettings) -> list[str]:
+    """The Host headers /mcp answers: LULL_PUBLIC_URL's hosts (any port) and localhost."""
+    hosts = [urlsplit(u).netloc for u in settings.public_urls if urlsplit(u).netloc]
+    names = [*hosts, *LOCALHOSTS]
+    return [*names, *(f"{h}:*" for h in names if ":" not in h.replace("[::1]", ""))]
+
+
+def _host_ok(host: str, allowed: list[str]) -> bool:
+    return host in allowed or any(
+        a.endswith(":*") and host.startswith(a[:-2] + ":") for a in allowed
+    )
+
+
+async def _refuse(send: Send, status: int, error: str, message: str) -> None:
+    body = json.dumps({"error": error, "message": message}).encode()
+    await send({"type": "http.response.start", "status": status,
+                "headers": [(b"content-type", b"application/json")]})  # fmt: skip
+    await send({"type": "http.response.body", "body": body})
 
 
 class McpEndpoint:
     """/mcp on the API, as an ASGI app: the MCP server's streamable HTTP transport (stateless:
-    one instance, any request), with a fresh session manager each time the app starts."""
+    one instance, any request), with a fresh session manager each time the app starts.
 
-    def __init__(self, server: MCPServer) -> None:
-        self.server = server
+    Before the SDK sees a request: its Host must be one of allowed_hosts (421 host), an Origin
+    header (a browser) one of LULL_WEB_ORIGINS (403 origin; no Origin is a non-browser client,
+    allowed), and a body no larger than MAX_BODY (413 too_large). The SDK's own DNS-rebinding
+    protection then checks the same hosts and origins, and its body limit the same size."""
+
+    def __init__(self, server: MCPServer, settings: ApiSettings) -> None:
+        self.server, self.settings = server, settings
         self._app: Any = None
+        self._hosts: list[str] = []
 
     @contextlib.asynccontextmanager
     async def running(self) -> AsyncIterator[None]:
+        self._hosts = allowed_hosts(self.settings)
+        security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=self._hosts,
+            allowed_origins=self.settings.origins,
+        )
         app = self.server.streamable_http_app(
-            streamable_http_path=PATH, stateless_http=True, transport_security=OPEN_HOSTS
+            streamable_http_path=PATH,
+            stateless_http=True,
+            transport_security=security,
+            max_request_body_size=MAX_BODY,
         )
         async with self.server.session_manager.run():
             self._app = app
@@ -534,10 +584,19 @@ class McpEndpoint:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if self._app is None:
-            body = b'{"error":"unavailable","message":"The MCP server is not running."}'
-            await send({"type": "http.response.start", "status": 503,
-                        "headers": [(b"content-type", b"application/json")]})  # fmt: skip
-            await send({"type": "http.response.body", "body": body})
+            await _refuse(send, 503, "unavailable", "The MCP server is not running.")
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+        if not _host_ok(headers.get("host", ""), self._hosts):
+            await _refuse(send, 421, "host", "This server does not answer to that host name.")
+            return
+        origin = headers.get("origin")
+        if origin is not None and origin not in self.settings.origins:
+            await _refuse(send, 403, "origin", "Calls from that web page are not allowed here.")
+            return
+        length = headers.get("content-length", "")
+        if length.strip().isdigit() and int(length) > MAX_BODY:
+            await _refuse(send, 413, "too_large", "This request is too large.")
             return
         await self._app(scope, receive, send)
 
@@ -601,7 +660,10 @@ class LocalLull:
             info = await anyio.to_thread.run_sync(self.probe, video)
             media.assert_safe_container(info)
         except Exception as e:
-            raise ToolError(f"unreadable: This file could not be read as a video ({e}).") from None
+            reason = self.scrub(video.parent, str(e))[:300]
+            raise ToolError(
+                f"unreadable: This file could not be read as a video ({reason})."
+            ) from None
         sha = await anyio.to_thread.run_sync(file_sha256, video)
         run_id = run_id_for(video, sha)
         run_dir = self.settings.runs_dir / run_id
@@ -635,9 +697,17 @@ class LocalLull:
             raise
         error = work.exception()
         if error is not None:
-            message = f"{type(error).__name__}: {' '.join(str(error).split())[:500]}"
-            return Described(run_id=run_id, status="failed", error=message)
+            text = self.scrub(run_dir, " ".join(str(error).split()))[:500]
+            return Described(
+                run_id=run_id, status="failed", error=f"{type(error).__name__}: {text}"
+            )
         return described(self.store, run_dir, {"type": "done"}, None)
+
+    def scrub(self, run_dir: Path, text: str) -> str:
+        """`text` without local paths, by the scrubber the REST API uses (lull.api.clean), in
+        the mode the run list uses: a path shrinks to its file name."""
+        roots = [*default_roots(self.settings.lull_data), Path.home()]
+        return Scrubber(run_dir.absolute(), roots, names_only=True)(text)
 
     def queue(self) -> Queue:
         items = []
@@ -691,10 +761,11 @@ def local_server(home: Path | None = None) -> MCPServer:
     ) -> Described:
         """Describe a video file on this machine (or a sample) with the user's own keys and
         spend caps: listen, watch, research names, plan, voice and verify each description
-        against the frames, then publish the tracks under LULL_HOME/runs. Takes minutes;
-        progress comes per stage; a run already made is reused from its cache. Returns the run
-        id, status, cue counts, coverage, the WCAG 1.2.3/1.2.5/1.2.7 rows, model spend and
-        searches."""
+        against the frames, then publish the tracks under LULL_HOME/runs. A run already made
+        is reused from its cache. Returns the run id, status, cue counts, coverage, the WCAG
+        1.2.3/1.2.5/1.2.7 rows, model spend and searches. It blocks while the run goes (a few
+        minutes; allow at least 5 minutes, or have the client reset its timeout on each
+        progress notification) and sends progress per stage."""
         return await lull.describe(ctx, sample_id, path, mode)
 
     @server.tool(annotations=READ_ONLY)

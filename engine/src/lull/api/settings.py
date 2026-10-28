@@ -25,8 +25,14 @@ class ApiSettings(BaseSettings):
         default=7.0, gt=0, validation_alias="LULL_UPLOAD_RETENTION_DAYS"
     )
 
-    # the API's public address for links it hands out (MCP get_tracks); else the request's
+    # the API's public address(es), comma-separated: the first makes the links MCP get_tracks
+    # hands out; all are the hosts /mcp answers to (with localhost). Unset: links are relative
+    # and /mcp answers localhost only
     lull_public_url: str = Field(default="", validation_alias="LULL_PUBLIC_URL")
+
+    @property
+    def public_urls(self) -> list[str]:
+        return [u.strip().rstrip("/") for u in self.lull_public_url.split(",") if u.strip()]
 
     @property
     def origins(self) -> list[str]:

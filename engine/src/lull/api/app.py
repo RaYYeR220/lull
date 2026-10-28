@@ -118,6 +118,11 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         refuse_unverified()
+        if not settings.public_urls:
+            log.warning(
+                "LULL_PUBLIC_URL is not set: /mcp answers localhost only and MCP links are "
+                "relative; set it to the public address in production"
+            )
         # housekeeping now and hourly, in the background: the port opens at once
         timer = asyncio.create_task(app.state.studio.housekeeping_forever(), name="housekeeping")
         try:
@@ -135,7 +140,7 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     app.state.live = Live(settings, store)
     app.state.studio = Studio(settings, store, app.state.live)
     app.state.agents = hosted_server(app.state.live, store, settings)
-    app.state.mcp = McpEndpoint(app.state.agents)
+    app.state.mcp = McpEndpoint(app.state.agents, settings)
     app.router.routes.append(Route("/mcp", endpoint=app.state.mcp))
     app.add_exception_handler(LiveError, live_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
