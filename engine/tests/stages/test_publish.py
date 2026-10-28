@@ -2123,3 +2123,65 @@ def test_a_rollback_that_fails_too_raises_the_first_error_and_logs_both(
         pub._move(src, tmp_path / "dst")
     assert err.value.errno == errno.EIO
     assert "the rollback was refused" in caplog.text and "the bucket said no" in caplog.text
+
+
+# -- keyframes stay inside the picture ----------------------------------------------------------
+
+REAL_PROBE, REAL_FRAMES_AT = media.probe, media.frames_at
+
+
+def test_a_keyframe_past_the_last_frame_of_the_picture_never_fails_publish(
+    tmp_path, fake_media, monkeypatch, long_audio
+):
+    """The sound runs 2 s past the picture; the event's middle (3.5 s) is after the last
+    frame (1.9 s). The keyframe is taken inside the picture and publish goes through."""
+    monkeypatch.setattr(media, "probe", REAL_PROBE)
+    monkeypatch.setattr(media, "frames_at", REAL_FRAMES_AT)
+    run = tmp_path / "run"
+    res = publish(run, long_audio, [_cue("c001", 2.0, 1.0, ev=["e1"])], [],
+                  [_ev("e1", 3.0, 4.0)], [_gap("g001", 2.0, 3.5)], None, _ledger(tmp_path),
+                  "r1", RunOptions(), speech=[])  # fmt: skip
+    assert (run / "keyframes" / "c001.jpg").stat().st_size > 0
+    assert "keyframes/c001.jpg" in res.files
+
+
+def test_a_keyframe_the_grab_misses_is_the_last_frame_of_the_picture(
+    tmp_path, fake_media, monkeypatch
+):
+    monkeypatch.setattr(media, "frames_at", lambda src, shots, **kw: [])  # no frame came out
+
+    def last(src, dst, **kw):
+        Path(dst).write_bytes(b"JPEG-last")
+        return Path(dst)
+
+    monkeypatch.setattr(media, "last_frame", last, raising=False)
+    video, args = _publish_args(tmp_path)
+    publish(tmp_path / "run", video, [_cue("c001", 2.0, 1.5, ev=["e1"])], [], *args, speech=[])
+    assert (tmp_path / "run" / "keyframes" / "c001.jpg").read_bytes() == b"JPEG-last"
+
+
+def test_a_keyframe_that_cannot_be_taken_is_left_out_with_a_warning(
+    tmp_path, fake_media, monkeypatch, caplog
+):
+    def none(*a, **kw):
+        raise MediaError("ffmpeg failed (exit 1): no frame")
+
+    monkeypatch.setattr(media, "frames_at", none)
+    monkeypatch.setattr(media, "last_frame", none, raising=False)
+    video, args = _publish_args(tmp_path)
+    res = publish(tmp_path / "run", video, [_cue("c001", 2.0, 1.5, ev=["e1"])], [], *args,
+                  speech=[])  # fmt: skip
+    assert "keyframes/c001.jpg" not in res.files
+    assert not (tmp_path / "run" / "keyframes" / "c001.jpg").exists()
+    assert "no keyframe for c001" in caplog.text
+
+
+def test_an_extended_freeze_holds_a_frame_of_the_picture_not_of_the_sound_after_it():
+    """The sound runs 4 s past the picture: a visual at 8.5 s freezes on the picture's last
+    frames, never on a time where there is no picture."""
+    import dataclasses
+
+    short = dataclasses.replace(INFO_25, video_end=6.0)
+    ext = [_cue("x001", 8.5, 1.0, gap=None, status="extended")]
+    _, [freeze] = mixer.freeze_points(ext, short)
+    assert freeze.frame / 25 <= 6.0

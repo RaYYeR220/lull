@@ -550,7 +550,10 @@ def _freeze_frame_setup(info, standard, speech, words):
     fps = frame_rate(info)
     std = voiced(standard)
     min_frames = max(1, math.ceil(MIN_SEGMENT * fps))
-    last = max(0, math.floor(info.duration * fps) - min_frames)
+    # frames of the picture: the sound (and the file) may run on after its last frame
+    frames = (math.floor(info.video_end * fps) + 1 if info.video_end is not None
+              else math.floor(info.duration * fps))  # fmt: skip
+    last = max(0, frames - min_frames)
     said = [(a, b) for a, b, _ in _units(words, speech)]
     busy = said + [(c.start, c.start + c.audio_dur) for c in std]
     return fps, last, min_frames, busy, std

@@ -399,3 +399,14 @@ def test_the_wait_after_a_kill_is_bounded_too(monkeypatch):
     with pytest.raises(subprocess.TimeoutExpired):
         media._exec(["ffmpeg"], cwd=None, timeout=1)
     assert len(waits) == 2 and None not in waits
+
+
+def test_probe_knows_where_the_picture_ends(long_audio):
+    info = media.probe(long_audio)
+    assert info.duration > 3.5  # the file: its sound runs to 4 s
+    assert info.video_end == pytest.approx(1.9, abs=0.06)  # the picture's last frame
+
+
+def test_the_last_frame_of_the_picture_can_be_taken(long_audio, tmp_path):
+    out = media.last_frame(long_audio, tmp_path / "last.jpg", window=4.0)
+    assert out.stat().st_size > 0
