@@ -33,6 +33,7 @@ from pathlib import Path
 
 from lull.tf import ULTRA
 
+from public_paths import public_path
 from suite_a import score as A
 from suite_a.score import (
     RESULTS,
@@ -146,7 +147,7 @@ def load_run(video: str, path: Path, offset: float, ref_duration: float) -> dict
     cues += [lull_cue(c, "extended", offset) for c in ext]
     return {
         "video": video,
-        "path": str(path),
+        "path": public_path(str(path)),  # a folder name outside the repository
         "run_id": cues_json.get("run_id") or manifest.get("run_id"),
         "offset_s": offset,
         "clip": [offset, offset + duration],
@@ -623,7 +624,8 @@ def _share(row: dict) -> str:
 
 def overlap_section(videos: list[dict]) -> list[str]:
     """The talking-over-speech tables: first against the independent reference transcript,
-    then against the Lull run's own speech detection (Lull marked 0 by construction there)."""
+    then against the Lull run's own speech detection (Lull's standard track is 0 by
+    construction there; its extended freeze points are counted, not 0)."""
     head = ["| video | side | description s | over speech s | share | note |",
             "|---|---|---|---|---|---|"]  # fmt: skip
     lines = ["", "## Talking over speech", "",
@@ -650,7 +652,7 @@ def overlap_section(videos: list[dict]) -> list[str]:
                              f"{row['overlap_s']:.1f} | {_share(row)} | {note} |")  # fmt: skip
         fz = ov["lull_extended_freeze_points_in_speech"]
         lines.append(f"| {v['video']} | lull_extended freeze points inside speech | | {len(fz)} "
-                     f"| | {OWN} |")  # fmt: skip
+                     f"| | |")  # fmt: skip
         own = ov.get("usgs_ad_own_timeline")
         if own:
             lines.append(f"| {v['video']} | USGS AD on its own timeline | "

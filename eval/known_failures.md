@@ -12,14 +12,35 @@ cues from one run to the next. Each suite scores one pre-registered run (Suite A
 complete --all invocation on the final engine) and does not average over runs; the intervals
 are bootstrapped over videos or reference lines, not over repeated runs.
 
-## Sparse descriptions compared with human audio description
+## Lull conveys little of what the human describers chose to say
 
-Lull says less than a human describer. In the Suite B smoke on Elephants Dream 60-150 s it
-voiced 55 words per minute (83 with the extended track) against 120 (Silvia Pfeiffer) and 95
-(JJ Hunt), and the primary judge credited none of the describers' 46 facts in that clip to its
-cues. Lull holds or cuts a description it cannot verify against the frames and fits the
-standard track into the programme's own pauses, which leaves room for far fewer words than a
-describer who writes for every scene.
+In the scored Suite B, the primary judge credited Lull's cues (standard and extended, inside
+the window) with 1 of JJ Hunt's 124 Elephants Dream facts (0.8 %), 2 of Silvia Pfeiffer's 152
+(1.3 %) and 9 of the USGS describers' 198 (4.5 %); one human describer judged against the
+other gets 38.8 % and 42.7 %. Over the full film Lull voiced 37.9 words per minute on the
+standard track (73.6 with the extended track); Pfeiffer's track has 89.3 and Hunt's 69.4.
+
+## Extended freezes fall inside continuous narration
+
+Suite A pre-registers 0 extended freeze points inside speech for its lectures. On Suite B's
+real videos the extended track paused the picture inside speech at 6 of 31 extended cues
+(Elephants Dream), 22 of 22 (woodshole), 14 of 14 (aquatic_connectivity) and 1 of 1
+(csc_intro), against the reference transcript. In continuous narration the extended track
+pauses the picture between words, mid-sentence: the narration is paused, not talked over,
+but the sentence is interrupted.
+
+## Suite B woodshole: the standard track voiced nothing
+
+On woodshole the standard track voiced 0 words: none of its cues was verified (5 held, 0
+verified); everything Lull said there was on the extended track (22 cues).
+
+## The two Suite B judges disagree
+
+The second judge (Qwen3 235B) credits Lull far more often than the primary one (Nemotron 3
+Ultra) on USGS: 17.7 % against 4.5 % of the facts (window, with extended), raw agreement 85.9 %,
+kappa 0.31. On Pfeiffer's facts the raw agreement is 96.1 % but kappa is -0.02 (both judges
+credit almost nothing, so the agreement is no better than chance). The primary judge's
+numbers are the pre-registered ones.
 
 ## Lecture pauses swallowed before the speech-span fix
 

@@ -53,6 +53,7 @@ from pathlib import Path
 import numpy as np
 from lull.tf import ULTRA
 
+from public_paths import public_path
 from suite_a.render import KEY_PATH, KEY_SHA_PATH, OUT, sha256_file
 from suite_a.specs import write_json
 from suite_a.style import STYLE_TEXT, y_ticks
@@ -2045,7 +2046,7 @@ def main(argv: list[str] | None = None) -> int:
     extra = {"runs/ledger_rows.json": {"rows": rows}, f"runs/invocations/{stamp}.json": invocation}
     if original:
         extra[f"runs/invocations/{original['stamp']}.json"] = original
-    result["bundle"] = {"path": str(bundle),
+    result["bundle"] = {"path": public_path(str(bundle)),
                         "sha256": write_bundle(bundle, OUT, run_dirs, files, extra)}  # fmt: skip
     write_json(folder / "suite_a.json", result)
     (folder / "SUITE_A.md").write_text(markdown(result), encoding="utf-8", newline="\n")

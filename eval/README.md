@@ -2,7 +2,9 @@
 
 Every number Lull publishes about itself comes from a script in this folder that anyone can
 re-run. Results carry the git commit, the model ids, the date and the sha256 of an answer key
-that was pinned before the scorer existed.
+that was pinned before the scorer existed. The order of pre-registration and runs rests on
+commit ancestry and commit times: each tag names its pinned commit, and a tag object's own
+creation time is not the evidence.
 
 `eval/` is its own uv project (`pyproject.toml`, `uv.lock`); it installs the engine from
 `../engine` in editable mode and adds matplotlib. Commands below run from the repository root
@@ -18,9 +20,9 @@ of each file. The code is under the repository's licence.
 Twelve short synthetic lectures (biology, economics, physics, history, statistics, chemistry,
 geography, computer science, art history, medicine, climate, engineering; 3-4 slides, two
 charts each, 8.8 minutes in all) whose narration leaves facts on the slides unsaid. The
-question: does Lull describe what a blind student would miss, without inventing anything,
-without repeating the lecturer, and without ever talking over speech, and at what cost and
-speed.
+question: does Lull describe what a blind student would miss (while measuring how much it
+invents), without repeating the lecturer, and without ever talking over speech, and at what
+cost and speed.
 
 ### Pre-registration (verifiable)
 
@@ -402,8 +404,10 @@ below it, the sha256 of every `refs/*.json` (`asr_corrections.json` included),
 
 ### Deviations: the scored runs
 
-- **Engine commits of the scored runs**: Suite A, the negative control and the ablation ran on the engine of main 61e9d81 (merged into the evaluation branch as 7168ea5). The first recorded run of the full Elephants Dream (run id final-ed) failed in publish on a deterministic engine bug: a keyframe time after the file's last video frame. It is listed under the known failures and stays listed. The bug was fixed on main 0b83117 (keyframe and freeze times clamped to the video stream's last frame; nothing else changed), merged, and the full film was run once more under a fresh run id (final-ed2) with the same command and options (paused once when the user stopped the speech server, then resumed from its stage cache). Suite B is scored on that run and on the three USGS runs made on 61e9d81 (Suite B does not require one engine across its runs).
+- **Engine commits of the scored runs**: Suite A, the negative control and the ablation ran on the engine of main 61e9d81 (merged into the evaluation branch as 7168ea5). The first recorded run of the full Elephants Dream (run id final-ed) failed in publish on a deterministic engine bug: a keyframe time after the file's last video frame. It is listed under the known failures and stays listed. The bug was fixed on main 0b83117 (keyframe and freeze times clamped to the video stream's last frame; nothing else changed), merged, and the full film was run once more under a fresh run id (final-ed2) with the same command and options (paused once for planned machine maintenance, then resumed from its stage cache). Suite B is scored on that run and on the three USGS runs made on 61e9d81 (Suite B does not require one engine across its runs).
 - **Batch splitting on cut-off answers**: added after the second Suite B attempt, in the scorer only (no change to prompts, rules or facts). When a judge's answer (either judge, any batch) is cut off by its token limit, even after the engine's retry with twice the limit, the batch is judged again in halves with the same prompt, schema, model and temperature, down to single facts; only a single fact whose answer is still cut off falls under the pre-registered rule (no verdict: not conveyed, listed). Every split is listed with the judge problems; saved answers and cut-offs are reused, not paid for twice.
+- **Account credit outage**: at 12:34 UTC the provider refused every call (HTTP 402, account credits exhausted) while the recorded runs were being made; the account credits were topped up and the runs resumed from their stage caches at 13:36 UTC. Suite A's scored run had finished before; the controls ran after.
+- **Three Suite B invocations**: the first stopped on the per-run cap of $0.30 that the scorer takes from Suite A's client setup (it needs more for a full film's judging), the second on a judge answer cut off by its token limit, the third (with the batch splitting above and a higher per-run cap) completed. The first two wrote nothing; their saved judge answers were reused.
 
 ### What is measured (`suite_b/score.py`, from `rules.json`)
 
@@ -443,7 +447,7 @@ On the existing `ed90` run: a 90 s clip of Elephants Dream from 60.0 s to 150.0 
 audio cross-correlation, 0.998 at 60.000 s; not the film's first 90 s), run id `ed90-final-b`
 on the pre-merge engine, facts anchored in 60-150 s (46 scored: 26 Pfeiffer, 20 Hunt).
 
-| | first pin (03:14 UTC) | second pin (03:57 UTC) |
+| | smoke on the first pin (run 03:14 UTC) | smoke re-run on the second pin (run 03:57 UTC; pin commit 03:54:30 UTC) |
 |---|---|---|
 | Lull, Ultra, window with extended (Pfeiffer / Hunt) | 0/26 / 0/20 | 0/26 / 0/20 |
 | Lull, Qwen, window with extended | 4/26 / 4/20 | 6/26 / 3/20 |
@@ -508,9 +512,9 @@ spend (default $0.50).
 ## Controls: does the verifier catch false descriptions?
 
 Lull checks every claim of a description against the frames it describes before voicing it.
-Two controls test that this check does work: a negative control (does the verifier accept a
-description checked against footage that does not show it?) and an ablation (how much does
-hallucination rise on Suite A when the check is switched off?). Both are pre-registered in
+Two controls measure how this check behaves: a negative control (does the verifier accept a
+description checked against footage that does not show it?) and an ablation (how do
+hallucination and recall on Suite A change when the check is switched off?). Both are pre-registered in
 `controls/prereg.json` under the annotated tag **`controls-prereg-2`**, committed before
 either was run; they run on the merged engine after the Suite A scored run.
 
@@ -541,7 +545,7 @@ or media directly.
   grid); otherwise the next video that has room ("other video"). Every row records its rule,
   the mismatched window and slide, and the watch events it overlaps with the seconds shared.
 - **Check**: the engine's verifier, with the pipeline's model and settings (Nemotron 3.5 Super
-  VL, its prompt, temperature 0.2), on the cue's final text and each clip; no names are passed.
+  VL, its prompt, temperature 0), on the cue's final text and each clip; no names are passed.
 - **Metrics** (95 % bootstrap over cues), per mismatch rule with row counts, and a headline
   over the same-video rules only (another slide; other events 30 s away). Other-video rows
   are reported apart and never pooled into the headline.
@@ -623,7 +627,7 @@ Expected spend:
   key's facts; a fact the key does not list cannot make a false accept discriminative.
 - 40 cues give a wide interval. The selection is spread over the inputs as they come, not
   balanced between Suite A and the showcase videos.
-- The verifier runs at temperature 0.2. True accept measures its consistency on cues it
+- The verifier runs at temperature 0. True accept measures its consistency on cues it
   already passed, from a single draw per clip.
 - No names are passed to the verifier, whereas the pipeline passes the cast names a line uses.
 - The ablation's two arms ran at different times (the with-arm is the Suite A counting run),

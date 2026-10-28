@@ -65,7 +65,7 @@ def test_the_price_table_names_engine_published_and_sources():
     assert rows[QWEN]["engine"] == [0.20, 0.05, 0.60]
     assert "engine/src/lull/ledger.py" in rows[ULTRA]["engine_source"]
     assert "eval/suite_a/score.py" in rows[QWEN]["engine_source"]
-    assert "research-models.md" in rows[ULTRA]["published_source"]
+    assert "research notes" in rows[ULTRA]["published_source"]
 
 
 def test_markdown_is_a_draft_with_totals_and_both_price_columns(tmp_path):

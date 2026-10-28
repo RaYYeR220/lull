@@ -436,3 +436,48 @@ def test_a_stale_claims_diagnosis_is_refused(tmp_path):
     with pytest.raises(Refused, match="suite_a_claims.json"):
         R.main_text(d, git=FakeGit(), readme=README, manual=MANUAL, suite_a_runs=tmp_path,
                     now="2026-10-28T07:00:00+00:00")  # fmt: skip
+
+
+def test_the_report_scrubs_local_paths_from_results_and_the_web_file(tmp_path):
+    d = results_dir(tmp_path, b_complete=True)
+    b = json.loads((d / "suite_b.json").read_text(encoding="utf-8"))
+    local = str(tmp_path / "elsewhere" / "final" / "b_run")
+    b["runs"][0]["path"] = local
+    (d / "suite_b.json").write_text(json.dumps(b), encoding="utf-8")
+    write_run(Path(local), [{"id": "c9", "reason": "not verified after 3 rounds: x"}])
+    md, web = tmp_path / "RESULTS.md", tmp_path / "out" / "benchmarks.json"
+    kw = {"readme": README, "manual": MANUAL, "suite_a_runs": tmp_path,
+          "suite_b_runs": tmp_path / "elsewhere" / "final"}  # fmt: skip
+    assert R.main(["--results", str(d), "--out-md", str(md), "--out-web", str(web)],
+                  git=FakeGit(), **kw) == 0  # fmt: skip
+    for f in (d / "suite_b.json", web, md):
+        text = f.read_text(encoding="utf-8")
+        assert str(tmp_path) not in text and str(tmp_path).replace("\\", "/") not in text, f
+    assert json.loads((d / "suite_b.json").read_text(encoding="utf-8"))["runs"][0]["path"] == (
+        "b_run"
+    )
+    # the Suite B run folder is still found under the given root for the held-cue reasons
+    doc = json.loads(web.read_text(encoding="utf-8"))
+    assert any("not verified after N rounds" in f["title"] for f in doc["known_failures"])
+
+
+def test_the_ablation_reading_follows_the_intervals():
+    comp = {
+        "recall_with_extended": {"with": 0.14, "without": 0.289, "ci95": [0.062, 0.231]},
+        "hallucination_claims": {"with": 0.181, "without": 0.195, "ci95": [-0.16, 0.16]},
+        "voiced_cues_with_unsupported": {"with": 0.13, "without": 0.17, "ci95": [-0.1, 0.2]},
+    }
+    text = R.ablation_reading(comp)
+    assert "from 14.0% to 28.9%" in text and "excludes 0" in text
+    assert "did not change significantly" in text
+    comp["hallucination_claims"]["ci95"] = [0.01, 0.2]
+    assert "hallucination_claims" in R.ablation_reading(comp)
+
+
+def test_extended_freezes_inside_speech_are_stated_against_suite_a_bar():
+    b = {"runs": [{"video": "v1", "cues": [{"track": "extended"}] * 3 + [{"track": "standard"}]}],
+         "videos": [{"video": "v1", "overlap": {"supplementary_against_reference_asr": {
+             "lull_extended_freeze_points_in_speech": [1.0, 2.0]}}}]}  # fmt: skip
+    text = " ".join(R.freeze_in_speech(b))
+    assert "v1 2 of 3" in text and "pre-registers 0" in text
+    assert "paused, not talked over" in text
