@@ -2,7 +2,7 @@ import path from "node:path";
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { assertApiBaseForBuild } from "./lib/api-base";
-import { assertRealShowcases } from "./lib/showcase-build";
+import { assertRealBenchmarks, assertRealShowcases } from "./lib/showcase-build";
 
 /** Sent with every response. */
 const SECURITY_HEADERS = [
@@ -46,6 +46,7 @@ export default function nextConfig(phase: string): NextConfig {
   if (phase === PHASE_PRODUCTION_BUILD) {
     assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL });
     assertRealShowcases(SHOWCASE_ROOT);
+    assertRealBenchmarks(path.join(__dirname, "public", "benchmarks.json"));
   }
   return config;
 }

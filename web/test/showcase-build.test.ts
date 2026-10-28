@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD } from "next/constants";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { assertRealShowcases } from "../lib/showcase-build";
+import { assertRealBenchmarks, assertRealShowcases } from "../lib/showcase-build";
 import nextConfig, { SHOWCASE_ROOT } from "../next.config";
 
 const REAL = readFileSync(path.join(__dirname, "..", "public", "showcase", "ed90", "showcase.json"), "utf8");
@@ -52,6 +52,22 @@ describe("a production build ships real runs only", () => {
       expect(() => nextConfig(PHASE_PRODUCTION_BUILD)).toThrow(/zz-interim-guard-test\/showcase\.json is an interim placeholder/);
       // the dev server still starts, so the placeholder can be looked at
       expect(nextConfig(PHASE_DEVELOPMENT_SERVER).poweredByHeader).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("a production build ships the evaluation's own results only", () => {
+  it("refuses a benchmarks.json marked as a test fixture, and passes a real one or none", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "lull-bench-"));
+    try {
+      const file = path.join(dir, "benchmarks.json");
+      expect(() => assertRealBenchmarks(file)).not.toThrow();
+      writeFileSync(file, JSON.stringify({ fixture: true, generated_at: "x", git_commit: "y", suites: {}, known_failures: [] }));
+      expect(() => assertRealBenchmarks(file)).toThrow(/is a test fixture, not the published evaluation/);
+      writeFileSync(file, JSON.stringify({ generated_at: "x", git_commit: "y", suites: {}, known_failures: [] }));
+      expect(() => assertRealBenchmarks(file)).not.toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

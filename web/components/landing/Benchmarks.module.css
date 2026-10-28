@@ -8,13 +8,16 @@
 .filled{border-style:solid}
 .value{font-family:var(--f-mono);font-size:var(--fs-mono);color:var(--lamp-0)}
 
-.measured{grid-column:10 / span 3;align-self:start;display:flex;flex-direction:column;gap:var(--s-3);padding-top:var(--s-4);border-top:1px solid var(--lamp-2)}
+.method{grid-column:1 / span 8;font-size:var(--fs-small)}
+.methodLink{font-weight:600;color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.methodLink:hover{text-decoration-color:var(--lamp-1)}
+.measured{grid-column:10 / span 3;grid-row:1;align-self:start;display:flex;flex-direction:column;gap:var(--s-3);padding-top:var(--s-4);border-top:1px solid var(--lamp-2)}
 .measured p{font-size:15px;line-height:1.55;color:var(--cream-1)}
 .measured .after{margin-top:4px}
 
 @media (max-width:1100px){
-  .metrics{grid-column:1 / -1}
-  .measured{grid-column:1 / span 6}
+  .metrics,.method{grid-column:1 / -1}
+  .measured{grid-column:1 / span 6;grid-row:auto}
 }
 @media (max-width:760px){
   .metric{grid-template-columns:1fr;row-gap:10px}

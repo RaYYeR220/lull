@@ -28,3 +28,23 @@ export function assertRealShowcases(root: string): void {
     );
   }
 }
+
+/**
+ * Stops a production build that would publish test data as the evaluation: a
+ * public/benchmarks.json marked `"fixture": true` (the e2e sample) never ships.
+ */
+export function assertRealBenchmarks(file: string): void {
+  if (!existsSync(file)) return;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return; // the benchmarks page build reports a file that doesn't read, with the field at fault
+  }
+  if (typeof raw === "object" && raw !== null && (raw as { fixture?: unknown }).fixture === true) {
+    throw new Error(
+      `${path.basename(path.dirname(file))}/${path.basename(file)} is a test fixture, not the published evaluation. ` +
+        "A production build ships the evaluation's own results only (eval/ writes them).",
+    );
+  }
+}

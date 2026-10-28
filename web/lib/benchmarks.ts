@@ -1,39 +1,24 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { cache } from "react";
+import { parseBenchmarks, type Benchmarks } from "./benchmarks-schema";
 
-export const BENCHMARK_KEYS = ["overlap", "hallucination", "recall", "costPerMinute"] as const;
-export type BenchmarkKey = (typeof BENCHMARK_KEYS)[number];
+export { BENCHMARK_KEYS, landingMetrics, type BenchmarkKey, type LandingCell } from "./benchmarks-landing";
+
+/** Where the evaluation's published results live in the site. */
+export const BENCHMARKS_FILE = path.join("public", "benchmarks.json");
 
 /**
- * public/benchmarks.json, written by the evaluation run. A metric that is missing has not
- * been measured, and the page says so; nothing is ever filled in by hand.
+ * public/benchmarks.json as the evaluation published it, checked (lib/benchmarks-schema.ts),
+ * or null while it doesn't exist. A file that doesn't hold fails the build.
  */
-export type Benchmarks = {
-  /** Each measured metric as it should read, e.g. { value: "0.00 s" }. */
-  metrics: Partial<Record<BenchmarkKey, { value: string; detail?: string }>>;
-};
-
-/** The published numbers, or null while public/benchmarks.json does not exist. */
 export const loadBenchmarks = cache(async (): Promise<Benchmarks | null> => {
-  const file = path.join(process.cwd(), "public", "benchmarks.json");
   let text: string;
   try {
-    text = await readFile(file, "utf8");
+    text = await readFile(path.join(process.cwd(), BENCHMARKS_FILE), "utf8");
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw e;
   }
-  const raw: unknown = JSON.parse(text);
-  const metrics = (raw as { metrics?: unknown })?.metrics;
-  if (typeof metrics !== "object" || metrics === null || Array.isArray(metrics)) throw new Error("benchmarks.json: metrics must be an object");
-  const out: Benchmarks["metrics"] = {};
-  for (const key of BENCHMARK_KEYS) {
-    const m = (metrics as Record<string, unknown>)[key];
-    if (m === undefined) continue;
-    const v = m as { value?: unknown; detail?: unknown };
-    if (typeof v.value !== "string" || !v.value) throw new Error(`benchmarks.json: metrics.${key}.value must be a non-empty string`);
-    out[key] = { value: v.value, ...(typeof v.detail === "string" ? { detail: v.detail } : {}) };
-  }
-  return { metrics: out };
+  return parseBenchmarks(JSON.parse(text));
 });

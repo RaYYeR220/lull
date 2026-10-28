@@ -1,5 +1,7 @@
 import { Section } from "@/components/ui/Section";
-import type { BenchmarkKey, Benchmarks as BenchmarkData } from "@/lib/benchmarks";
+import Link from "next/link";
+import { landingMetrics, type BenchmarkKey } from "@/lib/benchmarks-landing";
+import type { Benchmarks as BenchmarkData } from "@/lib/benchmarks-schema";
 import { cx } from "@/lib/cx";
 import type { Showcase } from "@/lib/showcase";
 import { spend } from "@/lib/showcase-derive";
@@ -14,7 +16,8 @@ const METRICS: { key: BenchmarkKey; name: string; what: string }[] = [
 
 /** 9. Benchmarks: four empty cells until they are measured, and the one number that has been. */
 export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData | null; showcase: Showcase }) {
-  const measured = METRICS.filter((m) => benchmarks?.metrics[m.key]).length;
+  const cells = landingMetrics(benchmarks);
+  const measured = METRICS.filter((m) => cells[m.key]).length;
   const cost = showcase.costUsd === undefined ? null : spend(showcase.costUsd);
 
   return (
@@ -31,7 +34,7 @@ export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData
       <div className={styles.grid}>
         <ul className={styles.metrics}>
           {METRICS.map((m) => {
-            const got = benchmarks?.metrics[m.key];
+            const got = cells[m.key];
             return (
               <li key={m.key} className={styles.metric}>
                 <h3 className="t-title">{m.name}</h3>
@@ -47,6 +50,11 @@ export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData
             );
           })}
         </ul>
+        <p className={styles.method}>
+          <Link href="/benchmarks" className={styles.methodLink}>
+            How it is measured
+          </Link>
+        </p>
         {cost ? (
           <aside className={styles.measured} aria-label="One measured number">
             <span className="t-numeral-xl">{cost.figure}</span>

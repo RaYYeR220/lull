@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { routeFixtures, waitReady } from "./player-fixtures";
@@ -354,6 +354,38 @@ test.describe("developers screens @screens", () => {
       await page.locator('[data-endpoint="startRun"]').scrollIntoViewIfNeeded();
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `developers-endpoint-${size.name}.png`) });
+    });
+  }
+});
+
+/**
+ * The evaluation page: empty (no public/benchmarks.json yet) and with the test fixture
+ * handed in. e2e/__screens__/benchmarks-<state>-<size>(-full).png.
+ */
+test.describe("benchmarks screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 90_000 });
+
+  for (const size of SIZES) {
+    test(`benchmarks at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await page.goto("/benchmarks");
+      await expect(page.locator("#empty-title")).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(300);
+      await fullPage(page, `benchmarks-empty-${size.name}-full.png`);
+      const body = readFileSync(path.join(__dirname, "fixtures", "benchmarks.sample.json"), "utf8");
+      await page.route("**/benchmarks.json", (route) => route.fulfill({ status: 200, contentType: "application/json", body }));
+      await page.goto("/benchmarks");
+      await expect(page.locator("[data-fixture]")).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(300);
+      await page.locator("[data-fixture]").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(OUT, `benchmarks-fixture-${size.name}.png`) });
+      await page.locator("#primary-title").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(200);
+      await page.screenshot({ path: path.join(OUT, `benchmarks-primary-${size.name}.png`) });
+      await fullPage(page, `benchmarks-fixture-${size.name}-full.png`);
     });
   }
 });
