@@ -163,7 +163,8 @@ def test_the_sites_own_validator_accepts_the_output(tmp_path):
     res = subprocess.run(["node", str(script), str(SITE_SCHEMA), str(f)], capture_output=True,
                          text=True, timeout=60)  # fmt: skip
     got = json.loads(res.stdout.strip().splitlines()[-1])
-    assert got["ok"] and got["suiteA"] == 2 and set(got["other"]) == {"suite_b", "controls"}
+    # the site now types Suite B and the controls itself; older builds passed them through as other
+    assert got["ok"] and got["suiteA"] == 2 and set(got["other"]) <= {"suite_b", "controls"}
     broken = dict(out, known_failures=[{"title": "only"}])
     f.write_text(json.dumps(broken), encoding="utf-8")
     res = subprocess.run(["node", str(script), str(SITE_SCHEMA), str(f)], capture_output=True,
