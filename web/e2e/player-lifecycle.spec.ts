@@ -173,6 +173,22 @@ test("an extended hold never runs past 30 s, by NOTE or by span", async ({ page,
   expect((await cueEvents(page)).filter((d) => d.kind === "extended").map((d) => d.hold)).toEqual([30, 30]);
 });
 
+test("at 0.75x an extended hold is still bounded at 30 s, and the band says so", async ({ page, baseURL }) => {
+  await instrument(page);
+  await open(page, baseURL, { ...FULL, extended: "/fx/extended-long.vtt", mode: "extended" });
+  await player(page).getByRole("button", { name: "Play" }).focus();
+  await page.keyboard.press("<");
+  expect((await playerState(page)).speed).toBe(0.75);
+  await record(page);
+  await player(page).getByRole("button", { name: "Play" }).click();
+  await expect.poll(async () => (await playerState(page)).holding, { timeout: 4000 }).toBe(true);
+  // 30 s / 0.75 would be 40 s: the wall-clock wait is bounded after the speed is applied
+  await expect(player(page).locator(".hold")).toContainText("The video waits 30.00 s for this line");
+  await expect(player(page).locator(".hold")).not.toContainText("40.00");
+  // the event still reports the hold in media seconds
+  await expect.poll(async () => (await cueEvents(page)).filter((d) => d.kind === "extended").map((d) => d.hold)).toEqual([30]);
+});
+
 test("a play from outside during a hold is undone", async ({ page, baseURL }) => {
   await open(page, baseURL, { ...FULL, mode: "extended" });
   await seek(page, 2.3);

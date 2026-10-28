@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CueClock, MAX_HOLD_S, holdFor } from "../src/clock";
+import { CueClock, MAX_HOLD_S, holdFor, holdWall } from "../src/clock";
 import { DUCK_DB, ElementProgramme, GraphProgramme, RAMP_S, dbToGain } from "../src/duck";
 import { MediaFollower } from "../src/sync";
 import { clock, spokenTime } from "../src/time";
@@ -235,6 +235,20 @@ describe("extended holds", () => {
     expect(holdFor({ start: 4, end: 5.2 })).toBeCloseTo(1.2, 6);
     expect(holdFor({ start: 4, end: 4 })).toBe(0.5);
     expect(holdFor({ start: 4, end: 9, pause: Number.NaN })).toBe(5);
+  });
+
+  it("scale with the playback speed and stay within 30 s at any speed", () => {
+    expect(holdWall({ start: 2.5, end: 4, pause: 1.5 }, 1)).toBe(1.5);
+    expect(holdWall({ start: 2.5, end: 4, pause: 1.5 }, 1.25)).toBeCloseTo(1.2, 6);
+    expect(holdWall({ start: 2.5, end: 4, pause: 1.5 }, 0.75)).toBeCloseTo(2, 6);
+    // 30 s at 0.75x would be 40 s on the wall: bounded after the speed, not only before
+    expect(holdWall({ start: 1, end: 2, pause: 999 }, 0.75)).toBe(30);
+    expect(holdWall({ start: 4, end: 104 }, 0.75)).toBe(30);
+    expect(holdWall({ start: 1, end: 2, pause: 25 }, 0.75)).toBe(30);
+    expect(holdWall({ start: 1, end: 2, pause: 999 }, 1.25)).toBe(24);
+    // a speed that isn't one plays as 1x
+    expect(holdWall({ start: 1, end: 2, pause: 3 }, 0)).toBe(3);
+    expect(holdWall({ start: 1, end: 2, pause: 3 }, Number.NaN)).toBe(3);
   });
 });
 

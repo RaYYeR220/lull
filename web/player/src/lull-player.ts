@@ -10,7 +10,7 @@
  *                extended="extended.vtt" cue-audio-base="audio/" captions="captions.vtt"
  *                poster="poster.jpg" label="Lecture 3"></lull-player>
  */
-import { CueClock, holdFor } from "./clock";
+import { CueClock, holdFor, holdWall } from "./clock";
 import { ElementProgramme, GraphProgramme, type Programme } from "./duck";
 import { MediaFollower } from "./sync";
 import { clock, seconds2, spokenTime } from "./time";
@@ -1048,8 +1048,8 @@ export class LullPlayer extends Base {
 
   private startHold(cue: Cue): void {
     const v = this.els.video;
-    // the clip plays at the video's rate, so the wait shortens (or lengthens) with it
-    const pause = holdFor(cue) / (this.speed || 1);
+    // the clip plays at the video's rate, so the wait shortens (or lengthens) with it, still bounded
+    const pause = holdWall(cue, this.speed);
     this.hold = { cue, remaining: pause * 1000, since: 0, timer: undefined, cap: undefined, playback: null, timeUp: false, voiceDone: false, respeak: false };
     v.pause();
     // land on the frame the line belongs to
@@ -1660,7 +1660,7 @@ export class LullPlayer extends Base {
     idle.hidden = !!shownCue;
     idle.textContent = this.current ? IDLE[this.current] : "This video has no descriptions.";
     hold.hidden = !this.hold;
-    if (this.hold) holdWait.textContent = `The video waits ${seconds2(holdFor(this.hold.cue) / (this.speed || 1))} for this line`;
+    if (this.hold) holdWait.textContent = `The video waits ${seconds2(holdWall(this.hold.cue, this.speed))} for this line`;
 
     for (const [c, el] of this.spanEls) el.classList.toggle("on", c === live);
     for (const [c, row] of this.rowEls) {

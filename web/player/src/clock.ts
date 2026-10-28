@@ -85,3 +85,13 @@ export function holdFor(c: { start: number; end: number; pause?: number }): numb
   const said = c.pause !== undefined && Number.isFinite(c.pause) && c.pause > 0 ? c.pause : Math.max(MIN_HOLD_S, c.end - c.start);
   return Math.min(MAX_HOLD_S, said);
 }
+
+/**
+ * Wall-clock seconds the picture holds for an extended cue at playback `speed`: the hold
+ * shortens or lengthens with the speed, as the line's voice does, and is bounded again
+ * afterwards, so a slow speed never stretches it past MAX_HOLD_S.
+ */
+export function holdWall(c: { start: number; end: number; pause?: number }, speed: number): number {
+  const rate = Number.isFinite(speed) && speed > 0 ? speed : 1;
+  return Math.min(MAX_HOLD_S, holdFor(c) / rate);
+}
