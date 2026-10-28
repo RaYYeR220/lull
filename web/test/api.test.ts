@@ -10,6 +10,7 @@ import {
   health,
   parseEvent,
   parseRetryAfter,
+  samples,
   startRun,
   toApiError,
   type RunEvent,
@@ -340,6 +341,33 @@ describe("the live limits", () => {
   it("knows the API's storage refusal", async () => {
     const e = await toApiError(json(503, { error: "storage", message: "The video could not be stored just now. Try again in a minute." }, { "retry-after": "60" }));
     expect(e).toMatchObject({ code: "storage", retryAfter: 60, apiCode: "storage" });
+  });
+});
+
+describe("the API's samples", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("are read with their metadata: title, length, credit and licence; what doesn't hold is dropped", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(200, [
+          { id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "USGS", licence: "public domain", source_url: "https://www.usgs.gov/" },
+          { id: "ed45", title: "Elephants Dream, an excerpt", duration: "45", credit: 3 },
+          { id: "" },
+          "tos45",
+        ]),
+      ),
+    );
+    expect(await samples()).toEqual([
+      { id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "USGS", licence: "public domain" },
+      { id: "ed45", title: "Elephants Dream, an excerpt", duration: null, credit: null, licence: null },
+    ]);
+  });
+
+  it("an older API that sends ids only still lists them", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(200, [{ id: "ed45" }])));
+    expect(await samples()).toEqual([{ id: "ed45", title: null, duration: null, credit: null, licence: null }]);
   });
 });
 

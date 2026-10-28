@@ -115,9 +115,21 @@ export const API_REFERENCE: Record<RouteName, EndpointDoc> = {
   },
   samples: {
     group: "Live runs",
-    summary: "The sample clips the live service can describe, by id.",
+    summary: "The sample clips the live service can describe: each up to 45 s, with its title, length, credit and licence.",
     auth: "none",
-    success: { status: 200, type: "application/json", what: "Each sample's id; pass it as sample to POST /v1/runs.", shape: `[{ "id": "ed90" }]` },
+    success: {
+      status: 200,
+      type: "application/json",
+      what: "Each sample's id (pass it as sample to POST /v1/runs), title, length in seconds, credit and licence.",
+      shape: `[
+  { "id": "csc_intro", "title": "Climate Science Champions, introduction", "duration": 44.9,
+    "credit": "U.S. Geological Survey", "licence": "public domain" },
+  { "id": "ed45", "title": "Elephants Dream, an excerpt", "duration": 45.0,
+    "credit": "Elephants Dream (2006), Blender Foundation / Orange Open Movie Team", "licence": "CC BY 2.5" },
+  { "id": "tos45", "title": "Tears of Steel, an excerpt", "duration": 45.0,
+    "credit": "Tears of Steel (2012), Blender Foundation", "licence": "CC BY 3.0" }
+]`,
+    },
     refusals: [],
     example: `curl -s "$LULL_API/v1/samples"`,
   },
@@ -177,7 +189,7 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":85.9,"summary":{"cue
       { status: 503, code: "storage", when: "The upload couldn't be stored just now (the service's disk, not your file).", retryAfter: true },
     ],
     limits: "One run at a time. 3 runs an hour per visitor and 20 a day across visitors; a run is stopped after 10 minutes.",
-    example: `curl -N "$LULL_API/v1/runs" -F sample=ed90 -F mode=standard -F voice=Sofia`,
+    example: `curl -N "$LULL_API/v1/runs" -F sample=ed45 -F mode=standard -F voice=Sofia`,
   },
   listRuns: {
     group: "Reading runs",

@@ -526,13 +526,29 @@ export function capReached(budget: Budget | null, estimate: number): "day" | "to
   return null;
 }
 
-/** GET /v1/samples: the sample clips the API can describe. */
-export async function samples(signal?: AbortSignal): Promise<{ id: string }[]> {
+/** A sample clip the API can describe, with what it says about it (older APIs send the id only). */
+export type Sample = { id: string; title: string | null; duration: number | null; credit: string | null; licence: string | null };
+
+/** GET /v1/samples: the sample clips the API can describe, with their title, length, credit and licence. */
+export async function samples(signal?: AbortSignal): Promise<Sample[]> {
   const res = await request(`${API_BASE}${routePath("samples")}`, { signal, cache: "no-store" });
   if (!res.ok) throw await toApiError(res);
   const raw: unknown = await res.json().catch(() => null);
   if (!Array.isArray(raw)) return [];
-  return raw.filter(isObj).flatMap((s) => (typeof s.id === "string" && s.id ? [{ id: s.id }] : []));
+  const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  return raw.filter(isObj).flatMap((s) =>
+    typeof s.id === "string" && s.id
+      ? [
+          {
+            id: s.id,
+            title: text(s.title),
+            duration: typeof s.duration === "number" && Number.isFinite(s.duration) && s.duration > 0 ? s.duration : null,
+            credit: text(s.credit),
+            licence: text(s.licence),
+          },
+        ]
+      : [],
+  );
 }
 
 /** The run's report page, served by the API. */

@@ -11,6 +11,7 @@ import {
   readEditToken,
   saveEditToken,
   samples,
+  type Sample,
   startRun,
   type RunEvent,
   type RunInput,
@@ -18,12 +19,13 @@ import {
   type StageName,
 } from "@/lib/api";
 import type { Recorded } from "@/lib/recorded";
+import { sampleItems, type SampleItem } from "@/lib/samples";
 import { STAGE_COPY } from "@/lib/run-format";
 import { CueNumbers, initialRun, runReducer, type RunSource } from "@/lib/run-state";
 import { RefusalNotice } from "./RefusalNotice";
 import { RunView } from "./RunView";
 import { ServiceStatus, type Service } from "./ServiceStatus";
-import { SourcePicker, type SampleItem } from "./SourcePicker";
+import { SourcePicker } from "./SourcePicker";
 import styles from "./TryApp.module.css";
 
 /** The API's run id pattern (store.RUN_ID_RE). */
@@ -58,7 +60,7 @@ type Props = {
 export function TryApp({ intro, recorded }: Props) {
   const [run, dispatch] = useReducer(runReducer, undefined, initialRun);
   const [service, setService] = useState<Service>({ status: "loading" });
-  const [sampleIds, setSampleIds] = useState<string[] | null>(null);
+  const [sampleList, setSampleList] = useState<Sample[] | null>(null);
 
   const ctrl = useRef<AbortController | null>(null);
   const seen = useRef(-1);
@@ -83,7 +85,7 @@ export function TryApp({ intro, recorded }: Props) {
     const signal = AbortSignal.timeout(10_000);
     const [h, s] = await Promise.allSettled([health(signal), samples(signal)]);
     setService(h.status === "fulfilled" ? { status: "ok", health: h.value } : { status: "down" });
-    setSampleIds((prev) => (s.status === "fulfilled" ? s.value.map((x) => x.id) : (prev ?? [])));
+    setSampleList((prev) => (s.status === "fulfilled" ? s.value : (prev ?? [])));
   }, []);
 
   const recheck = useCallback(() => {
@@ -229,14 +231,7 @@ export function TryApp({ intro, recorded }: Props) {
     return () => live.current?.abort();
   }, []);
 
-  const items = useMemo<SampleItem[] | null>(() => {
-    if (sampleIds === null) return null;
-    const byId = new Map(recorded.map((r) => [r.id, r]));
-    return sampleIds.map((id) => {
-      const r = byId.get(id);
-      return { id, title: r?.title ?? id, credit: r?.credit ?? null, duration: r?.duration ?? null, recorded: !!r };
-    });
-  }, [sampleIds, recorded]);
+  const items = useMemo<SampleItem[] | null>(() => (sampleList === null ? null : sampleItems(sampleList, recorded)), [sampleList, recorded]);
 
   const idle = run.phase === "idle";
   const refusal = run.refusal;

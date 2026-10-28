@@ -39,7 +39,7 @@ const REST_STEPS: { title: string; what: string; code: string; label: string; an
   },
   {
     title: "See what it can describe",
-    what: "Sample clips by id; or send your own file instead, up to 60 s and 30 MB; longer clips are refused (too_long).",
+    what: "Sample clips of up to 45 s, each with its title, length, credit and licence. Or send your own file instead, up to 60 s and 30 MB; longer clips are refused (too_long).",
     code: `curl -s "$LULL_API/v1/samples"`,
     label: "Samples",
     answer: API_REFERENCE.samples.success.shape,
@@ -47,7 +47,7 @@ const REST_STEPS: { title: string; what: string; code: string; label: string; an
   {
     title: "Describe a sample, and watch it happen",
     what: "-N keeps curl from buffering: each stage, model call and line arrives as it happens. The first event has the run id and its edit token; keep both.",
-    code: `curl -N "$LULL_API/v1/runs" -F sample=ed90 -F mode=standard -F voice=Sofia
+    code: `curl -N "$LULL_API/v1/runs" -F sample=ed45 -F mode=standard -F voice=Sofia
 
 # or your own clip
 curl -N "$LULL_API/v1/runs" -F file=@lecture.mp4 -F mode=standard`,

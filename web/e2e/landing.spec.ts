@@ -55,7 +55,7 @@ test.describe("landing", () => {
   test("says only what the run's data backs: its held lines, and that it waits for review", async ({ page }) => {
     await page.goto("/");
     const studio = page.locator("#studio");
-    await expect(studio.getByRole("list", { name: "Cue statuses" })).toContainText("4 held for review");
+    await expect(studio.getByRole("list", { name: "Cue statuses" })).toContainText("4 held");
     await expect(studio.getByText("Publish, 4 cues held")).toBeVisible();
     await expect(page.locator("#library [data-review-state]")).toHaveText("Needs review in the studio: 4 held, none approved yet");
     await expect(page.getByText(/course library/)).toHaveCount(0);

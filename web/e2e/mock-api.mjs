@@ -209,7 +209,7 @@ const server = createServer(async (req, res) => {
     if (scenario === "spent") budget.spent_today = 5;
     return json(res, 200, { ok: true, speech: scenario !== "nospeech", live_busy: scenario === "busy", budget });
   }
-  if (req.method === "GET" && route === "/v1/samples") return json(res, 200, [{ id: "ed90" }]);
+  if (req.method === "GET" && route === "/v1/samples") return json(res, 200, SAMPLES);
 
   if (req.method === "POST" && route === "/v1/runs") {
     await drain(req);
@@ -253,6 +253,13 @@ const server = createServer(async (req, res) => {
 
   json(res, 404, { detail: "Not Found" });
 });
+
+/** The API's samples (engine/samples/samples.json): up to 45 s each, with their metadata. */
+const SAMPLES = [
+  { id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "U.S. Geological Survey", licence: "public domain" },
+  { id: "ed45", title: "Elephants Dream, an excerpt", duration: 45.0, credit: "Elephants Dream (2006), Blender Foundation / Orange Open Movie Team", licence: "CC BY 2.5" },
+  { id: "tos45", title: "Tears of Steel, an excerpt", duration: 45.0, credit: "Tears of Steel (2012), Blender Foundation", licence: "CC BY 3.0" },
+];
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`mock api on http://127.0.0.1:${PORT}`);

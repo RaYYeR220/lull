@@ -18,13 +18,13 @@ import {
 import { cx } from "@/lib/cx";
 import { watchHref } from "@/lib/routes";
 import { clock, megabytes, usdShort } from "@/lib/run-format";
+import { sampleTooLong, type SampleItem } from "@/lib/samples";
 import type { RunSource } from "@/lib/run-state";
 import { isoDuration } from "@/lib/timecode";
 import shared from "./shared.module.css";
 import styles from "./SourcePicker.module.css";
 
-/** A sample the API offers, with what this site knows about it from its recorded run. */
-export type SampleItem = { id: string; title: string; credit: string | null; duration: number | null; recorded: boolean };
+export type { SampleItem } from "@/lib/samples";
 
 type FileState =
   | { status: "checking"; file: File }
@@ -144,6 +144,7 @@ export function SourcePicker({ samples, service, budget, headingRef, onStart }: 
     else if (file.status === "checking") blocked = "Checking the file.";
     else if (file.status === "refused") blocked = file.message;
   } else if (!sample) blocked = "Choose a clip first.";
+  else blocked = sampleTooLong(sample);
 
   function start() {
     if (blocked) return;

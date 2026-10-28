@@ -27,7 +27,7 @@ test.describe("the developer page", () => {
       "Fetch what it published",
     ]);
     await expect(rest.locator("pre").first()).toHaveText(`export LULL_API="${API}"`);
-    await expect(rest.getByText('curl -N "$LULL_API/v1/runs" -F sample=ed90 -F mode=standard -F voice=Sofia')).toBeVisible();
+    await expect(rest.getByText('curl -N "$LULL_API/v1/runs" -F sample=ed45 -F mode=standard -F voice=Sofia')).toBeVisible();
     // the answer's shape, from the API's own fields
     await rest.getByText("What comes back").nth(2).click();
     await expect(rest.getByText(/"edit_token"/).first()).toBeVisible();

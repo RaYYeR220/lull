@@ -28,14 +28,14 @@ async function openPicker(page: Page) {
   await page.goto("/try");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Watch a description being made.");
   await expect(page.getByText("Ready", { exact: true })).toBeVisible();
-  await expect(page.getByRole("radio", { name: /Elephants Dream/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /Climate Science Champions/ })).toBeChecked();
 }
 
 /** A figure in the result: the value shown for a label. */
 const figure = (scope: Locator, label: string) => scope.locator("dl > div", { has: scope.page().getByRole("term").filter({ hasText: label }) }).getByRole("definition");
 
-const start = (page: Page) => page.getByRole("button", { name: "Describe Elephants Dream" });
-const run = (page: Page) => page.getByRole("region", { name: /Elephants Dream/ });
+const start = (page: Page) => page.getByRole("button", { name: "Describe Climate Science Champions, introduction" });
+const run = (page: Page) => page.getByRole("region", { name: /Climate Science Champions/ });
 
 test.describe("try it", () => {
   test("a sample run streams stages, calls and cues to the result", async ({ page }) => {
@@ -44,19 +44,23 @@ test.describe("try it", () => {
     await routeApi(page, "run");
     await openPicker(page);
 
-    // the picker knows the sample from its recorded run, and the budget it needs
-    await expect(page.getByRole("link", { name: "Watch the recorded run of Elephants Dream" })).toHaveAttribute("href", "/watch/ed90");
-    await expect(page.getByText("The spend check needs $0.10 of budget left for this clip.")).toBeVisible();
+    // the cards are the API's samples, with the title, length, credit and licence it gives
+    await expect(page.getByRole("radio")).toHaveCount(4 + 2); // three samples and your own clip, then the two modes
+    await expect(page.getByText("U.S. Geological Survey, public domain")).toBeVisible();
+    await expect(page.getByText("Tears of Steel (2012), Blender Foundation, CC BY 3.0")).toBeVisible();
+    await expect(page.locator("label", { hasText: "Climate Science Champions" }).locator("time")).toHaveText("0:45");
+    await expect(page.getByRole("link", { name: /Watch the recorded run/ })).toHaveCount(0); // none is a recorded run here
+    await expect(page.getByText("The spend check needs $0.06 of budget left for this clip.")).toBeVisible();
     await expect(page.getByText("$0.41 of $5.00")).toBeVisible();
 
     await page.getByRole("radio", { name: /Extended/ }).check();
     const posted = page.waitForRequest((r) => r.method() === "POST" && r.url() === `${API}/v1/runs`);
     await start(page).click();
     const form = (await posted).postData() ?? "";
-    expect(form).toContain('name="sample"\r\n\r\ned90');
+    expect(form).toContain('name="sample"\r\n\r\ncsc_intro');
     expect(form).toContain('name="mode"\r\n\r\nextended');
 
-    await expect(page.getByRole("heading", { level: 2, name: /Elephants Dream/ })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 2, name: /Climate Science Champions/ })).toBeFocused();
     await expect(page.getByRole("heading", { name: "Ready to watch, with 1 line held for review." })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Finished in 1:26, for $0.0466 in model calls.")).toBeVisible();
 
@@ -118,7 +122,7 @@ test.describe("try it", () => {
     await expect(panel.locator('[data-stage="finalize"]')).toHaveAttribute("aria-current", "step");
     await expect(panel.locator('[data-stage="finalize"]')).toContainText("2 lines checked");
     await expect(panel.locator('[data-stage="publish"]')).toContainText("Waiting");
-    await expect(panel.getByRole("heading", { name: /^Describing Elephants Dream$/ })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: /^Describing Climate Science Champions, introduction$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Describe another clip" })).toHaveCount(0);
     for (const viewport of [DESKTOP, PHONE]) {
       await page.setViewportSize(viewport);
@@ -199,7 +203,7 @@ test.describe("try it", () => {
     await page.goto("/try");
     await expect(page.getByText("$5.00 of $5.00")).toBeVisible();
     await expect(start(page)).toBeDisabled();
-    await expect(page.getByText(/Today’s model budget hasn’t \$0\.10 of room left/)).toBeVisible();
+    await expect(page.getByText(/Today’s model budget hasn’t \$0\.06 of room left/)).toBeVisible();
   });
 
   test("an upload is checked here first: type, size, then length", async ({ page }) => {
@@ -267,11 +271,11 @@ test.describe("try it", () => {
     await openPicker(page);
     await page.getByRole("heading", { name: "Choose a clip" }).focus();
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("radio", { name: /Elephants Dream/ })).toBeFocused();
+    await expect(page.getByRole("radio", { name: /Climate Science Champions/ })).toBeFocused();
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByRole("radio", { name: /Your own clip/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Elephants Dream, an excerpt/ })).toBeChecked();
     await page.keyboard.press("ArrowUp");
-    await expect(page.getByRole("radio", { name: /Elephants Dream/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Climate Science Champions/ })).toBeChecked();
     // Tab on to the start door
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press("Tab");
@@ -279,7 +283,7 @@ test.describe("try it", () => {
     }
     await expect(start(page)).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { level: 2, name: /Elephants Dream/ })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 2, name: /Climate Science Champions/ })).toBeFocused();
     await expect(page.getByRole("heading", { name: /^Ready to watch/ })).toBeVisible({ timeout: 15_000 });
     for (let i = 0; i < 6; i++) {
       await page.keyboard.press("Tab");
