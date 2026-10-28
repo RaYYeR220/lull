@@ -106,7 +106,8 @@ def run_dir(tmp_path_factory) -> Path:
             _cue("c001", 0.5, 1.0, "A red door opens.", audio=audio["c001"],
                  claims=[_claim("A red door opens.")]),
             _cue("c002", 2.2, None, "A dog barks.", gap="g002", status="held",
-                 note="not verified after 2 repairs: a dog barks (not visible)"),
+                 note="not verified after 2 repairs: a dog barks (not visible)",
+                 claims=[_claim("a dog is there"), _claim("a dog barks", "not_visible", None)]),
             _cue("c004", 3.0, 0.8, "In a moment, a sign appears.", gap="g003",
                  audio=audio["c004"], claims=[_claim("A sign appears.", at=3.5)], ahead=True),
         ],
@@ -207,6 +208,7 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "ahead": False,
             "extended": False,
             "note": "not verified after 2 repairs: a dog barks (not visible)",
+            "claims": [{"text": "a dog barks", "verdict": "not_visible"}],
         },
         {
             "id": "c004",

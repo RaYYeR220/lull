@@ -219,7 +219,7 @@ def test_words_read_off_the_screen_are_not_the_describers_own():
 
 
 def test_a_run_of_capitals_stops_at_a_sentence_end():
-    """"OK. I" is two sentences: the screen's "OK" does not make the describer's "I" the
+    """ "OK. I" is two sentences: the screen's "OK" does not make the describer's "I" the
     screen's too."""
     assert "R7-person" in rules("The screen shows OK. I wave.")
     assert "R15-name" in rules("A card reads STOP. BAKE waves.", named={"BAKE"})

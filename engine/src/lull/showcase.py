@@ -18,8 +18,9 @@ floor -120, 1 decimal), speech [[start, end]...], gaps [{id, start, end, capacit
 usable windows the scheduler filled), cues [{id, start, end, text, status, ahead, extended}]
 (the published standard and extended cues; an extended cue starts at its freeze point; end =
 start + its audio; a held cue is listed too, with `note` (why it was held), the pause it would
-have filled as start/end (an extended one: its visual's start, twice), and no audio: it is in no
-description track), words [{t, s, e}], audio {original, described}, cueAudioBase,
+have filled as start/end (an extended one: its visual's start, twice), `claims` (its failed
+claims with their verdicts, from its last check when its text was withheld), and no audio: it
+is in no description track), words [{t, s, e}], audio {original, described}, cueAudioBase,
 verifyExample {cueId, cue, claims [{text, verdict}]}, costUsd, summary}.
 
 summary is what the report says about the run: counts (cues by status), coverage
@@ -159,9 +160,12 @@ def _held(published: dict) -> list[dict]:
         g = gaps.get(c.gap_id) if c.gap_id is not None else None
         start = float(g["usable_start"]) if g else c.start
         end = float(g["usable_end"]) if g else c.start
+        claims = c.claims or (c.checks[-1].claims if c.checks else [])
+        failed = [{"text": k.text, "verdict": k.verdict} for k in claims
+                  if k.verdict != "supported"]  # fmt: skip
         out.append({"id": c.id, "start": _r(start), "end": _r(end), "text": c.text,
                     "status": "held", "ahead": c.ahead, "extended": c.gap_id is None,
-                    "note": c.note or ""})  # fmt: skip
+                    "note": c.note or "", "claims": failed})  # fmt: skip
     return out
 
 
