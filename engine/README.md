@@ -103,13 +103,49 @@ overlap speech or another line. A line the frames do not support is held for a p
 review and is never voiced. A WCAG criterion reads "met" only after a person has reviewed
 every published line. Until then it reads "met (automated checks)" or "needs review".
 
+## Known limitations of verification
+
+Every voiced line is checked against the frames, but the checks have limits. Where a check
+cannot decide, the line is held for a person rather than voiced.
+
+- **Claims are built from the line's own words.** A line is split into small claims, each tied
+  to the exact words it comes from, and each claim may use only those words. Hyphenated
+  words and numbers count as several words ("red-jacketed", "004.77"), so the split often
+  needs a second try. When it fails twice, the line is checked one whole sentence at a time.
+- **Whole sentences are judged by one model.** Besides the small claims, every sentence is
+  judged as written. That is what catches a detail attached to the wrong person ("the man in
+  the red coat" when the red coat is someone else's) or a lost "not". It works only as well
+  as the model reads the sentence. The judge always gives the same answer for the same
+  frames, so asking again cannot turn a refusal into a pass, but a wrong reading stays wrong.
+- **A sentence ends at a full stop followed by a space.** "Mr. Smith waves." counts as two
+  sentences, so that line is judged in pieces and is usually held. A number such as "004.77"
+  stays whole.
+- **Some safe cuts are refused.** When a claim fails, the engine removes its words itself. It
+  refuses a cut that would change what the remaining words say: it never removes "not",
+  "no" or "without" on their own, a word that describes the next one ("toy gun" to "gun",
+  "nearly falls" to "falls", "a red door" to "a door"), a preposition before words that stay,
+  or part of a number or hyphenated word. These rules look at words and their order, not at
+  grammar, so a cut that would have been fine is sometimes refused, and the line is held.
+- **The grammar fix after a cut may only leave out whole sentences.** It cannot add, move or
+  change a word. When it leaves a sentence out, the cue's note says so ("sentence dropped:
+  ..."). A dropped sentence may have described an event that then goes undescribed.
+- **Names and pronouns come from the words they describe.** A claim may say "she" or a name
+  only where its own words do. The check does not work out who "she" is; the whole-sentence
+  judgement is what sees that.
+- **No verdict means no voice.** When the judge gives no verdict for a claim or a sentence,
+  or its answer is cut off, the line is held as it is. This costs lines, not accuracy.
+- **Only the clip around the line is seen.** Each line is judged against the frames around
+  its events. Something that is visible elsewhere in the video counts as not visible.
+- **Words that only place the line in time are not checked.** "In a moment", "now" and
+  "then" are left out of the claims.
+
 ## Models and voices
 
 | Model | Used for | Licence |
 |---|---|---|
 | `nvidia/Nemotron-3.5-Super-VL` (Token Factory) | watching the video, checking each line against the frames | the provider's terms |
 | `nvidia/Nemotron-3-Ultra-550b-a55b` (Token Factory) | planning the descriptions | the provider's terms |
-| `nvidia/Nemotron-3_5-Lightning` (Token Factory) | research terms, repairs, cuts, compression | the provider's terms |
+| `nvidia/Nemotron-3_5-Lightning` (Token Factory) | research terms, splitting lines into claims, repairs, grammar after a cut, compression | the provider's terms |
 | Parakeet TDT (speech server) | speech recognition | CC-BY-4.0 |
 | `nemotron-3-diarization` (speech server) | who speaks when | see its model card |
 | Magpie TTS (speech server) | the voice of the descriptions | NVIDIA Open Model License |

@@ -371,48 +371,73 @@ def _content_seq(text: str) -> list[str]:
             and fold(t.text) not in _LIGHT and fold(t.text) not in _EXEMPT]  # fmt: skip
 
 
-def _sentence_words(text: str) -> list[list[str]]:
-    """The words of each sentence of `text`, normalised (see norm), articles aside."""
-    out: list[list[str]] = []
-    cur: list[str] = []
-    for t in tokenize(text):
+def _ends_sentence(tokens: list[Token], i: int) -> bool:
+    """Whether token `i` ends a sentence: a full stop, question or exclamation mark or an
+    ellipsis not glued to a word after it ("004.77" and "e.g" go on)."""
+    if tokens[i].word or tokens[i].text not in ".!?\u2026":
+        return False
+    nxt = tokens[i + 1] if i + 1 < len(tokens) else None
+    return not (nxt is not None and nxt.word and nxt.start == tokens[i].end)
+
+
+def _sentences(text: str) -> list[tuple[str, list[str]]]:
+    """Each sentence of `text` (see _ends_sentence) and its words, normalised (see norm),
+    articles aside; a sentence with no such word is left out."""
+    tokens = tokenize(text)
+    out: list[tuple[str, list[str]]] = []
+    first, cur = None, []
+    for i, t in enumerate(tokens):
+        first = i if first is None else first
         if t.word and fold(t.text) not in _ARTICLES:
             cur.append(norm(t.text))
-        elif not t.word and t.text in ".!?\u2026" and cur:
-            out.append(cur)
-            cur = []
-    return out + ([cur] if cur else [])
+        if _ends_sentence(tokens, i) or i == len(tokens) - 1:
+            if cur:
+                out.append((text[tokens[first].start : t.end], cur))
+            first, cur = None, []
+    return out
+
+
+def mend_dropped(raw: str, mended: str) -> list[str] | None:
+    """The sentences of the cut line `raw` a mend left out, or None when the mend does more
+    than tidy it. Every word but the articles is compared (normalised: case, apostrophes,
+    stems, numbers; see norm): the mend says the words of `raw` in their order, and may leave
+    out only whole sentences of it. So it never adds, doubles or moves a word ("a red door"
+    never becomes "a person in red"), puts back a preposition or a pronoun, or drops a word
+    from a sentence it keeps ("does not")."""
+    have = _sentences(raw)
+    want = [w for _, s in _sentences(mended) for w in s]
+
+    @cache
+    def fit(i: int, j: int) -> tuple[int, ...] | None:  # sentences of have[i:] left out
+        if j == len(want):
+            return tuple(range(i, len(have)))
+        if i == len(have):
+            return None
+        words = have[i][1]
+        if want[j : j + len(words)] == words:
+            kept = fit(i + 1, j + len(words))
+            if kept is not None:
+                return kept
+        rest = fit(i + 1, j)
+        return None if rest is None else (i, *rest)
+
+    out = fit(0, 0)
+    return None if out is None else [have[i][0] for i in out]
 
 
 def mend_keeps(raw: str, mended: str) -> bool:
-    """Whether a mend of the cut line `raw` only tidies it. Every word but the articles is
-    compared (normalised: case, apostrophes, stems, numbers; see norm): the mend says the
-    words of `raw` in their order, and may leave out only whole sentences of it. So it never
-    adds, doubles or moves a word ("a red door" never becomes "a person in red"), puts back a
-    preposition or a pronoun, or drops a word from a sentence it keeps ("does not")."""
-    have = _sentence_words(raw)
-    want = [w for s in _sentence_words(mended) for w in s]
-
-    @cache
-    def fits(i: int, j: int) -> bool:  # want[j:] from the sentences have[i:]
-        if j == len(want):
-            return True
-        if i == len(have):
-            return False
-        s = have[i]
-        return (want[j : j + len(s)] == s and fits(i + 1, j + len(s))) or fits(i + 1, j)
-
-    return fits(0, 0)
+    """Whether a mend of the cut line `raw` only tidies it (see mend_dropped)."""
+    return mend_dropped(raw, mended) is not None
 
 
 def mend_ok(before: str, raw: str, mended: str) -> bool:
     """Whether `mended` may stand for the cut line `raw` of `before`: it only tidies `raw`
     (mend_keeps) and is not `before` again, articles and spelling aside."""
-    flat = [w for s in _sentence_words(mended) for w in s]
+    flat = [w for _, s in _sentences(mended) for w in s]
     return (
         bool(flat)
-        and flat != [w for s in _sentence_words(before) for w in s]
-        and (mend_keeps(raw, mended))
+        and flat != [w for _, s in _sentences(before) for w in s]
+        and mend_keeps(raw, mended)
     )
 
 
@@ -454,6 +479,9 @@ def check_split(text: str, claims: list[SplitClaim], names: Iterable[str] = ()) 
     ids = [c.id for c in claims]
     if len(set(ids)) < len(ids):
         problems.append("two claims share an id")
+    odd = [i for i in ids if not re.fullmatch(r"k\d+", i)]
+    if odd:
+        problems.append("claim ids must be k1, k2, ...: " + ", ".join(odd))
     covered: set[int] = set()
     for c in claims:
         if not c.tokens or any(not (0 <= a <= b < n) for a, b in c.tokens):
@@ -504,9 +532,9 @@ def sentence_claims(text: str) -> list[SplitClaim]:
     tokens = tokenize(text)
     framing = time_framing(tokens)
     out, start = [], 0
-    for i, t in enumerate(tokens + [Token(".", len(text), len(text))]):
-        if i < len(tokens) and t.text not in ".!?…":
-            continue
+    for i, _t in enumerate(tokens + [Token(".", len(text), len(text))]):
+        if i < len(tokens) and not _ends_sentence(tokens, i):
+            continue  # "004.77" is one number, not two sentences
         idx = [k for k in range(start, min(i + 1, len(tokens))) if k not in framing]
         words = [k for k in idx if tokens[k].word]
         if words:
@@ -665,14 +693,9 @@ def sentence_gate(text: str, claims: list[SplitClaim]) -> list[SplitClaim]:
         return _words(c.text), frozenset(i for i in c.indices() if i < len(toks) and toks[i].word)
 
     said = {says(c) for c in claims}
-    taken = {c.id for c in claims}
-    gate = []
-    for s in sentence_claims(text):
-        if says(s) in said:
-            continue
-        sid = s.id if s.id not in taken else "w" + s.id[1:]
-        gate.append(s.model_copy(update={"id": sid, "whole": True}))
-    return gate
+    # a split's ids are k1, k2, ... (check_split), or, fallen back, these very sentences
+    return [s.model_copy(update={"whole": True}) for s in sentence_claims(text)
+            if says(s) not in said]  # fmt: skip
 
 
 def _words(text: str) -> tuple[str, ...]:

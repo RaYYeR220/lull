@@ -2472,3 +2472,93 @@ def test_a_compress_answer_cut_off_is_no_shorter_line():
     assert compress("A red door opens slowly.", 3, [], tf, run_id="r1") == (
         "A red door opens slowly."
     )
+
+
+# -- fix round 5: never cut inside a glued token; sentences end only at a space ------------------
+
+DISPLAY = "A display reads 004.77."
+CLOCK = "A clock shows 10:45."
+
+
+def _glued(line, cut):
+    """The split takes a number apart (its parts are separate tokens): `cut` is the claim of
+    the part the frames contradict; the whole sentence is contradicted too."""
+    head = {"id": "k1", "text": cut[0], "tokens": [[0, 3]]}
+    after = {head["text"].capitalize() + ".", head["text"].capitalize() + ".."}
+    return FakeTF(
+        split=_by_text({line: {"claims": [head, {"id": "k2", "text": cut[1], "tokens": [[5, 5]]}]},
+                        **{t: {"claims": [head]} for t in after}}),
+        verify=_by_text({line: _verdicts(("k1", "supported"), ("k2", "contradicted"),
+                                         ("s1", "contradicted")),
+                         **{t: _verdicts(("k1", "supported")) for t in after}}),
+        mend=lambda call: {"text": _description(call)},
+    )  # fmt: skip
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "line, cut, made",
+    [(DISPLAY, ("a display reads 004", "77"), "A display reads 004."),
+     (CLOCK, ("a clock shows 10", "45"), "A clock shows 10.")],
+    ids=["decimal", "time"],
+)  # fmt: skip
+def test_r4_a_cut_inside_a_number_never_makes_a_new_number(tmp_path, video, line, cut, made):
+    out = _run(tmp_path, video, _glued(line, cut), FakeSpeech([2.0]), cue=_cue(line))
+    assert out.status == "held" and out.text != made and out.audio_path is None
+
+
+@pytest.mark.strict_split
+@pytest.mark.parametrize(
+    "line, claims",
+    [("The glass is half-full.", [("the glass is full", [[0, 2], [5, 5]]),
+                                  ("the glass is half-full", [[0, 5]])]),
+     ("The score reads 2-1.", [("the score reads 2", [[0, 3]]),
+                               ("the score reads 2-1", [[0, 5]])])],
+    ids=["hyphen", "score"],
+)  # fmt: skip
+def test_a_cut_that_would_split_a_glued_token_holds(tmp_path, video, line, claims):
+    split = {"claims": [{"id": f"k{i}", "text": t, "tokens": r}
+                        for i, (t, r) in enumerate(claims, 1)]}  # fmt: skip
+    tf = FakeTF(split=[split], verify=[_verdicts(("k1", "supported"), ("k2", "not_visible"))])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    assert out.status == "held" and out.text == line and "mend" not in tf.roles()
+    assert "would split" in out.note
+
+
+def test_a_full_stop_inside_a_number_does_not_end_a_sentence():
+    from lull.stages.verify import mend_keeps, sentence_claims
+
+    texts = [c.text for c in sentence_claims("A display reads 004.77. A clock shows 10:45.")]
+    assert texts == ["A display reads 004.77", "A clock shows 10:45"]
+    assert mend_keeps("It reads 004.77.", "It reads 004.") is False  # not a sentence dropped
+    assert mend_keeps("It reads 004.77. A cat sits.", "It reads 004.77.") is True
+
+
+@pytest.mark.strict_split
+def test_a_split_must_number_its_claims_k1_k2():
+    from lull.stages.verify import check_split
+
+    line = "A man in a red coat waves."
+    got = check_split(line, [_sc("s1", "a man waves", [[0, 1], [6, 6]]),
+                             _sc("w1", "a man in a red coat", [[0, 5]])])  # fmt: skip
+    assert "claim ids must be k1, k2, ...: s1, w1" in got
+
+
+@pytest.mark.strict_split
+def test_a_split_with_sentence_like_ids_is_asked_again_and_ids_never_collide(tmp_path, video):
+    line = "A man in a red coat waves."
+    odd = {"claims": [{"id": "s1", "text": "a man waves", "tokens": [[0, 1], [6, 6]]},
+                      {"id": "w1", "text": "a man in a red coat", "tokens": [[0, 5]]}]}  # fmt: skip
+    tf = FakeTF(split=[odd, odd], verify=[_verdicts(("s1", "supported"))])
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    ids = re.findall(r"^(\w+): ", _user_text(tf.of("verify")[0]), re.M)
+    assert len(ids) == len(set(ids)) and "w1" not in ids
+    assert "claims: one per sentence (split failed)" in out.note
+
+
+def test_a_sentence_the_mend_leaves_out_is_named_in_the_note(tmp_path, video):
+    tf = FakeTF(verify=[COAT_CLAIMS, _supported("a person opens a door")],
+                mend=[{"text": "A person opens a door."}])  # fmt: skip
+    out = _coat_cat(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert out.status == "verified" and out.text == "A person opens a door."
+    assert 'sentence dropped: "A cat runs past."' in out.note

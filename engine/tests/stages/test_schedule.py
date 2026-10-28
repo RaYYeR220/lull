@@ -242,10 +242,10 @@ def test_continuous_speech_leaves_only_extended_candidates():
 
 
 def test_extended_candidates_follow_the_plan_priority_not_the_first_guess():
-    """Live csc_intro: the inventory rated 42 one-second shots salience 4; the plan, seeing the
-    whole video, rated most of them priority 1, yet each one stopped the video. Only what the
-    plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and stays
-    undescribed, which the pipeline reports)."""
+    """A fast-cut intro: the inventory rated 42 one-second shots salience 4; the plan, seeing
+    the whole video, rated most of them priority 1, yet each one stopped the video. Only what
+    the plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and
+    stays undescribed, which the pipeline reports)."""
     events = [_ev("e001", 1.0, 2.0, sal=4), _ev("e002", 2.0, 3.0, sal=3),
               _ev("e003", 3.0, 4.0, sal=5), _ev("e004", 4.0, 5.0, sal=4)]  # fmt: skip
     variants = [_var(e, "short", 4) for e in ("e001", "e002", "e003")]

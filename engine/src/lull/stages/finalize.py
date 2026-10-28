@@ -52,6 +52,7 @@ from lull.stages.verify import (
     content_words,
     fold,
     mend,
+    mend_dropped,
     mend_ok,
     rewrite,
     tagged,
@@ -454,7 +455,9 @@ def _meaning_cut(tokens: list[Token], drop: set[int], bad: list[Claim]) -> str |
       function word: a modifier cut from its head ("toy gun" -> "gun", "nearly falls" ->
       "falls", "a red door" -> "a door");
     - a cut ending in a preposition right before a word that stays ("stands behind the car"
-      -> "stands the car")."""
+      -> "stands the car");
+    - a word cut from a space-free chunk whose other words stay: a number or a compound
+      ("004.77" -> "004", "10:45" -> "10", "half-full" -> "full")."""
     for i in sorted(drop):
         if not _is_negation(tokens[i].text):
             continue
@@ -466,6 +469,14 @@ def _meaning_cut(tokens: list[Token], drop: set[int], bad: list[Claim]) -> str |
                 for k in mine if k < len(tokens)
             ):  # fmt: skip
                 return f'the cut would leave the words "{tokens[i].text}" denies'
+    for i in sorted(drop):  # a word glued to a kept one: "004.77", "10:45", "2-1", "half-full"
+        j = k = i
+        while j > 0 and tokens[j - 1].end == tokens[j].start:
+            j -= 1
+        while k + 1 < len(tokens) and tokens[k].end == tokens[k + 1].start:
+            k += 1
+        if any(tokens[x].word and x not in drop for x in range(j, k + 1)):
+            return f'the cut would split "{"".join(t.text for t in tokens[j : k + 1])}"'
     for a, b in _runs(drop):
         nxt = b + 1
         if nxt >= len(tokens) or nxt in drop or not tokens[nxt].word:
@@ -549,6 +560,7 @@ class _Finalise:
     splits: dict = field(default_factory=dict)  # claim splits by text (verify.split_claims)
     extras: list[Claim] = field(default_factory=list)  # supported claims the line never made
     split_notes: list[str] = field(default_factory=list)  # e.g. a split that fell back
+    left_out: list[str] = field(default_factory=list)  # sentences a mend left out
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
     at: float | None = None  # where in its window the voiced line starts
@@ -621,6 +633,7 @@ class _Finalise:
             parts.append(f"compressed {self.words_before}→{count_words(self.text)} words")
         for eid in self.dropped:
             parts.append(f"dropped the sentence for {eid} to fit")
+        parts += [f'sentence dropped: "{s}"' for s in dict.fromkeys(self.left_out)]
         parts += list(dict.fromkeys(self.split_notes))
         if self.extras:
             seen = list(dict.fromkeys(c.text for c in self.extras))
@@ -819,6 +832,7 @@ class _Finalise:
         cut = sorted({tokens[i].text for i in drop}, key=str.lower)
         mended = autofix(mend(raw, cut, self.tf, run_id=self.run_id))
         if mended and mend_ok(text, raw, mended):
+            self.left_out += mend_dropped(raw, mended) or []
             return mended, None
         if mended:
             log.info("finalize: %s: the mend changed words; the raw cut stands", self.cue.id)
