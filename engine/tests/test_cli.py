@@ -41,7 +41,9 @@ def _fake_clients(monkeypatch, ledger: Ledger) -> dict:
 
 
 def _free_ledger(home: Path, **caps) -> Ledger:
-    return Ledger(home / "ledger.db", **{"cap_run": 0, "cap_day": 0, "cap_total": 0, **caps})
+    return Ledger(
+        home / "ledger.db", **{"cap_run": None, "cap_day": None, "cap_total": None, **caps}
+    )
 
 
 def test_describe_prints_progress_and_a_summary(

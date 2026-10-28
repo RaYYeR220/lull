@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -13,6 +14,8 @@ import httpx
 
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, CallRecord, Ledger, cost_of
+
+log = logging.getLogger(__name__)
 
 ULTRA = "nvidia/Nemotron-3-Ultra-550b-a55b"
 VL = "nvidia/Nemotron-3.5-Super-VL"
@@ -179,7 +182,10 @@ class TokenFactory:
                 **extra,
             }
             data, latency = self._post(body, run_id, estimate)
-            self._record(data, model, run_id, stage, role, latency)
+            self._record(data, model, run_id, stage, role, latency, estimate)
+            if not data.get("usage"):
+                log.warning("tf: %s answered without usage; charged at its estimate $%.4f",
+                            model, estimate)  # fmt: skip
             choice = (data.get("choices") or [{}])[0]
             content = (choice.get("message") or {}).get("content") or ""
             if choice.get("finish_reason") == "length" or not content.strip():
@@ -220,8 +226,11 @@ class TokenFactory:
         raise AssertionError("unreachable")  # pragma: no cover
 
     def _record(
-        self, data: dict, model: str, run_id: str, stage: str, role: str, latency: float
-    ) -> None:
+        self, data: dict, model: str, run_id: str, stage: str, role: str, latency: float,
+        estimate: float = 0.0,
+    ) -> None:  # fmt: skip
+        """One ledger row for a call. An answer that reports no usage is charged at the
+        call's estimate, so the caps still see it."""
         usage = data.get("usage") or {}
         details = usage.get("prompt_tokens_details") or {}
         cached = details.get("cached_tokens")
@@ -241,7 +250,7 @@ class TokenFactory:
                 tokens_cached=cached,
                 tokens_out=tout,
                 latency_s=latency,
-                cost_usd=cost_of(model, tin, cached, tout),
+                cost_usd=cost_of(model, tin, cached, tout) if usage else estimate,
                 ts=time.time(),
             )  # fmt: skip
         )

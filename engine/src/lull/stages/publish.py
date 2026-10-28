@@ -841,13 +841,16 @@ def publish(
     speech: list[Span],
     duplicates: dict[str, str] | None = None,
     priority: dict[str, int] | None = None,
+    since: float | None = None,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
     protected sound or another cue; any other failure leaves the previous outputs untouched.
     `speech` is the listen stage's speech spans; `duplicates` the events the plan dropped as
     near-duplicates of another (dropped -> kept), counted as described with their twin;
-    `priority` the plan's priorities, which decide what is important (see `important`)."""
+    `priority` the plan's priorities, which decide what is important (see `important`);
+    `since` when this attempt started (epoch seconds): its calls are the ones reported as this
+    run's, next to the model spend of every attempt under the run id."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -873,7 +876,7 @@ def publish(
         try:
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
-                run_id, opts, speech, duplicates, overlap, priority,
+                run_id, opts, speech, duplicates, overlap, priority, since,
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -889,7 +892,7 @@ def _stage(
     extended: list[Cue], events: list[VisualEvent], gaps: list[Gap],
     research: ResearchResult | None, ledger: Ledger, run_id: str, opts: RunOptions,
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
-    priority: dict[str, int] | None = None,
+    priority: dict[str, int] | None = None, since: float | None = None,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
@@ -934,8 +937,17 @@ def _stage(
         extended_error=ext_error, coverage=cov,
     )  # fmt: skip
     disclosure = tts_disclosure(everything)
-    calls = ledger.summary(run_id)
-    cost = round(calls["total_cost_usd"], 6)
+    calls = ledger.summary(run_id, since=since)
+    spend = {
+        "model_usd_this_run": round(ledger.spent(run_id=run_id, since=since), 6),
+        "tavily_searches_this_run": ledger.searches(run_id=run_id, since=since),
+        "tavily_notional_usd_this_run": round(
+            ledger.spent(run_id=run_id, since=since, tavily=True)
+            - ledger.spent(run_id=run_id, since=since), 6
+        ),
+        "model_usd_all_runs": round(ledger.spent(run_id=run_id), 6),
+    }  # fmt: skip
+    cost = spend["model_usd_this_run"]
     minutes = info.duration / 60
     per_min = round(cost / minutes, 6) if minutes > 0 else None
     warnings = [
@@ -953,8 +965,9 @@ def _stage(
         "held": [{"id": c.id, "reason": c.note} for c in held],
         "f113": flags,
         "lint_warnings": [{k: w[k] for k in ("cue_id", "rule", "message")} for w in warnings],
-        "cost_usd": cost,
+        "cost_usd": cost,  # model spend of this run
         "cost_per_min": per_min,
+        "spend": spend,
         "calls_by_role_model": calls["by_role_model"],
         "wcag": wcag,
         "reviewed": signed_off,
@@ -1000,7 +1013,8 @@ def _stage(
     }  # fmt: skip
     out[REPORT] = _write(run_dir / REPORT, _render_report(context))
 
-    models = sorted({c.model for c in ledger.calls(run_id)})
+    models = sorted({c.model for c in ledger.calls(run_id)
+                     if since is None or c.ts >= since})  # fmt: skip
     manifest = {
         "run_id": run_id,
         "created": created,

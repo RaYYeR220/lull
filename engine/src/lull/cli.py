@@ -315,18 +315,27 @@ def calibrate_voice(
     )
 
 
+def _cap(cap: float | None, *, money: bool = True) -> str:
+    if cap is None:
+        return "no cap"
+    return f"cap ${cap:.2f}" if money else f"cap {cap}"
+
+
 @app.command("ledger")
 def ledger_cmd(
     run_id: Annotated[str | None, typer.Option("--run", help="Show one run's calls.")] = None,
 ) -> None:
-    """Model and search spend: every run, or one run by role and model."""
+    """Model spend and web searches: every run, or one run by role and model."""
     led = _ledger()
     if run_id is None:
-        midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-        today, total = led.spent(since=midnight.timestamp()), led.spent()
+        midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+        today, total = led.spent(since=midnight), led.spent()
         typer.echo(
-            f"spent     today ${today:.4f} (cap ${led.cap_day:.2f}), "
-            f"total ${total:.4f} (cap ${led.cap_total:.2f})"
+            f"model     today ${today:.4f} ({_cap(led.cap_day)}), "
+            f"total ${total:.4f} ({_cap(led.cap_total)})"
+        )
+        typer.echo(
+            f"searches  today {led.searches(since=midnight)} ({_cap(led.tavily_day, money=False)})"
         )
         for r in led.runs():
             when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["last_ts"]))

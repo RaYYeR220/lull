@@ -408,6 +408,8 @@ class _Run:
             )
         for err in found.errors:
             self.warn("research_error", f"research: {err}", "research")
+        for note in found.notes:
+            self.warn("research_capped", note, "research")
         return found
 
     def plan(self, events, words, gaps, found: ResearchResult) -> PlanResult:
@@ -646,6 +648,7 @@ def run(
     video, run_dir = Path(video), given.absolute()
     emit = _Emitter(on_event)
     t0 = time.monotonic()
+    started = time.time()  # this attempt's calls are the ledger rows from here on
     state: _Run | None = None
     try:
         info = media.probe(video)
@@ -691,7 +694,7 @@ def run(
 
         unsubscribe = ledger.subscribe(on_call)
         try:
-            result = _stages(state)
+            result = _stages(state, started)
         finally:
             unsubscribe()
     except Exception as e:
@@ -710,7 +713,7 @@ def run(
     return result
 
 
-def _stages(r: _Run) -> PublishResult:
+def _stages(r: _Run, started: float | None = None) -> PublishResult:
     heard, gaps = r.listen()
     events = r.watch(heard.words)
     found = r.research(events, heard.words)
@@ -737,6 +740,7 @@ def _stages(r: _Run) -> PublishResult:
             speech=heard.speech,
             duplicates=planned.duplicates,
             priority=planned.priority,
+            since=started,
         )
         info["files"] = len(result.files) + 1
     return result

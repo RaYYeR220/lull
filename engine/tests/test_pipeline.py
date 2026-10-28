@@ -56,7 +56,9 @@ OUTPUTS = {
 
 
 def _ledger(root: Path, **caps) -> Ledger:
-    return Ledger(root / "ledger.db", **{"cap_run": 0, "cap_day": 0, "cap_total": 0, **caps})
+    return Ledger(
+        root / "ledger.db", **{"cap_run": None, "cap_day": None, "cap_total": None, **caps}
+    )
 
 
 def _run(video, run_dir, ledger, *, tf=None, speech=None, opts=None, wps=3.0, run_id="t1"):

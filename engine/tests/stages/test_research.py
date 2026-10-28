@@ -40,7 +40,7 @@ WORDS = [Word(text=t, start=i * 0.5, end=i * 0.5 + 0.4) for i, t in enumerate(_S
 
 
 def _tavily(tmp_path, handler, sleep=lambda s: None):
-    ledger = Ledger(tmp_path / "l.db", cap_run=0, cap_day=0, cap_total=0)
+    ledger = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
     return Tavily(
         "tvly-secret", ledger, transport=httpx.MockTransport(handler), sleep=sleep
     ), ledger
@@ -286,10 +286,26 @@ def test_search_failure_degrades(tmp_path):
 
 
 def test_budget_exceeded_propagates(tmp_path):
-    ledger = Ledger(tmp_path / "b.db", cap_run=0.001, cap_day=0, cap_total=0)
-    tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler([])))
+    class Broke(FakeTF):
+        def json(self, *a, **kw):
+            raise BudgetExceeded("run")
+
+    tv, _ = _tavily(tmp_path, _handler([]))
     with pytest.raises(BudgetExceeded):
-        research(_ev(), WORDS, RunOptions(), FakeTF(["Proog"]), tv, run_id="r")
+        research(_ev(), WORDS, RunOptions(), Broke(["Proog"]), tv, run_id="r")
+
+
+def test_research_stops_at_the_search_cap_and_says_so(tmp_path):
+    """Searches are capped per run (LULL_TAVILY_RUN): research looks up what it may, keeps
+    the other terms as heard, and records that it was capped; that is not an error."""
+    seen: list = []
+    ledger = Ledger(tmp_path / "c.db", cap_run=None, cap_day=None, cap_total=None, tavily_run=2)
+    tv = Tavily("k", ledger, transport=httpx.MockTransport(_handler(seen)))
+    res = research(_ev(), WORDS, RunOptions(), FakeTF(["Proog", "Emo", "Bad"]), tv, run_id="r")
+    assert [p for p, _, _ in seen] == ["/search", "/search"]
+    assert [g.note for g in res.glossary][2] == "lookup skipped: search cap"
+    assert res.glossary[0].sources and res.glossary[1].sources
+    assert res.notes == ["research capped: 2 searches"] and res.errors == []
 
 
 def test_descriptors_dropped_no_searches(tmp_path):

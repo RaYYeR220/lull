@@ -11,6 +11,7 @@ from lull.ledger import (
     BudgetExceeded,
     CallRecord,
     Ledger,
+    SearchCapReached,
     cost_of,
     cost_of_tavily,
 )
@@ -100,7 +101,7 @@ def test_spent_filters(tmp_path):
 
 
 def test_check_run_cap(tmp_path):
-    led = mk(tmp_path, cap_run=0.50, cap_day=0, cap_total=0)
+    led = mk(tmp_path, cap_run=0.50, cap_day=None, cap_total=None)
     led.record(rec(cost=0.45))
     with pytest.raises(BudgetExceeded) as e:
         led.check("r1", 0.10)
@@ -110,7 +111,7 @@ def test_check_run_cap(tmp_path):
 
 
 def test_check_day_counts_only_today(tmp_path):
-    led = mk(tmp_path, cap_run=0, cap_day=1.0, cap_total=0)
+    led = mk(tmp_path, cap_run=None, cap_day=1.0, cap_total=None)
     led.record(rec("old", 5.0, ts=midnight_utc() - 1))
     led.check("n", 0.9)  # yesterday's spend ignored
     led.record(rec("today", 0.95, ts=midnight_utc() + 1))
@@ -120,7 +121,7 @@ def test_check_day_counts_only_today(tmp_path):
 
 
 def test_check_total_and_order(tmp_path):
-    led = mk(tmp_path, cap_run=0, cap_day=0, cap_total=2.0)
+    led = mk(tmp_path, cap_run=None, cap_day=None, cap_total=2.0)
     led.record(rec("old", 1.95, ts=1000))
     with pytest.raises(BudgetExceeded) as e:
         led.check("n", 0.10)
@@ -145,10 +146,17 @@ def test_caps_default_from_settings(tmp_path, monkeypatch):
         get_settings.cache_clear()
 
 
-def test_zero_cap_means_unlimited(tmp_path):
-    led = mk(tmp_path, cap_run=0, cap_day=-1, cap_total=0)
+def test_no_cap_is_none_and_a_zero_cap_refuses_every_call(tmp_path):
+    """None (LULL_CAP_*=none) is the only way to switch a cap off; 0 means spend nothing."""
+    led = mk(tmp_path, cap_run=None, cap_day=None, cap_total=None)
     led.record(rec(cost=100))
     led.check("r1", 100)
+    for scope in ("run", "day", "total"):
+        caps = {"cap_run": None, "cap_day": None, "cap_total": None, f"cap_{scope}": 0}
+        zero = Ledger(tmp_path / f"{scope}.db", **caps)
+        with pytest.raises(BudgetExceeded) as err:
+            zero.check("r1", 0.0)
+        assert err.value.scope == scope and "0" in str(err.value)
 
 
 def test_persists_across_instances(tmp_path):
@@ -245,21 +253,25 @@ def test_check_refuses_an_estimate_that_is_not_a_cost(tmp_path, estimate):
 def test_a_cap_switched_off_in_the_settings_is_logged(tmp_path, monkeypatch, caplog):
     from lull.config import get_settings
 
-    monkeypatch.setenv("LULL_CAP_DAY", "0")
+    monkeypatch.setenv("LULL_CAP_DAY", "none")
+    monkeypatch.setenv("LULL_CAP_TOTAL", "0")
     get_settings.cache_clear()
     try:
         with caplog.at_level("WARNING", logger="lull.ledger"):
-            Ledger(tmp_path / "d.db")
-            Ledger(tmp_path / "e.db", cap_day=0)  # asked for in code: deliberate, no warning
+            led = Ledger(tmp_path / "d.db")
+            Ledger(tmp_path / "e.db", cap_day=None, cap_total=0)  # given in code: no warning
     finally:
         get_settings.cache_clear()
+    assert (led.cap_day, led.cap_total) == (None, 0.0)
     warnings = [r.getMessage() for r in caplog.records]
-    assert len(warnings) == 1 and "LULL_CAP_DAY" in warnings[0] and "no day cap" in warnings[0]
+    assert len(warnings) == 2
+    assert "LULL_CAP_DAY" in warnings[0] and "no day cap" in warnings[0]
+    assert "LULL_CAP_TOTAL" in warnings[1] and "refuses every call" in warnings[1]
 
 
 def test_ledger_closes_and_is_a_context_manager(tmp_path):
     path = tmp_path / "d.db"
-    with Ledger(path, cap_run=0, cap_day=0, cap_total=0) as led:
+    with Ledger(path, cap_run=None, cap_day=None, cap_total=None) as led:
         led.record(rec(cost=0.5))
         assert led.spent() == 0.5
     with pytest.raises(sqlite3.ProgrammingError, match="closed"):
@@ -268,3 +280,49 @@ def test_ledger_closes_and_is_a_context_manager(tmp_path):
     for p in tmp_path.iterdir():
         p.unlink()  # nothing holds the database open any more (Windows)
     assert list(tmp_path.iterdir()) == []
+
+
+# -- what the caps count -------------------------------------------------------------------------
+
+
+def test_spend_caps_count_model_calls_only(tmp_path):
+    """Tavily is metered in searches, not dollars: its notional cost never trips a spend cap
+    (it is still reported)."""
+    led = mk(tmp_path, cap_run=0.5, cap_day=None, cap_total=None)
+    led.record(rec(cost=5.0, provider="tavily", model="tavily-search"))
+    led.check("r1", 0.4)
+    assert led.spent(run_id="r1") == 0.0 and led.spent(run_id="r1", tavily=True) == 5.0
+    led.record(rec(cost=0.3))
+    with pytest.raises(BudgetExceeded):
+        led.check("r1", 0.3)
+
+
+def test_searches_are_capped_per_run_and_per_day(tmp_path):
+    led = Ledger(tmp_path / "s.db", cap_run=None, cap_day=None, cap_total=None, tavily_run=2,
+                 tavily_day=3)  # fmt: skip
+    for _ in range(2):
+        led.check_searches("r1")
+        led.record(rec(run_id="r1", provider="tavily", model="tavily-search", cost=0.008))
+    with pytest.raises(SearchCapReached) as err:
+        led.check_searches("r1")
+    assert (err.value.scope, err.value.done, err.value.cap) == ("run", 2, 2)
+    led.check_searches("r2")
+    led.record(rec(run_id="r2", provider="tavily", model="tavily-search", cost=0.008))
+    with pytest.raises(SearchCapReached) as err:
+        led.check_searches("r3")
+    assert err.value.scope == "day"
+    assert led.searches(run_id="r1") == 2 and led.searches() == 3
+
+
+def test_search_caps_default_from_the_settings(tmp_path, monkeypatch):
+    from lull.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        led = Ledger(tmp_path / "d.db")
+        assert (led.tavily_run, led.tavily_day) == (5, 60)
+        monkeypatch.setenv("LULL_TAVILY_RUN", "3")
+        get_settings.cache_clear()
+        assert Ledger(tmp_path / "e.db").tavily_run == 3
+    finally:
+        get_settings.cache_clear()

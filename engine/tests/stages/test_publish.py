@@ -71,7 +71,7 @@ def _sine_wav(path: Path, seconds: float, freq: float, amp: float, rate: int = 2
 
 
 def _ledger(tmp_path: Path, run_id: str = "r1") -> Ledger:
-    led = Ledger(tmp_path / "ledger.db", cap_run=0, cap_day=0, cap_total=0)
+    led = Ledger(tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
     for role, model, cost in [("watch", SUPER, 0.004), ("verify", SUPER, 0.002),
                               ("verify", SUPER, 0.002), ("repair", LIGHT, 0.0001)]:  # fmt: skip
         led.record(CallRecord(run_id=run_id, stage="s", role=role, provider="tokenfactory",
@@ -1586,3 +1586,35 @@ def test_the_report_explains_a_pass_without_visual_information(tmp_path, fake_me
     assert {r["status"] for r in rows} == {"met (no visual information beyond the soundtrack)"}
     html = (run / "report.html").read_text(encoding="utf-8")
     assert "needs no description" in html
+
+
+# -- what this attempt cost -------------------------------------------------------------------
+
+
+def test_the_report_states_this_attempts_spend_and_all_runs_apart(tmp_path, fake_media):
+    """Model spend of this attempt, its web searches (counted, notional $ for reference) and
+    the model spend of every attempt under the run id, each labelled."""
+    led = Ledger(tmp_path / "l.db", cap_run=None, cap_day=None, cap_total=None)
+
+    def row(ts, cost, provider="tokenfactory", model=SUPER):
+        led.record(CallRecord(run_id="r1", stage="s", role="watch", provider=provider,
+                              model=model, tokens_in=10, tokens_cached=0, tokens_out=5,
+                              latency_s=1.0, cost_usd=cost, ts=ts))  # fmt: skip
+
+    row(100.0, 0.01)  # an earlier attempt under the same run id
+    row(200.0, 0.02)
+    row(201.0, 0.008, provider="tavily", model="tavily-search")
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    res = publish(tmp_path / "run", video, [], [], [], [], None, led, "r1", RunOptions(),
+                  speech=[], since=150.0)  # fmt: skip
+    s = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert s["spend"] == {
+        "model_usd_this_run": 0.02, "tavily_searches_this_run": 1,
+        "tavily_notional_usd_this_run": 0.008, "model_usd_all_runs": 0.03,
+    }  # fmt: skip
+    assert s["cost_usd"] == 0.02
+    assert sum(g["calls"] for g in s["calls_by_role_model"]) == 2  # this attempt's calls
+    html = " ".join((tmp_path / "run" / "report.html").read_text(encoding="utf-8").split())
+    assert "Model spend, this run" in html and "all runs under run id r1" in html
+    assert "1 web search" in html

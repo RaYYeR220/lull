@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from lull.ledger import BudgetExceeded
+from lull.ledger import BudgetExceeded, SearchCapReached
 from lull.tavily import Tavily, TavilyError
 from lull.tf import LIGHTNING, TokenFactory
 from lull.types import RunOptions, VisualEvent, Word
@@ -25,6 +25,7 @@ MAX_SOURCES = 3
 SEARCHED_KINDS = {"person", "place", "organization", "work"}  # looked up when said or shown
 ON_SCREEN_KINDS = {"technical"}  # looked up only when the screen shows them
 LOOKUP_FAILED = "lookup failed"
+LOOKUP_CAPPED = "lookup skipped: search cap"
 Kind = Literal["person", "place", "organization", "work", "technical", "other"]
 # (step name, inputs, compute) -> the step's JSON-able result, from a cache or computed; a
 # step that raises is never kept
@@ -74,6 +75,7 @@ class ResearchResult(BaseModel):
     skipped: bool  # True when no Tavily client was available: nothing was looked up
     source_context: str | None = None
     errors: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)  # what limited it, not errors ("capped")
 
 
 def _system_prompt() -> str:
@@ -169,6 +171,8 @@ def research(
         url = opts.source_url
         try:
             pages = memo("source", {"url": url}, lambda: tavily.extract([url], run_id=run_id))
+        except SearchCapReached:
+            pages = []
         except TavilyError as e:
             errors.append(f"source extract failed: {e}")
             pages = []
@@ -190,13 +194,23 @@ def research(
         return ResearchResult(glossary=entries, skipped=True)
 
     entries = []
+    capped: SearchCapReached | None = None
     for t, k in terms:
+        if capped is not None:
+            entries.append(GlossaryEntry(term=t, canonical=t, note=LOOKUP_CAPPED, kind=k))
+            continue
         try:
             found = memo("lookup", {"term": t}, lambda t=t: tavily.search(t, run_id=run_id))
             entries.append(_entry(t, k, found))
         except BudgetExceeded:
             raise
+        except SearchCapReached as e:
+            capped = e
+            entries.append(GlossaryEntry(term=t, canonical=t, note=LOOKUP_CAPPED, kind=k))
         except TavilyError as e:
             errors.append(f"search failed for {t!r}: {e}")
             entries.append(GlossaryEntry(term=t, canonical=t, note=LOOKUP_FAILED, kind=k))
-    return ResearchResult(glossary=entries, skipped=False, source_context=context, errors=errors)
+    notes = [f"research capped: {capped.done} searches"] if capped else []
+    return ResearchResult(
+        glossary=entries, skipped=False, source_context=context, errors=errors, notes=notes
+    )
