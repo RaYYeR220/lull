@@ -403,64 +403,64 @@ def _win_scrubber():
     from lull.api.clean import Scrubber
 
     return Scrubber(
-        Path(r"C:\Users\egori\data\runs\r1"), [Path(r"C:\Users\egori"), Path("/home/app")]
+        Path(r"C:\Users\alice\data\runs\r1"), [Path(r"C:\Users\alice"), Path("/home/app")]
     )
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        r"error:C:\Users\egori\secret\x.log",
-        r"\\?\C:\Users\egori\secret\x.log",
-        "file:///C:/Users/egori/secret/x.log",
+        r"error:C:\Users\alice\secret\x.log",
+        r"\\?\C:\Users\alice\secret\x.log",
+        "file:///C:/Users/alice/secret/x.log",
         "x-/home/app/secret/x.log",
-        "see c:/users/EGORI/secret/x.log",
-        "msys /c/Users/egori/secret/x.log",
-        r"a.C:\Users\egori\secret\x.log",
+        "see c:/users/ALICE/secret/x.log",
+        "msys /c/Users/alice/secret/x.log",
+        r"a.C:\Users\alice\secret\x.log",
     ],
 )
 def test_scrubber_cuts_every_form_of_a_root(text):
     out = _win_scrubber()(text)
     assert "x.log" in out
-    assert "egori" not in out.lower() and "/home/app" not in out
+    assert "alice" not in out.lower() and "/home/app" not in out
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        r"GET http://x.test/?p=C:\Users\egori\secret\x.log failed",
-        "see file://host/C:/Users/egori/secret/x.log",
+        r"GET http://x.test/?p=C:\Users\alice\secret\x.log failed",
+        "see file://host/C:/Users/alice/secret/x.log",
         "see file://fileserver/home/app/secret/x.log",
-        "open http://C:/Users/egori/secret/x.log",
+        "open http://C:/Users/alice/secret/x.log",
         "https://example.org/home/app/x.log",
     ],
 )
 def test_no_known_root_survives_inside_a_url(text):
     out = _win_scrubber()(text)
-    assert "egori" not in out.lower() and "/home/app" not in out
+    assert "alice" not in out.lower() and "/home/app" not in out
 
 
 def test_a_root_right_after_a_url_host_leaves_a_readable_url():
     assert _scrubber()("https://example.org/data/report.html") == "https://example.org/report.html"
 
 
-# -- fix round 2: the scrubber's last gaps ---------------------------------------------------------
+# -- the scrubber: bracketed, escaped and URL-embedded roots -----------------------------------
 
 
 @pytest.mark.parametrize(
     "text",
     [
-        r"[C:\Users\egori]",
-        r"x=C:\Users\egori|y",
+        r"[C:\Users\alice]",
+        r"x=C:\Users\alice|y",
         "'/home/app'.",
-        "file://C:/Users/egori/secret/x.log",
-        r"C:\\Users\\egori\\secret\\x.log",
-        r'{"path": "C:\\Users\\egori\\x.log"}',
+        "file://C:/Users/alice/secret/x.log",
+        r"C:\\Users\\alice\\secret\\x.log",
+        r'{"path": "C:\\Users\\alice\\x.log"}',
     ],
 )
-def test_scrubber_round_2_forms(text):
+def test_scrubber_bracketed_and_escaped_forms(text):
     out = _win_scrubber()(text)
-    assert "egori" not in out.lower() and "/home/app" not in out
+    assert "alice" not in out.lower() and "/home/app" not in out
 
 
 @pytest.mark.parametrize(

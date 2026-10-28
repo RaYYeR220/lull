@@ -13,8 +13,10 @@ from contextlib import asynccontextmanager
 
 import anyio
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from lull.api.health import Health
 from lull.api.live import SEARCHES_PER_RUN, Live, LiveError, live_error_handler
@@ -42,7 +44,7 @@ CONTENT_TYPES = {
 }
 REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:"
 CORS_METHODS = ["GET", "HEAD", "OPTIONS", "POST", "PATCH"]
-CORS_HEADERS = ["Authorization", "Content-Type", "Last-Event-ID"]
+CORS_HEADERS = ["Authorization", "Content-Type", "Last-Event-ID", "X-Lull-Client"]
 
 
 NO_VERIFY = "LULL_NO_VERIFY"  # the engine's evaluation-only switch: frames go unchecked
@@ -60,6 +62,34 @@ def refuse_unverified() -> None:
         )
         log.critical(message)
         raise RuntimeError(message)
+
+
+async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """FastAPI's own 422 (a query parameter of the wrong type, say) in the API's shape."""
+    assert isinstance(exc, RequestValidationError)
+    first = exc.errors()[0] if exc.errors() else {}
+    where = ".".join(str(p) for p in first.get("loc", ())[1:]) or "the request"
+    message = f"{where}: {first.get('msg', 'is not valid')}."
+    return JSONResponse({"error": "invalid", "message": message}, status_code=422)
+
+
+HTTP_ERRORS = {
+    404: ("not_found", "There is no such route."),
+    405: ("method_not_allowed", "This route does not take that method."),
+}
+
+
+async def http_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """The framework's own errors (an unknown route, a method a route does not take) in the
+    API's shape {error, message}, with their headers (Allow on a 405)."""
+    assert isinstance(exc, StarletteHTTPException)
+    error, message = HTTP_ERRORS.get(exc.status_code, (f"http_{exc.status_code}", ""))
+    message = message or (exc.detail if isinstance(exc.detail, str) else "") or error
+    return JSONResponse(
+        {"error": error, "message": message},
+        status_code=exc.status_code,
+        headers=getattr(exc, "headers", None),
+    )
 
 
 def no_run() -> LiveError:
@@ -102,6 +132,8 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
     app.state.live = Live(settings, store)
     app.state.studio = Studio(settings, store, app.state.live)
     app.add_exception_handler(LiveError, live_error_handler)
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(StarletteHTTPException, http_error_handler)
     app.include_router(live_router)
     app.include_router(studio_router)
     app.add_middleware(

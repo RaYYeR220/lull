@@ -26,6 +26,7 @@ OWNER = "owner-token-of-the-unfinished-run"
 OWNER_AUTH = {"Authorization": f"Bearer {OWNER}"}
 BUSY = "Another description is running. Try again in a minute, or open a recorded run."
 RUN_ID = re.compile(r"^live-\d{8}-[0-9a-f]{24}$")
+CLIENT = {"X-Lull-Client": "test"}  # what the site sends (any value) on POST runs and forks
 
 
 # -- fakes -------------------------------------------------------------------------------------
@@ -236,7 +237,7 @@ def live(app):
 
 @pytest.fixture
 def lc(app):
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         yield c
 
 
@@ -247,7 +248,7 @@ def test_post_streams_run_then_engine_events_then_done(lc, live, data, tmp_path)
     r = post(lc, mode="extended", voice="Sofia")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/event-stream")
-    assert r.headers["cache-control"].startswith("no-cache")
+    assert r.headers["cache-control"].startswith("no-store")  # it carries the edit token
     assert r.text.startswith("id: 0\nevent: run\ndata: {")
     events = parse_sse(r.text)
     assert types(events) == ["run", "stage_start", "call", "stage_end", "cue", "done"]
@@ -1013,6 +1014,7 @@ def _asgi_post_stalling(
             "headers": [
                 (b"host", b"t"),
                 (b"content-type", b"multipart/form-data; boundary=b"),
+                (b"x-lull-client", b"test"),
             ],
             "client": client,
             "server": ("t", 80),
@@ -1039,7 +1041,7 @@ def test_a_stalled_body_times_out_408_and_frees_the_slot(app, live, data):
     assert status == 408 and body["error"] == "timeout" and body["message"]
     assert live.uploading == 0 and not live.upload_keys
     assert run_dirs(data) == []
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         r = post(c)  # the stall counted as a refused upload
         assert r.status_code == 429 and r.json()["error"] == "rate_limited"
 
@@ -1155,16 +1157,16 @@ def test_cors_allows_the_authorization_header_and_only_the_ones_in_use(lc):
             },
         )
 
-    r = preflight("authorization, content-type, last-event-id")
+    r = preflight("authorization, content-type, last-event-id, x-lull-client")
     assert r.status_code == 200
     allowed = r.headers["access-control-allow-headers"].lower()
-    assert {"authorization", "content-type", "last-event-id"} <= {
+    assert {"authorization", "content-type", "last-event-id", "x-lull-client"} <= {
         h.strip() for h in allowed.split(",")
     }
     assert preflight("x-something-else").status_code == 400
 
 
-# -- fix round 2: refusals, engine timeouts, stopped runs ------------------------------------------
+# -- refusals, engine timeouts, stopped runs -------------------------------------------------------
 
 
 def test_a_client_that_disconnects_mid_body_counts_as_refused(app, live, data):
@@ -1173,7 +1175,7 @@ def test_a_client_that_disconnects_mid_body_counts_as_refused(app, live, data):
     assert status in (None, 400)
     assert live.uploading == 0 and not live.upload_keys
     assert run_dirs(data) == []
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         r = post(c)  # the cut-off upload counted against this visitor
         assert r.status_code == 429 and r.json()["error"] == "rate_limited"
 
@@ -1255,7 +1257,7 @@ def test_a_stopped_run_skips_the_after_run_steps(lc, live, data):
     assert len(seen) == 1
 
 
-# -- fix round 2: who may resume, how long a video may be, which containers ---------------------
+# -- who may resume, how long a video may be, which containers ---------------------------------
 
 
 @pytest.mark.parametrize(
@@ -1800,7 +1802,7 @@ class Watcher:
             "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"},
             "http_version": "1.1", "method": "POST", "scheme": "http", "path": "/v1/runs",
             "raw_path": b"/v1/runs", "root_path": "", "query_string": b"",
-            "headers": [(b"host", b"t"),
+            "headers": [(b"host", b"t"), (b"x-lull-client", b"test"),
                         (b"content-type", f"multipart/form-data; boundary={boundary}".encode()),
                         (b"content-length", str(len(body)).encode()), *headers],
             "client": ("testclient", 50000), "server": ("t", 80), "state": {},
@@ -2102,3 +2104,38 @@ def test_the_streams_in_all_are_capped_replays_included(lc, live, data):
         assert lc.get("/v1/runs/demo/events").status_code == 200
         gate.set()
         list(plines)
+
+
+# -- a custom header on what starts work; one error shape everywhere -------------------------------
+
+
+def test_starting_a_run_needs_the_client_header(app, live, data):
+    with TestClient(app) as c:  # a plain cross-site form post sends no such header
+        r = post(c)
+        assert r.status_code == 400 and r.json()["error"] == "client_header"
+        assert "X-Lull-Client" in r.json()["message"]
+        r = c.post("/v1/runs", data={"sample": "ed45"}, headers={"X-Lull-Client": ""})
+        assert r.status_code == 400
+        assert live.runner.jobs == [] and run_dirs(data) == []
+        assert post(c).status_code == 400  # not counted against the visitor either
+        r = c.post(
+            "/v1/runs",
+            files={"file": ("a.mp4", b"x", "video/mp4")},
+            headers={"X-Lull-Client": "web"},
+        )
+        assert r.status_code == 200 and r.headers["cache-control"].startswith("no-store")
+
+
+@pytest.mark.parametrize(
+    "method,path,status,error",
+    [
+        ("GET", "/v1/runs/r1/events?after=abc", 422, "invalid"),
+        ("GET", "/v1/nothing-here", 404, "not_found"),
+        ("DELETE", "/v1/runs", 405, "method_not_allowed"),
+    ],
+)
+def test_framework_errors_have_the_error_shape(lc, method, path, status, error):
+    r = lc.request(method, path)
+    assert r.status_code == status
+    body = r.json()
+    assert set(body) == {"error", "message"} and body["error"] == error and body["message"]

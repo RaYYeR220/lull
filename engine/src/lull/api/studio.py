@@ -87,7 +87,15 @@ from pydantic import BaseModel, ValidationError
 
 from lull import media
 from lull.api import facts
-from lull.api.live import Live, LiveError, budget_message, client_ip, new_run_id, wait_words
+from lull.api.live import (
+    Live,
+    LiveError,
+    budget_message,
+    check_client_header,
+    client_ip,
+    new_run_id,
+    wait_words,
+)
 from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import DAY, HOUR, RateLimiter
 from lull.api.settings import ApiSettings
@@ -1328,6 +1336,7 @@ def fork_run(
     envelope: Callable[[Path, Path, float | None], object] | None = None,
     spend_before: float = 0.0,
     expires: float | None = None,
+    samples_dir: Path | None = None,
 ) -> None:
     """Copy what the Studio and a new publish need from the published run `src` into the new
     live run folder `dst`, left out of the run list until it is complete: the manifest and
@@ -1383,7 +1392,8 @@ def fork_run(
     if (src / facts.LOUDNESS).is_file():  # the same original sound
         _copy(src / facts.LOUDNESS, dst / facts.LOUDNESS)
     elif envelope is not None:  # worked out now, at fork time, never on a request
-        original = dst / video if video else facts.source_video(src, manifest, request, Path())
+        samples = samples_dir if samples_dir is not None else Path()
+        original = dst / video if video else facts.source_video(src, manifest, request, samples)
         if original is not None:
             envelope(dst, original, facts.duration(manifest, request))
     options = request.get("options") if isinstance(request.get("options"), dict) else None
@@ -1445,7 +1455,9 @@ def fork_origin(studio: Studio, kind: str, src: Path) -> dict:
 @router.post("/v1/runs/{run_id}/fork")
 async def fork(run_id: str, request: Request) -> JSONResponse:
     """A published run (showcase or live) copied into a new live run that the caller owns:
-    {run_id, edit_token}. Anyone may fork; no model is called."""
+    {run_id, edit_token}, never cached. Anyone may fork (with X-Lull-Client); no model is
+    called."""
+    check_client_header(request)
     studio = _studio(request)
     found = studio.store.find(run_id)
     if found is None:
@@ -1473,6 +1485,7 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
                     envelope=studio.live.envelope,
                     spend_before=studio.spent_by(found[0], src),
                     expires=fork_expiry(studio, found[0], src, time.time()),
+                    samples_dir=studio.settings.samples_dir,
                 )  # fmt: skip
             )
         except Exception:
@@ -1480,4 +1493,8 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
             await anyio.to_thread.run_sync(lambda: shutil.rmtree(dst, ignore_errors=True))
             raise LiveError(500, "fork_failed", "The run could not be copied.") from None
     studio.store.invalidate()
-    return JSONResponse({"run_id": new_id, "edit_token": token}, status_code=201)
+    return JSONResponse(
+        {"run_id": new_id, "edit_token": token},
+        status_code=201,
+        headers={"Cache-Control": "no-store"},
+    )

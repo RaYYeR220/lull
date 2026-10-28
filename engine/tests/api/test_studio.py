@@ -34,6 +34,7 @@ RID2 = "live-20261027-120500-123456"
 TOKEN = "owner-token-of-the-run-under-test"
 OWNER_HASH = hashlib.sha256(TOKEN.encode()).hexdigest()
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
+CLIENT = {"X-Lull-Client": "test"}  # what the site sends (any value) on POST runs and forks
 
 
 # -- the run every test starts from -------------------------------------------------------------
@@ -181,7 +182,7 @@ def fakes(app) -> Fakes:
 @pytest.fixture
 def sc(app):
     """A client holding the run's edit token."""
-    with TestClient(app, headers=AUTH) as c:
+    with TestClient(app, headers={**AUTH, **CLIENT}) as c:
         yield c
 
 
@@ -579,7 +580,7 @@ def test_showcase_runs_are_read_only(sc, template, data, fast_media):
 
 def test_showcase_editable_locally(make_app, template, data, fast_media):
     d = place(template, data / "showcase")
-    with TestClient(make_app(lull_showcase_editable=True)) as c:
+    with TestClient(make_app(lull_showcase_editable=True), headers=CLIENT) as c:
         r = c.post(f"/v1/runs/{RID}/cues/c001/approve")
         assert r.status_code == 200 and r.json()["status"] == "approved"
     assert cue_of(d, "c001")["status"] == "approved"
@@ -601,7 +602,7 @@ def test_showcase_edit_finds_its_video_among_the_samples(
     shutil.rmtree(d / "input")
     (d / "request.json").unlink()
     app = make_app(lull_showcase_editable=True)
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         r = c.patch(f"/v1/runs/{RID}/cues/c001", json={"text": NEW_RED})
     if same:
         assert r.status_code == 200 and r.json()["status"] == "edited", r.text
@@ -646,7 +647,9 @@ def test_a_stopped_run_whose_thread_still_runs_is_busy(sc, rd, app):
 def _async_patch(app, *requests):
     async def go():
         transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://t", headers=AUTH) as c:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://t", headers={**AUTH, **CLIENT}
+        ) as c:
             return await asyncio.gather(
                 *(
                     c.patch(f"/v1/runs/{rid}/cues/{cid}", json={"text": t})
@@ -873,7 +876,7 @@ def test_startup_sweeps_edit_folders_nothing_refers_to(make_app, rd):
         "overrides": {"c002": {"previous": {"audio_path": "work/edits/c002-prev/audio/c002.wav"}}},
     }
     (rd / "studio.json").write_text(json.dumps(studio_state))
-    with TestClient(make_app()):
+    with TestClient(make_app(), headers=CLIENT):
         assert _until_gone(edits / "c002-dead")
     assert sorted(p.name for p in edits.iterdir()) == ["c001-live", "c002-prev"]
 
@@ -907,7 +910,7 @@ def test_the_sample_hash_is_computed_once_per_file_version(template, data, monke
 
 def test_studio_changes_need_the_owner_token(app, rd):
     before = snapshot(rd)
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         for headers in (
             {},
             {"Authorization": "Bearer nope"},
@@ -974,7 +977,7 @@ def test_fork_a_showcase_run_into_an_editable_copy(make_app, template, data, fas
     before = snapshot(src)
     app = make_app()
     fakes = app.state.studio.clients
-    with TestClient(app) as c:  # anyone may fork: no token
+    with TestClient(app, headers=CLIENT) as c:  # anyone may fork: no token
         r = c.post(f"/v1/runs/{RID}/fork")
         assert r.status_code == 201, r.text
         new, token = r.json()["run_id"], r.json()["edit_token"]
@@ -1020,7 +1023,7 @@ def test_fork_refusals(make_app, template, data, fast_media):
     unfinished = data / "runs" / RID2
     (unfinished / "input").mkdir(parents=True)
     app = make_app()
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         assert c.post("/v1/runs/nope/fork").status_code == 404
         r = c.post(f"/v1/runs/{RID2}/fork")
         assert r.status_code == 409 and r.json()["error"] == "not_ready"
@@ -1141,7 +1144,7 @@ def test_a_held_edit_keeps_the_previous_voiced_take(sc, rd, fakes):
     assert "previous" not in overrides(rd)["c001"]
 
 
-# -- fix round 2: an override never re-applies to a cue that moved --------------------------------
+# -- an override never re-applies to a cue that moved --------------------------------
 
 
 def _engine_cues(template: Path) -> dict:
@@ -1186,7 +1189,7 @@ def test_an_unmoved_cue_takes_its_override_as_before(sc, rd, template):
     assert c["text"] == NEW_RED and c["status"] == "edited" and c["audio_path"]
 
 
-# -- fix round 2: forks expire after a day ---------------------------------------------------------
+# -- forks expire after a day ---------------------------------------------------------
 
 
 def _age(d: Path, hours: float) -> None:
@@ -1222,7 +1225,7 @@ def test_forks_older_than_a_day_are_removed(make_app, template, data, fast_media
     plain = place(template, data / "runs")  # a live run of its own, not a fork
     _age(plain, 48)
     app = make_app()
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         old = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         new = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         _age(data / "runs" / old, 25)
@@ -1239,7 +1242,7 @@ def test_a_fork_being_changed_is_not_removed(make_app, template, data, fast_medi
 
     place(template, data / "showcase")
     app = make_app()
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
     _age(data / "runs" / fid, 25)
     studio = app.state.studio
@@ -1255,19 +1258,19 @@ def test_a_fork_being_changed_is_not_removed(make_app, template, data, fast_medi
 def test_fork_expiry_runs_at_startup_and_then_on_a_timer(make_app, template, data, fast_media):
     place(template, data / "showcase")
     app = make_app()
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         first = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
     _age(data / "runs" / first, 25)
     app = make_app()
     app.state.studio.housekeep_every = 0.05
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         assert _until_gone(data / "runs" / first)  # at startup
         second = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         _age(data / "runs" / second, 25)
         assert _until_gone(data / "runs" / second)  # by the timer, while serving
 
 
-# -- fix round 2: coverage recomputed on any text change; forking a live run -----------------------
+# -- coverage recomputed on any text change; forking a live run -----------------------------------
 
 
 def test_a_text_change_refreshes_coverage_with_the_engine_helper(sc, rd, template, monkeypatch):
@@ -1413,7 +1416,7 @@ def test_a_showcase_run_without_its_input_uses_its_sample(make_app, template, da
     shutil.copyfile(d / "input" / "clip.mp4", data / "samples" / "clip.mp4")
     shutil.rmtree(d / "input")
     (d / "request.json").unlink()
-    with TestClient(make_app()) as c:
+    with TestClient(make_app(), headers=CLIENT) as c:
         j = c.get(f"/v1/runs/{RID}").json()
         assert j["kind"] == "showcase" and j["status"] == "done"
         assert j["source"] == {"kind": "sample", "sample_id": "clip"}
@@ -1507,7 +1510,7 @@ def test_a_visitor_past_their_day_of_forks_is_429(make_app, template, data, fast
     app.state.studio.fork_limiter = RateLimiter(
         per_client=100, client_window=3600, per_client_day=1, per_day=1000
     )
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         assert c.post(f"/v1/runs/{RID}/fork").status_code == 201
         r = c.post(f"/v1/runs/{RID}/fork")
         assert r.status_code == 429 and "today" in r.json()["message"]
@@ -1520,7 +1523,7 @@ def test_a_fork_carries_its_sources_spend_into_its_run_cap(make_app, template, d
     app.state.live.ledger = ledger
     _spend(ledger, RID, 0.035)
     fakes = app.state.studio.clients
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         r = c.post(f"/v1/runs/{RID}/fork")
         fid, token = r.json()["run_id"], r.json()["edit_token"]
         req = json.loads((data / "runs" / fid / "request.json").read_text(encoding="utf-8"))
@@ -1544,7 +1547,7 @@ def test_a_fork_of_a_recorded_run_carries_its_recorded_spend(make_app, template,
     src = place(template, data / "showcase")
     _made_in(src, template)
     app = make_app()
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
     req = json.loads((data / "runs" / fid / "request.json").read_text(encoding="utf-8"))
     summary = json.loads((src / "manifest.json").read_text(encoding="utf-8"))["summary"]
@@ -1569,7 +1572,7 @@ def test_housekeeping_never_holds_up_requests(make_app, data, monkeypatch):
 
     monkeypatch.setattr(studio_mod, "scan_runs", slow)
     app = make_app()
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         t0 = time.monotonic()
         assert c.get("/v1/runs").status_code == 200
         assert time.monotonic() - t0 < 1.0  # served while the startup pass scans
@@ -1598,7 +1601,7 @@ def test_a_fork_of_an_upload_goes_when_the_upload_does(make_app, template, data,
     (src / "request.json").write_text(json.dumps(req))
     _age(src, 7 * 24 - 2)  # the upload has two hours left
     app = make_app()
-    with TestClient(app, headers=AUTH) as c:
+    with TestClient(app, headers={**AUTH, **CLIENT}) as c:
         fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         fork = data / "runs" / fid
         freq = json.loads((fork / "request.json").read_text(encoding="utf-8"))
@@ -1618,7 +1621,7 @@ def test_a_fork_of_a_sample_run_lives_a_day(make_app, template, data, fast_media
 
     place(template, data / "showcase")
     app = make_app()
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
     freq = json.loads((data / "runs" / fid / "request.json").read_text(encoding="utf-8"))
     left = datetime.fromisoformat(freq["expires"]).timestamp() - datetime.now(UTC).timestamp()
@@ -1642,7 +1645,7 @@ def test_health_runs_housekeeping_when_it_is_due(make_app, template, data, fast_
     app = make_app()
     studio = app.state.studio
     studio.housekeep_every = 3600.0
-    with TestClient(app) as c:
+    with TestClient(app, headers=CLIENT) as c:
         fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
         deadline = time.time() + 10
         while studio.last_housekeep is None and time.time() < deadline:
@@ -1654,3 +1657,38 @@ def test_health_runs_housekeeping_when_it_is_due(make_app, template, data, fast_
         studio.last_housekeep -= 2 * 3600  # an instance that slept through its timer
         assert c.get("/v1/health").status_code == 200
         assert _until_gone(data / "runs" / fid)
+
+
+# -- a fork of a recorded run; what a fork answers -------------------------------------------------
+
+
+def test_a_fork_of_a_recorded_run_keeps_its_loudness_from_the_sample(
+    make_app, template, data, fast_media
+):
+    from lull.api import facts
+
+    d = place(template, data / "showcase")
+    _made_in(d, template)
+    (data / "samples").mkdir(parents=True)
+    shutil.copyfile(d / "input" / "clip.mp4", data / "samples" / "clip.mp4")
+    shutil.rmtree(d / "input")  # a recorded run keeps no input/: its video is the sample
+    (d / "request.json").unlink()
+    app = make_app()
+    app.state.live.envelope = facts.keep_loudness
+    with TestClient(app, headers=CLIENT) as c:
+        fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+        assert (data / "runs" / fid / "loudness.json").is_file()
+        assert c.get(f"/v1/runs/{fid}").json()["loudness"]
+
+
+def test_a_fork_needs_the_client_header_and_is_never_cached(make_app, template, data, fast_media):
+    place(template, data / "showcase")
+    app = make_app()
+    with TestClient(app) as c:
+        r = c.post(f"/v1/runs/{RID}/fork")
+        assert r.status_code == 400 and r.json()["error"] == "client_header"
+        assert r.json()["message"] and not (data / "runs").exists()
+        r = c.post(f"/v1/runs/{RID}/fork", headers={"X-Lull-Client": "  "})
+        assert r.status_code == 400
+        r = c.post(f"/v1/runs/{RID}/fork", headers={"X-Lull-Client": "web"})
+        assert r.status_code == 201 and r.headers["cache-control"] == "no-store"

@@ -111,6 +111,7 @@ EVENTS, REQUEST, ERROR, MANIFEST, INPUT = (
 )
 SAMPLE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")  # called with fullmatch
 BUSY_MESSAGE = "Another description is running. Try again in a minute, or open a recorded run."
+CLIENT_HEADER = "X-Lull-Client"  # any value; a cross-site form cannot send it without a preflight
 FORMAT_MESSAGE = "Send an mp4, mov, webm or mkv video."
 
 
@@ -141,6 +142,18 @@ class LiveError(Exception):
 async def live_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, LiveError)
     return exc.response()
+
+
+def check_client_header(request: Request) -> None:
+    """What starts work (a run, a fork) carries X-Lull-Client (400 client_header otherwise): a
+    custom header makes a browser ask first (CORS preflight), which LULL_WEB_ORIGINS answers,
+    so another site cannot spend its visitors' limits here with a plain form post."""
+    if not request.headers.get(CLIENT_HEADER, "").strip():
+        raise LiveError(
+            400,
+            "client_header",
+            f"Send the {CLIENT_HEADER} header (any value, such as web) with this request.",
+        )
 
 
 def busy() -> LiveError:
@@ -1077,7 +1090,7 @@ class EventStream(StreamingResponse):
         super().__init__(
             frames,
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+            headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no"},
         )
         self._on_close = on_close
 
@@ -1171,6 +1184,7 @@ def _check_headers(request: Request, limit: int) -> None:
 
 @router.post("/v1/runs")
 async def create_run(request: Request) -> StreamingResponse:
+    check_client_header(request)
     live = _live(request)
     key = live.limiter.client_key(client_ip(request, live.settings.lull_proxy_hops))
     if live.executor.busy:
