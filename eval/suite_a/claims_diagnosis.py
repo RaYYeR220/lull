@@ -143,9 +143,9 @@ def markdown(doc: dict, level: int = 2) -> list[str]:
     lines = [
         f"{h} {MARK.lstrip('# ')} (added after the scored run, no new calls)", "",
         "Every claim the pre-registered hallucination metric counted as unsupported, with its "
-        "kind as the run's cues.json records it and a class from a manual review against the "
-        "answer key (slide inventory, style text) and the rendered slide images"
-        + (f" ({rev['method']})" if rev.get("method") else "") + ". Made from the scored "
+        "kind as the run's cues.json records it and a class from a manual review: "
+        + (rev.get("method") or "against the answer key and the rendered slides")
+        + ". Made from the scored "
         f"results (`{doc['source']['file']}`, sha256 `{doc['source']['sha256'][:12]}`) and the "
         "judge answers already given; the pre-registered number is unchanged.", "",
         "| measure | value |", "|---|---|",
