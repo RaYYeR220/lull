@@ -230,20 +230,26 @@ def claims_of(text: str, claims: Iterable[Claim]) -> list[Claim]:
     return kept
 
 
+FRESH_NOTE = (
+    "A previous check of this description listed a claim it does not make. List only the "
+    "claims this description makes, one checkable fact each, and judge them again."
+)
+
+
 def verify(
     text: str, clip: Path, tf: TokenFactory, *, run_id: str, names: Iterable[str] = (),
-    offset: float = 0.0,
+    offset: float = 0.0, note: str | None = None,
 ) -> list[Claim]:  # fmt: skip
     """Atomic visual claims of `text`, each judged against the frames of `clip` only.
 
     `names` are names the programme has established; they are context, not claims. `offset` is
     the clip's start in the video, added to every claim time. Supported claims the line does
-    not make are left out; failed ones never are (claims_of).
+    not make are left out; failed ones never are (claims_of). `note` is added after the data
+    (FRESH_NOTE asks for a fresh extraction).
     """
     known = sorted(set(names))
-    user = "\n\n".join(
-        [tagged("description", [text]), tagged("names", [", ".join(known)] if known else [])]
-    )
+    parts = [tagged("description", [text]), tagged("names", [", ".join(known)] if known else [])]
+    user = "\n\n".join([*parts, note] if note else parts)
     messages = [
         {"role": "system", "content": load_prompt("verify")},
         {"role": "user", "content": [video_part(clip), {"type": "text", "text": user}]},

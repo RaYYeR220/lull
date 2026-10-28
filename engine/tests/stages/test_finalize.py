@@ -237,12 +237,11 @@ def test_contradicted_claim_is_removed(tmp_path, video):
 
 
 def _new_failure_each_round(*last_round, then=()):
-    """A verifier that rejects a different detail of the line in each of rounds 1-3 ("red",
-    "coat", "opens": every line these tests verify says them), then `last_round`, then the
-    answers in `then`."""
+    """A verifier that rejects a different detail of the line in each of the two repair
+    rounds ("red", "coat": every line these tests verify says them), then answers
+    `last_round` on the third check, then the answers in `then`."""
     answers = iter(
-        [_claims(("a person", "supported"), (word, "not_visible"))
-         for word in ("red", "coat", "opens")]
+        [_claims(("a person", "supported"), (word, "not_visible")) for word in ("red", "coat")]
         + [_claims(*last_round), *then]
     )  # fmt: skip
     return lambda call: next(answers)
@@ -254,10 +253,10 @@ def _changed_each_time():
 
 
 def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
-    """On the last round the cue is held for a person, but a contradicted claim is still cut
-    from its text; a claim that is only not visible stays for the reviewer to judge."""
+    """After its two repairs the cue is held for a person, but a contradicted claim is still
+    cut from its text; a claim that is only not visible stays for the reviewer to judge."""
     removes = iter(["A person in a red coat opens the door.", "A person in a red coat opens it.",
-                    TEXT, "A person opens a door."])  # fmt: skip
+                    "A person opens a door."])  # fmt: skip
     tf = FakeTF(
         verify=_new_failure_each_round(
             ("a red coat", "contradicted"),
@@ -269,16 +268,16 @@ def test_contradicted_claim_never_kept_even_when_held(tmp_path, video):
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
-    assert len(tf.of("verify")) == 5 and len(tf.of("remove")) == 4
+    assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 3
     last = _user_text(tf.of("remove")[-1]).split("<remove>", 1)[1]
     assert "a red coat" in last and "a door" not in last
     assert out.text == "A person opens a door."
-    # the claims it is held with are those of the cut text, judged on it (a fifth check)
+    # the claims it is held with are those of the cut text, judged on it (one more check)
     assert _description(tf.of("verify")[-1]) == out.text == out.checks[-1].text
     assert [(c.text, c.verdict) for c in out.claims] == [
         ("a person", "supported"), ("opens a door", "not_visible")
     ]  # fmt: skip
-    assert "not verified after 4 rounds" in out.note and "a red coat" in out.note
+    assert "not verified after 2 repairs" in out.note and "a red coat" in out.note
     assert speech.calls == []
     assert (out.audio_path, out.audio_dur) == (None, None)
 
@@ -295,23 +294,41 @@ def test_claim_rejected_again_after_removal_is_held(tmp_path, video):
 
 
 def test_removal_that_changes_nothing_is_held(tmp_path, video):
+    """The line is checked once more, afresh; the same failed claim comes back: held."""
     tf = FakeTF(
-        verify=[_claims(("a person", "supported"), ("a red coat", "not_visible"))],
+        verify=[_claims(("a person", "supported"), ("a red coat", "not_visible"))] * 2,
         remove=lambda call: {"text": _description(call)},
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert tf.roles() == ["verify", "remove"]
+    assert tf.roles() == ["verify", "remove", "verify"]
     assert out.status == "held" and out.text == TEXT
     assert "removed nothing" in out.note
 
 
+def test_a_failed_extra_the_line_never_says_gets_one_fresh_check(tmp_path, video):
+    """The verifier once attributes a failing claim the line does not make; the repair can
+    remove nothing, so the unchanged line is checked once more with a fresh extraction, and
+    passes."""
+    tf = FakeTF(
+        verify=[
+            _claims(("a person opens a door", "supported"), ("a dog sleeps", "not_visible")),
+            _supported("a person opens a door"),
+        ],  # fmt: skip
+        remove=lambda call: {"text": _description(call)},
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]))
+    assert tf.roles() == ["verify", "remove", "verify"]
+    assert out.status == "verified" and out.text == TEXT
+    assert "only the claims this description makes" in _user_text(tf.of("verify")[1])
+
+
 def test_contradiction_that_cannot_be_cut_withholds_the_text(tmp_path, video):
     tf = FakeTF(
-        verify=[_claims(("a person", "supported"), ("a red coat", "contradicted"))],
+        verify=[_claims(("a person", "supported"), ("a red coat", "contradicted"))] * 2,
         remove=lambda call: {"text": _description(call)},
     )
     out = _run(tmp_path, video, tf, FakeSpeech([]))
-    assert tf.roles() == ["verify", "remove"]
+    assert tf.roles() == ["verify", "remove", "verify"]
     assert out.status == "held" and out.text == ""
     assert "withheld" in out.note
     assert out.claims == []  # nothing is said, so no claim is published; the check is kept
@@ -589,8 +606,9 @@ def test_remove_claims_sends_the_note_only_when_given():
 # -- (e) verification never passes ----------------------------------------------------------
 
 
-def test_verify_always_fails_is_held_after_four_rounds(tmp_path, video):
-    """A new claim fails in every round; each is cut, and the fourth failure holds the cue."""
+def test_verify_always_fails_is_held_after_two_repairs(tmp_path, video):
+    """A new claim fails in every check; two are cut, and the third failure holds the cue:
+    repairs never loop."""
     tf = FakeTF(
         verify=_new_failure_each_round(("a person", "supported"), ("door", "not_visible")),
         remove=_changed_each_time(),
@@ -598,9 +616,9 @@ def test_verify_always_fails_is_held_after_four_rounds(tmp_path, video):
     speech = FakeSpeech([])
     out = _run(tmp_path, video, tf, speech)
     assert out.status == "held"
-    assert len(tf.of("verify")) == 4 and len(tf.of("remove")) == 3
-    assert "not verified after 4 rounds: door (not visible)" in out.note
-    assert "3 claims removed: red; coat; opens" in out.note
+    assert len(tf.of("verify")) == 3 and len(tf.of("remove")) == 2
+    assert "not verified after 2 repairs: door (not visible)" in out.note
+    assert "2 claims removed: red; coat" in out.note
     assert speech.calls == []
     assert out.start == GAP.usable_start
     assert {c["stage"] for c in tf.calls} == {"finalize"}
@@ -1407,19 +1425,19 @@ def test_claims_of_drops_only_supported_claims_the_line_does_not_make():
 
 def test_a_paraphrased_contradicted_claim_is_never_voiced_as_verified(tmp_path, video):
     tf = FakeTF(
-        verify=[_claims(("a person waves", "supported"), ("1 person", "contradicted"))],
+        verify=[_claims(("a person waves", "supported"), ("1 person", "contradicted"))] * 2,
         remove=lambda call: {"text": _description(call)},  # the cut finds nothing to cut
     )
     out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue("One person waves at the camera."))
     assert out.status == "held" and out.audio_path is None
-    assert tf.roles() == ["verify", "remove"]
+    assert tf.roles() == ["verify", "remove", "verify"]  # checked afresh once: same verdict
 
 
 def test_a_held_cue_keeps_a_contradiction_found_when_its_cut_text_is_checked_again(tmp_path, video):
     """The check of the cut text finds a new contradiction: the held cue keeps that claim
     with its verdict and says so, so a reviewer never sees the line as merely unconfirmed."""
     removes = iter(["A person in a red coat opens the door.", "A person in a red coat opens it.",
-                    TEXT, "A person opens a door."])  # fmt: skip
+                    "A person opens a door."])  # fmt: skip
     tf = FakeTF(
         verify=_new_failure_each_round(
             ("a red coat", "contradicted"),
@@ -1485,3 +1503,37 @@ def test_with_verification_off_a_line_is_voiced_unverified(tmp_path, video):
     out = finalize_cue(ext, None, EVENTS, video, tmp_path / "w2", tf, FakeSpeech([3.0]), OPTS,
                        ctx, run_id="r1")  # fmt: skip
     assert out.status == "unverified" and out.gap_id is None
+
+
+# -- atomic claims and a targeted repair ------------------------------------------------------
+
+
+def test_the_verifier_is_asked_for_one_checkable_fact_per_claim():
+    from lull.stages.verify import load_prompt
+
+    text = " ".join(load_prompt("verify").split())
+    assert "one checkable fact per claim" in text
+    for case in ('"and"', "lists", '"X does Y while Z"'):
+        assert case in text, case
+
+
+def test_a_repair_rewrites_only_the_clause_that_carries_a_failed_claim(tmp_path, video):
+    """A two-clause line with one false clause keeps the true one."""
+    from lull.stages.verify import load_prompt
+
+    line = "A person walks along the bridge while lasers scan the crowd."
+    tf = FakeTF(
+        verify=[
+            _claims(
+                ("a person walks along the bridge", "supported"),
+                ("lasers scan the crowd", "not_visible"),
+            ),
+            _supported("a person walks along the bridge"),
+        ],  # fmt: skip
+        remove=[{"text": "A person walks along the bridge."}],
+    )
+    out = _run(tmp_path, video, tf, FakeSpeech([2.0]), cue=_cue(line))
+    assert out.status == "verified" and out.text == "A person walks along the bridge."
+    listed = _user_text(tf.of("remove")[0]).split("<remove>", 1)[1]
+    assert "lasers scan the crowd" in listed and "walks along the bridge" not in listed
+    assert "only the clause" in " ".join(load_prompt("remove").split())

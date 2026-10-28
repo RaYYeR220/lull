@@ -45,6 +45,7 @@ from lull.stages.plan import count_words
 from lull.stages.schedule import AHEAD_PREFIX, AHEAD_WORDS, lower_first
 from lull.stages.verify import (
     CLIP_HEIGHT,
+    FRESH_NOTE,
     clip_window,
     remove_claims,
     rewrite,
@@ -59,6 +60,7 @@ from lull.types import Check, Claim, Cue, Gap, RunOptions, Span, VisualEvent
 log = logging.getLogger(__name__)
 
 MAX_ROUNDS = 4
+MAX_REPAIRS = 2  # claim cuts per cue: a third failure holds it
 LEAD_IN_S = 0.3  # a line starts this long before its first visual when its pause allows
 COMPRESS_MARGIN = 0.95
 GATED = ("verified", "edited", "approved", "unverified")  # statuses the overlap gate checks
@@ -452,6 +454,8 @@ class _Finalise:
     removed: list[Claim] = field(default_factory=list)
     words_before: int | None = None  # word count before the first compression
     dropped: list[str] = field(default_factory=list)  # events whose sentence went to fit
+    repairs: int = 0  # claim cuts made
+    rechecked: bool = False  # the unchanged line was checked afresh once
     checks: list[Check] = field(default_factory=list)  # every verification round
     clip: tuple[Path, float] | None = None
     at: float | None = None  # where in its window the voiced line starts
@@ -626,7 +630,7 @@ class _Finalise:
 
     # -- verify --------------------------------------------------------------------------
 
-    def check_frames(self) -> list[Claim]:
+    def check_frames(self, note: str | None = None) -> list[Claim]:
         if self.clip is None:
             duration = self.ctx.video_duration
             if duration is None:
@@ -637,7 +641,8 @@ class _Finalise:
             self.clip = (cut_clip(self.video, dst, lo, hi, height=CLIP_HEIGHT), lo)
         clip, offset = self.clip
         names = names_in(self.text, self.names)
-        claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset)
+        claims = verify(self.text, clip, self.tf, run_id=self.run_id, names=names, offset=offset,
+                        note=note)  # fmt: skip
         self.checks.append(Check(text=self.text, claims=claims))
         return claims
 
@@ -657,6 +662,9 @@ class _Finalise:
         if last:
             reason = f"not verified after {MAX_ROUNDS} rounds: " + _claims_note(bad)
             return self.hold_unverified(reason, bad)
+        if self.repairs >= MAX_REPAIRS:
+            reason = f"not verified after {MAX_REPAIRS} repairs: " + _claims_note(bad)
+            return self.hold_unverified(reason, bad)
         before = self.text
         new = remove_claims(before, bad, self.tf, run_id=self.run_id)
         lost = dropped_sentences(before, new, bad)
@@ -671,8 +679,12 @@ class _Finalise:
                 reason = f'the claim cut dropped "{lost[0]}" twice: ' + _claims_note(bad)
                 return self.hold_unverified(reason, bad, cut_tried=True)
         if _same(new, before):
+            fresh = self.fresh_check(bad, last)
+            if fresh is not False:
+                return fresh
             reason = "the rewrite removed nothing: " + _claims_note(bad)
             return self.hold_unverified(reason, bad, cut_tried=True)
+        self.repairs += 1
         self._removed_add(bad)
         self.claims = []  # they judged the old text; the next round verifies the new one
         self.text = new
@@ -683,6 +695,23 @@ class _Finalise:
         said = " ".join(c.text.lower() for c in bad)
         self.keep = [k for k in self.keep if not _occurs(said, k.lower())]  # cut quotes only
         return None
+
+    def fresh_check(self, bad: list[Claim], last: bool) -> Cue | None | bool:
+        """The repair removed nothing: the failed claim may be one the verifier attributed to
+        the line without the line saying it. The unchanged line is checked once more, with a
+        fresh claim extraction; when the same failed claim comes back (or this was done
+        already) False, and the caller holds the cue. Otherwise the new verdicts decide: all
+        supported, the line goes on to be voiced; a new failure is cut as any other."""
+        if self.rechecked:
+            return False
+        self.rechecked = True
+        self.claims = self.check_frames(note=FRESH_NOTE)
+        failed = [c for c in self.claims if c.verdict != "supported"]
+        if {_key(c) for c in failed} & {_key(c) for c in bad}:
+            return False
+        if not self.claims:
+            return self.held("the verifier found no visual claim to check")
+        return self.cut(failed, last) if failed else self.speak(last)
 
     def hold_unverified(self, reason: str, bad: list[Claim], *, cut_tried: bool = False) -> Cue:
         """Held for review. Contradicted claims are cut from the text even so, and the text is
