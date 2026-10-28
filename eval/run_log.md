@@ -91,3 +91,25 @@ runs are not exported (music licences).
 - Spend so far: $0.2666 (403 Token Factory calls) and 5 searches; ledger $4.9335.
 - To resume when the server is back: the same command with the same `--out` and `--run-id`,
   from the stage cache. That counts as the same single re-run.
+
+### The full-film re-run resumed after the pause; Suite B attempts
+
+- **20:07:16** `final-ed2` resumed from its stage cache once the speech server was back (same
+  command and run id): listen, watch, research, plan, schedule and the 70 finalize cues
+  reused. It published 294 s later: 36 verified, 28 held, 31 extended. This attempt $0.0272;
+  `final-ed2` in all $0.2937 (481 Token Factory calls) and 5 searches.
+- Exported as the site's `ed` into lull-runs/showcase-final/ed ("Elephants Dream", CC BY 2.5
+  credit). Its showcase.json `costUsd` is the publishing attempt's spend ($0.0272); the full
+  run's $0.2937 is in `summary.spend.model_usd_all_runs`.
+- **20:14:12** Suite B, first invocation (`--cap 1.20`, the deviation notes committed before
+  it): stopped after 604 s, nothing written. The ledger's per-run-id cap of $0.30, which
+  Suite B takes from Suite A's client setup unless LULL_CAP_RUN is set, stopped the Elephants
+  Dream human-baseline judge at $0.2686 (6 Ultra calls). Spend $0.5064 (Lull judged: 8 Ultra
+  and 8 Qwen calls; baseline: 6 Ultra and 4 Qwen); every answer is kept in the judge cache.
+- **20:25:23** second invocation (LULL_CAP_RUN=0.60; `--cap 0.70`, so Suite B in all stays
+  within the $1.20; the cached answers were reused at no cost): stopped after 130 s, nothing
+  written. The next baseline batch's Ultra answer was cut off at its token limit twice
+  (16,000, then 32,000 output tokens; `TFUnusable`), an error the scorer does not catch.
+  Spend $0.1498.
+- Suite B spend so far $0.6562. This step (the re-run and Suite B) $0.9499 of its $2.00;
+  ledger $5.6169. Stopped here for a decision; Suite B has no results.
