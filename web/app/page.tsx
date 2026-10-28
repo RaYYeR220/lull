@@ -25,7 +25,7 @@ export default async function Home() {
         <HowItWorks />
         <Guarantee showcase={showcase} />
         <Refusal showcase={showcase} />
-        <Outputs title={showcase.title} />
+        <Outputs showcase={showcase} />
         <StudioPreview showcase={showcase} />
         <Developers />
         <Benchmarks benchmarks={benchmarks} showcase={showcase} />

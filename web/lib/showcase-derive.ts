@@ -3,6 +3,7 @@
  * Nothing here reads files; everything is derived from the data, never assumed.
  */
 import type { CueStatus, Showcase, ShowcaseCue, ShowcaseGap, ShowcaseWord, Verdict } from "./showcase-schema.mjs";
+import { heldOf } from "./showcase-schema.mjs";
 import { formatTimecode } from "./timecode";
 
 /** Statuses that are mixed into the described soundtrack. Held and extended cues are not. */
@@ -35,6 +36,38 @@ export function placedCues(s: Pick<Showcase, "cues" | "gaps">): PlacedCue[] {
 /** The cues you hear in the described soundtrack. */
 export function voicedCues(s: Pick<Showcase, "cues" | "gaps">): PlacedCue[] {
   return placedCues(s).filter((c) => VOICED.has(c.status));
+}
+
+/** A run's lines by outcome. `held` is null when the export can't say. */
+export type LineCounts = { passed: number; held: number | null; heldListed: number; extended: number; reviewed: number };
+
+/**
+ * A recorded run's lines by outcome: from the export's summary when it has one (an export from
+ * before held lines were listed still counts them there), else from the lines it lists. Held
+ * lines are never guessed from the published lines alone: with neither, `held` is null.
+ */
+export function lineCounts(s: Pick<Showcase, "cues" | "summary">): LineCounts {
+  const listed = (f: (c: ShowcaseCue) => boolean) => s.cues.filter(f).length;
+  const heldListed = listed((c) => c.status === "held");
+  const k = s.summary?.counts;
+  if (k && Object.keys(k).length) {
+    const n = (st: CueStatus) => k[st] ?? 0;
+    return {
+      passed: n("verified") + n("edited") + n("approved"),
+      held: heldOf(s),
+      heldListed,
+      extended: k.extended ?? listed((c) => c.status === "extended"),
+      reviewed: n("edited") + n("approved"),
+    };
+  }
+  const extended = (c: ShowcaseCue) => c.extended ?? c.status === "extended";
+  return {
+    passed: listed((c) => !extended(c) && VOICED.has(c.status)),
+    held: heldOf(s),
+    heldListed,
+    extended: listed((c) => extended(c) && c.status !== "held"),
+    reviewed: listed((c) => c.status === "edited" || c.status === "approved"),
+  };
 }
 
 export type NumberedCue = ShowcaseCue & {

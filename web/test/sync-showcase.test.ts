@@ -63,7 +63,7 @@ describe("sync-showcase", () => {
     // nothing the site doesn't play
     for (const stray of ["report.html", "notes.txt", "audio/c999.m4a", "keyframes/c999.jpg"]) expect(copied).not.toContain(stray);
     expect(readFileSync(path.join(dest, "ed90", "showcase.json"))).toEqual(readFileSync(path.join(src, "showcase.json")));
-    expect(index).toEqual([{ id: "ed90", title: "Elephants Dream", credit: REAL.credit, duration: 90, cues: 10, costUsd: 0.047979 }]);
+    expect(index).toEqual([{ id: "ed90", title: "Elephants Dream", credit: REAL.credit, duration: 90, cues: 10, held: 4, costUsd: 0.047979 }]);
     expect(JSON.parse(readFileSync(path.join(dest, "index.json"), "utf8"))).toEqual(index);
   });
 

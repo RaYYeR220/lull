@@ -13,6 +13,8 @@ export type ShowcaseCue = {
   ahead: boolean;
   /** The picture holds while it plays (newer exports say so; older ones only by status). */
   extended?: boolean;
+  /** Why a held line was held, in the verifier's or a reviewer's words. */
+  note?: string | null;
 };
 
 /** What the run's report says (the export's `summary`); empty values when the run predates them. */
@@ -83,7 +85,17 @@ export type Showcase = {
 };
 
 /** One row of public/showcase/index.json. */
-export type ShowcaseIndexEntry = { id: string; title: string; credit: string; duration: number; cues: number; costUsd?: number };
+export type ShowcaseIndexEntry = {
+  id: string;
+  title: string;
+  credit: string;
+  duration: number;
+  /** The lines the export lists. */
+  cues: number;
+  /** Lines held for review (the summary's count when the export doesn't list them). */
+  held?: number;
+  costUsd?: number;
+};
 
 export declare const STATUSES: readonly CueStatus[];
 export declare const VERDICTS: readonly Verdict[];
@@ -106,4 +118,5 @@ export declare function showcaseUrl(id: string, rel?: string): string;
 export declare function parseShowcase(raw: unknown, id: string): Showcase;
 export declare function requiredFiles(raw: Record<string, unknown>): string[];
 export declare function indexEntry(s: Showcase): ShowcaseIndexEntry;
+export declare function heldOf(s: Pick<Showcase, "cues" | "summary">): number | null;
 export declare function parseIndex(raw: unknown): ShowcaseIndexEntry[];

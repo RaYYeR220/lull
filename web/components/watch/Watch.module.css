@@ -68,6 +68,7 @@
 .said{grid-area:said;margin:0;font-family:var(--f-display);font-optical-sizing:auto;font-style:italic;font-weight:350;font-size:19px;line-height:1.32;letter-spacing:var(--tr-cue);
   color:var(--cream-0);text-wrap:pretty}
 .current .lineBtn .said{color:var(--lamp-0)}
+.reason{display:block;margin-top:6px;font-family:var(--f-ui);font-style:normal;font-weight:500;font-size:12.5px;line-height:1.4;letter-spacing:0;color:var(--cream-2)}
 .verdict{grid-area:verdict;display:flex;flex-direction:column;align-items:flex-end;gap:6px;text-align:right}
 .fit{font-size:12px;line-height:1.3;color:var(--cream-2)}
 

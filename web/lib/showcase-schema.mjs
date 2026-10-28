@@ -109,7 +109,18 @@ export function parseShowcase(raw, id) {
     if (!STATUSES.includes(c.status)) fail(`cues[${i}].status`, `is not one of ${STATUSES.join(", ")}`);
     if (typeof c.ahead !== "boolean") fail(`cues[${i}].ahead`, "must be a boolean");
     if (c.extended !== undefined && typeof c.extended !== "boolean") fail(`cues[${i}].extended`, "must be a boolean");
-    return { id: c.id, start: c.start, end: c.end, text: c.text, status: c.status, ahead: c.ahead, ...(c.extended !== undefined ? { extended: c.extended } : {}) };
+    // why a line was held (the verifier's or a reviewer's words); held lines are listed, never voiced
+    if (c.note !== undefined && c.note !== null && !isStr(c.note)) fail(`cues[${i}].note`, "must be a string or null");
+    return {
+      id: c.id,
+      start: c.start,
+      end: c.end,
+      text: c.text,
+      status: c.status,
+      ahead: c.ahead,
+      ...(c.extended !== undefined ? { extended: c.extended } : {}),
+      ...(c.note !== undefined ? { note: c.note } : {}),
+    };
   });
 
   const out = { id, title: r.title, credit: r.credit, duration: r.duration, loudness, speech, gaps, cues };
@@ -231,12 +242,25 @@ export function indexEntry(s) {
     credit: s.credit,
     duration: s.duration,
     cues: s.cues.length,
+    ...(heldOf(s) !== null ? { held: heldOf(s) } : {}),
     ...(s.costUsd !== undefined ? { costUsd: s.costUsd } : {}),
   };
 }
 
 /**
- * Checks public/showcase/index.json: a list of {id, title, credit, duration, cues, costUsd?},
+ * How many lines the run held for review: the summary's count (an export from before held
+ * lines were listed still counts them there), else the held lines it lists; null when the
+ * export can't say. Never guessed from the published lines alone.
+ */
+export function heldOf(s) {
+  const listed = s.cues.filter((c) => c.status === "held").length;
+  const counted = s.summary?.counts?.held;
+  if (typeof counted === "number") return Math.max(counted, listed);
+  return listed > 0 ? listed : null;
+}
+
+/**
+ * Checks public/showcase/index.json: a list of {id, title, credit, duration, cues, held?, costUsd?},
  * ids unique.
  */
 export function parseIndex(raw) {
@@ -252,6 +276,15 @@ export function parseIndex(raw) {
     if (!isStr(e.title) || !isStr(e.credit) || !isNum(e.duration) || !Number.isInteger(e.cues) || e.cues < 0)
       fail(`[${i}]`, "must be { id, title, credit, duration, cues }");
     if (e.costUsd !== undefined && !(isNum(e.costUsd) && e.costUsd >= 0)) fail(`[${i}].costUsd`, "must be a non-negative number");
-    return { id: e.id, title: e.title, credit: e.credit, duration: e.duration, cues: e.cues, ...(e.costUsd !== undefined ? { costUsd: e.costUsd } : {}) };
+    if (e.held !== undefined && !(Number.isInteger(e.held) && e.held >= 0)) fail(`[${i}].held`, "must be a whole number");
+    return {
+      id: e.id,
+      title: e.title,
+      credit: e.credit,
+      duration: e.duration,
+      cues: e.cues,
+      ...(e.held !== undefined ? { held: e.held } : {}),
+      ...(e.costUsd !== undefined ? { costUsd: e.costUsd } : {}),
+    };
   });
 }

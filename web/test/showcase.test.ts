@@ -34,7 +34,7 @@ describe("the shipped showcase is the engine's real export", () => {
 
   it("lists in the index exactly as its showcase.json reads", () => {
     const index = parseIndex(JSON.parse(readFileSync(path.join(ROOT, "index.json"), "utf8")));
-    expect(index).toEqual([{ id: "ed90", title: show.title, credit: show.credit, duration: show.duration, cues: show.cues.length, costUsd: show.costUsd }]);
+    expect(index).toEqual([{ id: "ed90", title: show.title, credit: show.credit, duration: show.duration, cues: show.cues.length, held: 4, costUsd: show.costUsd }]);
   });
 
   it("names every file the player needs", () => {

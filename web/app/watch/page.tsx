@@ -8,7 +8,7 @@ import { Eyebrow } from "@/components/ui/Eyebrow";
 import { cx } from "@/lib/cx";
 import { watchHref } from "@/lib/routes";
 import { keyframeUrl, loadIndex, loadShowcase } from "@/lib/showcase";
-import { creditParts, numberedCues, plural, spend } from "@/lib/showcase-derive";
+import { creditParts, lineCounts, numberedCues, plural, spend } from "@/lib/showcase-derive";
 import { MAIN_ID } from "@/lib/site";
 import { formatTimecode, isoDuration } from "@/lib/timecode";
 import styles from "./watch.module.css";
@@ -48,6 +48,7 @@ export default async function WatchIndex() {
             {shows.map((s) => {
               const cues = numberedCues(s);
               const lines = cues.filter((c) => c.kind === "standard" && c.status !== "held").length;
+              const held = lineCounts(s).held;
               const extended = cues.filter((c) => c.kind === "extended").length;
               const frame = cardFrame(s.id, cues);
               const credit = creditParts(s.credit);
@@ -75,6 +76,7 @@ export default async function WatchIndex() {
                     </p>
                     <ul className={styles.cardFacts} aria-label="This run">
                       <li>{plural(lines, "line")} in its pauses</li>
+                      {held ? <li>{held} held for review</li> : null}
                       {extended ? <li>{extended} extended</li> : null}
                       {s.costUsd !== undefined ? <li>{spend(s.costUsd).figure} in model calls</li> : null}
                     </ul>

@@ -52,6 +52,16 @@ test.describe("landing", () => {
       await expect(page.locator(`section#${id}`)).toHaveCount(1);
   });
 
+  test("says only what the run's data backs: its held lines, and that it waits for review", async ({ page }) => {
+    await page.goto("/");
+    const studio = page.locator("#studio");
+    await expect(studio.getByRole("list", { name: "Cue statuses" })).toContainText("4 held for review");
+    await expect(studio.getByText("Publish, 4 cues held")).toBeVisible();
+    await expect(page.locator("#library [data-review-state]")).toHaveText("Needs review in the studio: 4 held, none approved yet");
+    await expect(page.getByText(/course library/)).toHaveCount(0);
+    await expect(page.getByText(/Reviewed and approved/)).toHaveCount(0);
+  });
+
   test("the gate's second door takes you to describe your own clip", async ({ page }) => {
     await page.goto("/");
     const gate = page.getByRole("group", { name: "Choose how to begin" });

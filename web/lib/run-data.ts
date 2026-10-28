@@ -8,6 +8,7 @@ import type { CueStatus, LintFinding } from "./api";
 import { cueAudioPattern, runFileUrl, type ApiClaim, type ApiCue, type CueFileTimeline, type ManifestSummary, type RunDetail } from "./api-runs";
 import { LAYOUT, showcaseUrl } from "./showcase-schema.mjs";
 import type { Showcase, ShowcaseIndexEntry, ShowcaseWord } from "./showcase-schema.mjs";
+import { lineCounts, type LineCounts } from "./showcase-derive";
 import { inferWps } from "./studio-budget";
 
 export type RunGap = { id: string; start: number; end: number; capacity: number };
@@ -93,6 +94,12 @@ export type RunData = {
   dirty: boolean | null;
   created: string | null;
   provenance: Provenance | null;
+  /**
+   * A recorded run's own account, from its export: its lines by outcome (held lines counted
+   * even when the export doesn't list them) and its WCAG statuses. Null for API runs, whose
+   * cues list every line and whose summary is `summary`.
+   */
+  recorded: { lines: LineCounts; wcag: { criterion: string; status: string; blockers: string[] }[] | null } | null;
 };
 
 export const VOICED: ReadonlySet<CueStatus> = new Set(["verified", "edited", "approved"]);
@@ -165,8 +172,8 @@ export function fromShowcase(s: Showcase, opts: { hasFrame?: (url: string) => bo
         claims: draftOf === c.id && s.verifyExample ? s.verifyExample.claims.map((k) => ({ text: k.text, verdict: k.verdict, at: null })) : null,
         claimsOf: "draft" as const,
         findings: null,
-        note: null,
-        audioDur: VOICED.has(c.status) || extended ? c.end - c.start : null,
+        note: c.note ?? null,
+        audioDur: c.status !== "held" && (VOICED.has(c.status) || extended) ? c.end - c.start : null,
         frame: !opts.hasFrame || opts.hasFrame(frame) ? frame : null,
       };
     }),
@@ -194,6 +201,7 @@ export function fromShowcase(s: Showcase, opts: { hasFrame?: (url: string) => bo
     dirty: null,
     created: null,
     provenance: null,
+    recorded: { lines: lineCounts(s), wcag: s.summary?.wcag.length ? s.summary.wcag : null },
   };
 }
 
@@ -324,10 +332,28 @@ export function fromApi(
     dirty: detail.dirty,
     created: manifest.created,
     provenance: provenance(manifest.summary, manifest.versions.tts),
+    recorded: null,
   };
 }
 
 /** The voiced standard lines (the ones in the described soundtrack), in time order. */
+/**
+ * A run's lines by outcome: a recorded run's from its export (held lines included even when
+ * it doesn't list them); an API run's from its cues, which list every line, held ones too.
+ */
+export function runLines(run: Pick<RunData, "cues" | "recorded">): LineCounts {
+  if (run.recorded) return run.recorded.lines;
+  const n = (f: (c: RunCue) => boolean) => run.cues.filter(f).length;
+  const heldListed = n((c) => c.status === "held");
+  return {
+    passed: n((c) => c.kind === "standard" && VOICED.has(c.status)),
+    held: heldListed,
+    heldListed,
+    extended: n((c) => c.kind === "extended" && c.status !== "held"),
+    reviewed: n((c) => REVIEWED.has(c.status)),
+  };
+}
+
 export const voicedLines = (run: Pick<RunData, "cues">) => run.cues.filter((c) => c.kind === "standard" && VOICED.has(c.status));
 
 /**

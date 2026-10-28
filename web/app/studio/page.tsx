@@ -46,7 +46,7 @@ export default async function StudioIndex() {
                 <Link href={studioHref(e.id)} className={styles.runLink}>
                   <span className={styles.runTitle}>{e.title}</span>
                   <span className={styles.runMeta}>
-                    {formatTimecode(e.duration, 0)} long, {e.cues} lines
+                    {formatTimecode(e.duration, 0)} long, {e.cues} lines{e.held ? `, ${e.held} held for review` : ""}
                   </span>
                 </Link>
               </li>

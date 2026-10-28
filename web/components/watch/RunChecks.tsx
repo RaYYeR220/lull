@@ -1,8 +1,10 @@
-import { REVIEWED, voicedLines, type RunData } from "@/lib/run-data";
+import { runLines, voicedLines, type RunData } from "@/lib/run-data";
 import { plural, spend } from "@/lib/showcase-derive";
 import styles from "./Watch.module.css";
 
 type Check = { name: string; value: string; detail: string; tone?: "good" | "warn" };
+
+const sentence = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /** Seconds of voiced standard lines over speech, worked out from the run's speech spans. */
 function overSpeech(run: RunData): { cues: number; seconds: number } | null {
@@ -27,11 +29,9 @@ function overSpeech(run: RunData): { cues: number; seconds: number } | null {
  */
 export function RunChecks({ run }: { run: RunData }) {
   const voiced = voicedLines(run);
-  const all = run.cues;
-  const extended = all.filter((c) => c.kind === "extended");
-  const held = all.filter((c) => c.status === "held").length;
-  const passed = all.length - held;
-  const reviewed = all.filter((c) => REVIEWED.has(c.status)).length;
+  const extended = run.cues.filter((c) => c.kind === "extended" && c.status !== "held");
+  const lines = runLines(run);
+  const wcag = run.recorded?.wcag ?? run.summary?.wcag ?? null;
   const waits = extended.reduce((t, c) => t + (c.end !== null ? c.end - c.start : 0), 0);
 
   const checks: Check[] = [];
@@ -67,12 +67,17 @@ export function RunChecks({ run }: { run: RunData }) {
       tone: inside === voiced.length ? "good" : "warn",
     });
   }
+  const { passed, held, heldListed, reviewed } = lines;
   checks.push({
     name: "Passed the frame check",
-    value: `${passed} of ${all.length}`,
-    detail: held
-      ? `${plural(held, "line")} failed the check or ${held === 1 ? "was" : "were"} held for a person, and ${held === 1 ? "is" : "are"} not voiced.`
-      : "Every line was checked claim by claim against the frames it describes before it was voiced.",
+    value: held === null ? plural(passed, "line") : `${passed} of ${passed + held}`,
+    detail:
+      held === null
+        ? "Each voiced line was checked claim by claim against its frames. This export doesn’t record whether any line was held."
+        : held
+          ? `${held} held for review and not voiced` +
+            (heldListed >= held ? "; each is in the script with the reason." : heldListed ? "; the script lists those this export carries." : "; this export doesn’t list them.")
+          : "Every line was checked claim by claim against the frames it describes before it was voiced.",
     tone: held ? "warn" : "good",
   });
   if (extended.length) {
@@ -84,11 +89,27 @@ export function RunChecks({ run }: { run: RunData }) {
   }
   checks.push({
     name: "Reviewed by a person",
-    value: reviewed ? `${reviewed} of ${all.length}` : "Not yet",
+    value: reviewed ? `${reviewed} of ${passed + lines.extended}` : "Not yet",
     detail: reviewed
       ? "Lines a person approved or rewrote in the studio."
-      : "The lines are checked by the engine and wait for a person’s review. They are voiced with synthetic speech.",
+      : "No line has been approved or edited by a person yet. The lines are checked by the engine and voiced with synthetic speech.",
   });
+  if (wcag?.length) {
+    const review = wcag.some((w) => w.status === "needs review");
+    const met = wcag.every((w) => w.status === "met");
+    const list = wcag.map((w) => w.criterion);
+    const named = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0];
+    checks.push({
+      name: "WCAG audio description",
+      value: review ? "Needs review" : met ? "Met" : sentence(wcag[0]!.status),
+      detail: review
+        ? `${named} ${list.length > 1 ? "need" : "needs"} a person’s review first; the conformance report lists what blocks each.`
+        : met
+          ? `${named}: met, with every line reviewed by a person.`
+          : `${named}: see the conformance report for each status.`,
+      tone: review ? "warn" : met ? "good" : undefined,
+    });
+  }
   if (run.costUsd !== null) {
     const cost = spend(run.costUsd);
     checks.push({ name: "Model spend", value: cost.figure, detail: "For the full run: every model call made for it, not only its last pass." });

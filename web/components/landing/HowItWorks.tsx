@@ -20,7 +20,7 @@ const STEPS: { verb: string; text: string; model: ReactNode }[] = [
   },
   {
     verb: "Write",
-    text: "For every pause, three versions of the line: short, medium and long.",
+    text: "For every moment worth describing, up to three versions of the line: short, medium and long.",
     model: <b>Nemotron 3 Ultra</b>,
   },
   {

@@ -4,7 +4,7 @@ import { Section } from "@/components/ui/Section";
 import { STATUS, StatusMark } from "@/components/ui/StatusMark";
 import { cx } from "@/lib/cx";
 import { keyframeUrl, type CueStatus, type Showcase } from "@/lib/showcase";
-import { clamp, numberedCues, plural, slug, verifiedCue, wordCount } from "@/lib/showcase-derive";
+import { clamp, lineCounts, numberedCues, plural, slug, verifiedCue, wordCount } from "@/lib/showcase-derive";
 import { formatTimecode as fmt } from "@/lib/timecode";
 import styles from "./StudioPreview.module.css";
 
@@ -56,8 +56,12 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
   const extended = cues.filter((c) => c.kind === "extended");
   const match = verifiedCue(showcase);
   const selected = cues.find((c) => c.id === match?.id) ?? cues[0];
-  const counts = ORDER.map((s) => [s, cues.filter((c) => c.status === s).length] as const).filter(([, n]) => n > 0);
-  const held = cues.filter((c) => c.status === "held").length;
+  // the run's own counts: an export from before held lines were listed still counts them
+  const own = showcase.summary?.counts;
+  const counts = ORDER.map((s) => [s, own && Object.keys(own).length ? (own[s] ?? 0) : cues.filter((c) => c.status === s).length] as const).filter(
+    ([, n]) => n > 0,
+  );
+  const held = lineCounts(showcase).held ?? 0;
 
   const ruler: ReactNode[] = [];
   for (let t = 0; t <= T; t += 10) {

@@ -87,12 +87,13 @@ function ed90() {
       tempo: 1.0,
       findings: [],
       note:
-        show.verifyExample?.cueId === c.id
+        c.note ??
+        (show.verifyExample?.cueId === c.id
           ? show.verifyExample.claims
               .filter((k) => k.verdict === "not_visible")
               .map((k) => `removed “${k.text}” (not visible in the frames)`)
               .join("; ") || null
-          : null,
+          : null),
     };
   };
   return {

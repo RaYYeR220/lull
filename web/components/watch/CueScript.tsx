@@ -25,7 +25,14 @@ const Row = memo(function Row({ cue, current, onSeek, borrowed }: { cue: RunCue;
           <Timecode seconds={cue.start} className={styles.tc} />
           <span className={styles.label}>{cue.label}</span>
         </span>
-        <span className={styles.said}>{cue.text}</span>
+        <span className={styles.said}>
+          {cue.text}
+          {cue.status === "held" ? (
+            <span className={styles.reason}>
+              Held for review{cue.note ? `: ${cue.note.replace(/\.$/, "")}` : ""}. Not voiced.
+            </span>
+          ) : null}
+        </span>
         <span className={styles.verdict}>
           <StatusMark status={cue.status} />
           <span className={styles.fit}>{fitWords(cue, countWords, { borrowed })}</span>
@@ -36,7 +43,8 @@ const Row = memo(function Row({ cue, current, onSeek, borrowed }: { cue: RunCue;
 });
 
 /**
- * The description script: every line in time order with its frame, time, words and status.
+ * The description script: every line in time order with its frame, time, words and status; a
+ * held line with the reason it was held.
  * Choosing a line moves the player there; the line being spoken is marked.
  */
 export const CueScript = memo(function CueScript({
@@ -45,6 +53,7 @@ export const CueScript = memo(function CueScript({
   onSeek,
   className,
   borrowedGaps = false,
+  heldElsewhere = 0,
 }: {
   cues: RunCue[];
   active: string | null;
@@ -52,6 +61,8 @@ export const CueScript = memo(function CueScript({
   className?: string;
   /** The pauses are the recorded run's: each line's fit says so. */
   borrowedGaps?: boolean;
+  /** Lines the run held for review that its files don't list (an export from before they were listed). */
+  heldElsewhere?: number;
 }) {
   return (
     <section aria-labelledby="script-title" aria-describedby="script-how" className={cx(styles.script, className)}>
@@ -68,6 +79,13 @@ export const CueScript = memo(function CueScript({
           <Row key={c.id} cue={c} current={c.id === active} onSeek={onSeek} borrowed={borrowedGaps} />
         ))}
       </ol>
+      {heldElsewhere > 0 ? (
+        <p className={styles.note} data-held-elsewhere="">
+          {heldElsewhere === 1 ? "One more line was" : `${heldElsewhere} more lines were`} held for review and not voiced. This export doesn’t include{" "}
+          {heldElsewhere === 1 ? "it" : "them"}, so {heldElsewhere === 1 ? "it isn’t" : "they aren’t"} listed here; the conformance report counts{" "}
+          {heldElsewhere === 1 ? "it" : "them"}.
+        </p>
+      ) : null}
     </section>
   );
 });

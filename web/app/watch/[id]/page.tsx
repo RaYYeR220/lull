@@ -11,7 +11,7 @@ import { WatchRun } from "@/components/watch/WatchRun";
 import { cx } from "@/lib/cx";
 import Link from "next/link";
 import { reportHref, studioHref } from "@/lib/routes";
-import { voicedLines } from "@/lib/run-data";
+import { runLines, voicedLines } from "@/lib/run-data";
 import { loadIndex, loadShowcase } from "@/lib/showcase";
 import { creditParts, plural, voicedCues } from "@/lib/showcase-derive";
 import { loadShowcaseRun } from "@/lib/showcase-run";
@@ -43,6 +43,7 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
   const s = await loadShowcaseRun(id);
   const voiced = voicedLines(s).length;
   const extended = s.cues.filter((c) => c.kind === "extended").length;
+  const lines = runLines(s);
   const credit = creditParts(s.credit ?? "");
 
   return (
@@ -79,6 +80,13 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
                     <span key="lines">
                       <b>{voiced}</b> {voiced === 1 ? "line" : "lines"} in its pauses
                     </span>,
+                    ...(lines.held
+                      ? [
+                          <span key="held">
+                            <b>{lines.held}</b> held for review
+                          </span>,
+                        ]
+                      : []),
                     ...(extended
                       ? [
                           <span key="ext">
@@ -95,6 +103,7 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
             }
             label={`${s.title}, described`}
             cues={s.cues}
+            heldElsewhere={Math.max(0, (lines.held ?? 0) - lines.heldListed)}
             edit={
               <section aria-labelledby="edit-title" className={run.editBlock}>
                 <h2 id="edit-title" className={run.h2}>

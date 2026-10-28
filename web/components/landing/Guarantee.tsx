@@ -219,7 +219,7 @@ function Figure({ narrow, showcase, cu, voiced, overlap }: FigureProps) {
         </text>
       )}
       <text x={P(cx1)} dx={narrow ? 7 : 10} y={cy + 15} fill="#f6ddb0" fontSize="12.5" fontWeight="600">
-        {narrow ? "Placed" : "Short version, placed"}{" "}
+        {narrow ? "Placed" : "Version placed"}{" "}
         <tspan className={styles.mono} fill="#d6cdbb" fontWeight="400">
           {(cue.end - cue.start).toFixed(2)} s
         </tspan>

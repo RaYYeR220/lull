@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { cx } from "@/lib/cx";
-import { slug } from "@/lib/showcase-derive";
+import { LIBRARY_AVAILABLE } from "@/lib/features";
+import { lineCounts, slug } from "@/lib/showcase-derive";
+import type { Showcase } from "@/lib/showcase-schema.mjs";
 import styles from "./Outputs.module.css";
 
 /** The authored 18px line glyphs, one per file. */
@@ -32,8 +34,20 @@ const FILES: { name: string; std: string; icon: keyof typeof ICON; desc: ReactNo
   { name: "script.md", std: "Markdown", icon: "script", desc: "The full description script, for editing and sign-off." },
 ];
 
+/**
+ * Where the showcase run stands with review, from its own counts: approved only when every
+ * line was, never claimed for a run a person hasn't signed off.
+ */
+export function reviewState(s: Pick<Showcase, "cues" | "summary">): string {
+  const k = lineCounts(s);
+  const all = k.passed + k.extended + (k.held ?? 0);
+  if (all > 0 && k.reviewed === k.passed + k.extended && !k.held) return "Reviewed and approved in the studio";
+  const parts = [k.held ? `${k.held} held` : null, k.reviewed ? `${k.reviewed} approved or edited` : "none approved yet"].filter(Boolean);
+  return `Needs review in the studio: ${parts.join(", ")}`;
+}
+
 /** 6. What you ship: six files in a folder named for the showcase clip. */
-export function Outputs({ title }: { title: string }) {
+export function Outputs({ showcase }: { showcase: Pick<Showcase, "title" | "cues" | "summary"> }) {
   return (
     <section id="library" aria-labelledby="library-title" className={cx(styles.sec, "ruled")}>
       <div className={cx("wrap", styles.grid)}>
@@ -44,8 +58,8 @@ export function Outputs({ title }: { title: string }) {
           </h2>
           <p className={cx("t-lede", styles.lede)}>A text track, an audio track, two finished videos, a conformance report and the script.</p>
           <p className={styles.note}>
-            <b>Every file is reviewed in the studio before it ships.</b> Point Lull at a course library and new lectures arrive
-            drafted, waiting for that review.
+            <b>Each line can be reviewed in the studio before it ships.</b>
+            {LIBRARY_AVAILABLE ? " Point Lull at a course library and new lectures arrive drafted, waiting for that review." : null}
           </p>
         </div>
         <div className={styles.folder}>
@@ -53,7 +67,7 @@ export function Outputs({ title }: { title: string }) {
             <svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true" focusable="false">
               <path d="M.5 1.5h4.5l1.5 1.5h7v8.5H.5z" fill="none" stroke="var(--lamp-1)" strokeWidth="1" />
             </svg>
-            {slug(title)}/
+            {slug(showcase.title)}/
           </div>
           <div className={styles.body}>
             <ul className={styles.files}>
@@ -70,7 +84,7 @@ export function Outputs({ title }: { title: string }) {
             </ul>
             <p className={styles.foot}>
               <span>{FILES.length} files</span>
-              <span>Reviewed and approved in the studio</span>
+              <span data-review-state="">{reviewState(showcase)}</span>
             </p>
           </div>
         </div>

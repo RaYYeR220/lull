@@ -144,7 +144,12 @@ test.describe("a recorded run's page", () => {
     await expect(checks.getByRole("definition").filter({ hasText: /^0\.00 s$/ })).toHaveCount(1);
     await expect(checks).toContainText("8 of 8");
     await expect(checks).toContainText("8 of 13 pauses carry a line");
-    await expect(checks).toContainText("10 of 10");
+    // the export's summary counts the four lines it held for review, though it doesn't list them
+    await expect(checks).toContainText("8 of 12");
+    await expect(checks).toContainText("4 held for review and not voiced; this export doesn’t list them.");
+    await expect(checks).toContainText("Needs review");
+    await expect(page.locator("[data-held-elsewhere]")).toContainText("4 more lines were held for review and not voiced.");
+    await expect(page.getByRole("list", { name: "This run" })).toContainText("4 held for review");
     await expect(checks).toContainText("Not yet");
     await expect(checks).toContainText("$0.05");
     await expect(checks).toContainText("For the full run");
