@@ -59,6 +59,10 @@ curl localhost:8080/v1/health   # {"ok":true,"speech":true,...} once both proces
 - `/data` must be writable by uid 10001 (Docker Desktop bind mounts are; on Linux,
   `chown 10001 lull-data`).
 - Nothing listens until the speech server is ready: allow up to a minute.
+- The ledger is in `/tmp/lull-home` inside the container: it starts empty each time unless
+  `LULL_BUCKET` (or `LULL_LEDGER_REPLICA`, e.g. `file:///data/replica`) is set.
+- `uv run python docker/smoke.py http://localhost:8080` (from `engine/`, ffmpeg on PATH) checks
+  a running container end to end; see "Deploy smoke" below.
 
 ## What starts (`docker/entrypoint.sh`)
 
@@ -96,6 +100,12 @@ container exits.
 Measured: `docker stop` takes about 1.2 s normally, and 8.5 s with the API frozen (`kill -STOP`),
 where the entrypoint logs "the API did not stop in 7.5s; killing it".
 
+With a live run in flight the API cannot exit within those 5 s: the engine runs in a worker
+thread, which cannot be interrupted, and Python waits for it before the process ends. The
+entrypoint then kills the API at 7.5 s and Litestream's final sync does not run, so the ledger
+rows of the last sync interval (1 s) can be lost; the run itself reads `stopped` afterwards and
+its owner can restart it from the stage cache.
+
 ## Environment
 
 | Variable | Default in the image | Meaning |
@@ -106,7 +116,7 @@ where the entrypoint logs "the API did not stop in 7.5s; killing it".
 | `LULL_WEB_ORIGINS` | none | comma-separated origins allowed by CORS |
 | `LULL_PROXY_HOPS` | `0` | trusted proxies that append to `X-Forwarded-For`; 0 = the socket peer. Cloud Run: set `1` |
 | `LULL_DATA` | `/data` | runs, showcase, samples |
-| `LULL_HOME` | `/data/home` | `ledger.db` and `voices.json`. SQLite needs a local disk: when `/data` is a Cloud Storage (FUSE) mount, point this at a local path such as `/home/lull/state` and let Litestream keep the durable copy |
+| `LULL_HOME` | `/tmp/lull-home` | `ledger.db` and `voices.json`, on local disk: SQLite must never sit on the Cloud Storage mount. Litestream keeps the durable copy in the bucket |
 | `LULL_BUCKET` | none | Cloud Storage bucket for the ledger replica (`gs://$LULL_BUCKET/ledger`); unset = no replication |
 | `LULL_LEDGER_REPLICA` | `gs://$LULL_BUCKET/ledger` | any Litestream replica URL, e.g. `file:///data/replica` to try replication locally |
 | `LULL_SPEECH_KEY` | random per start | bearer key between the API and the speech server |
@@ -115,7 +125,7 @@ where the entrypoint logs "the API did not stop in 7.5s; killing it".
 | `LULL_CAP_RUN` / `LULL_CAP_DAY` / `LULL_CAP_TOTAL` | `0.50` / `3.00` / `35.00` | spend caps in USD on model calls only; `none` = no cap, `0` refuses every call |
 | `LULL_TAVILY_DAY` | `60` | web searches per day (counted, never priced); a live run may make 3 |
 | `LULL_SAMPLES` | `/opt/lull/samples` | the sample clips and `samples.json` baked into the image (read-only) |
-| `LULL_UPLOAD_RETENTION_DAYS` | `7` | an upload's run is removed this many days after it was made (forks: 24 h), by the sweep at start and every hour; `/v1/health` states it |
+| `LULL_UPLOAD_RETENTION_DAYS` | `7` | an upload's run is removed this many days after it was made (a fork: 24 h, and never after the upload it came from), by housekeeping at start, hourly, and from `/v1/health` when an hour has passed; `/v1/health` states it |
 | `LULL_SHOWCASE_EDITABLE` | `0` | local only: lets the Studio change showcase runs |
 | `LULL_NO_VERIFY` | unset | the engine's evaluation-only switch (no frame verification): a true value stops the container at start, and the API refuses to start with it; it is never passed on |
 
@@ -124,15 +134,60 @@ Default Credentials); it needs object read/write on the bucket.
 
 ## On Cloud Run
 
-- 4 vCPU, 8 GiB, CPU always allocated (`--no-cpu-throttling`): a live run works inside its
-  streaming request, and the speech server and Litestream work outside requests.
+The data bucket is created with hierarchical namespace and uniform access. Publishing a run
+(live or from the Studio) renames folders; on a hierarchical bucket a folder rename is one
+atomic operation, where a flat bucket mounted with Cloud Storage FUSE refuses it (the engine
+falls back to moving the files one by one when a folder rename fails).
+
+```bash
+gcloud storage buckets create "gs://$LULL_BUCKET" --location "$REGION" \
+  --uniform-bucket-level-access --enable-hierarchical-namespace
+
+gcloud run deploy lull-api --image "$IMAGE" --region "$REGION" \
+  --cpu 4 --memory 8Gi --concurrency 20 --max-instances 1 --min-instances 0 \
+  --timeout 900 --execution-environment gen2 \
+  --add-volume name=data,type=cloud-storage,bucket="$LULL_BUCKET" \
+  --add-volume-mount volume=data,mount-path=/data \
+  --set-env-vars LULL_PROXY_HOPS=1,LULL_BUCKET="$LULL_BUCKET",LULL_WEB_ORIGINS="$WEB_ORIGIN" \
+  --set-secrets NEBIUS_API_KEY=nebius-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest \
+  --no-traffic
+```
+
+- Request-based billing (the default; not `--no-cpu-throttling`): the instance has CPU only
+  while a request is in flight. A live run works inside its own streaming request; when the
+  page following it closes, the run stops at once (it reads `stopped`) and its owner restarts
+  it from the stage cache. Litestream syncs while requests run and at shutdown. Housekeeping
+  (retention) runs at start, hourly while the instance lives, and from `/v1/health` when an
+  hour has passed, so a keep-warm ping of `/v1/health` (Cloud Scheduler) keeps it going.
+- `--concurrency 20`: the work that loads the CPU is gated in the app (one live run, two
+  uploads received at once, two Studio edits re-checked and one publish at a time), so the
+  rest of the slots are for reads, health and the event streams (at most 3 follow one run and
+  8 are open in all).
 - `--max-instances 1`: the rate limits, the live executor and the ledger live in one process,
   and Litestream allows one writer per replica. Two instances would replicate over each other.
+  `max-instances` counts per revision, so deploy with `--no-traffic` and move the traffic once
+  the old revision's `/v1/health` says `"live_busy": false`.
 - `LULL_PROXY_HOPS=1` (Cloud Run's front end appends the visitor's address).
-- `LULL_HOME` on local disk (e.g. `/home/lull/state`) when `/data` is a Cloud Storage volume,
-  with `LULL_BUCKET` set so the ledger survives restarts.
+- `LULL_HOME` stays on local disk (the image's `/tmp/lull-home`); `LULL_BUCKET` set so the
+  ledger survives restarts.
 - Raise `LULL_SPEECH_WAIT` (e.g. 180) if cold starts on the platform are slower than measured
   here; the default startup probe allows 240 s.
+- Optional backstop for retention: a bucket lifecycle rule deleting objects under `runs/` older
+  than 8 days.
+
+### Deploy smoke
+
+Against the new revision's URL (`--no-traffic` gives it a tagged URL), from `engine/` with
+ffmpeg on PATH:
+
+```bash
+uv run python docker/smoke.py "$REVISION_URL"
+```
+
+It checks health; starts a sample run (bbb45) and leaves it once its first stage starts (the
+run must read `stopped`); restarts it as its owner (`done`, a stage from the cache, model spend
+within $0.05 over both attempts); sends a 2560x1440 upload (422 unsupported); then, over the
+real mount, forks the run, approves or holds one cue and publishes it. It prints no token.
 
 ## Sizes
 

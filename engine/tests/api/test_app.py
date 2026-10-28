@@ -201,3 +201,27 @@ def test_the_entrypoint_never_forwards_no_verify():
 
     script = (Path(__file__).resolve().parents[2] / "docker" / "entrypoint.sh").read_text()
     assert "LULL_NO_VERIFY" in script and "unset LULL_NO_VERIFY" in script
+
+
+def test_the_ledger_lives_on_local_disk_by_default():
+    """SQLite (WAL) must not sit on the Cloud Storage mount: the image keeps LULL_HOME local
+    and Litestream keeps the durable copy."""
+    from pathlib import Path
+
+    docker = Path(__file__).resolve().parents[2] / "docker"
+    image = (docker.parent / "Dockerfile").read_text()
+    script = (docker / "entrypoint.sh").read_text()
+    assert "LULL_HOME=/tmp/lull-home" in image and "LULL_HOME=/data" not in image
+    assert 'LULL_HOME="${LULL_HOME:-/tmp/lull-home}"' in script
+
+
+def test_the_deploy_notes_state_the_platform_settings():
+    from pathlib import Path
+
+    docker = Path(__file__).resolve().parents[2] / "docker"
+    notes = (docker / "README.md").read_text()
+    for needed in ("--concurrency 20", "--enable-hierarchical-namespace",
+                   "--uniform-bucket-level-access", "smoke.py", "--no-cpu-throttling"):  # fmt: skip
+        assert needed in notes, needed
+    assert "CPU always allocated" not in notes  # request-based billing
+    assert (docker / "smoke.py").is_file()

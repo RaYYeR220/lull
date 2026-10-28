@@ -46,7 +46,9 @@ esac
 unset LULL_NO_VERIFY
 
 export LULL_DATA="${LULL_DATA:-/data}"
-export LULL_HOME="${LULL_HOME:-$LULL_DATA/home}"
+# the ledger (SQLite, WAL) on local disk, never the Cloud Storage mount; Litestream keeps the
+# durable copy in the bucket
+export LULL_HOME="${LULL_HOME:-/tmp/lull-home}"
 export LULL_SPEECH_URL="$SPEECH_URL"
 mkdir -p "$LULL_DATA" "$LULL_HOME"
 

@@ -124,15 +124,15 @@ ENV PATH=/app/.venv/bin:/opt/nemo-speech/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     NEMO_SPEECH_MODEL_DIR=/opt/nemo-models \
     LULL_DATA=/data \
-    LULL_HOME=/data/home \
+    LULL_HOME=/tmp/lull-home \
     LULL_SPEECH_URL=http://127.0.0.1:8089 \
     LULL_PROXY_HOPS=0 \
     LULL_SAMPLES=/opt/lull/samples \
     PORT=8080
 
 RUN python -m compileall -q /app/src \
-    && mkdir -p /data/home \
-    && chown -R lull:lull /data \
+    && mkdir -p /data /tmp/lull-home \
+    && chown -R lull:lull /data /tmp/lull-home \
     && ffmpeg -hide_banner -version | head -n 1 \
     && nemo-speech --version \
     && litestream version
