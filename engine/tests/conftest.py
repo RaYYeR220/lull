@@ -99,3 +99,15 @@ def fast_media(monkeypatch: pytest.MonkeyPatch) -> dict:
     monkeypatch.setattr(mixer, "extended_video", fake_extended)
     monkeypatch.setattr(media, "frames_at", fake_frames)
     return seen
+
+
+@pytest.fixture(scope="session")
+def long_audio(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """2 s of picture (red, 10 fps) and 4 s of sound: the file runs on past its last frame."""
+    out = tmp_path_factory.mktemp("media") / "long_audio.mp4"
+    _ffmpeg(
+        "-f", "lavfi", "-i", "color=c=red:s=160x90:r=10:d=2",
+        "-f", "lavfi", "-i", "sine=frequency=440:duration=4",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(out),
+    )  # fmt: skip
+    return out

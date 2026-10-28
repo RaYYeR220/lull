@@ -52,6 +52,9 @@ class Probe:
     format_name: str = ""  # ffprobe's demuxer names, comma-separated ("mov,mp4,m4a,3gp,3g2,mj2")
     audio_streams: int = 0
     fps_rational: str = ""  # the nominal frame rate as ffprobe gives it ("30000/1001")
+    # when the picture's last frame shows, in seconds from the start of the file: the sound
+    # (and so the file) may run on past it; None only where a Probe is built by hand
+    video_end: float | None = None
 
 
 def _bin(name: str) -> str:
@@ -217,18 +220,32 @@ def probe(path: Path) -> Probe:
     width, height = int(video["width"]), int(video["height"])
     if _rotation(video) % 180 == 90:
         width, height = height, width
+    fps = _fps(video.get("r_frame_rate", "0/1"))
     return Probe(
         duration=float(duration),
         width=width,
         height=height,
-        fps=_fps(video.get("r_frame_rate", "0/1")),
+        fps=fps,
         has_audio=audio is not None,
         video_codec=video.get("codec_name", ""),
         audio_codec=None if audio is None else audio.get("codec_name", ""),
         format_name=str(info.get("format", {}).get("format_name") or ""),
         audio_streams=sum(s.get("codec_type") == "audio" for s in streams),
         fps_rational=str(video.get("r_frame_rate") or ""),
+        video_end=_video_end(info.get("format", {}), video, float(duration), fps),
     )
+
+
+def _video_end(fmt: dict, video: dict, duration: float, fps: float) -> float:
+    """When the last frame of the picture shows: the video stream's own length (from where
+    the file starts) less one frame, else the file's length less one frame."""
+    frame = 1.0 / fps if fps > 0 else 0.04
+    try:
+        length = float(video["duration"])
+        start = float(video.get("start_time") or 0.0) - float(fmt.get("start_time") or 0.0)
+    except (KeyError, TypeError, ValueError):  # Matroska and WebM often give no stream length
+        length, start = duration, 0.0
+    return max(0.0, min(duration, start + length) - frame)
 
 
 def audio_duration(path: Path) -> float:
@@ -325,9 +342,12 @@ def frame_at(src: Path, t: float, dst: Path) -> Path:
     return dst
 
 
-def frames_at(src: Path, shots: list[tuple[float, Path]], *, batch: int = 16) -> list[Path]:
+def frames_at(
+    src: Path, shots: list[tuple[float, Path]], *, batch: int = 16, missing_ok: bool = False
+) -> list[Path]:
     """One JPEG per (t, dst), `batch` frames per ffmpeg run (each input seeks to its own t):
-    launching ffmpeg costs far more than decoding one frame."""
+    launching ffmpeg costs far more than decoding one frame. With `missing_ok`, a shot that
+    gives no frame is left out of the result instead of raising MediaError."""
     out: list[Path] = []
     for i in range(0, len(shots), batch):
         chunk = [(t, Path(d)) for t, d in shots[i : i + batch]]
@@ -339,10 +359,22 @@ def frames_at(src: Path, shots: list[tuple[float, Path]], *, batch: int = 16) ->
             args += ["-map", f"{j}:v:0", "-frames:v", "1", "-q:v", "2", str(dst)]
         _ffmpeg(*args, seconds=float(len(chunk)))  # a seek and a frame each
         missing = [f"{t:.3f}" for t, dst in chunk if not dst.exists()]
-        if missing:
+        if missing and not missing_ok:
             raise MediaError(f"no frame at t={', '.join(missing)} in {src}")
-        out += [dst for _, dst in chunk]
+        out += [dst for _, dst in chunk if dst.exists()]
     return out
+
+
+def last_frame(src: Path, dst: Path, *, window: float = 3.0) -> Path:
+    """The last frame of the picture that decodes, as a JPEG: the last `window` seconds of
+    the file are decoded and each frame overwrites `dst`, so the last one stays."""
+    dst = Path(dst)
+    dst.unlink(missing_ok=True)
+    _ffmpeg("-sseof", f"-{window:.3f}", *input_args(src), "-map", "0:v:0", "-update", "1",
+            "-q:v", "2", str(dst), seconds=window)  # fmt: skip
+    if not dst.exists():
+        raise MediaError(f"no frame decodes in the last {window:g} s of {src}")
+    return dst
 
 
 _PTS = re.compile(r"pts_time:(\d+(?:\.\d+)?)")
