@@ -1,3 +1,4 @@
+import hashlib
 import tarfile
 
 import pytest
@@ -28,6 +29,7 @@ from suite_a.score import (
     guard_results_write,
     judge_cues,
     judge_vectors,
+    judge_voiced,
     negative_probes,
     overlap_seconds,
     probe_cues,
@@ -36,14 +38,23 @@ from suite_a.score import (
     run_inventory,
     select_reuse,
     silence,
+    slides_on_screen,
     spend_of,
     tagged,
     title_match,
     value_match,
     verify_prereg,
     video_metrics,
+    voiced_flags,
+    voiced_probe_cues,
+    voiced_probe_scores,
+    voiced_request,
     write_bundle,
 )
+
+# sha256 of the scorer's prompts as first committed (5551575), before any judge call
+PREREGISTERED_CLAIMS = "eca1dc4eb1fcda4233dc2eb58ecdcfc251ff86d3612dcfe1104f86f68ae3e2f5"
+PREREGISTERED_COVERAGE = "ff0c6c692796182ec543d223eb4e0464ac6920f2c4f64f8107212e461cd6ff0c"
 
 # -- fakes ----------------------------------------------------------------------------------------
 
@@ -151,9 +162,9 @@ def verdicts():
                 {"key": "x001#1", "reason": "no photo", "verdict": "unsupported"},
             ],
             "cues": [
-                {"id": "c001", "restates_narration": False, "text_unsupported": False},
-                {"id": "c002", "restates_narration": False, "text_unsupported": False},
-                {"id": "x001", "restates_narration": True, "text_unsupported": True},
+                {"id": "c001", "restates_narration": False},
+                {"id": "c002", "restates_narration": False},
+                {"id": "x001", "restates_narration": True},
             ],
         },
     }
@@ -418,7 +429,7 @@ def test_video_metrics_from_fake_verdicts():
     assert m["judge_problems"] == []
     assert m["exact_match"]["standard"]["chart_value"]["matched"] == 1  # the tie
     sup = m["supplementary"]
-    assert sup["hallucination_voiced_text"] == [1, 3]
+    assert sup["hallucination_voiced_text"] is None  # no voiced-text call was made
     assert sup["decoys_absent_part"] == ["t01-d02"]
     assert sup["claims_not_in_cue_text"] == [0, 4]
     assert m["silence"]["pauses"] == 3
@@ -452,7 +463,6 @@ def test_missing_verdicts_count_against_the_system_and_are_reported():
     assert m["decoys"]["stated"] == ["t01-d01", "t01-d02"]  # missing decoy: stated
     assert m["redundancy"]["cues"] == [2, 3]  # missing cue verdict: redundant
     assert m["redundancy"]["spoken_facts_restated"] == [1, 1]
-    assert m["supplementary"]["hallucination_voiced_text"] == [2, 3]
     assert len(m["judge_problems"]) >= 6
 
 
@@ -467,12 +477,14 @@ def test_a_failed_run_publishes_nothing_and_misses_everything():
 
 
 def test_aggregate_pools_videos():
-    a = video_metrics(ENTRY, run_record(), cues_json(), verdicts())
-    b = video_metrics({**ENTRY, "id": "t02"}, run_record(), cues_json(), verdicts())
+    a = video_metrics(ENTRY, run_record(), cues_json(), verdicts(), voiced=voiced_answers())
+    b = video_metrics({**ENTRY, "id": "t02"}, run_record(), cues_json(), verdicts(),
+                      voiced=voiced_answers())  # fmt: skip
     agg = aggregate([a, b])
     assert agg["recall_standard"]["value"] == pytest.approx(4 / 6)
     assert agg["hallucination_claims"]["value"] == pytest.approx(2 / 8)
-    assert agg["hallucination_voiced_text"]["value"] == pytest.approx(2 / 6)
+    assert agg["hallucination_voiced_text"]["value"] == pytest.approx(2 / 8)
+    assert agg["voiced_unverifiable"]["value"] == pytest.approx(2 / 8)
     assert agg["decoys_stated"] == 2 and agg["decoys_total"] == 4
     assert agg["decoys_absent_part"] == 2
     assert agg["cost"]["model_usd_per_min"] == pytest.approx(0.03)
@@ -513,7 +525,11 @@ def test_requests_list_every_item_and_force_complete_answers():
     assert schema["properties"]["claims"]["items"]["properties"]["key"]["enum"] == [
         "c001#1", "c002#1", "c002#2", "x001#1"]  # fmt: skip
     cue_item = schema["properties"]["cues"]["items"]
-    assert set(cue_item["required"]) == {"id", "restates_narration", "text_unsupported", "reason"}
+    assert set(cue_item["required"]) == {"id", "restates_narration"}
+    assert "text_unsupported" not in prompt
+    # the claims call is exactly the one committed with the scorer before any judge call
+    assert hashlib.sha256(score.CLAIMS_PROMPT.encode()).hexdigest() == PREREGISTERED_CLAIMS
+    assert hashlib.sha256(score.COVERAGE_PROMPT.encode()).hexdigest() == PREREGISTERED_COVERAGE
     assert 'supported", "at"' not in prompt  # the engine's own verdicts never reach the judge
 
 
@@ -660,3 +676,103 @@ def test_markdown_names_the_tag_and_labels_supplementary_rows():
     md = score.markdown(result)
     assert "suite-a-prereg" in md and "PARTIAL" in md
     assert "supplementary" in md and "pauses >= 2 s" in md
+
+
+# -- the voiced-text call (supplementary) ---------------------------------------------------------
+
+
+def voiced_answers():
+    st = lambda text, verdict: {"text": text, "verdict": verdict, "reason": ""}  # noqa: E731
+    return {
+        "c001": {"statements": [st("A slide reads Cell Energy", "supported")]},
+        "c002": {"statements": [st("A line chart", "supported"),
+                                st("It peaks at 23 for H3", "unverifiable")]},
+        "x001": {"statements": [st("A photo of a microscope", "unsupported")]},
+    }  # fmt: skip
+
+
+def test_slides_on_screen_for_a_cue():
+    assert slides_on_screen(ENTRY, {"track": "standard", "start": 6.0, "audio_dur": 2.0}) == [1]
+    assert slides_on_screen(ENTRY, {"track": "standard", "start": 29.0, "audio_dur": 2.0}) == [1, 2]
+    assert slides_on_screen(ENTRY, {"track": "extended", "start": 31.0, "audio_dur": 4.0}) == [2]
+    assert slides_on_screen(ENTRY, {"track": "extended", "start": 30.0, "audio_dur": 9.0}) == [2]
+    assert slides_on_screen(ENTRY, {"track": "extended", "start": 60.0, "audio_dur": 1.0}) == [2]
+
+
+def test_voiced_request_sees_only_the_text_and_the_slides_on_screen():
+    cues = tagged(*published(cues_json()))
+    prompt, schema = voiced_request(ENTRY, cues[1])  # c002, slide 2, two claims in cues.json
+    assert "A line chart peaks at 23 for H3." in prompt
+    assert "A line chart is shown" not in prompt  # the run's claim split never reaches it
+    facts = {f["id"]: f["text"] for f in ENTRY["visual_facts"] + ENTRY["spoken_facts"]}
+    assert facts["t01-v02"] in prompt and facts["t01-v03"] in prompt
+    assert facts["t01-v01"] not in prompt and facts["t01-s01"] not in prompt
+    assert all(d["text"] in prompt for d in ENTRY["absent_decoys"])
+    prompt1, _ = voiced_request(ENTRY, cues[0])  # c001 on slide 1
+    assert facts["t01-s01"] in prompt1 and facts["t01-v02"] not in prompt1
+    statements = schema["properties"]["statements"]
+    assert statements["minItems"] == 1
+    assert statements["items"]["properties"]["verdict"]["enum"] == [
+        "supported", "unsupported", "unverifiable"]  # fmt: skip
+
+
+def test_voiced_metric_counts_statements():
+    m = video_metrics(ENTRY, run_record(), cues_json(), verdicts(), voiced=voiced_answers())
+    sup = m["supplementary"]
+    assert sup["hallucination_voiced_text"] == [1, 4]
+    assert sup["voiced_unverifiable"] == [1, 4]
+    assert sup["voiced_cues_with_unsupported"] == [1, 3]
+
+
+def test_a_cue_without_a_voiced_verdict_counts_as_one_unsupported_statement():
+    answers = voiced_answers()
+    del answers["c001"]
+    m = video_metrics(ENTRY, run_record(), cues_json(), verdicts(), voiced=answers)
+    assert m["supplementary"]["hallucination_voiced_text"] == [2, 4]
+    assert any("voiced" in p for p in m["judge_problems"])
+
+
+def test_voiced_flags_for_agreement():
+    flags = voiced_flags(voiced_answers(), ["c001", "c002", "x001"])
+    assert flags == {"c001": False, "c002": False, "x001": True}
+    assert voiced_flags({}, ["c001"]) == {"c001": True}  # missing: counted unsupported
+
+
+def test_judge_voiced_makes_one_call_per_cue(tmp_path, monkeypatch):
+    monkeypatch.setattr(score, "JUDGE_CACHE", tmp_path)
+    cues = tagged(*published(cues_json()))
+    answers = voiced_answers()
+    tf = FakeTF([answers[c["id"]] for c in cues])
+    got = judge_voiced(ENTRY, cues, Judge(tf, Budget(FakeLedger(), cap=1.0)), "run-v")
+    assert got == answers and tf.calls == 3
+    again = judge_voiced(ENTRY, cues, Judge(FakeTF([]), Budget(FakeLedger(), cap=1.0)), "x")
+    assert again == answers
+
+
+def test_voiced_probes_two_positives_three_near_misses():
+    cues = voiced_probe_cues(ENTRY)
+    kinds = [c["probe"]["type"] for c in cues]
+    assert kinds == ["positive", "positive", "wrong_number", "swapped_label", "invented_bullet"]
+    assert [c["id"] for c in cues] == ["vp01", "vp02", "vn01", "vn02", "vn03"]
+    texts = [c["text"] for c in cues]
+    assert texts[0] == ENTRY["visual_facts"][1]["text"]
+    assert texts[1] == 'A bullet reads "Oxygen helps".'
+    assert "29.9" in texts[2] and texts[2].endswith('for "H2".')
+    assert texts[3].endswith('is 23, for "H1".')
+    assert texts[4] == 'A bullet reads "Output Over Time was settled in 1999".'
+    assert all(slides_on_screen(ENTRY, c) == [2] for c in cues)
+
+
+def test_voiced_probe_scores():
+    cues = voiced_probe_cues(ENTRY)
+    st = lambda verdict: {"text": "x", "verdict": verdict, "reason": ""}  # noqa: E731
+    answers = {
+        "vp01": {"statements": [st("supported")]},
+        "vp02": {"statements": [st("supported"), st("unverifiable")]},  # not all supported
+        "vn01": {"statements": [st("supported"), st("unsupported")]},
+        "vn02": {"statements": [st("unverifiable")]},  # a swapped label must be unsupported
+        "vn03": {"statements": [st("unverifiable")]},  # an invented bullet may be unverifiable
+    }
+    s = voiced_probe_scores(cues, answers)
+    assert s["sensitivity"] == [1, 2] and s["specificity"] == [2, 3]
+    assert s["by_type"]["swapped_label"] == [0, 1] and s["by_type"]["invented_bullet"] == [1, 1]
