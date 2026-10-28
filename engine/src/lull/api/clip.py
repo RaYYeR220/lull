@@ -11,8 +11,15 @@ streams (a phone's data or timecode track, subtitles, attachments, a second pict
 are never read: the copy leaves them out.
 
 The frame rate is the higher of the nominal and average rates; a nominal rate over 240 (a
-browser recording's 1000/1) is not believed, and the rate is measured instead: the video
-stream's packets over its length (ffprobe -count_packets, under the same time limit).
+browser recording's 1000/1) is not believed, and the rate is measured instead from the packets
+themselves: the video packets of the first MEASURE_S seconds, (packets - 1) over the span of
+their times, never the duration the header states (ffprobe, under the same time limit). A rate
+that cannot be measured (fewer than 2 packets, no span) is refused. The live side also refuses
+a file whose copy's length is more than 20 % off the length the file states.
+
+These checks keep honest files cheap to refuse early; what bounds a run's work is the
+normalising transcode below (its frame-rate cap, frame cap and time limit), whatever a header
+or a measurement says.
 
 The run's copy (transcode): one normalising transcode, and every engine stage works on it only.
 The first video stream, scaled to fit 1280x720 (720x1280 upright; never upscaled), at its
@@ -40,6 +47,7 @@ MAX_LONG_SIDE, MAX_SHORT_SIDE, MAX_PIXELS = 1920, 1080, 2_100_000
 MAX_FPS = 60.0
 FPS_SLACK = 0.5  # a nominal 60 that a phone reports as 60.02
 PLAUSIBLE_FPS = 240.0  # a stated rate above this is measured, not believed
+MEASURE_S = 5  # seconds of packets the measured rate is taken over
 MAX_CHANNELS, MAX_SAMPLE_RATE = 8, 192_000
 MAX_BIT_RATE = 100_000_000  # bits a second, the whole file
 OUT_LONG_SIDE, OUT_SHORT_SIDE = 1280, 720  # the run's copy
@@ -57,6 +65,7 @@ class Media(Probe):
     others: tuple[str, ...] = ()
     bit_rate: float | None = None
     rate: str = ""  # the first video stream's frame rate as ffprobe states it ("30000/1001")
+    measured: bool = False  # the stated rate was not believed and `fps` was measured
 
 
 def _bin(name: str) -> str:
@@ -122,6 +131,8 @@ def over_limits(info: Probe) -> str | None:
     for w, h, fps in videos:
         if w <= 0 or h <= 0:
             return "This video does not state its picture size. Export it again as an mp4."
+        if not fps > 0 and getattr(info, "measured", False):
+            return "This video's frame rate could not be measured. Export it again as an mp4."
         if not fps > 0:
             return "This video does not state its frame rate. Export it again as an mp4."
         if max(w, h) > MAX_LONG_SIDE or min(w, h) > MAX_SHORT_SIDE or w * h > MAX_PIXELS:
@@ -179,8 +190,9 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
             raise MediaError(f"cannot determine duration of {path}")
         kinds = [str(s.get("codec_type") or "unknown") for s in streams]
         fps, rate = _rate(video)
-        if fps > PLAUSIBLE_FPS:  # not believed: measured
-            fps = _measured_rate(path, float(duration), timeout)
+        measured = fps > PLAUSIBLE_FPS  # not believed: measured from the packets
+        if measured:
+            fps = _measured_rate(path, timeout)
             rate = f"{fps:.6g}" if fps > 0 else ""
         first = next(i for i, s in enumerate(streams) if s.get("codec_type") == "video")
         return Media(
@@ -207,24 +219,27 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
             others=tuple(k for k in kinds if k not in ("video", "audio")),
             bit_rate=_number(fmt.get("bit_rate")),
             rate=rate,
+            measured=measured,
         )
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise MediaError(f"ffprobe output for {path} does not read: {e}") from None
 
 
-def _measured_rate(path: Path, duration: float, timeout: float) -> float:
-    """The first video stream's packets a second over `duration` (0.0 when not known)."""
+def _measured_rate(path: Path, timeout: float) -> float:
+    """The first video stream's frame rate from its own packets: those of the first MEASURE_S
+    seconds, (packets - 1) over the span of their times (sorted: B-frames come out of order);
+    0.0 when there are fewer than 2 or no span. The header's duration plays no part."""
     out = _run(
         [_bin("ffprobe"), "-v", "error", "-protocol_whitelist", SAFE_PROTOCOLS,
-         "-format_whitelist", SAFE_FORMATS, "-select_streams", "v:0", "-count_packets",
-         "-show_entries", "stream=nb_read_packets", "-print_format", "json", str(path)],
+         "-format_whitelist", SAFE_FORMATS, "-select_streams", "v:0",
+         "-read_intervals", f"%+{MEASURE_S}", "-show_entries", "packet=pts_time",
+         "-of", "csv=p=0", str(path)],
         timeout,
     )  # fmt: skip
-    try:
-        packets = int(json.loads(out.stdout)["streams"][0]["nb_read_packets"])
-    except (ValueError, KeyError, IndexError, TypeError):
+    times = sorted(t for t in map(_number, out.stdout.decode().split()) if t is not None)
+    if len(times) < 2 or not times[-1] > times[0]:
         return 0.0
-    return packets / duration if duration > 0 else 0.0
+    return (len(times) - 1) / (times[-1] - times[0])
 
 
 def _out_rate(info: Probe) -> str:

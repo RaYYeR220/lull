@@ -86,6 +86,7 @@ FORM_SLACK = 64 * 1024  # multipart headers and the small fields around the file
 MAX_SECONDS = 60.0  # an upload (demo latency: the UI states it)
 MAX_SAMPLE_SECONDS = 45.0
 TRIM_SLACK = 1.0  # a stream copy cuts at a packet, a little past the limit
+LENGTH_SLACK = 0.2  # a copy more than 20 % off the length the file states is refused
 FORMATS = (".mp4", ".mov", ".webm", ".mkv")
 HEARTBEAT_S = 15.0
 BUSY_RETRY_S = 60
@@ -943,9 +944,17 @@ async def _cut(live: Live, run_id: str, video: Path, limit: float) -> tuple[Path
     except Exception:
         log.info("live run %s: %s does not transcode", run_id, video.name, exc_info=True)
         raise not_converted() from None
+    stated = info.duration
     info = await _probe(live, run_id, copy)
     if info.duration > limit + TRIM_SLACK:
         raise too_long(info.duration, limit)
+    if abs(info.duration - stated) > LENGTH_SLACK * stated:
+        raise LiveError(
+            422,
+            "unsupported",
+            f"This video's stated length ({stated:.1f} s) does not match what it holds "
+            f"({info.duration:.1f} s). Export it again as an mp4.",
+        )
     final = video.with_name(f"{video.stem}.mp4")
     os.replace(copy, final)
     if final != video:

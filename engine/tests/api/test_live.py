@@ -758,12 +758,12 @@ def test_refused_uploads_count_in_their_own_window(lc, live):
 
 def test_runs_use_the_trimmed_copy_and_its_duration(lc, live, data):
     def trim(src, dst, seconds, info):
-        assert seconds == live.max_seconds and info.duration == 9.0
+        assert seconds == live.max_seconds and info.duration == 5.4
         Path(dst).write_bytes(b"DUR=5;trimmed")
         return dst
 
     live.transcode = trim
-    r = post(lc, b"DUR=9;original")
+    r = post(lc, b"DUR=5.4;original")
     assert types(parse_sse(r.text))[-1] == "done"
     (job,) = live.runner.jobs
     assert job.duration == 5.0 and job.video.read_bytes() == b"DUR=5;trimmed"
@@ -784,8 +784,9 @@ def test_trimmed_copy_still_too_long_422(lc, live, data):
     assert run_dirs(data) == []
 
 
-def test_a_container_that_understates_its_length_is_cut(lc, live, noaudio):
-    """The header claims 1 s; the clip is 4 s. The run gets the first 2 s (the limit here)."""
+def test_a_container_that_understates_its_length_is_refused(lc, live, noaudio):
+    """The header claims 1 s; the clip is 4 s: its copy (cut at the 2 s limit here) is twice
+    what the header says, so the file is refused, not cut."""
     from lull.api import clip
 
     def lying(path):
@@ -797,10 +798,22 @@ def test_a_container_that_understates_its_length_is_cut(lc, live, noaudio):
 
     live.probe, live.transcode, live.max_seconds = lying, clip.transcode, 2.0
     r = post(lc, noaudio.read_bytes(), name="portrait.mp4")
-    assert types(parse_sse(r.text))[-1] == "done", r.text
-    (job,) = live.runner.jobs
-    assert job.duration == pytest.approx(2.0, abs=0.3)
-    assert clip.probe(job.video).duration == pytest.approx(2.0, abs=0.3)
+    assert r.status_code == 422 and r.json()["error"] == "unsupported"
+    assert "length" in r.json()["message"] and live.runner.jobs == []
+
+
+@pytest.mark.parametrize("copy_secs,ok", [(9.0, True), (8.5, True), (7.0, False), (12.5, False)])
+def test_the_stated_length_must_match_the_copy_within_20_percent(lc, live, copy_secs, ok):
+    def trim(src, dst, seconds, info):
+        Path(dst).write_bytes(f"DUR={copy_secs};".encode())
+        return dst
+
+    live.transcode, live.max_seconds = trim, 60.0
+    r = post(lc, b"DUR=10;")
+    if ok:
+        assert types(parse_sse(r.text))[-1] == "done"
+    else:
+        assert r.status_code == 422 and r.json()["error"] == "unsupported"
 
 
 def test_probe_runs_under_a_time_limit(noaudio):
@@ -2161,9 +2174,9 @@ def test_framework_errors_have_the_error_shape(lc, method, path, status, error):
     assert set(body) == {"error", "message"} and body["error"] == error and body["message"]
 
 
-def _fake_ffprobe(monkeypatch, *, r_rate: str, avg_rate: str, packets: int, duration=10.0):
+def _fake_ffprobe(monkeypatch, *, r_rate: str, avg_rate: str, pts: list, duration=10.0):
     """clip.probe's ffprobe answers: the streams (a MediaRecorder WebM's nominal 1000/1, say)
-    and, when asked to count, the video packets."""
+    and, when asked for the first seconds of packets, their times (`pts`, demux order)."""
     import subprocess
 
     from lull.api import clip
@@ -2172,8 +2185,9 @@ def _fake_ffprobe(monkeypatch, *, r_rate: str, avg_rate: str, packets: int, dura
 
     def run(cmd, timeout):
         calls.append((cmd, timeout))
-        if "-count_packets" in cmd:
-            out = {"streams": [{"nb_read_packets": str(packets)}]}
+        if "-read_intervals" in cmd:
+            text = "".join(f"{t}\n" for t in pts)
+            return subprocess.CompletedProcess(cmd, 0, text.encode(), b"")
         else:
             out = {
                 "format": {"duration": str(duration), "format_name": "matroska,webm",
@@ -2192,23 +2206,34 @@ def _fake_ffprobe(monkeypatch, *, r_rate: str, avg_rate: str, packets: int, dura
 
 
 def test_an_implausible_stated_frame_rate_is_measured(monkeypatch):
-    """A browser recording states 1000 frames a second: the rate that counts is the packets
-    the video stream has over its length, counted under the probe's time limit."""
+    """A browser recording states 1000 frames a second: the rate that counts is measured from
+    the video packets of its first 5 s, (packets - 1) / their time span, never from the
+    duration the header states, under the probe's time limit."""
     from lull.api import clip
 
-    calls = _fake_ffprobe(monkeypatch, r_rate="1000/1", avg_rate="0/0", packets=300)
+    times = [i / 30 for i in range(151)]  # 30 a second for 5 s, B-frame order shuffled a bit
+    times[3], times[4] = times[4], times[3]
+    calls = _fake_ffprobe(monkeypatch, r_rate="1000/1", avg_rate="0/0", pts=times, duration=999)
     info = clip.probe(Path("rec.webm"))
     assert info.fps == pytest.approx(30.0) and info.videos[0][2] == pytest.approx(30.0)
     assert clip.over_limits(info) is None
-    counted = [c for c in calls if "-count_packets" in c[0]]
-    assert len(counted) == 1 and counted[0][1] == clip.PROBE_TIMEOUT
-    assert "v:0" in counted[0][0]
+    read = [c for c in calls if "-read_intervals" in c[0]]
+    assert len(read) == 1 and read[0][1] == clip.PROBE_TIMEOUT
+    assert "v:0" in read[0][0] and "%+5" in read[0][0]
+
+
+@pytest.mark.parametrize("times", [[], [1.0], [2.0, 2.0, 2.0], ["N/A", "N/A"]])
+def test_a_rate_that_cannot_be_measured_is_refused(monkeypatch, times):
+    from lull.api import clip
+
+    _fake_ffprobe(monkeypatch, r_rate="1000/1", avg_rate="0/0", pts=times)
+    assert "could not be measured" in clip.over_limits(clip.probe(Path("rec.webm")))
 
 
 def test_a_measured_rate_over_the_limit_is_refused(monkeypatch):
     from lull.api import clip
 
-    _fake_ffprobe(monkeypatch, r_rate="1000/1", avg_rate="0/0", packets=1200)
+    _fake_ffprobe(monkeypatch, r_rate="1000/1", avg_rate="0/0", pts=[i / 120 for i in range(601)])
     info = clip.probe(Path("rec.webm"))
     assert "120 frames a second" in clip.over_limits(info)
 
@@ -2216,6 +2241,6 @@ def test_a_measured_rate_over_the_limit_is_refused(monkeypatch):
 def test_a_plausible_stated_rate_is_not_counted(monkeypatch):
     from lull.api import clip
 
-    calls = _fake_ffprobe(monkeypatch, r_rate="30/1", avg_rate="30/1", packets=10**6)
+    calls = _fake_ffprobe(monkeypatch, r_rate="30/1", avg_rate="30/1", pts=[0.0, 0.001])
     assert clip.probe(Path("rec.webm")).fps == 30.0
-    assert not any("-count_packets" in c[0] for c in calls)
+    assert not any("-read_intervals" in c[0] for c in calls)
