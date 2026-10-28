@@ -7,6 +7,7 @@
 .slot{position:relative;height:52px;display:flex;align-items:center;justify-content:center;border:1px dashed rgb(var(--lamp-rgb) / .35);font-size:var(--fs-micro);font-weight:500;color:var(--cream-2);background:radial-gradient(60% 90% at 50% 100%,rgb(var(--lamp-rgb) / .12),transparent 75%)}
 .filled{border-style:solid}
 .value{font-family:var(--f-mono);font-size:var(--fs-mono);color:var(--lamp-0)}
+.detail{display:block;margin-top:8px;font-size:var(--fs-micro);line-height:1.45;color:var(--cream-2)}
 
 .method{grid-column:1 / span 8;font-size:var(--fs-small)}
 .methodLink{font-weight:600;color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}

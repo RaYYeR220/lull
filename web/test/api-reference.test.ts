@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { SNAPSHOT, apiSrc, readCodes } from "../scripts/api-codes.mjs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { API_REFUSALS } from "../lib/api";
@@ -52,19 +53,13 @@ describe("the endpoint reference", () => {
   });
 });
 
-/** The API's own source (read-only), where every refusal is a LiveError(<status>, "<code>", …). */
-const API_SRC = "C:/Users/egori/Desktop/projects/lull-api/engine/src/lull/api";
+/** Every code the API raises, with its statuses: a snapshot of its source (scripts/api-codes.mjs). */
+const SNAP = JSON.parse(readFileSync(SNAPSHOT, "utf8")) as { codes: Record<string, number[]> };
+const API_SRC = apiSrc();
 
 describe("the reference against the API's source", () => {
-  it.skipIf(!existsSync(API_SRC))(`every code the API raises is documented and known to the client (reads ${API_SRC}; skipped where it isn't checked out)`, () => {
-    const raised = new Map<string, Set<number>>();
-    for (const f of readdirSync(API_SRC).filter((x) => x.endsWith(".py"))) {
-      for (const m of readFileSync(path.join(API_SRC, f), "utf8").matchAll(/LiveError\(\s*(\d{3}),\s*"([a-z_]+)"/g)) {
-        const set = raised.get(m[2]!) ?? new Set<number>();
-        set.add(Number(m[1]));
-        raised.set(m[2]!, set);
-      }
-    }
+  it("every code the API raises is documented and known to the client, with the API's statuses", () => {
+    const raised = new Map(Object.entries(SNAP.codes).map(([c, st]) => [c, new Set(st)]));
     expect(raised.size).toBeGreaterThan(10);
     const documented = new Map<string, Set<number>>();
     for (const d of Object.values(API_REFERENCE)) for (const r of d.refusals) documented.set(r.code, (documented.get(r.code) ?? new Set()).add(r.status));
@@ -73,6 +68,10 @@ describe("the reference against the API's source", () => {
     // each documented status is one the API raises that code with
     const wrong = [...documented].flatMap(([code, statuses]) => [...statuses].filter((st) => raised.has(code) && !raised.get(code)!.has(st)).map((st) => `${st} ${code}`));
     expect(wrong, "documented with a status the API never uses").toEqual([]);
+  });
+
+  it.skipIf(!existsSync(API_SRC))("the snapshot still matches the API's source (where it is checked out; LULL_API_SRC names it)", () => {
+    expect(readCodes(API_SRC), "re-run node scripts/api-codes.mjs").toEqual(SNAP.codes);
   });
 
   it("the live start documents what the API says about long clips and its own storage", () => {

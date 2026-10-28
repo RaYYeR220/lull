@@ -38,7 +38,7 @@ cite{font-style:italic}
 .ruled{background-image:var(--ruled)}
 
 /* ===================================================================
-   Type roles (TOKENS.md, "Type"). Italic Newsreader is a voice:
+   Type roles. Italic Newsreader is a voice:
    quotes and spoken lines only, never emphasis.
    =================================================================== */
 .t-display-1,.t-display-2,.t-quote,.t-proof,.t-proof-spoken,.t-numeral-xl,.t-numeral-l,.t-verb,.t-title,.t-title-s,.t-step-index,.t-cue,.t-pause,.t-wordmark{

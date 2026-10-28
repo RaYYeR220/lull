@@ -26,16 +26,16 @@ export type SiteLink = {
 export const NAV_LINKS: readonly SiteLink[] = [
   { href: "/try", label: "Try it", live: true },
   { href: "/studio", label: "Studio", live: true },
-  // the recorded runs, until the library (Plan 4) has its own page
+  // the recorded runs
   { href: "/watch", label: "Library", live: true },
   { href: "/developers", label: "Developers", live: true },
-  { href: "/benchmarks", label: "Benchmarks", live: false },
+  { href: "/benchmarks", label: "Benchmarks", live: true },
 ];
 
 export const FOOTER_LINKS: readonly SiteLink[] = [
   { href: REPO_URL, label: "GitHub", live: true },
   { href: "/developers", label: "Docs", live: true },
-  { href: "/benchmarks", label: "Benchmarks", live: false },
+  { href: "/benchmarks", label: "Benchmarks", live: true },
 ];
 
 /** Prefetch setting for a link to `href`: default for live routes, off for routes not built yet (and pages under them). */

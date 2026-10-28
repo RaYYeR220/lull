@@ -1,12 +1,26 @@
 import { Figtree, IBM_Plex_Mono, Newsreader } from "next/font/google";
 
-/** Display and the voice: variable, optical size axis, roman and italic. */
+/** Display: variable, optical size axis, roman. Preloaded: the headings are the first paint. */
 export const newsreader = Newsreader({
   subsets: ["latin"],
-  style: ["normal", "italic"],
+  style: ["normal"],
   axes: ["opsz"],
   display: "swap",
   variable: "--font-newsreader",
+});
+
+/**
+ * The voice: the same family's italic, declared apart so it isn't preloaded (it is for spoken
+ * lines and quotes, never the first paint). Both declare the family "Newsreader", so text set
+ * in italic finds these faces through --font-newsreader.
+ */
+export const newsreaderItalic = Newsreader({
+  subsets: ["latin"],
+  style: ["italic"],
+  axes: ["opsz"],
+  display: "swap",
+  preload: false,
+  variable: "--font-newsreader-italic",
 });
 
 /** Body and interface. */

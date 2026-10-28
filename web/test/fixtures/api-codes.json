@@ -1,0 +1,87 @@
+{
+  "from": "lull-api engine/src/lull/api/*.py",
+  "codes": {
+    "budget": [
+      402
+    ],
+    "busy": [
+      409
+    ],
+    "disconnected": [
+      400
+    ],
+    "engine": [
+      502
+    ],
+    "forbidden": [
+      403
+    ],
+    "fork_failed": [
+      500
+    ],
+    "format": [
+      422
+    ],
+    "invalid": [
+      400,
+      422
+    ],
+    "invalid_transition": [
+      409
+    ],
+    "lint": [
+      422
+    ],
+    "not_editable": [
+      409
+    ],
+    "not_found": [
+      404
+    ],
+    "not_ready": [
+      409
+    ],
+    "not_voiced": [
+      409
+    ],
+    "one_upload_at_a_time": [
+      429
+    ],
+    "overlap": [
+      409
+    ],
+    "overloaded": [
+      503
+    ],
+    "publish_failed": [
+      500
+    ],
+    "rate_limited": [
+      429
+    ],
+    "read_only": [
+      403
+    ],
+    "sample": [
+      422
+    ],
+    "storage": [
+      503
+    ],
+    "timeout": [
+      408
+    ],
+    "too_large": [
+      413
+    ],
+    "too_long": [
+      422
+    ],
+    "unreadable": [
+      422
+    ],
+    "uploads_busy": [
+      503
+    ]
+  }
+}

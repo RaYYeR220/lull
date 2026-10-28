@@ -47,10 +47,10 @@
 .mode .optTitle{font-size:15px}
 
 .voice{display:flex;flex-direction:column;gap:8px}
-.select{appearance:none;width:100%;max-width:240px;height:40px;padding:0 36px 0 12px;border:1px solid var(--hair-strong);border-radius:var(--radius);
+.select{appearance:none;width:100%;max-width:240px;height:40px;padding:0 36px 0 12px;border:1px solid rgb(var(--cream-rgb) / .45);border-radius:var(--radius);
   background:var(--night-3) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23aca491' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 13px center;
   font:inherit;font-size:15px;color:var(--cream-0);cursor:pointer}
-.select:hover{border-color:rgb(var(--cream-rgb) / .4)}
+.select:hover{border-color:rgb(var(--cream-rgb) / .62)}
 .select option{background:var(--night-2);color:var(--cream-0)}
 
 .estimate{font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-2)}

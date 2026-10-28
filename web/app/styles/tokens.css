@@ -1,8 +1,8 @@
 /* ===================================================================
    Lull / Nocturne: design tokens
-   The first block is TOKENS.md copied 1:1. The only change: each face
-   leads with the self-hosted next/font family (set on <html> in the
-   root layout); the fallback chain after it is unchanged.
+   The first block is the design system's base tokens. Each face leads
+   with the self-hosted next/font family (set on <html> in the root
+   layout), then a fallback chain.
    =================================================================== */
 :root{
   /* night: the room */
@@ -39,8 +39,8 @@
 }
 
 /* ===================================================================
-   Derived tokens: the tables in TOKENS.md ("Type", "Space, grid,
-   shape", "Texture floor", "Focus and interaction") as properties.
+   Derived tokens: type, space, grid and shape, the texture floor, and
+   focus and interaction, as properties.
    =================================================================== */
 :root{
   /* type scale: size / line-height / tracking per role */

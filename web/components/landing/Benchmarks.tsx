@@ -40,9 +40,13 @@ export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData
                 <h3 className="t-title">{m.name}</h3>
                 <p>{m.what}</p>
                 {got ? (
-                  <span className={cx(styles.slot, styles.filled)} title={got.detail}>
-                    <span className={styles.value}>{got.value}</span>
-                  </span>
+                  <>
+                    <span className={cx(styles.slot, styles.filled)}>
+                      <span className={styles.value}>{got.value}</span>
+                    </span>
+                    {/* the denominator and interval, in view: a tooltip reaches no keyboard or touch */}
+                    {got.detail ? <span className={styles.detail}>{got.detail}</span> : null}
+                  </>
                 ) : (
                   <span className={styles.slot}>Not yet measured</span>
                 )}

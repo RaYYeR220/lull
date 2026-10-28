@@ -8,8 +8,8 @@ export const MOCK_API_PORT = Number(process.env.MOCK_API_PORT ?? 3218);
 
 // E2E_CHROMIUM_PATH picks the browser. Without it, use the Chromium build on this
 // machine when it is there, otherwise Playwright's own download.
-const LOCAL_CHROMIUM = "C:/Users/egori/AppData/Local/ms-playwright/chromium-1248/chrome-win64/chrome.exe";
-const executablePath = process.env.E2E_CHROMIUM_PATH || (existsSync(LOCAL_CHROMIUM) ? LOCAL_CHROMIUM : undefined);
+const LOCAL_CHROMIUM = process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}/ms-playwright/chromium-1248/chrome-win64/chrome.exe` : "";
+const executablePath = process.env.E2E_CHROMIUM_PATH || (LOCAL_CHROMIUM && existsSync(LOCAL_CHROMIUM) ? LOCAL_CHROMIUM : undefined);
 
 export default defineConfig({
   testDir: "./e2e",
