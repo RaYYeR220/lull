@@ -374,6 +374,16 @@ def described_events(parts: dict[str, str], text: str) -> list[str] | None:
     return out
 
 
+def refresh_described(cue: Cue) -> Cue:
+    """`cue` with `described` recomputed from its parts and its current text (described_events;
+    None when it lacks the parts of any of its events). Required after any change to a cue's
+    text, such as an edit in the Studio: coverage and F113 read `described`, and a stale value
+    would count an event the new text no longer mentions."""
+    parts = {i: cue.parts[i] for i in cue.event_ids if i in cue.parts}
+    described = described_events(parts, cue.text) if len(parts) == len(cue.event_ids) else None
+    return cue.model_copy(update={"described": described})
+
+
 # -- one cue -------------------------------------------------------------------------------------
 
 
@@ -483,10 +493,7 @@ class _Finalise:
         )
 
     def _described(self) -> list[str] | None:
-        parts = {i: self.cue.parts[i] for i in self.cue.event_ids if i in self.cue.parts}
-        if len(parts) != len(self.cue.event_ids):
-            return None  # composed elsewhere: the line is taken to describe all of them
-        return described_events(parts, self.text)
+        return refresh_described(self.cue.model_copy(update={"text": self.text})).described
 
     def held(self, reason: str) -> Cue:
         """Held for a person; it keeps its placement, look-ahead included."""

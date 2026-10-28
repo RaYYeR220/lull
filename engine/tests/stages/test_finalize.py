@@ -17,6 +17,7 @@ from lull.stages.finalize import (
     introduce_names,
     names_in,
     overlap_report,
+    refresh_described,
     split_sentences,
 )
 from lull.stages.verify import (
@@ -1156,3 +1157,19 @@ def test_repeated_claims_are_judged_once():
     assert [(c.text, c.verdict) for c in got] == [
         ("A cat sits", "not_visible"), ("A dog barks", "supported")
     ]  # fmt: skip
+
+
+# -- Task 17 ------------------------------------------------------------------------------------
+
+
+def test_refresh_described_follows_an_edited_text():
+    """The Studio edit path: after a person changes the text, `described` is recomputed from
+    the cue's parts, so coverage never counts an event the new text dropped."""
+    parts = {"e001": "A person opens a door.", "e002": "A cat sleeps on the mat."}
+    cue = _cue("A person opens a door. A cat sleeps on the mat.", event_ids=["e001", "e002"],
+               parts=parts, described=["e001", "e002"], status="edited")  # fmt: skip
+    edited = cue.model_copy(update={"text": "A cat sleeps on the mat."})
+    fresh = refresh_described(edited)
+    assert fresh.described == ["e002"] and edited.described == ["e001", "e002"]
+    assert fresh.model_copy(update={"described": edited.described}) == edited  # nothing else
+    assert refresh_described(_cue("Anything.", parts={})).described is None  # no parts
