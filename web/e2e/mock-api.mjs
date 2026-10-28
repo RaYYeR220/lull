@@ -22,6 +22,7 @@
 //
 // Run: node e2e/mock-api.mjs [port]   (MOCK_API_PORT also works; default 3218)
 
+import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { FORK_ID, FORK_TOKEN, RUN_ID, RUN_TOKEN, runRoutes } from "./mock-runs.mjs";
 
@@ -85,7 +86,10 @@ function script() {
     [77.9, "stage_start", "publish", {}],
     [85.8, "stage_end", "publish", { seconds: 7.9, cached: false, files: 14 }],
   ];
-  const spent = events.filter((e) => e[1] === "call").reduce((n, e) => n + e[3].cost_usd, 0);
+  // model spend only: a search is counted, never priced (lull.api.spend)
+  const calls = events.filter((e) => e[1] === "call");
+  const spent = calls.filter((e) => e[3].provider !== "tavily").reduce((n, e) => n + e[3].cost_usd, 0);
+  const searches = calls.filter((e) => e[3].provider === "tavily").length;
   events.push([
     86.0,
     "done",
@@ -101,6 +105,7 @@ function script() {
         f113: [],
         cost_usd: Number(spent.toFixed(6)),
         cost_per_min: Number((spent / 1.5).toFixed(6)),
+        spend: { model_usd: Number(spent.toFixed(6)), model_usd_all_runs: Number(spent.toFixed(6)), searches },
         wcag: [
           { criterion: "1.2.3", level: "A", name: "Audio Description or Media Alternative (Prerecorded)", status: "needs review", via: "descriptions.vtt, script.md", reasons: ["1 description held for review"] },
           { criterion: "1.2.5", level: "AA", name: "Audio Description (Prerecorded)", status: "needs review", via: "described.mp4 and described-audio.m4a", reasons: ["1 description held for review"] },
@@ -205,9 +210,10 @@ const server = createServer(async (req, res) => {
   const [, scenario, route] = m;
 
   if (req.method === "GET" && route === "/v1/health") {
-    const budget = { spent_today: 0.412, cap_day: 5, spent_total: 3.274, cap_total: 50 };
+    // /v1/health as app.py answers: model spend against its caps, searches counted, retention
+    const budget = { spent_today: 0.412, cap_day: 5, spent_total: 3.274, cap_total: 50, searches_today: 4, searches_cap_day: 60, cap_run: 0.1, searches_cap_run: 3 };
     if (scenario === "spent") budget.spent_today = 5;
-    return json(res, 200, { ok: true, speech: scenario !== "nospeech", live_busy: scenario === "busy", budget });
+    return json(res, 200, { ok: true, speech: scenario !== "nospeech", budget, live_busy: scenario === "busy", retention_days: 7, fork_retention_hours: 24 });
   }
   if (req.method === "GET" && route === "/v1/samples") return json(res, 200, SAMPLES);
 
@@ -254,12 +260,12 @@ const server = createServer(async (req, res) => {
   json(res, 404, { detail: "Not Found" });
 });
 
-/** The API's samples (engine/samples/samples.json): up to 45 s each, with their metadata. */
-const SAMPLES = [
-  { id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "U.S. Geological Survey", licence: "public domain" },
-  { id: "ed45", title: "Elephants Dream, an excerpt", duration: 45.0, credit: "Elephants Dream (2006), Blender Foundation / Orange Open Movie Team", licence: "CC BY 2.5" },
-  { id: "tos45", title: "Tears of Steel, an excerpt", duration: 45.0, credit: "Tears of Steel (2012), Blender Foundation", licence: "CC BY 3.0" },
-];
+/**
+ * The API's samples as GET /v1/samples serves them (engine/samples/samples.json, the fields
+ * it keeps). ed45 and tos45 are the API's own entries; bbb45's is a stand-in in the same shape
+ * until the API ships it. Sorted by id, as the API lists them.
+ */
+const SAMPLES = JSON.parse(readFileSync(new URL("./fixtures/api-samples.json", import.meta.url), "utf8"));
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`mock api on http://127.0.0.1:${PORT}`);

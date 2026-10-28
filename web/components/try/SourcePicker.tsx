@@ -11,6 +11,7 @@ import {
   budgetEstimate,
   capReached,
   type Budget,
+  type Retention,
   type Mode,
   type RunInput,
   type RunOptions,
@@ -18,6 +19,7 @@ import {
 import { cx } from "@/lib/cx";
 import { watchHref } from "@/lib/routes";
 import { clock, megabytes, usdShort } from "@/lib/run-format";
+import { DEFAULT_RETENTION } from "@/lib/own-runs";
 import { sampleTooLong, type SampleItem } from "@/lib/samples";
 import type { RunSource } from "@/lib/run-state";
 import { isoDuration } from "@/lib/timecode";
@@ -91,12 +93,16 @@ type Props = {
   samples: SampleItem[] | null;
   service: "loading" | "ok" | "down";
   budget: Budget | null;
+  /** How long the service keeps uploads and copies, when its health says. */
+  retention?: Retention | null;
   headingRef: Ref<HTMLHeadingElement>;
   onStart: (input: RunInput, source: RunSource, opts: RunOptions) => void;
 };
 
 /** Choose a sample or a file, a mode and a voice, then start. */
-export function SourcePicker({ samples, service, budget, headingRef, onStart }: Props) {
+export function SourcePicker({ samples, service, budget, retention, headingRef, onStart }: Props) {
+  const keepDays = retention?.uploadDays ?? DEFAULT_RETENTION.uploadDays;
+  const keepHours = retention?.forkHours ?? DEFAULT_RETENTION.forkHours;
   const uid = useId();
   const [picked, setPicked] = useState<string | null>(null);
   const [file, setFile] = useState<FileState | null>(null);
@@ -234,7 +240,7 @@ export function SourcePicker({ samples, service, budget, headingRef, onStart }: 
             <p id={privacyId} className={styles.privacy} data-privacy="">
               <b>Where your clip goes.</b> It is sent to Nebius Token Factory, where NVIDIA Nemotron models watch it and write the lines, and
               NVIDIA speech models on our server transcribe and voice it. Anyone with the finished run’s link can open it and its files.
-              Uploads are deleted after 7 days, and copies made in the studio after 24 hours. Don’t upload anything private.
+              Uploads are deleted after {keepDays} days, and copies made in the studio after {keepHours} hours. Don’t upload anything private.
             </p>
             <div className={styles.drop}>
               <input
@@ -305,16 +311,25 @@ export function SourcePicker({ samples, service, budget, headingRef, onStart }: 
         </fieldset>
 
         <div className={styles.voice}>
-          <label htmlFor={`${uid}-voice`} className={shared.label}>
-            Voice
-          </label>
-          <select id={`${uid}-voice`} value={voice} onChange={(e) => setVoice(e.currentTarget.value)} className={styles.select}>
-            {VOICES.map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
+          {VOICES.length > 1 ? (
+            <>
+              <label htmlFor={`${uid}-voice`} className={shared.label}>
+                Voice
+              </label>
+              <select id={`${uid}-voice`} value={voice} onChange={(e) => setVoice(e.currentTarget.value)} className={styles.select}>
+                {VOICES.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            // one built-in voice: nothing to choose, so it is said, not offered
+            <p className={styles.oneVoice} data-voice="">
+              <span className={shared.label}>Voice</span> {voice}
+            </p>
+          )}
         </div>
 
         <p className={styles.estimate}>

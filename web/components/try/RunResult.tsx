@@ -67,7 +67,8 @@ export function RunResult({ runId, summary, elapsed, cost, cues, onAgain, ref }:
           {verdict(voiced, held)}
         </h3>
         <p className={styles.took}>
-          Finished in {clock(elapsed)}, for {usd(spend)} in model calls.
+          Finished in {clock(elapsed)}, for {usd(spend)} in model calls
+          {summary?.searches ? ` and ${summary.searches} web ${summary.searches === 1 ? "search" : "searches"}` : ""}.
         </p>
         <dl className={styles.figs}>
           {figures.map((f) => (

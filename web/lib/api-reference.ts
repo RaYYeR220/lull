@@ -22,7 +22,7 @@ export type EndpointDoc = {
   group: "Live runs" | "Reading runs" | "Studio";
   summary: string;
   /** "edit-token": Authorization: Bearer <the run's edit token>. */
-  auth: "none" | "edit-token" | "edit-token to resume";
+  auth: "none" | "edit-token" | "edit-token to resume" | "edit-token to see an unfinished run";
   body?: { type: "multipart/form-data" | "application/json"; fields: Field[] };
   /** Path and query parameters. */
   params?: Field[];
@@ -53,30 +53,46 @@ const CUE_SHAPE = `{
   "audio_dur": 2.322,
   "tempo": 1.0,
   "findings": [{ "rule": "R14-gender", "message": "gendered word; confirm the programme establishes it", "span": [4, 7], "severity": "warning" }],
-  "note": null
+  "note": null,
+  "extended": false
 }`;
 
 const DETAIL_SHAPE = `{
+  "id": "live-20261028-de7ca0a30ae1f82a26beeccb",
+  "kind": "live",
+  "status": "done",
+  "source": { "kind": "sample", "sample_id": "ed45" },
+  "title": "ed45.mp4",
+  "duration": 44.917,
+  "created": "2026-10-28T09:16:42+00:00",
+  "error": null,
+  "dirty": false,
+  "wps": 3.05,
+  "speech": [[0.24, 1.68], [2.08, 4.8], [5.36, 9.09], …],
+  "gaps": [{ "id": "g001", "start": 9.29, "end": 15.64, "capacity": 19 }, …],
+  "loudness": [-29.4, -29.9, -30.4, -35.0, …],
+  "loudness_hop_s": 0.1,
+  "original": "/v1/runs/live-20261028-de7ca0a30ae1f82a26beeccb/original",
   "manifest": {
-    "run_id": "live-20261028-091500-…",
+    "run_id": "live-20261028-de7ca0a30ae1f82a26beeccb",
     "created": "2026-10-28T09:16:42+00:00",
-    "video": { "name": "lecture.mp4", "duration": 58.2, "sha256": "…" },
-    "options": { "mode": "standard", "profile": "education", "voice": "Sofia", "language": "en" },
-    "outputs": { "descriptions.vtt": { "sha256": "…", "bytes": 1182 }, "described-audio.m4a": { … }, … },
+    "video": { "name": "ed45.mp4", "duration": 44.917, "sha256": "…" },
+    "options": { "mode": "extended", "profile": "education", "voice": "Sofia", "language": "en" },
+    "outputs": { "descriptions.vtt": { "sha256": "…", "bytes": 612 }, "described-audio.m4a": { … }, … },
     "summary": {
-      "cues": { "verified": 7, "edited": 0, "approved": 0, "held": 1, "extended": 2 },
-      "coverage": { "important_events": 9, "described": 8, "ratio": 0.889, … },
+      "cues": { "verified": 5, "edited": 0, "approved": 0, "held": 0, "extended": 1 },
+      "coverage": { "important_events": 6, "described": 5, "ratio": 0.833, … },
       "overlap_seconds": 0.0,
-      "held": [{ "id": "c004", "reason": "…" }],
-      "wcag": [{ "criterion": "1.2.5", "level": "AA", "status": "needs review", "via": "…", "reasons": ["1 description held for review"] }],
-      "cost_usd": 0.0466,
-      "spend": { "models_usd": 0.0466, "tavily_credits": 1.0 },
+      "held": [],
+      "wcag": [{ "criterion": "1.2.5", "level": "AA", "status": "met (automated checks)", "via": "…", "reasons": [] }],
+      "cost_usd": 0.03323,
+      "spend": { "model_usd": 0.03323, "model_usd_all_runs": 0.03323, "searches": 1 },
+      "repetitive": [],
       …
     },
-    "versions": { "engine": "…", "models": ["nvidia/Nemotron-3-Ultra-550b-a55b", …], "tts": "NVIDIA Magpie TTS" }
+    "versions": { "engine": "…", "models": ["nvidia/Nemotron-3-Ultra-550b-a55b", …], "tts": "Magpie TTS Multilingual" }
   },
-  "cues": { "run_id": "…", "language": "en", "cues": [ <cue>, … ], "extended": [ <cue>, … ] },
-  "dirty": false
+  "cues": { "run_id": "…", "language": "en", "cues": [ <cue>, … ], "extended": [ <cue>, … ] }
 }`;
 
 const ID: Field = { name: "id", type: "path", required: true, what: "The run id (letters, digits, . _ -; at most 80)." };
@@ -86,28 +102,30 @@ const READ_ONLY: Refusal = { status: 403, code: "read_only", when: "The run is a
 const FORBIDDEN: Refusal = { status: 403, code: "forbidden", when: "No Authorization: Bearer with this run's edit token." };
 const NO_RUN: Refusal = { status: 404, code: "not_found", when: "No run, or no cue, with that id." };
 const DESCRIBING: Refusal = { status: 409, code: "busy", when: "The run is still being described.", retryAfter: true };
-const NOT_READY: Refusal = { status: 409, code: "not_ready", when: "The run isn't published yet." };
+const NOT_READY: Refusal = { status: 409, code: "not_ready", when: "The run isn't done (published) yet." };
 const NOT_EDITABLE: Refusal = { status: 409, code: "not_editable", when: "The run's folder lacks what re-checking needs (its source video or stage records)." };
 const EDIT_RATE: Refusal = { status: 429, code: "rate_limited", when: "More than 30 changes a minute from you, or 2,000 a day in all.", retryAfter: true };
 
 export const API_REFERENCE: Record<RouteName, EndpointDoc> = {
   health: {
     group: "Live runs",
-    summary: "Whether the live service can take a run: the speech server, a run in progress, and the spend so far against its caps.",
+    summary: "Whether the live service can take a run: the speech server, a run in progress, the model spend so far against its caps, the web searches made today, and how long runs are kept.",
     auth: "none",
     success: {
       status: 200,
       type: "application/json",
-      what: "Cached for 10 s, except live_busy. Spend is in USD: model calls and web searches together, then apart.",
+      what:
+        "Cached for 10 s, except live_busy. Spend is model calls, in USD; a cap of null is none, a cap of 0 refuses every call. Web searches are counted, never priced. Uploads are kept retention_days, copies made in the studio fork_retention_hours.",
       shape: `{
   "ok": true,
   "speech": true,
-  "live_busy": false,
   "budget": {
-    "cap_day": 3.0, "cap_total": 35.0,
-    "spent_today": 0.41, "models_today": 0.40, "tavily_credits_today": 1.0,
-    "spent_total": 3.27, "models_total": 3.19, "tavily_credits_total": 9.0
-  }
+    "spent_today": 0.0332, "cap_day": 3.0, "spent_total": 3.27, "cap_total": 35.0, "cap_run": 0.1,
+    "searches_today": 1, "searches_cap_day": 60, "searches_cap_run": 3
+  },
+  "live_busy": false,
+  "retention_days": 7.0,
+  "fork_retention_hours": 24.0
 }`,
     },
     refusals: [],
@@ -120,14 +138,19 @@ export const API_REFERENCE: Record<RouteName, EndpointDoc> = {
     success: {
       status: 200,
       type: "application/json",
-      what: "Each sample's id (pass it as sample to POST /v1/runs), title, length in seconds, credit and licence.",
+      what:
+        "Each sample (its samples.json entry): the id to pass as sample to POST /v1/runs, its title, credit, licence and the licence's address, where it was cut from, what was changed, and its length in seconds. An API without samples.json lists ids alone.",
       shape: `[
-  { "id": "csc_intro", "title": "Climate Science Champions, introduction", "duration": 44.9,
-    "credit": "U.S. Geological Survey", "licence": "public domain" },
-  { "id": "ed45", "title": "Elephants Dream, an excerpt", "duration": 45.0,
-    "credit": "Elephants Dream (2006), Blender Foundation / Orange Open Movie Team", "licence": "CC BY 2.5" },
-  { "id": "tos45", "title": "Tears of Steel, an excerpt", "duration": 45.0,
-    "credit": "Tears of Steel (2012), Blender Foundation", "licence": "CC BY 3.0" }
+  {
+    "id": "ed45", "file": "ed45.mp4", "title": "Elephants Dream (excerpt)",
+    "credit": "Orange Open Movie Team / Blender Foundation, elephantsdream.org",
+    "licence": "CC BY 2.5", "licence_url": "https://creativecommons.org/licenses/by/2.5/",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm",
+    "excerpt": "1:00-1:44.9",
+    "changes": "cut to 44.9 s and re-encoded at 854x480 (H.264 CRF 26, AAC 96 kb/s)",
+    "duration": 44.917
+  },
+  { "id": "tos45", "file": "tos45.mp4", "title": "Tears of Steel (excerpt)", "licence": "CC BY 3.0", … }
 ]`,
     },
     refusals: [],
@@ -143,7 +166,7 @@ export const API_REFERENCE: Record<RouteName, EndpointDoc> = {
         { name: "file", type: "file", required: false, what: "The video: mp4, mov, webm or mkv, up to 60 s and 30 MB; longer clips are refused (too_long)." },
         { name: "sample", type: "string", required: false, what: "A sample id instead of a file (samples run up to 45 s)." },
         { name: "mode", type: "standard | extended", required: false, what: "extended also writes long versions for the extended track. Default standard." },
-        { name: "voice", type: "Sofia | Aria", required: false, what: "The voice. Default Sofia." },
+        { name: "voice", type: "Sofia", required: false, what: "The voice: Sofia, the one built-in voice (the default)." },
       ],
     },
     success: {
@@ -169,7 +192,13 @@ data: {"type":"cue","stage":"finalize","seq":21,"id":"c001","status":"verified",
 
 id: 30
 event: done
-data: {"type":"done","seq":30,"run_id":"live-…","seconds":85.9,"summary":{"cues":{…},"coverage":{…},"wcag":[…],"cost_usd":0.0466,…}}`,
+id: 14
+event: call
+data: {"type":"call","stage":"research","seq":14,"role":"research","model":"tavily-search","provider":"tavily","latency_s":2.6}
+
+id: 30
+event: done
+data: {"type":"done","seq":30,"run_id":"live-…","seconds":182.4,"summary":{"cues":{…},"coverage":{…},"wcag":[…],"cost_usd":0.03323,"spend":{"model_usd":0.03323,"model_usd_all_runs":0.03323,"searches":1},…}}`,
     },
     refusals: [
       { status: 400, code: "invalid", when: "The body couldn't be read as a form." },
@@ -199,13 +228,14 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":85.9,"summary":{"cue
     success: {
       status: 200,
       type: "application/json",
-      what: "status is published, running or failed. Cached for 5 s.",
+      what:
+        "status: running (being described now), done (published), failed, or stopped (unfinished; its owner may resume it). Spend is model calls in USD and web searches as a count. Cached for 5 s.",
       shape: `[
   {
     "id": "live-…", "kind": "live", "title": "ed45.mp4", "duration": 45.0,
-    "created": "2026-10-28T09:16:42+00:00", "status": "published",
-    "cost_usd": 0.0466, "spend": { "models_usd": 0.0466, "tavily_credits": 1.0 },
-    "cues": { "verified": 7, "edited": 0, "approved": 0, "held": 1, "extended": 2 }
+    "created": "2026-10-28T09:16:42+00:00", "status": "done",
+    "cost_usd": 0.03323, "spend": { "model_usd": 0.03323, "model_usd_all_runs": 0.03323, "searches": 1 },
+    "cues": { "verified": 5, "edited": 0, "approved": 0, "held": 0, "extended": 1 }
   }
 ]`,
     },
@@ -214,16 +244,18 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":85.9,"summary":{"cue
   },
   run: {
     group: "Reading runs",
-    summary: "A published run: its manifest (files, summary, WCAG statuses, versions) and every cue with its checks.",
-    auth: "none",
+    summary:
+      "Any run, by its id: where it stands and where it came from, its timeline, soundtrack levels and original video, and once it is done its manifest (files, summary, WCAG statuses, versions) and every cue with its checks.",
+    auth: "edit-token to see an unfinished run",
     params: [ID],
     success: {
       status: 200,
       type: "application/json",
-      what: "dirty: changed in the studio since it was last published. Local paths never appear: a cue's take is an audio_url.",
+      what:
+        "status as in the list. A run that isn't done shows anyone but its owner only { id, status, source: { kind }, created }; send its edit token as a Bearer for the rest. source: { kind: sample, sample_id }, { kind: upload }, or { kind: fork, forked_from, origin, sample_id? }. speech and gaps (usable windows, capacity in words) come from its cues; loudness is dBFS per loudness_hop_s, null when none was kept; original is null until it is done. dirty: changed in the studio since it was last published. Local paths never appear: a cue's take is an audio_url.",
       shape: DETAIL_SHAPE,
     },
-    refusals: [{ status: 404, code: "not_found", when: "No published run with that id (one still running has no manifest yet)." }],
+    refusals: [{ status: 404, code: "not_found", when: "No run with that id (never made, or removed: uploads after 7 days, copies after 24 hours)." }],
     example: `curl -s "$LULL_API/v1/runs/$RUN"`,
   },
   events: {
@@ -246,6 +278,15 @@ data: {"type":"done","seq":31,…}`,
       { status: 402, code: "budget", when: "Resuming, past a spend cap." },
     ],
     example: `curl -N "$LULL_API/v1/runs/$RUN/events?after=10"`,
+  },
+  original: {
+    group: "Reading runs",
+    summary: "The video a done run described, with byte ranges. HEAD works too.",
+    auth: "none",
+    params: [ID],
+    success: { status: 200, type: "video/mp4", what: "206 for a range. The detail's original gives this address once the run is done.", shape: "(video)" },
+    refusals: [{ status: 404, code: "not_found", when: "No run with that id, or it isn't done yet." }],
+    example: `curl -s -r 0-1023 -o head.mp4 "$LULL_API/v1/runs/$RUN/original"`,
   },
   file: {
     group: "Reading runs",

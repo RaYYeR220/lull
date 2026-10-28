@@ -35,9 +35,8 @@ export type ShowcaseSummary = {
   models: string[];
   spend: {
     modelUsdThisRun: number | null;
+    /** Web searches, counted (never priced). */
     webSearchesThisRun: number | null;
-    /** Notional: what the searches would cost at list price; not charged. */
-    webSearchListUsdThisRun: number | null;
     modelUsdAllRunsOfRunId: number | null;
   };
 };

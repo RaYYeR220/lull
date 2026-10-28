@@ -10,6 +10,7 @@ export const ROUTES = {
   startRun: { method: "POST", path: "/v1/runs" },
   listRuns: { method: "GET", path: "/v1/runs" },
   run: { method: "GET", path: "/v1/runs/{id}" },
+  original: { method: "GET", path: "/v1/runs/{id}/original" },
   events: { method: "GET", path: "/v1/runs/{id}/events" },
   file: { method: "GET", path: "/v1/runs/{id}/files/{path}" },
   cueAudio: { method: "GET", path: "/v1/runs/{id}/cues/{cue_id}/audio" },

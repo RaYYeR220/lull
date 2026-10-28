@@ -165,12 +165,12 @@ test.describe("try screens @screens", () => {
       await routeApi(page, "mid");
       await page.goto("/try", { waitUntil: "networkidle" });
       await page.evaluate(() => document.fonts.ready);
-      await expect(page.getByRole("button", { name: "Describe Climate Science Champions, introduction" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Describe Big Buck Bunny (excerpt)" })).toBeEnabled();
       await page.waitForTimeout(900);
       await page.screenshot({ path: path.join(OUT, `try-pick-${size.name}.png`) });
       await fullPage(page, `try-pick-${size.name}-full.png`);
 
-      await page.getByRole("button", { name: "Describe Climate Science Champions, introduction" }).click();
+      await page.getByRole("button", { name: "Describe Big Buck Bunny (excerpt)" }).click();
       await expect(page.locator("li[data-cue]")).toHaveCount(2);
       await page.waitForTimeout(1200);
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -179,7 +179,7 @@ test.describe("try screens @screens", () => {
 
       await routeApi(page, "run");
       await page.goto("/try", { waitUntil: "networkidle" });
-      await page.getByRole("button", { name: "Describe Climate Science Champions, introduction" }).click();
+      await page.getByRole("button", { name: "Describe Big Buck Bunny (excerpt)" }).click();
       await expect(page.getByRole("heading", { name: /^Ready to watch/ })).toBeVisible({ timeout: 15_000 });
       await page.waitForTimeout(900);
       await page.evaluate(() => window.scrollTo(0, 0));
@@ -188,7 +188,7 @@ test.describe("try screens @screens", () => {
 
       await routeApi(page, "429");
       await page.goto("/try", { waitUntil: "networkidle" });
-      await page.getByRole("button", { name: "Describe Climate Science Champions, introduction" }).click();
+      await page.getByRole("button", { name: "Describe Big Buck Bunny (excerpt)" }).click();
       await expect(page.getByRole("heading", { name: "You’ve reached the live limit for now." })).toBeVisible();
       await page.waitForTimeout(300);
       await page.screenshot({ path: path.join(OUT, `try-refused-${size.name}.png`) });

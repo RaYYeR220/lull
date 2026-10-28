@@ -19,12 +19,14 @@ import {
   type StageName,
 } from "@/lib/api";
 import type { Recorded } from "@/lib/recorded";
+import { rememberRun } from "@/lib/own-runs";
 import { sampleItems, type SampleItem } from "@/lib/samples";
 import { STAGE_COPY } from "@/lib/run-format";
 import { CueNumbers, initialRun, runReducer, type RunSource } from "@/lib/run-state";
 import { RefusalNotice } from "./RefusalNotice";
 import { RunView } from "./RunView";
 import { ServiceStatus, type Service } from "./ServiceStatus";
+import { OwnRuns } from "./OwnRuns";
 import { SourcePicker } from "./SourcePicker";
 import styles from "./TryApp.module.css";
 
@@ -105,6 +107,13 @@ export function TryApp({ intro, recorded }: Props) {
     switch (ev.type) {
       case "run":
         if (ev.edit_token) saveEditToken(ev.run_id, ev.edit_token);
+        {
+          // this browser's own runs: the service lists no uploads, so it is how one is found again
+          const src = last.current?.source;
+          if (src && src.kind !== "follow") {
+            rememberRun({ id: ev.run_id, title: src.kind === "sample" ? src.title : src.name, kind: src.kind === "sample" ? "sample" : "upload", made: Date.now() });
+          }
+        }
         setRunParam(ev.run_id);
         if (ev.resumed) a?.stage("The run picks up where it stopped.");
         break;
@@ -280,9 +289,11 @@ export function TryApp({ intro, recorded }: Props) {
             samples={items}
             service={service.status}
             budget={service.status === "ok" ? service.health.budget : null}
+            retention={service.status === "ok" ? service.health.retention : null}
             headingRef={pickHeading}
             onStart={(input, source, opts) => void start(input, source, opts)}
           />
+          <OwnRuns retention={service.status === "ok" ? service.health.retention : null} className={styles.own} />
         </div>
 
         {!idle ? <RunView run={run} recorded={recorded} headingRef={runHeading} onAgain={again} onReconnect={reconnect} /> : null}

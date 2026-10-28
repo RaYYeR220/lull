@@ -113,7 +113,7 @@ export default async function WatchPage({ params }: { params: Promise<Params> })
                   A recorded run stays as it was made. Open it in the studio to see each line with its evidence, or make your own copy
                   to edit lines, check them again and publish your version.
                 </p>
-                <ForkDoor runId={s.id}>
+                <ForkDoor runId={s.id} title={s.title}>
                   <Door tone="dark" href={studioHref(s.id)} className={run.studioDoor}>
                     Open in Studio
                   </Door>

@@ -142,7 +142,9 @@ describe("health and budget", () => {
       ok: true,
       speech: false,
       liveBusy: true,
-      budget: { spentToday: 0.4, capDay: 5, spentTotal: null, capTotal: 50 },
+      // an older answer: what it doesn't say is null
+      budget: { spentToday: 0.4, capDay: 5, spentTotal: null, capTotal: 50, capRun: null, searchesToday: null, searchesCapDay: null, searchesCapRun: null },
+      retention: null,
     });
   });
 
@@ -152,13 +154,15 @@ describe("health and budget", () => {
   });
 
   it("finds the cap a run would cross, as the API's spend check does", () => {
-    const b = { spentToday: 4.95, capDay: 5, spentTotal: 10, capTotal: 50 };
+    const b = { spentToday: 4.95, capDay: 5, spentTotal: 10, capTotal: 50, capRun: 0.1, searchesToday: 0, searchesCapDay: 60, searchesCapRun: 3 };
     expect(budgetEstimate(90)).toBeCloseTo(0.095);
     expect(capReached(b, budgetEstimate(90))).toBe("day");
     expect(capReached(b, 0.04)).toBeNull();
     expect(capReached({ ...b, spentTotal: 50 }, 0)).toBeNull(); // spent == cap: nothing more fits, but 0 more is fine
     expect(capReached({ ...b, spentTotal: 49.99 }, 0.02)).toBe("total");
-    expect(capReached({ ...b, capDay: 0 }, 1)).toBeNull(); // 0 is no cap
+    // the engine's rule now: no cap is null; a cap of 0 refuses every call
+    expect(capReached({ ...b, capDay: null }, 1)).toBeNull();
+    expect(capReached({ ...b, capDay: 0, spentToday: 0 }, 0.02)).toBe("day");
   });
 });
 
@@ -352,22 +356,32 @@ describe("the API's samples", () => {
       "fetch",
       vi.fn(async () =>
         json(200, [
-          { id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "USGS", licence: "public domain", source_url: "https://www.usgs.gov/" },
-          { id: "ed45", title: "Elephants Dream, an excerpt", duration: "45", credit: 3 },
+          { id: "ed45", file: "ed45.mp4", title: "Elephants Dream (excerpt)", credit: "Orange Open Movie Team / Blender Foundation, elephantsdream.org", licence: "CC BY 2.5", licence_url: "https://creativecommons.org/licenses/by/2.5/", source_url: "https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm", excerpt: "1:00-1:44.9", changes: "cut to 44.9 s", duration: 44.917 },
+          { id: "tos45", title: "Tears of Steel (excerpt)", duration: "45", credit: 3, licence_url: "javascript:alert(1)" },
           { id: "" },
           "tos45",
         ]),
       ),
     );
     expect(await samples()).toEqual([
-      { id: "csc_intro", title: "Climate Science Champions, introduction", duration: 44.9, credit: "USGS", licence: "public domain" },
-      { id: "ed45", title: "Elephants Dream, an excerpt", duration: null, credit: null, licence: null },
+      {
+        id: "ed45",
+        title: "Elephants Dream (excerpt)",
+        duration: 44.917,
+        credit: "Orange Open Movie Team / Blender Foundation, elephantsdream.org",
+        licence: "CC BY 2.5",
+        licenceUrl: "https://creativecommons.org/licenses/by/2.5/",
+        sourceUrl: "https://commons.wikimedia.org/wiki/File:Elephants_Dream_(2006).webm",
+        excerpt: "1:00-1:44.9",
+      },
+      // what doesn't hold is left out: a length that isn't a number, a credit that isn't text, an address that isn't https
+      { id: "tos45", title: "Tears of Steel (excerpt)", duration: null, credit: null, licence: null, licenceUrl: null, sourceUrl: null, excerpt: null },
     ]);
   });
 
   it("an older API that sends ids only still lists them", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(200, [{ id: "ed45" }])));
-    expect(await samples()).toEqual([{ id: "ed45", title: null, duration: null, credit: null, licence: null }]);
+    expect(await samples()).toEqual([{ id: "ed45", title: null, duration: null, credit: null, licence: null, licenceUrl: null, sourceUrl: null, excerpt: null }]);
   });
 });
 

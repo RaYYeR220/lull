@@ -16,7 +16,8 @@ const CallRow = memo(function CallRow({ call, newest }: { call: CallEvent; newes
       <span className={styles.tok}>
         {isLookup(call) ? "Web lookup" : `${tokens(call.tokens_in)} in, ${tokens(call.tokens_out)} out`}
       </span>
-      <span className={styles.cost}>{usd(call.cost_usd)}</span>
+      {/* a search is counted, never priced */}
+      <span className={styles.cost}>{call.search ? "search" : usd(call.cost_usd)}</span>
       <span className={styles.lat}>
         <span className="sr-only">took </span>
         {secs(call.latency_s)}
@@ -30,6 +31,7 @@ export const CallFeed = memo(function CallFeed({ calls, cost }: { calls: CallEve
   const models = useMemo(() => totalsByModel(calls), [calls]);
   const newestFirst = useMemo(() => [...calls].reverse(), [calls]);
   const tokenTotal = useMemo(() => calls.reduce((n, c) => n + c.tokens_in + c.tokens_out, 0), [calls]);
+  const searches = useMemo(() => calls.filter((c) => c.search).length, [calls]);
 
   return (
     <section aria-labelledby="calls-title" className={styles.feed}>
@@ -43,7 +45,8 @@ export const CallFeed = memo(function CallFeed({ calls, cost }: { calls: CallEve
             {usd(cost)}
           </span>
           <span className={styles.sub}>
-            {calls.length} {calls.length === 1 ? "call" : "calls"}, {tokens(tokenTotal)} tokens
+            {calls.length - searches} model {calls.length - searches === 1 ? "call" : "calls"}, {tokens(tokenTotal)} tokens
+            {searches ? `; ${searches} web ${searches === 1 ? "search" : "searches"}, not priced` : ""}
           </span>
         </p>
       </div>
@@ -68,7 +71,7 @@ export const CallFeed = memo(function CallFeed({ calls, cost }: { calls: CallEve
                 <td>
                   {m.calls} {m.calls === 1 ? "call" : "calls"}
                 </td>
-                <td className={styles.mcost}>{usd(m.cost)}</td>
+                <td className={styles.mcost}>{m.search ? "not priced" : usd(m.cost)}</td>
               </tr>
             ))}
           </tbody>

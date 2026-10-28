@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { API, FAILED_ID, FORK_ID, RUN_ID, RUN_TOKEN, RUNNING_ID, apiDown, holdToken, own, routeApi } from "./try-api";
+import { API, FAILED_ID, FORK_ID, RUN_ID, RUN_TOKEN, RUNNING_ID, STOPPED_ID, STOPPED_TOKEN, apiDown, holdToken, own, routeApi } from "./try-api";
 
 /**
  * A finished live run's page, /run/<id>: loaded from the API (the scripted stand-in,
@@ -29,22 +29,21 @@ test.describe("a finished live run", () => {
     await expect(page.getByText("Live run, finished", { exact: true })).toBeVisible();
     await expect(page.getByText(/Described by a live run, published .*2026/)).toBeVisible();
 
-    // an uploaded clip: the API keeps no original, so the player gets described.mp4 and is told
-    // its sound already carries the lines
+    // an uploaded clip: the original video the API keeps for it, with the descriptions over it,
+    // so every mode is offered (its sound isn't the described mix)
     const p = player(page);
-    await expect(p).toHaveAttribute("src", `${API}/v1/runs/${RUN_ID}/files/described.mp4`);
-    await expect(p).toHaveAttribute("sound", "described");
+    await expect(p).toHaveAttribute("src", `${API}/v1/runs/${RUN_ID}/original`);
+    expect(await p.evaluate((el) => el.hasAttribute("sound"))).toBe(false);
     await expect(p).toHaveAttribute("descriptions", `${API}/v1/runs/${RUN_ID}/files/descriptions.vtt`);
     await expect(p).toHaveAttribute("described-audio", `${API}/v1/runs/${RUN_ID}/files/described-audio.m4a`);
     await expect(p).toHaveAttribute("crossorigin", "anonymous");
     await expect(p).toHaveAttribute("cue-audio-base", `${API}/v1/runs/${RUN_ID}/cues/{id}/audio`);
-    // the lines are already in that sound: only mixed audio plays, the other modes say why
+    // the original's own sound: every mode plays, spoken cues too
     await expect.poll(() => p.evaluate((el) => (el as unknown as { mode: string | null }).mode), { timeout: 15_000 }).toBe("mixed");
     await p.evaluate((el) => ((el as unknown as { mode: string }).mode = "spoken"));
-    expect(await p.evaluate((el) => (el as unknown as { mode: string | null }).mode)).toBe("mixed");
+    expect(await p.evaluate((el) => (el as unknown as { mode: string | null }).mode)).toBe("spoken");
     await p.getByRole("button", { name: /Description mode/ }).click();
-    await expect(p.getByRole("radio", { name: /Spoken cues/ })).toBeDisabled();
-    await expect(p.getByRole("radio", { name: /Spoken cues/ })).toHaveAccessibleDescription(/already has the descriptions in it/);
+    await expect(p.getByRole("radio", { name: /Spoken cues/ })).toBeEnabled();
     await page.keyboard.press("Escape");
 
     // the script, in time order, the held line included
@@ -87,7 +86,8 @@ test.describe("a finished live run", () => {
     await page.goto(`/run/${FORK_ID}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Elephants Dream");
     await expect(page.getByRole("link", { name: /CC BY 2\.5/ })).toBeVisible();
-    await expect(player(page)).toHaveAttribute("src", "/showcase/ed90/video.mp4");
+    // the API's own copy of the video
+    await expect(player(page)).toHaveAttribute("src", `${API}/v1/runs/${FORK_ID}/original`);
     await expect(player(page)).not.toHaveAttribute("sound", /./);
     await expect(page.locator("[data-line]")).toHaveCount(10);
   });
@@ -119,6 +119,24 @@ test.describe("a finished live run", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("This run stopped before it finished.");
     await expect(page.getByText("The speech server didn’t answer in time, so the run stopped at listen.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Describe a clip" })).toHaveAttribute("href", "/try");
+  });
+
+  test("an unfinished run says so; only the browser that started it may resume it, with its key", async ({ page }) => {
+    await routeApi(page, own("run"));
+    await page.goto(`/run/${STOPPED_ID}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("This run hasn’t finished.");
+    await expect(page.getByRole("link", { name: "Resume it" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Describe a clip" })).toHaveAttribute("href", "/try");
+
+    // the owner: the detail is asked for with the edit key, and the door resumes it
+    const asked: (string | undefined)[] = [];
+    page.on("request", (r) => {
+      if (r.url() === `${API}/v1/runs/${STOPPED_ID}`) asked.push(r.headers()["authorization"]);
+    });
+    await holdToken(page, STOPPED_ID, STOPPED_TOKEN);
+    await page.goto(`/run/${STOPPED_ID}`);
+    await expect(page.getByRole("link", { name: "Resume it" })).toHaveAttribute("href", `/try?run=${STOPPED_ID}`);
+    expect(asked).toContain(`Bearer ${STOPPED_TOKEN}`);
   });
 
   test("an id that isn't there, or was removed, says so", async ({ page }) => {

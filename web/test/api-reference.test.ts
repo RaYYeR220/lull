@@ -39,7 +39,9 @@ describe("the endpoint reference", () => {
   it("every write that changes a run asks for the edit token", () => {
     for (const name of ["editCue", "approveCue", "holdCue", "publish"] as const) expect(API_REFERENCE[name].auth).toBe("edit-token");
     expect(API_REFERENCE.events.auth).toBe("edit-token to resume");
-    for (const name of ["health", "samples", "startRun", "listRuns", "run", "file", "cueAudio", "fork"] as const) expect(API_REFERENCE[name].auth).toBe("none");
+    // an unfinished run is shown in full only to its owner
+    expect(API_REFERENCE.run.auth).toBe("edit-token to see an unfinished run");
+    for (const name of ["health", "samples", "startRun", "listRuns", "original", "file", "cueAudio", "fork"] as const) expect(API_REFERENCE[name].auth).toBe("none");
   });
 
   it("each example calls its own route", () => {

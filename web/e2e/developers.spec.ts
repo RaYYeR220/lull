@@ -131,7 +131,7 @@ test.describe("the developer page", () => {
   test("lists every endpoint with its answer, its refusals and a curl call", async ({ page }) => {
     await page.goto("/developers");
     const endpoints = page.locator("[data-endpoint]");
-    await expect(endpoints).toHaveCount(13);
+    await expect(endpoints).toHaveCount(14);
     await expect(page.getByRole("heading", { level: 3 })).toContainText(["Live runs", "Reading runs", "Studio"]);
     const start = page.locator('[data-endpoint="startRun"]');
     await expect(start.getByRole("heading", { level: 4 })).toHaveText("POST/v1/runs");

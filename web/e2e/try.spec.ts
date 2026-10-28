@@ -28,14 +28,14 @@ async function openPicker(page: Page) {
   await page.goto("/try");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Watch a description being made.");
   await expect(page.getByText("Ready", { exact: true })).toBeVisible();
-  await expect(page.getByRole("radio", { name: /Climate Science Champions/ })).toBeChecked();
+  await expect(page.getByRole("radio", { name: /Big Buck Bunny/ })).toBeChecked();
 }
 
 /** A figure in the result: the value shown for a label. */
 const figure = (scope: Locator, label: string) => scope.locator("dl > div", { has: scope.page().getByRole("term").filter({ hasText: label }) }).getByRole("definition");
 
-const start = (page: Page) => page.getByRole("button", { name: "Describe Climate Science Champions, introduction" });
-const run = (page: Page) => page.getByRole("region", { name: /Climate Science Champions/ });
+const start = (page: Page) => page.getByRole("button", { name: "Describe Big Buck Bunny (excerpt)" });
+const run = (page: Page) => page.getByRole("region", { name: /Big Buck Bunny/ });
 
 test.describe("try it", () => {
   test("a sample run streams stages, calls and cues to the result", async ({ page }) => {
@@ -46,9 +46,12 @@ test.describe("try it", () => {
 
     // the cards are the API's samples, with the title, length, credit and licence it gives
     await expect(page.getByRole("radio")).toHaveCount(4 + 2); // three samples and your own clip, then the two modes
-    await expect(page.getByText("U.S. Geological Survey, public domain")).toBeVisible();
-    await expect(page.getByText("Tears of Steel (2012), Blender Foundation, CC BY 3.0")).toBeVisible();
-    await expect(page.locator("label", { hasText: "Climate Science Champions" }).locator("time")).toHaveText("0:45");
+    await expect(page.getByText("Blender Foundation, peach.blender.org, CC BY 3.0")).toBeVisible();
+    await expect(page.getByText("Orange Open Movie Team / Blender Foundation, elephantsdream.org, CC BY 2.5")).toBeVisible();
+    await expect(page.locator("label", { hasText: "Big Buck Bunny" }).locator("time")).toHaveText("0:45");
+    // Sofia is the one built-in voice: said, not offered
+    await expect(page.locator("[data-voice]")).toHaveText("Voice Sofia");
+    await expect(page.getByRole("combobox", { name: "Voice" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Watch the recorded run/ })).toHaveCount(0); // none is a recorded run here
     await expect(page.getByText("The spend check needs $0.06 of budget left for this clip.")).toBeVisible();
     await expect(page.getByText("$0.41 of $5.00")).toBeVisible();
@@ -57,12 +60,12 @@ test.describe("try it", () => {
     const posted = page.waitForRequest((r) => r.method() === "POST" && r.url() === `${API}/v1/runs`);
     await start(page).click();
     const form = (await posted).postData() ?? "";
-    expect(form).toContain('name="sample"\r\n\r\ncsc_intro');
+    expect(form).toContain('name="sample"\r\n\r\nbbb45');
     expect(form).toContain('name="mode"\r\n\r\nextended');
 
-    await expect(page.getByRole("heading", { level: 2, name: /Climate Science Champions/ })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 2, name: /Big Buck Bunny/ })).toBeFocused();
     await expect(page.getByRole("heading", { name: "Ready to watch, with 1 line held for review." })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Finished in 1:26, for $0.0466 in model calls.")).toBeVisible();
+    await expect(page.getByText("Finished in 1:26, for $0.0386 in model calls and 1 web search.")).toBeVisible();
 
     const panel = run(page);
     await expect(panel.locator("[data-stage]")).toHaveCount(7);
@@ -90,6 +93,10 @@ test.describe("try it", () => {
     await expect(calls.last()).toContainText("18,420 in, 812 out");
     await expect(panel.getByRole("table", { name: "Spend by model" })).toContainText("Nemotron 3 Ultra");
     await expect(panel.getByText("Web lookup")).toBeVisible();
+    // a web search is counted, never priced
+    await expect(calls.filter({ hasText: "Web lookup" })).toContainText("search");
+    await expect(calls.filter({ hasText: "Web lookup" })).not.toContainText("$");
+    await expect(panel.getByText(/1 web search, not priced/)).toBeVisible();
 
     // the result: numbers from the done event, and where to open it
     const result = panel.getByRole("region", { name: /^Ready to watch/ });
@@ -111,6 +118,13 @@ test.describe("try it", () => {
     expect(said.at(-1)).toMatch(/^Finished\. 3 lines passed, 1 held\./);
     expect(said.length).toBeLessThanOrEqual(6);
     expect(errors).toEqual([]);
+
+    // this browser's own runs: the service lists no uploads, so the page keeps them
+    await page.goto("/try");
+    const own = page.locator("[data-own-runs]");
+    await expect(own.getByRole("link", { name: "Big Buck Bunny (excerpt)", exact: true })).toHaveAttribute("href", `/run/${RUN_ID}`);
+    await expect(own).toContainText("A sample");
+    await expect(own.getByRole("link", { name: /^Studio/ })).toHaveAttribute("href", `/studio/${RUN_ID}`);
   });
 
   test("while running, the active stage is lit and finalize shows how far it has checked", async ({ page }) => {
@@ -122,7 +136,7 @@ test.describe("try it", () => {
     await expect(panel.locator('[data-stage="finalize"]')).toHaveAttribute("aria-current", "step");
     await expect(panel.locator('[data-stage="finalize"]')).toContainText("2 lines checked");
     await expect(panel.locator('[data-stage="publish"]')).toContainText("Waiting");
-    await expect(panel.getByRole("heading", { name: /^Describing Climate Science Champions, introduction$/ })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: /^Describing Big Buck Bunny \(excerpt\)$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Describe another clip" })).toHaveCount(0);
     for (const viewport of [DESKTOP, PHONE]) {
       await page.setViewportSize(viewport);
@@ -261,7 +275,7 @@ test.describe("try it", () => {
     await routeApi(page, "run");
     await page.goto(`/try?run=${RUN_ID}`);
     await expect(page.getByRole("heading", { name: "Ready to watch, with 1 line held for review." })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Finished in 1:26, for $0.0466 in model calls.")).toBeVisible();
+    await expect(page.getByText("Finished in 1:26, for $0.0386 in model calls and 1 web search.")).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: `Described run ${RUN_ID}` })).toBeVisible();
     await expect(page.locator("li[data-cue]")).toHaveCount(4);
   });
@@ -277,11 +291,11 @@ test.describe("try it", () => {
     await openPicker(page);
     await page.getByRole("heading", { name: "Choose a clip" }).focus();
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("radio", { name: /Climate Science Champions/ })).toBeFocused();
+    await expect(page.getByRole("radio", { name: /Big Buck Bunny/ })).toBeFocused();
     await page.keyboard.press("ArrowDown");
-    await expect(page.getByRole("radio", { name: /Elephants Dream, an excerpt/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Elephants Dream \(excerpt\)/ })).toBeChecked();
     await page.keyboard.press("ArrowUp");
-    await expect(page.getByRole("radio", { name: /Climate Science Champions/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Big Buck Bunny/ })).toBeChecked();
     // Tab on to the start door
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press("Tab");
@@ -289,7 +303,7 @@ test.describe("try it", () => {
     }
     await expect(start(page)).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("heading", { level: 2, name: /Climate Science Champions/ })).toBeFocused();
+    await expect(page.getByRole("heading", { level: 2, name: /Big Buck Bunny/ })).toBeFocused();
     await expect(page.getByRole("heading", { name: /^Ready to watch/ })).toBeVisible({ timeout: 15_000 });
     for (let i = 0; i < 6; i++) {
       await page.keyboard.press("Tab");

@@ -1,0 +1,78 @@
+{
+  "id": "live-20261028-de7ca0a30ae1f82a26beeccb",
+  "kind": "live",
+  "status": "done",
+  "source": { "kind": "sample", "sample_id": "ed45" },
+  "title": "ed45.mp4",
+  "duration": 44.917,
+  "created": "2026-10-28T09:16:42+00:00",
+  "error": null,
+  "manifest": {
+    "run_id": "live-20261028-de7ca0a30ae1f82a26beeccb",
+    "created": "2026-10-28T09:16:42+00:00",
+    "video": { "name": "ed45.mp4", "duration": 44.917, "sha256": "a1" },
+    "options": { "mode": "extended", "profile": "education", "voice": "Sofia", "language": "en" },
+    "outputs": {
+      "descriptions.vtt": { "sha256": "b1", "bytes": 612 },
+      "extended.vtt": { "sha256": "b2", "bytes": 233 },
+      "described-audio.m4a": { "sha256": "b3", "bytes": 1100000 },
+      "described.mp4": { "sha256": "b4", "bytes": 4200000 },
+      "extended.mp4": { "sha256": "b5", "bytes": 4400000 },
+      "cues.json": { "sha256": "b6", "bytes": 7000 },
+      "script.md": { "sha256": "b7", "bytes": 1800 },
+      "report.html": { "sha256": "b8", "bytes": 12000 },
+      "manifest.json": { "sha256": "b9", "bytes": 4000 }
+    },
+    "summary": {
+      "cues": { "verified": 5, "edited": 0, "approved": 0, "held": 0, "extended": 1 },
+      "coverage": { "important_events": 6, "described": 5, "ratio": 0.833, "described_with_extended": 6, "ratio_with_extended": 1.0, "undescribed": ["e004"] },
+      "overlap_seconds": 0.0,
+      "overlap": { "speech_s": 0.0, "between_cues_s": 0.0, "outside_pauses_s": 0.0, "total_s": 0.0 },
+      "held": [],
+      "f113": [],
+      "lint_warnings": [],
+      "cost_usd": 0.03323,
+      "cost_per_min": 0.04439,
+      "calls_by_role_model": [
+        { "role": "watch", "model": "nvidia/Nemotron-3.5-Super-VL", "calls": 3, "tokens_in": 40000, "tokens_cached": 0, "tokens_out": 1900, "cost_usd": 0.0142, "latency_s": 11.9 },
+        { "role": "plan", "model": "nvidia/Nemotron-3-Ultra-550b-a55b", "calls": 1, "tokens_in": 9800, "tokens_cached": 0, "tokens_out": 1600, "cost_usd": 0.0146, "latency_s": 19.9 },
+        { "role": "research", "model": "tavily-search", "calls": 1, "latency_s": 2.6, "searches": 1 },
+        { "role": "verify", "model": "nvidia/Nemotron-3.5-Super-VL", "calls": 6, "tokens_in": 21000, "tokens_cached": 0, "tokens_out": 400, "cost_usd": 0.0044, "latency_s": 9.0 }
+      ],
+      "wcag": [
+        { "criterion": "1.2.3", "level": "A", "name": "Audio Description or Media Alternative (Prerecorded)", "status": "met (automated checks)", "via": "descriptions.vtt, script.md", "reasons": [] },
+        { "criterion": "1.2.5", "level": "AA", "name": "Audio Description (Prerecorded)", "status": "met (automated checks)", "via": "described.mp4 and described-audio.m4a", "reasons": [] },
+        { "criterion": "1.2.7", "level": "AAA", "name": "Extended Audio Description (Prerecorded)", "status": "met (automated checks)", "via": "extended.mp4 and extended.vtt", "reasons": [] }
+      ],
+      "reviewed": false,
+      "extended_produced": true,
+      "extended_error": null,
+      "tts_disclosure": "Descriptions are voiced with synthetic speech (Magpie TTS Multilingual); lines are awaiting review.",
+      "research": { "skipped": false, "terms": 1, "errors": 0 },
+      "repetitive": [],
+      "for_reviewer": {},
+      "spend": { "model_usd": 0.03323, "model_usd_all_runs": 0.03323, "searches": 1 }
+    },
+    "versions": { "engine": "0.2.0", "models": ["nvidia/Nemotron-3-Ultra-550b-a55b", "nvidia/Nemotron-3.5-Super-VL"], "tts": "Magpie TTS Multilingual" }
+  },
+  "cues": {
+    "run_id": "live-20261028-de7ca0a30ae1f82a26beeccb",
+    "language": "en",
+    "cues": [
+      { "id": "c001", "gap_id": "g001", "start": 9.29, "end": null, "text": "A wide shot reveals an industrial shaft with walkways.", "event_ids": ["e001"], "status": "verified", "ahead": false, "claims": [{ "text": "an industrial shaft", "verdict": "supported", "at": 9.8 }], "audio_dur": 3.1, "tempo": 1.0, "findings": [], "note": null, "audio_url": "/v1/runs/live-20261028-de7ca0a30ae1f82a26beeccb/cues/c001/audio?v=0a1b2c3d4e", "extended": false }
+    ],
+    "extended": [
+      { "id": "x001", "gap_id": null, "start": 3.4, "end": null, "text": "Two people step through a bright doorway into darkness.", "event_ids": ["e002"], "status": "extended", "ahead": false, "claims": [], "audio_dur": 2.9, "tempo": 1.0, "findings": [], "note": null, "audio_url": "/v1/runs/live-20261028-de7ca0a30ae1f82a26beeccb/cues/x001/audio?v=1f2e3d4c5b", "extended": true }
+    ]
+  },
+  "dirty": false,
+  "speech": [[0.24, 1.68], [2.08, 4.8], [5.36, 9.09], [15.84, 16.32]],
+  "gaps": [
+    { "id": "g001", "start": 9.29, "end": 15.64, "capacity": 19 },
+    { "id": "g002", "start": 18.25, "end": 23.42, "capacity": 15 }
+  ],
+  "wps": 3.05,
+  "loudness": [-29.4, -29.9, -30.4, -35.0, -40.7, -39.9, -38.2, -33.5],
+  "loudness_hop_s": 0.1,
+  "original": "/v1/runs/live-20261028-de7ca0a30ae1f82a26beeccb/original"
+}

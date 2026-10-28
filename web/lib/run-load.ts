@@ -1,10 +1,11 @@
 /**
  * Loads a run the API serves into the pages' shape (lib/run-data.ts), in the browser: its
- * detail, the speech and pauses from its cues.json, and the recorded run of the same clip
- * when there is one (it lends the soundtrack and the original video).
+ * detail (status, timeline, loudness, original video, and once done its manifest and cues),
+ * with the owner's edit token when this browser holds it, and the recorded run of the same
+ * clip when there is one (it lends what the API keeps no copy of).
  */
-import { isAbort } from "./api";
-import { getCueFileTimeline, lookupRun, type RunDetail } from "./api-runs";
+import { isAbort, readEditToken } from "./api";
+import { lookupRun, type DoneDetail } from "./api-runs";
 import { clipOf, fromApi, type RunData, type RunFile } from "./run-data";
 import { LAYOUT, parseShowcase, showcaseUrl } from "./showcase-schema.mjs";
 import type { Showcase, ShowcaseIndexEntry } from "./showcase-schema.mjs";
@@ -22,8 +23,9 @@ export async function fetchShowcase(id: string, signal?: AbortSignal): Promise<S
 }
 
 export type Loaded =
-  | { kind: "published"; run: RunData; detail: RunDetail }
+  | { kind: "done"; run: RunData; detail: DoneDetail }
   | { kind: "running" }
+  | { kind: "stopped" }
   | { kind: "failed"; reason: string | null }
   | { kind: "missing" };
 
@@ -38,23 +40,20 @@ type LoadOpts = {
   signal?: AbortSignal;
 };
 
-/** A published run's data, ready for the pages; built again from a fresh detail by `build`. */
-export async function buildRun(id: string, detail: RunDetail, opts: LoadOpts): Promise<RunData> {
-  // the recorded run itself (opened through the API), or the one the API says this run is of
+/** A done run's data, ready for the pages; built again from a fresh detail by `build`. */
+export async function buildRun(id: string, detail: DoneDetail, opts: LoadOpts): Promise<RunData> {
+  // the recorded run itself (opened through the API), or the one this run is a copy or sample of
   const entry = opts.clip && opts.clip.id === id ? opts.clip : clipOf(detail, opts.index);
-  const [timeline, clip] = await Promise.all([
-    "cues.json" in detail.manifest.outputs ? getCueFileTimeline(id, opts.signal) : Promise.resolve({ speech: null, gaps: null }),
-    entry ? (opts.clip?.id === entry.id ? Promise.resolve(opts.clip) : fetchShowcase(entry.id, opts.signal)) : Promise.resolve(null),
-  ]);
-  return fromApi(id, detail, { timeline, clip, clipFiles: opts.clipFiles, audioVersion: opts.audioVersion, filesVersion: opts.filesVersion });
+  const clip = entry ? (opts.clip?.id === entry.id ? opts.clip : await fetchShowcase(entry.id, opts.signal)) : null;
+  return fromApi(id, detail, { clip, clipFiles: opts.clipFiles, audioVersion: opts.audioVersion, filesVersion: opts.filesVersion });
 }
 
 /**
- * Where the run stands and, when it is published, its data. Throws an ApiError when the API
- * can't be asked.
+ * Where the run stands and, when it is done, its data. Sends the edit token when this browser
+ * holds it. Throws an ApiError when the API can't be asked.
  */
 export async function loadRun(id: string, opts: LoadOpts): Promise<Loaded> {
-  const found = await lookupRun(id, opts.signal);
-  if (found.kind !== "published") return found;
-  return { kind: "published", detail: found.detail, run: await buildRun(id, found.detail, opts) };
+  const found = await lookupRun(id, { token: readEditToken(id), signal: opts.signal });
+  if (found.kind !== "done") return found;
+  return { kind: "done", detail: found.detail, run: await buildRun(id, found.detail, opts) };
 }

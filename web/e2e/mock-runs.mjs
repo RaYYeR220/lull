@@ -2,9 +2,14 @@
 // list, and the studio's writes, with the API's owner-token rules (engine/src/lull/api/
 // studio.py, store.py, app.py).
 //
-//   GET  /v1/runs                       the list: the recorded run, the published live runs,
-//                                       one still running (RUNNING_ID), one that stopped (FAILED_ID)
-//   GET  /v1/runs/<id>                  {manifest, cues {cues, extended}, dirty}; 404 otherwise
+//   GET  /v1/runs                       the list (store.list): the recorded run, sample runs and
+//                                       copies of samples; never an upload or a copy of one
+//   GET  /v1/runs/<id>                  the run's detail (store.detail): status, source, title,
+//                                       duration, created, error, manifest, cues, dirty, speech,
+//                                       gaps, wps, loudness, original; an unfinished run shows
+//                                       anyone but its owner only {id, status, source.kind,
+//                                       created}; 404 {error: not_found} otherwise
+//   GET  /v1/runs/<id>/original         the video the run described (byte ranges served)
 //   GET  /v1/runs/<id>/files/<path>     cues.json (with gaps and speech), the VTTs, the mix,
 //                                       described.mp4, keyframes, report.html (byte ranges served)
 //   GET  /v1/runs/<id>/cues/<cue>/audio the cue's take
@@ -44,6 +49,9 @@ export const SAMPLE_ID = "live-20261028-111500-5a3e90";
 export const SAMPLE_TOKEN = "tok-sample-e2e-1357924680";
 export const UPLOAD_ED90_ID = "live-20261028-112000-0ed90u";
 export const FAILED_ID = "live-20261028-100000-de4d00";
+/** An upload that stopped before it finished: its owner (STOPPED_TOKEN) may resume it. */
+export const STOPPED_ID = "live-20261028-104500-5709ed";
+export const STOPPED_TOKEN = "tok-stopped-e2e-2468013579";
 
 const show = JSON.parse(readFileSync(path.join(SHOWCASE, "showcase.json"), "utf8"));
 
@@ -106,13 +114,17 @@ function ed90() {
     gaps,
     speech: show.speech.map(([start, end]) => ({ start, end })),
     clip: true,
-    source: { kind: "fork", id: "ed90" },
+    source: { kind: "fork", forked_from: "ed90", origin: "sample" },
+    // a copy of a recorded run: the API copies its video, and keeps no loudness for it
+    original: true,
+    loudness: null,
   };
 }
 
 /** A run of the recorded clip's cues whose cues.json, from an older engine, has no speech or pauses. */
 function older(source, name) {
-  return () => ({ ...ed90(), video: { name, duration: show.duration }, gaps: null, speech: null, clip: source.kind === "sample", source });
+  // an older run: no timeline, loudness or original of its own in its detail
+  return () => ({ ...ed90(), video: { name, duration: show.duration }, gaps: null, speech: null, clip: source.kind === "sample", source, original: false, loudness: null });
 }
 
 /** The live run of an uploaded clip (the try-it stream's run), with a held line and a reviewer warning. */
@@ -174,16 +186,20 @@ function upload() {
     gaps,
     speech,
     clip: false,
-    source: { kind: "upload", id: null },
+    source: { kind: "upload" },
+    original: true,
+    // the API works the levels out once the run is published (facts.keep_loudness)
+    loudness: show.loudness,
   };
 }
 
 const BASE = {
-  ed90: () => ({ ...ed90(), source: { kind: "showcase", id: "ed90" } }),
+  // the recorded run: ed90 isn't one of the API's samples, so no sample id
+  ed90: () => ({ ...ed90(), source: { kind: "sample", sample_id: null }, original: true, loudness: null }),
   [FORK_ID]: ed90,
   [RUN_ID]: upload,
-  [SAMPLE_ID]: older({ kind: "sample", id: "ed90" }, "ed90.mp4"),
-  [UPLOAD_ED90_ID]: older({ kind: "upload", id: null }, "ed90.mp4"),
+  [SAMPLE_ID]: older({ kind: "sample", sample_id: "ed90" }, "ed90.mp4"),
+  [UPLOAD_ED90_ID]: older({ kind: "upload" }, "ed90.mp4"),
 };
 const TOKENS = { [FORK_ID]: FORK_TOKEN, [RUN_ID]: RUN_TOKEN, [SAMPLE_ID]: SAMPLE_TOKEN };
 
@@ -263,7 +279,7 @@ function summary(run) {
  */
 function exportedSummary(run) {
   const x = show.summary;
-  if (!x || run.source?.kind !== "showcase") return null;
+  if (!x || run.id !== "ed90") return null;
   const c = x.counts;
   const reviewed = c.verified === 0 && c.edited + c.approved > 0;
   return {
@@ -285,7 +301,7 @@ function exportedSummary(run) {
     wcag: x.wcag.map((w) => ({ criterion: w.criterion, level: w.level, name: w.name, status: w.status, via: "", reasons: w.blockers })),
     reviewed,
     tts_disclosure: `Descriptions are voiced with synthetic speech (${TTS}); ${reviewed ? "every line was reviewed before publishing." : "lines are awaiting review."}`,
-    spend: { models_usd: x.spend.modelUsdThisRun, tavily_credits: x.spend.webSearchesThisRun },
+    spend: { model_usd: x.spend.modelUsdThisRun, model_usd_all_runs: x.spend.modelUsdAllRunsOfRunId, searches: x.spend.webSearchesThisRun },
   };
 }
 
@@ -309,20 +325,39 @@ function view(run, c) {
   return { ...rest, audio_url: audio_path ? `/v1/runs/${run.id}/cues/${c.id}/audio?v=${tag(run, c)}` : null };
 }
 
+/** The run's detail as store.detail gives it to its owner, or to anyone once it is done. */
 function detail(run) {
   return {
+    id: run.id,
+    kind: run.id === "ed90" ? "showcase" : "live",
+    status: "done",
+    source: run.source,
+    title: run.video.name,
+    duration: run.video.duration,
+    created: run.created,
+    error: null,
+    dirty: run.dirty,
+    speech: run.speech ? run.speech.map(({ start, end }) => [start, end]) : null,
+    gaps: run.gaps ? run.gaps.map((g) => ({ id: g.id, start: g.usable_start, end: g.usable_end, capacity: g.capacity_words })) : null,
+    wps: run.gaps ? 3.05 : null,
+    loudness: run.loudness ?? null,
+    loudness_hop_s: 0.1,
+    original: run.original ? `/v1/runs/${run.id}/original` : null,
     manifest: {
       run_id: run.id,
       created: run.created,
       video: { name: run.video.name, duration: run.video.duration, sha256: "a".repeat(64) },
       options: { mode: run.extended.length ? "extended" : "standard", profile: "entertainment", voice: run.voice, language: "en" },
       outputs: OUTPUTS(run),
-      summary: { ...summary(run), spend: { models_usd: run.cost, tavily_credits: 1 }, ...exportedSummary(run) },
+      summary: { ...summary(run), spend: { model_usd: run.cost, model_usd_all_runs: run.cost, searches: 1 }, ...exportedSummary(run) },
       versions: { engine: "0.4.0", models: [ULTRA, VL, LIGHT], tts: TTS },
     },
-    cues: { run_id: run.id, language: "en", cues: run.cues.map((c) => view(run, c)), extended: run.extended.map((c) => view(run, c)) },
-    dirty: run.dirty,
-    source: run.source,
+    cues: {
+      run_id: run.id,
+      language: "en",
+      cues: run.cues.map((c) => ({ ...view(run, c), extended: false })),
+      extended: run.extended.map((c) => ({ ...view(run, c), extended: true })),
+    },
   };
 }
 
@@ -355,6 +390,7 @@ const ERR = {
   forbidden: [403, "forbidden", "Only the person who started this run can change it. Fork it to edit a copy."],
   no_cue: [404, "not_found", "There is no cue with that id in this run."],
   no_run: [404, "not_found", "There is no run with that id."],
+  no_file: [404, "not_found", "There is no such file."],
   overlap: [409, "overlap", "Nothing was published: these descriptions would overlap speech, the edge of their pause or each other."],
 };
 
@@ -437,7 +473,7 @@ function serveFile(req, res, cors, run, rel) {
   else if (/^keyframes\/[\w-]+\.jpg$/.test(rel)) buf = fromShowcase(rel);
   if (!buf) {
     res.writeHead(404, { "Content-Type": "application/json", ...cors });
-    res.end(JSON.stringify({ detail: "not found" }));
+    res.end(JSON.stringify({ error: "not_found", message: "There is no such file." }));
     return true;
   }
   return sendBytes(req, res, cors, buf, type);
@@ -456,14 +492,12 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
   if (req.method === "GET" && route === "/v1/runs") {
     if (behaviour === "empty-list") return send(200, []);
     const row = (id, kind, title, status) => ({ id, kind, title, duration: 90, created: "2026-10-28T10:15:00+00:00", status, cost_usd: null, spend: null, cues: null });
+    // uploads (RUN_ID, UPLOAD_ED90_ID, FAILED_ID, STOPPED_ID) open by their id alone
     return send(200, [
-      row("ed90", "showcase", "ed90.mp4", "published"),
-      row(RUNNING_ID, "live", "harbour.mp4", "running"),
-      row(FAILED_ID, "live", "lecture.mp4", "failed"),
-      row(FORK_ID, "live", "ed90.mp4", "published"),
-      row(RUN_ID, "live", "corridor-walk.mp4", "published"),
-      row(SAMPLE_ID, "live", "ed90.mp4", "published"),
-      row(UPLOAD_ED90_ID, "live", "ed90.mp4", "published"),
+      row("ed90", "showcase", "ed90.mp4", "done"),
+      row(RUNNING_ID, "live", "ed45.mp4", "running"),
+      row(FORK_ID, "live", "ed90.mp4", "done"),
+      row(SAMPLE_ID, "live", "ed90.mp4", "done"),
     ]);
   }
 
@@ -486,10 +520,19 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
     await streamRun({ stopAfter: "c002" });
     return true;
   }
+  // an unfinished run: its owner sees it all; anyone else only that it exists
+  const unfinished = { [RUNNING_ID]: ["running", "sample"], [FAILED_ID]: ["failed", "upload"], [STOPPED_ID]: ["stopped", "upload"] }[id];
+  if (unfinished && req.method === "GET" && rest === "") {
+    const [status, kind] = unfinished;
+    const created = "2026-10-28T10:45:00+00:00";
+    const owner = id === STOPPED_ID && (req.headers.authorization ?? "") === `Bearer ${STOPPED_TOKEN}`;
+    if (!owner) return send(200, { id, status, source: { kind }, created });
+    return send(200, { id, kind: "live", status, source: { kind }, title: "lecture.mp4", duration: 58.2, created, error: null, manifest: null, cues: null, dirty: false, speech: null, gaps: null, wps: 3.05, loudness: null, loudness_hop_s: 0.1, original: null });
+  }
 
   const run = runOf(scenario, id);
   if (!run) {
-    if (req.method === "GET" && rest === "") return send(404, { detail: "run not found" });
+    if (req.method === "GET" && rest === "") return refuse(ERR.no_run);
     if (rest === "/events") return false; // the live stream routes (mock-api.mjs)
     return refuse(ERR.no_run);
   }
@@ -498,13 +541,17 @@ export async function runRoutes({ req, res, scenario, route, cors, send, streamR
     if (behaviour === "reread500" && (run.version || run.published)) return send(500, { detail: "Internal Server Error" });
     return send(200, detail(run));
   }
+  if ((req.method === "GET" || req.method === "HEAD") && rest === "/original") {
+    if (!run.original) return refuse(ERR.no_file);
+    return sendBytes(req, res, cors, fromShowcase("video.mp4"), "video/mp4");
+  }
   const file = rest.match(/^\/files\/(.+)$/);
   if ((req.method === "GET" || req.method === "HEAD") && file) return serveFile(req, res, cors, run, decodeURIComponent(file[1]));
   const audio = rest.match(/^\/cues\/([\w-]+)\/audio$/);
   if ((req.method === "GET" || req.method === "HEAD") && audio) {
     const c = [...run.cues, ...run.extended].find((x) => x.id === audio[1]);
     const buf = c?.audio_path ? (fromShowcase(`audio/${c.id}.m4a`) ?? fromShowcase("audio/c001.m4a")) : null;
-    if (!buf) return send(404, { detail: "not found" });
+    if (!buf) return send(404, { error: "not_found", message: "There is no such file." });
     return sendBytes(req, res, cors, buf, "audio/mp4");
   }
   if (rest === "/events") return false;

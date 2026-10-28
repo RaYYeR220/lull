@@ -3,6 +3,7 @@
 .status{grid-column:9 / span 4;min-width:0}
 
 .work{display:flex;flex-direction:column;gap:var(--s-5);margin-top:var(--s-7)}
+.own{margin-top:var(--s-6)}
 
 @media (max-width:1100px){
   .intro{grid-column:1 / span 12}

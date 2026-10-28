@@ -22,7 +22,8 @@ export const MODES = ["standard", "extended"] as const;
 export type Mode = (typeof MODES)[number];
 
 /** The calibrated voices the API accepts (lull.voices DEFAULT_WPS). */
-export const VOICES = ["Sofia", "Aria"] as const;
+/** The API's built-in voices (lull.voices): Sofia only. */
+export const VOICES = ["Sofia"] as const;
 
 /** USD the API's spend check asks to have left before a run starts: $0.05 a minute + $0.02. */
 export function budgetEstimate(durationSeconds: number): number {
@@ -69,6 +70,8 @@ export type CallEvent = Meta & {
   tokens_out: number;
   cost_usd: number;
   latency_s: number;
+  /** A web search (Tavily): counted, never priced; its cost_usd is 0 whatever the engine attached. */
+  search: boolean;
 };
 export type CueEvent = Meta & {
   type: "cue";
@@ -103,13 +106,19 @@ export type RunSummary = {
   coverage: { ratio: number | null; described: number; salient: number } | null;
   overlapSeconds: number | null;
   held: { id: string; reason: string | null }[];
+  /** Model spend for the run, USD. */
   costUsd: number | null;
   costPerMin: number | null;
+  /** Web searches the run made, counted (never priced). */
+  searches: number | null;
   wcag: WcagRow[];
   extendedProduced: boolean | null;
 };
 
 export type Obj = Record<string, unknown>;
+
+/** A web search rather than a model call (the API's spend.is_search: Tavily's models). */
+export const isSearch = (model: string, provider?: string | null) => model.startsWith("tavily") || provider === "tavily";
 export const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 export const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
@@ -140,8 +149,9 @@ function readSummary(raw: unknown): RunSummary | null {
       : null,
     overlapSeconds: num(raw.overlap_seconds),
     held,
-    costUsd: num(raw.cost_usd),
+    costUsd: (isObj(raw.spend) ? num(raw.spend.model_usd) : null) ?? num(raw.cost_usd),
     costPerMin: num(raw.cost_per_min),
+    searches: isObj(raw.spend) ? num(raw.spend.searches) : null,
     wcag,
     extendedProduced: typeof raw.extended_produced === "boolean" ? raw.extended_produced : null,
   };
@@ -191,17 +201,21 @@ export function parseEvent(data: string, sseType = "message"): RunEvent | null {
       const role = str(raw.role);
       const model = str(raw.model);
       if (!role || !model) return null;
+      const provider = str(raw.provider);
+      const search = isSearch(model, provider);
       return {
         ...meta,
         type,
         role,
         model,
-        provider: str(raw.provider),
+        provider,
         tokens_in: num(raw.tokens_in) ?? 0,
         tokens_cached: num(raw.tokens_cached) ?? 0,
         tokens_out: num(raw.tokens_out) ?? 0,
-        cost_usd: num(raw.cost_usd) ?? 0,
+        // a search is counted, never priced (the engine may attach a list price; it isn't spent)
+        cost_usd: search ? 0 : (num(raw.cost_usd) ?? 0),
         latency_s: num(raw.latency_s) ?? 0,
+        search,
       };
     }
     case "cue": {
@@ -494,8 +508,20 @@ export async function request(url: string, init: RequestInit): Promise<Response>
 
 // -- reads -------------------------------------------------------------------------------------
 
-export type Budget = { spentToday: number | null; capDay: number | null; spentTotal: number | null; capTotal: number | null };
-export type Health = { ok: boolean; speech: boolean | null; liveBusy: boolean | null; budget: Budget | null };
+/** The live demo's budget: model spend (USD) against its caps, and web searches counted, never priced. */
+export type Budget = {
+  spentToday: number | null;
+  capDay: number | null;
+  spentTotal: number | null;
+  capTotal: number | null;
+  capRun: number | null;
+  searchesToday: number | null;
+  searchesCapDay: number | null;
+  searchesCapRun: number | null;
+};
+/** How long the service keeps an upload's run (days) and a studio copy (hours). */
+export type Retention = { uploadDays: number | null; forkHours: number | null };
+export type Health = { ok: boolean; speech: boolean | null; liveBusy: boolean | null; budget: Budget | null; retention: Retention | null };
 
 /** GET /v1/health. Throws ApiError ("unreachable" when nothing answers). */
 export async function health(signal?: AbortSignal): Promise<Health> {
@@ -509,25 +535,50 @@ export async function health(signal?: AbortSignal): Promise<Health> {
     speech: typeof raw.speech === "boolean" ? raw.speech : null,
     liveBusy: typeof raw.live_busy === "boolean" ? raw.live_busy : null,
     budget: b
-      ? { spentToday: num(b.spent_today), capDay: num(b.cap_day), spentTotal: num(b.spent_total), capTotal: num(b.cap_total) }
+      ? {
+          spentToday: num(b.spent_today),
+          capDay: num(b.cap_day),
+          spentTotal: num(b.spent_total),
+          capTotal: num(b.cap_total),
+          capRun: num(b.cap_run),
+          searchesToday: num(b.searches_today),
+          searchesCapDay: num(b.searches_cap_day),
+          searchesCapRun: num(b.searches_cap_run),
+        }
       : null,
+    retention:
+      num(raw.retention_days) !== null || num(raw.fork_retention_hours) !== null
+        ? { uploadDays: num(raw.retention_days), forkHours: num(raw.fork_retention_hours) }
+        : null,
   };
 }
 
 /**
  * Which spend cap would stop a run that needs `estimate` USD, judged from a health answer
- * (the API's own rule: a cap of 0 or less is no cap). Null when the run fits.
+ * (the engine's rule: no cap is null; a cap of 0 refuses every call). Null when the run fits.
  */
 export function capReached(budget: Budget | null, estimate: number): "day" | "total" | null {
   if (!budget) return null;
-  const over = (spent: number | null, cap: number | null) => spent !== null && cap !== null && cap > 0 && spent + estimate > cap;
+  const over = (spent: number | null, cap: number | null) => spent !== null && cap !== null && spent + estimate > cap;
   if (over(budget.spentTotal, budget.capTotal)) return "total";
   if (over(budget.spentToday, budget.capDay)) return "day";
   return null;
 }
 
-/** A sample clip the API can describe, with what it says about it (older APIs send the id only). */
-export type Sample = { id: string; title: string | null; duration: number | null; credit: string | null; licence: string | null };
+/**
+ * A sample clip the API can describe, with what its samples.json says about it: title, length,
+ * credit, licence (and the deed's address), where it was cut from (an older API sends the id only).
+ */
+export type Sample = {
+  id: string;
+  title: string | null;
+  duration: number | null;
+  credit: string | null;
+  licence: string | null;
+  licenceUrl: string | null;
+  sourceUrl: string | null;
+  excerpt: string | null;
+};
 
 /** GET /v1/samples: the sample clips the API can describe, with their title, length, credit and licence. */
 export async function samples(signal?: AbortSignal): Promise<Sample[]> {
@@ -536,6 +587,7 @@ export async function samples(signal?: AbortSignal): Promise<Sample[]> {
   const raw: unknown = await res.json().catch(() => null);
   if (!Array.isArray(raw)) return [];
   const text = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const httpUrl = (v: unknown) => (typeof v === "string" && /^https:\/\//.test(v.trim()) ? v.trim() : null);
   return raw.filter(isObj).flatMap((s) =>
     typeof s.id === "string" && s.id
       ? [
@@ -545,6 +597,9 @@ export async function samples(signal?: AbortSignal): Promise<Sample[]> {
             duration: typeof s.duration === "number" && Number.isFinite(s.duration) && s.duration > 0 ? s.duration : null,
             credit: text(s.credit),
             licence: text(s.licence),
+            licenceUrl: httpUrl(s.licence_url),
+            sourceUrl: httpUrl(s.source_url),
+            excerpt: text(s.excerpt),
           },
         ]
       : [],

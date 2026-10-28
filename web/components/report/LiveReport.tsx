@@ -11,7 +11,7 @@ import type { ShowcaseIndexEntry } from "@/lib/showcase-schema.mjs";
 import { RunReport } from "./RunReport";
 import styles from "./Report.module.css";
 
-type State = { kind: "loading" } | { kind: "down"; message: string | null } | Exclude<Loaded, { kind: "published" }> | { kind: "ready"; report: ReportData };
+type State = { kind: "loading" } | { kind: "down"; message: string | null } | Exclude<Loaded, { kind: "done" }> | { kind: "ready"; report: ReportData };
 
 /** A live run's conformance report, loaded from the API; where the run stands when it isn't published. */
 export function LiveReport({ id, index }: { id: string; index: readonly ShowcaseIndexEntry[] }) {
@@ -26,7 +26,7 @@ export function LiveReport({ id, index }: { id: string; index: readonly Showcase
     try {
       const got = await loadRun(id, { index, signal: c.signal });
       if (c.signal.aborted) return;
-      setState(got.kind === "published" ? { kind: "ready", report: apiReport(id, got.detail, got.run) } : got);
+      setState(got.kind === "done" ? { kind: "ready", report: apiReport(id, got.detail, got.run) } : got);
     } catch (e) {
       if (isAbort(e) || c.signal.aborted) return;
       setState({ kind: "down", message: e instanceof ApiError && e.code !== "unreachable" ? e.message : null });
@@ -69,6 +69,10 @@ export function LiveReport({ id, index }: { id: string; index: readonly Showcase
           }
         >
           <p>Its report is written when it is published.</p>
+        </RunNotice>
+      ) : state.kind === "stopped" ? (
+        <RunNotice eyebrow="Conformance report" title="This run hasn’t finished." doors={ways}>
+          <p>Nothing was published from it yet, so there is no report. Its owner can resume it from the try-it page.</p>
         </RunNotice>
       ) : state.kind === "failed" ? (
         <RunNotice eyebrow="Conformance report" title="This run stopped before it finished." doors={ways}>

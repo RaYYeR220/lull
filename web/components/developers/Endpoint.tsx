@@ -7,6 +7,7 @@ const AUTH: Record<EndpointDoc["auth"], string> = {
   none: "None.",
   "edit-token": "Authorization: Bearer <the run’s edit token> (from its run event, or from a fork).",
   "edit-token to resume": "None to read; to resume a run that stopped before it finished, Authorization: Bearer <its edit token>.",
+  "edit-token to see an unfinished run": "None for a done run; for the rest of a run that isn't done, Authorization: Bearer <its edit token>.",
 };
 
 function Fields({ fields, caption }: { fields: Field[]; caption: string }) {

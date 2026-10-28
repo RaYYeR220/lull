@@ -116,7 +116,7 @@ function EditBlock({ data, owner }: { data: RunData; owner: boolean }) {
             Only the browser that started this run can change it. Open it in the studio to see each line with its evidence, or make your own copy to
             edit.
           </p>
-          <ForkDoor runId={data.id}>
+          <ForkDoor runId={data.id} title={data.title}>
             <Door tone="dark" href={studioHref(data.id)} className={run.studioDoor}>
               Open in Studio
             </Door>
@@ -159,18 +159,18 @@ export function LiveRun({ id, index }: { id: string; index: readonly ShowcaseInd
   }, [id, load]);
 
   useEffect(() => {
-    if (state.kind === "published") document.title = `${state.run.title}, described | Lull`;
+    if (state.kind === "done") document.title = `${state.run.title}, described | Lull`;
   }, [state]);
 
   const status =
-    state.kind === "loading" ? "Loading the run…" : state.kind === "published" ? `${state.run.title} is ready to play.` : "";
+    state.kind === "loading" ? "Loading the run…" : state.kind === "done" ? `${state.run.title} is ready to play.` : "";
 
   return (
     <>
       <p role="status" className={state.kind === "loading" ? styles.loading : "sr-only"}>
         {status}
       </p>
-      {state.kind === "published" ? (
+      {state.kind === "done" ? (
         <WatchRun
           media={state.run.media}
           label={`${state.run.title}, described`}
@@ -196,6 +196,31 @@ export function LiveRun({ id, index }: { id: string; index: readonly ShowcaseInd
           }
         >
           <p>Its stages, model calls and lines show up as they happen on the try-it page. Once it is published, this page plays it.</p>
+        </Notice>
+      ) : state.kind === "stopped" ? (
+        <Notice
+          title="This run hasn’t finished."
+          doors={
+            <Gate label="What next">
+              {owner ? (
+                <Door tone="lit" href={followHref(id)}>
+                  Resume it
+                </Door>
+              ) : (
+                <Door tone="lit" href="/try">
+                  Describe a clip
+                </Door>
+              )}
+              <Door tone="dark" href="/watch">
+                Watch a recorded run
+              </Door>
+            </Gate>
+          }
+        >
+          <p>
+            It stopped before it finished, and nothing was published from it. Only the browser that started it can resume it, from where it
+            stopped.
+          </p>
         </Notice>
       ) : state.kind === "failed" ? (
         <Notice

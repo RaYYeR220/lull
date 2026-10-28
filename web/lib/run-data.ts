@@ -5,7 +5,7 @@
  * comes from the run's own data; what a source doesn't have is null and the pages leave it out.
  */
 import type { CueStatus, LintFinding } from "./api";
-import { cueAudioPattern, runFileUrl, type ApiClaim, type ApiCue, type CueFileTimeline, type ManifestSummary, type RunDetail } from "./api-runs";
+import { cueAudioPattern, runFileUrl, type ApiClaim, type ApiCue, type ManifestSummary, type DoneDetail, type RunDetail } from "./api-runs";
 import { LAYOUT, showcaseUrl } from "./showcase-schema.mjs";
 import type { Showcase, ShowcaseIndexEntry, ShowcaseWord } from "./showcase-schema.mjs";
 import { lineCounts, type LineCounts } from "./showcase-derive";
@@ -222,10 +222,18 @@ const API_FILES: { name: string; kind: string; what: string }[] = [
  * the site ships (source "sample"), or a copy of one of its recorded runs (source "fork").
  * Never guessed from the file's name: an upload is never matched to a recorded run.
  */
-export function clipOf(detail: Pick<RunDetail, "source">, index: readonly ShowcaseIndexEntry[]): ShowcaseIndexEntry | null {
+/**
+ * The recorded run this site ships for a run the API serves, when there is one: the recorded
+ * run itself (opened through the API), a copy of it (a fork of a showcase run), or a run of a
+ * sample of the same name. It lends what the API keeps no copy of (a recorded run's loudness).
+ */
+export function clipOf(detail: Pick<RunDetail, "id" | "kind" | "source">, index: readonly ShowcaseIndexEntry[]): ShowcaseIndexEntry | null {
+  const find = (id: string | null) => (id ? (index.find((e) => e.id === id) ?? null) : null);
+  if (detail.kind === "showcase") return find(detail.id);
   const src = detail.source;
-  if (!src || !src.id || (src.kind !== "sample" && src.kind !== "fork")) return null;
-  return index.find((e) => e.id === src.id) ?? null;
+  if (src?.kind === "fork") return find(src.forkedFrom);
+  if (src?.kind === "sample") return find(src.sampleId);
+  return null;
 }
 
 function provenance(summary: ManifestSummary, tts: string | null): Provenance | null {
@@ -238,17 +246,16 @@ function provenance(summary: ManifestSummary, tts: string | null): Provenance | 
 }
 
 /**
- * A run the API serves. `timeline`: the speech and pauses from its cues.json. `clip`: the
- * recorded run of the same clip, when there is one; it lends the soundtrack's loudness (the
- * same audio), and speech and pauses only when the run's own files lack them (said so in
- * `borrowed`). When `clip` is the run itself (a recorded run opened through the API), its
- * media and files are the site's copies.
+ * A done run the API serves. Its detail brings its own speech, pauses, voice rate, loudness and
+ * original video. `clip`: the recorded run of the same clip, when there is one; it lends only
+ * what the detail lacks (the loudness, which the API keeps for live runs only, and speech or
+ * pauses an older run didn't record), said so in `borrowed`. When `clip` is the run itself (a
+ * recorded run opened through the API), its media and files are the site's copies.
  */
 export function fromApi(
   id: string,
-  detail: RunDetail,
+  detail: DoneDetail,
   opts: {
-    timeline?: CueFileTimeline;
     clip?: Showcase | null;
     clipFiles?: RunFile[];
     /** Bumped after an edit: the cue recordings are fetched afresh. */
@@ -259,21 +266,21 @@ export function fromApi(
 ): RunData {
   const { manifest } = detail;
   const clip = opts.clip ?? null;
-  const own = opts.timeline ?? { speech: null, gaps: null };
-  const gaps: RunGap[] | null = own.gaps ?? (clip ? clip.gaps.map((g) => ({ id: g.id, start: g.start, end: g.end, capacity: g.capacity })) : null);
-  const speech = own.speech ?? clip?.speech ?? null;
+  const gaps: RunGap[] | null = detail.gaps ?? (clip ? clip.gaps.map((g) => ({ id: g.id, start: g.start, end: g.end, capacity: g.capacity })) : null);
+  const speech = detail.speech ?? clip?.speech ?? null;
+  const loudness = detail.loudness ?? clip?.loudness ?? null;
   const byId = new Map((gaps ?? []).map((g) => [g.id, g]));
 
   const draft = (c: ApiCue, extended: boolean): Draft => {
     const voiced = c.audioDur !== null && c.status !== "held";
     return {
       id: c.id,
-      extended,
+      extended: extended || c.extended,
       start: c.start,
       end: voiced ? c.start + c.audioDur! : null,
       text: c.text,
       status: c.status,
-      gap: extended ? null : ((c.gapId ? byId.get(c.gapId) : undefined) ?? gapAt(c.start, gaps)),
+      gap: extended || c.extended ? null : ((c.gapId ? byId.get(c.gapId) : undefined) ?? gapAt(c.start, gaps)),
       claims: c.claims,
       claimsOf: "line",
       findings: c.findings,
@@ -283,7 +290,7 @@ export function fromApi(
     };
   };
   const cues = number([...detail.cues.map((c) => draft(c, false)), ...detail.extended.map((c) => draft(c, true))]);
-  const duration = manifest.video.duration ?? clip?.duration ?? Math.max(0, ...cues.map((c) => c.end ?? c.start));
+  const duration = detail.duration ?? manifest.video.duration ?? clip?.duration ?? Math.max(0, ...cues.map((c) => c.end ?? c.start));
 
   const itself = clip !== null && clip.id === id;
   const has = (name: string) => name in manifest.outputs;
@@ -291,7 +298,9 @@ export function fromApi(
   let media: RunMedia | null;
   if (itself) media = showcaseMedia(clip);
   else {
-    const src = clip ? showcaseUrl(clip.id, LAYOUT.video) : (published("described.mp4") ?? null);
+    // the original video with the descriptions over it; without it, the described video as is
+    const original = detail.original ?? (clip ? showcaseUrl(clip.id, LAYOUT.video) : null);
+    const src = original ?? published("described.mp4") ?? null;
     media = src
       ? {
           src,
@@ -301,7 +310,7 @@ export function fromApi(
           cueAudioBase: cueAudioPattern(id, opts.audioVersion ?? 0),
           cueAudioExt: "wav",
           crossOrigin: "anonymous",
-          sound: clip ? undefined : "described",
+          sound: original ? undefined : "described",
         }
       : null;
   }
@@ -309,28 +318,29 @@ export function fromApi(
     itself && opts.clipFiles
       ? opts.clipFiles
       : API_FILES.filter((f) => has(f.name)).map((f) => ({ ...f, href: runFileUrl(id, f.name), bytes: manifest.outputs[f.name]?.bytes ?? null }));
+  const lent = clip && !itself ? { loudness: !detail.loudness && !!clip.loudness, speech: !detail.speech, gaps: !detail.gaps } : null;
 
   return {
     id,
     source: "api",
-    title: clip?.title ?? manifest.video.name ?? id,
+    title: clip?.title ?? detail.title ?? manifest.video.name ?? id,
     credit: clip?.credit ?? null,
     file: manifest.video.name,
     duration,
-    loudness: clip?.loudness ?? null,
+    loudness,
     speech,
     gaps,
     words: clip?.words ?? null,
-    borrowed: clip && !itself ? { from: clip.id, title: clip.title, loudness: true, speech: !own.speech, gaps: !own.gaps } : null,
+    borrowed: lent && (lent.loudness || lent.speech || lent.gaps) ? { from: clip!.id, title: clip!.title, ...lent } : null,
     cues,
     media,
     files,
     summary: manifest.summary,
-    costUsd: manifest.summary.costUsd,
+    costUsd: manifest.summary.spend?.modelUsd ?? manifest.summary.costUsd,
     voice: manifest.options.voice,
-    wps: gaps ? (inferWps(gaps)?.wps ?? null) : null,
+    wps: detail.wps ?? (gaps ? (inferWps(gaps)?.wps ?? null) : null),
     dirty: detail.dirty,
-    created: manifest.created,
+    created: manifest.created ?? detail.created,
     provenance: provenance(manifest.summary, manifest.versions.tts),
     recorded: null,
   };

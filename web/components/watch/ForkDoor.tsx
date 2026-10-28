@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Door, Gate } from "@/components/ui/Gate";
 import { ApiError, forkRun, health, isAbort, saveEditToken, saveForkRecord } from "@/lib/api";
+import { rememberRun } from "@/lib/own-runs";
 import { studioHref } from "@/lib/routes";
 import styles from "./Watch.module.css";
 
@@ -32,10 +33,13 @@ const KEYLESS = "Copy made, but this browser can’t keep the edit key, so you c
  */
 export function ForkDoor({
   runId,
+  title,
   children,
   label = "Edit this run",
 }: {
   runId: string;
+  /** The run's title, for this browser's list of its own runs. */
+  title?: string;
   /** The door beside it in the gate. */
   children?: ReactNode;
   label?: string;
@@ -78,6 +82,7 @@ export function ForkDoor({
         return;
       }
       saveForkRecord(fork.runId, { source: runId, made: Date.now() });
+      rememberRun({ id: fork.runId, title: `${title ?? runId}, your copy`, kind: "fork", made: Date.now() });
       setPhase({ kind: "made" });
       router.push(studioHref(fork.runId));
     } catch (e) {

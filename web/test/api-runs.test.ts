@@ -9,7 +9,6 @@ import {
   lookupRun,
   publishRun,
   readCue,
-  readCueFileTimeline,
   readDetail,
   runFileUrl,
 } from "../lib/api-runs";
@@ -83,8 +82,9 @@ describe("reading a run", () => {
     const d = readDetail(DETAIL)!;
     expect(d.dirty).toBe(true);
     expect(d.cues.map((c) => c.id)).toEqual(["c002"]);
-    expect(d.manifest.outputs["descriptions.vtt"]).toEqual({ bytes: 1182 });
-    const s = d.manifest.summary;
+    expect(d.status).toBe("done"); // an older answer without a status: its manifest says it is done
+    expect(d.manifest!.outputs["descriptions.vtt"]).toEqual({ bytes: 1182 });
+    const s = d.manifest!.summary;
     expect(s.coverage).toMatchObject({ important: 6, described: 5, ratio: 0.833 });
     expect(s.repetitive).toEqual([{ id: "e09", text: "Wires sway." }]);
     expect(s.wcag?.[0]).toMatchObject({ criterion: "1.2.5", status: "needs review", reasons: ["1 description held for review"] });
@@ -93,22 +93,9 @@ describe("reading a run", () => {
     expect(s.lintWarnings).toBeNull();
     // an older summary keeps only the ids of what the plan judged repetitive
     const older = readDetail({ ...DETAIL, manifest: { ...DETAIL.manifest, summary: { coverage: { salient_events: 4, described: 4, repetitive: ["e1"] } } } })!;
-    expect(older.manifest.summary.repetitive).toEqual([{ id: "e1", text: null }]);
-    expect(older.manifest.summary.coverage?.important).toBe(4);
+    expect(older.manifest!.summary.repetitive).toEqual([{ id: "e1", text: null }]);
+    expect(older.manifest!.summary.coverage?.important).toBe(4);
     expect(readDetail({ cues: {} })).toBeNull();
-  });
-
-  it("reads the usable pauses and speech from cues.json", () => {
-    const t = readCueFileTimeline({
-      gaps: [
-        { id: "g1", start: 1, end: 5, usable_start: 1.2, usable_end: 4.8, capacity_words: 10 },
-        { id: "g2", start: 6, end: 6 },
-      ],
-      speech: [{ start: 0, end: 1 }, { start: 3, end: 2 }],
-    });
-    expect(t.gaps).toEqual([{ id: "g1", start: 1.2, end: 4.8, capacity: 10 }]);
-    expect(t.speech).toEqual([[0, 1]]);
-    expect(readCueFileTimeline({ cues: [] })).toEqual({ speech: null, gaps: null });
   });
 
   it("names the API's file and audio routes", () => {
@@ -117,33 +104,11 @@ describe("reading a run", () => {
     expect(cueAudioPattern("r1", 3)).toBe(`${API_BASE}/v1/runs/r1/cues/{id}/audio?v=3`);
   });
 
-  it("gets a run, and says not_found for one that isn't published", async () => {
+  it("gets a run, and says not_found for one that isn't there", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json(200, DETAIL)));
-    expect((await getRun("r1")).manifest.runId).toBe("r1");
-    vi.stubGlobal("fetch", vi.fn(async () => json(404, { detail: "run not found" })));
+    expect((await getRun("r1")).manifest!.runId).toBe("r1");
+    vi.stubGlobal("fetch", vi.fn(async () => json(404, { error: "not_found", message: "There is no run with that id." })));
     await expect(getRun("r1")).rejects.toMatchObject({ code: "not_found" });
-  });
-
-  it("looks a run up: published, still running, stopped with its reason, or missing", async () => {
-    const list = [
-      { id: "run", kind: "live", title: "a.mp4", status: "running" },
-      { id: "fail", kind: "live", title: "b.mp4", status: "failed" },
-    ];
-    const replay =
-      'id: 0\nevent: run\ndata: {"type":"run","run_id":"fail","seq":0}\n\nid: 1\nevent: error\ndata: {"type":"error","message":"The speech server stopped.","seq":1}\n\n';
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        if (url.endsWith("/v1/runs")) return json(200, list);
-        if (url.endsWith("/v1/runs/ok")) return json(200, DETAIL);
-        if (url.endsWith("/events")) return new Response(replay, { status: 200, headers: { "content-type": "text/event-stream" } });
-        return json(404, { detail: "run not found" });
-      }),
-    );
-    expect((await lookupRun("ok")).kind).toBe("published");
-    expect(await lookupRun("run")).toEqual({ kind: "running" });
-    expect(await lookupRun("fail")).toEqual({ kind: "failed", reason: "The speech server stopped." });
-    expect(await lookupRun("gone")).toEqual({ kind: "missing" });
   });
 
   it("can't look a run up when nothing answers", async () => {

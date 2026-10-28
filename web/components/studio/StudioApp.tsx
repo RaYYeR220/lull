@@ -10,7 +10,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { STATUS } from "@/components/ui/StatusMark";
 import { ForkDoor } from "@/components/watch/ForkDoor";
 import { API_REFUSALS, ApiError, FORK_TTL_MS, isAbort, readEditToken, readForkRecord, type CueStatus, type ForkRecord } from "@/lib/api";
-import { approveCue, editCue, getRun, holdCue, publishRun, type RunDetail } from "@/lib/api-runs";
+import { approveCue, doneOrThrow, editCue, getRun, holdCue, publishRun, type DoneDetail } from "@/lib/api-runs";
 import { cx } from "@/lib/cx";
 import { followHref, reportHref, runHref, watchHref } from "@/lib/routes";
 import { buildRun, loadRun } from "@/lib/run-load";
@@ -28,6 +28,7 @@ type Load =
   | { kind: "loading" }
   | { kind: "ready" }
   | { kind: "running" }
+  | { kind: "stopped" }
   | { kind: "failed"; reason: string | null }
   | { kind: "missing" }
   | { kind: "down"; message: string | null };
@@ -98,7 +99,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
   const cue = run?.cues.find((c) => c.id === selected) ?? null;
 
   const build = useCallback(
-    (detail: RunDetail, signal?: AbortSignal) =>
+    (detail: DoneDetail, signal?: AbortSignal) =>
       buildRun(id, detail, { index, clip, clipFiles: initial?.files, audioVersion: versions.current.audio, filesVersion: versions.current.files, signal }),
     [id, index, clip, initial],
   );
@@ -110,7 +111,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
     if (recorded) {
       // the recorded files are already here; the API adds each line's checks and the summary
       try {
-        const next = await build(await getRun(id, c.signal), c.signal);
+        const next = await build(doneOrThrow(await getRun(id, { token: readEditToken(id), signal: c.signal })), c.signal);
         if (!c.signal.aborted) {
           setRun(next);
           setApi("ok");
@@ -124,7 +125,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
     try {
       const got = await loadRun(id, { index, signal: c.signal });
       if (c.signal.aborted) return;
-      if (got.kind === "published") {
+      if (got.kind === "done") {
         setRun(got.run);
         setSelected((s) => s ?? (got.run.cues.find((x) => x.id === cueInAddress())?.id ?? got.run.cues[0]?.id ?? null));
         setLoad({ kind: "ready" });
@@ -150,7 +151,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
    */
   const refresh = useCallback(async (): Promise<boolean> => {
     try {
-      setRun(await build(await getRun(id)));
+      setRun(await build(doneOrThrow(await getRun(id, { token: readEditToken(id) }))));
       return true;
     } catch {
       return false;
@@ -300,6 +301,31 @@ export function StudioApp({ id, initial, clip, index }: Props) {
           >
             <p>Its lines can be reviewed here once it is published.</p>
           </RunNotice>
+        ) : load.kind === "stopped" ? (
+          <RunNotice
+            eyebrow="Studio"
+            title="This run hasn’t finished."
+            doors={
+              token ? (
+                <Gate label="What next">
+                  <Door tone="lit" href={followHref(id)}>
+                    Resume it
+                  </Door>
+                  <Door tone="dark" href="/watch">
+                    Open a recorded run
+                  </Door>
+                </Gate>
+              ) : (
+                recordedDoor
+              )
+            }
+          >
+            <p>
+            It stopped before it finished, and nothing was published from it. Only the browser that started it can resume it, from where it
+            stopped.
+          </p>
+            <p>Its lines can be reviewed here once it is published.</p>
+          </RunNotice>
         ) : load.kind === "failed" ? (
           <RunNotice eyebrow="Studio" title="This run stopped before it finished." doors={recordedDoor}>
             {load.reason ? <p className={styles.quoted}>{load.reason}</p> : null}
@@ -342,7 +368,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
       <p className={styles.roNote}>
         A recorded run stays as it was made. Make your own copy to edit its lines, have them checked again and publish your version.
       </p>
-      <ForkDoor runId={id} label="Edit a copy" />
+      <ForkDoor runId={id} title={run?.title} label="Edit a copy" />
     </>
   ) : (
     <>
@@ -350,7 +376,7 @@ export function StudioApp({ id, initial, clip, index }: Props) {
         This browser doesn’t hold the edit key for this run, so its lines can’t be changed here. Only the browser that started the run, or made
         the copy, can edit it. You can make a copy of your own.
       </p>
-      <ForkDoor runId={id} label="Edit a copy" />
+      <ForkDoor runId={id} title={run?.title} label="Edit a copy" />
     </>
   );
 

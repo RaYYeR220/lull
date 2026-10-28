@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { readDetail } from "../lib/api-runs";
+import { doneOrThrow, readDetail } from "../lib/api-runs";
 import { apiReport, showcaseReport } from "../lib/report-data";
 import { fromApi, fromShowcase } from "../lib/run-data";
 import { parseShowcase } from "../lib/showcase";
@@ -63,7 +63,8 @@ describe("a recorded run's report", () => {
     expect(r.wcag?.[0]).toMatchObject({ criterion: "1.2.5", status: "needs review", blockers: [expect.stringContaining("F113")] });
     expect(r.f113).toEqual([{ gapId: "g009", start: 64.3, end: 66.5, events: ["e12"] }]);
     expect(r.spend?.map((x) => x.name)).toEqual(["Model calls, this run", "Model calls, every run under this id", "Web searches, this run"]);
-    expect(r.spend?.[2]?.note).toBe("$0.0160 at list price, not charged.");
+    // searches are counted, never priced: no list-price note
+    expect(r.spend?.[2]).toEqual({ name: "Web searches, this run", value: "2" });
   });
 
   it("a summary from before these were recorded leaves its rows out", () => {
@@ -84,7 +85,7 @@ describe("a recorded run's report", () => {
 
 describe("a live run's report", () => {
   it("reads the manifest's summary: WCAG with its blockers, held lines, review, models and spend", () => {
-    const detail = readDetail({
+    const detail = doneOrThrow(readDetail({
       manifest: {
         run_id: "r1",
         video: { name: "clip.mp4", duration: 30 },
@@ -98,22 +99,23 @@ describe("a live run's report", () => {
           reviewed: false,
           cost_usd: 0.0213,
           cost_per_min: 0.0142,
-          spend: { models_usd: 0.0213, tavily_credits: 1 },
+          spend: { model_usd: 0.0213, model_usd_all_runs: 0.0213, searches: 1 },
           tts_disclosure: "Descriptions are voiced with synthetic speech (NVIDIA Magpie TTS); lines are awaiting review.",
         },
         versions: { models: ["nvidia/Nemotron-3.5-Super-VL"] },
       },
       cues: { cues: [], extended: [] },
       dirty: false,
-    })!;
+    })!);
     const r = apiReport("r1", detail, fromApi("r1", detail));
     expect(r.kind).toBe("live");
     expect(r.held).toEqual([{ id: "c003", reason: "no door" }]);
     expect(r.reviewed).toBe(false);
     expect(r.wcag?.[0]).toMatchObject({ status: "not claimed", blockers: ["extended version not produced"], via: null });
     expect(r.spend).toEqual([
-      { name: "Model calls", value: "$0.0213", note: "$0.0142 per minute of video." },
-      { name: "Web search credits", value: "1", note: "Counted apart from the model spend." },
+      { name: "Model calls, this run", value: "$0.0213", note: "$0.0142 per minute of video." },
+      // searches are counted, never priced
+      { name: "Web searches, this run", value: "1" },
     ]);
     expect(r.engineReport).toMatch(/\/v1\/runs\/r1\/files\/report\.html$/);
     expect(r.f113).toBeNull();

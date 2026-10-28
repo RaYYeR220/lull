@@ -442,8 +442,9 @@ test.describe("the studio, read-only", () => {
     await expect(drawer(page).getByRole("button", { name: "Make an editable copy" })).toBeVisible();
     await expect(publish(page)).toHaveCount(0);
     await expect(page.getByText("Read-only", { exact: true })).toBeVisible();
-    // an uploaded clip: no soundtrack levels to draw, its own speech and pauses
-    await expect(page.locator("[class*='h_wave']")).toHaveCount(0);
+    // an uploaded clip: its own soundtrack levels (the API keeps them once it is published), speech and pauses
+    await expect(page.locator("[class*='h_wave']").first()).toBeVisible();
+    await expect(page.getByText(/from the recorded run of this clip/)).toHaveCount(0);
     await option(page, "c001").click();
     await expect(drawer(page).getByRole("region", { name: "Writing checks" })).toContainText("R14-gender");
   });

@@ -7,7 +7,7 @@
  */
 import type { CueStatus } from "./api";
 import { reportUrl } from "./api";
-import type { RunDetail } from "./api-runs";
+import type { DoneDetail } from "./api-runs";
 import type { RunData } from "./run-data";
 import type { Showcase } from "./showcase-schema.mjs";
 
@@ -65,12 +65,8 @@ export function showcaseReport(s: Showcase, run: RunData): ReportData {
     spend.push({ name: "Model calls, this run", value: usd(sum.spend.modelUsdThisRun), note: "The attempt that published it." });
   if (sum?.spend.modelUsdAllRunsOfRunId != null)
     spend.push({ name: "Model calls, every run under this id", value: usd(sum.spend.modelUsdAllRunsOfRunId), note: "Earlier attempts included." });
-  if (sum?.spend.webSearchesThisRun != null)
-    spend.push({
-      name: "Web searches, this run",
-      value: String(sum.spend.webSearchesThisRun),
-      note: sum.spend.webSearchListUsdThisRun != null ? `${usd(sum.spend.webSearchListUsdThisRun)} at list price, not charged.` : undefined,
-    });
+  // searches are counted, never priced
+  if (sum?.spend.webSearchesThisRun != null) spend.push({ name: "Web searches, this run", value: String(sum.spend.webSearchesThisRun) });
   if (!spend.length && s.costUsd !== undefined) spend.push({ name: "Model calls", value: usd(s.costUsd), note: "As the export gives it." });
   return {
     id: s.id,
@@ -96,15 +92,17 @@ export function showcaseReport(s: Showcase, run: RunData): ReportData {
 }
 
 /** A run the API serves: its manifest's summary. */
-export function apiReport(id: string, detail: RunDetail, run: RunData): ReportData {
+export function apiReport(id: string, detail: DoneDetail, run: RunData): ReportData {
   const s = detail.manifest.summary;
   const counts = Object.keys(s.cues).length ? s.cues : null;
   const spend: SpendRow[] = [];
-  if (s.costUsd !== null) spend.push({ name: "Model calls", value: usd(s.costUsd), note: s.costPerMin !== null ? `${usd(s.costPerMin)} per minute of video.` : undefined });
-  if (s.spend) {
-    if (s.spend.tavilyCredits !== null && s.spend.tavilyCredits > 0)
-      spend.push({ name: "Web search credits", value: String(s.spend.tavilyCredits), note: "Counted apart from the model spend." });
-  }
+  const model = s.spend?.modelUsd ?? s.costUsd;
+  if (model !== null)
+    spend.push({ name: "Model calls, this run", value: usd(model), note: s.costPerMin !== null ? `${usd(s.costPerMin)} per minute of video.` : undefined });
+  const all = s.spend?.modelUsdAllRuns ?? null;
+  if (all !== null && model !== null && all > model) spend.push({ name: "Model calls, every run under this id", value: usd(all), note: "Earlier attempts included." });
+  // searches are counted, never priced
+  if (s.spend?.searches != null) spend.push({ name: "Web searches, this run", value: String(s.spend.searches) });
   return {
     id,
     kind: "live",

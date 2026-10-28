@@ -245,7 +245,7 @@ export function elapsedSeconds(s: RunState, now: number): number {
   return s.sentAt !== null ? Math.max(0, (now - s.sentAt) / 1000) : 0;
 }
 
-export type ModelTotal = { model: string; calls: number; tokensIn: number; tokensOut: number; cost: number; roles: string[] };
+export type ModelTotal = { model: string; calls: number; tokensIn: number; tokensOut: number; cost: number; roles: string[]; search: boolean };
 
 /** Calls grouped by model, in the order each model was first called. */
 export function totalsByModel(calls: readonly CallEvent[]): ModelTotal[] {
@@ -253,7 +253,7 @@ export function totalsByModel(calls: readonly CallEvent[]): ModelTotal[] {
   for (const c of calls) {
     let t = out.get(c.model);
     if (!t) {
-      t = { model: c.model, calls: 0, tokensIn: 0, tokensOut: 0, cost: 0, roles: [] };
+      t = { model: c.model, calls: 0, tokensIn: 0, tokensOut: 0, cost: 0, roles: [], search: c.search };
       out.set(c.model, t);
     }
     t.calls += 1;

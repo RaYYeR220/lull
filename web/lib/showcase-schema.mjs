@@ -215,8 +215,8 @@ function parseSummary(s, fail) {
     models: strs(s.models),
     spend: {
       modelUsdThisRun: num(spend.modelUsdThisRun),
+      // searches are counted, never priced: the export's list-price figure is not read
       webSearchesThisRun: num(spend.webSearchesThisRun),
-      webSearchListUsdThisRun: num(spend.webSearchListUsdThisRun),
       modelUsdAllRunsOfRunId: num(spend.modelUsdAllRunsOfRunId),
     },
   };
