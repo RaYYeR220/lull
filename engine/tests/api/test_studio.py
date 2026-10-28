@@ -159,6 +159,7 @@ def make_app(data, tmp_path, monkeypatch):
         app.state.live.ledger = Ledger(
             tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None
         )
+        app.state.live.envelope = None  # tests that want the loudness kept set it
         app.state.studio.clients = Fakes()
         return app
 
@@ -1320,11 +1321,13 @@ def test_detail_has_the_web_contract(sc, rd, monkeypatch):
     import math
 
     from lull import media
+    from lull.api import facts
 
+    facts.keep_loudness(rd, rd / "input" / "clip.mp4", 12.0)  # as a live run's publish does
     calls = []
-    real = media.extract_wav
-    monkeypatch.setattr(media, "extract_wav", lambda *a, **k: calls.append(a) or real(*a, **k))
+    monkeypatch.setattr(media, "extract_wav", lambda *a, **k: calls.append(a))
     j = sc.get(f"/v1/runs/{RID}").json()
+    assert calls == []  # reading a run never runs ffmpeg
     assert j["id"] == RID and j["kind"] == "live" and j["status"] == "done"
     assert j["source"] == {"kind": "upload"}
     assert j["error"] is None and j["dirty"] is False
@@ -1345,9 +1348,14 @@ def test_detail_has_the_web_contract(sc, rd, monkeypatch):
     assert [c["extended"] for c in j["cues"]["cues"]] == [False, False]
     assert [c["extended"] for c in j["cues"]["extended"]] == [True]
     assert isinstance(j["manifest"]["summary"]["repetitive"], list)
-    again = sc.get(f"/v1/runs/{RID}").json()
-    assert again["loudness"] == loud and len(calls) == 1  # worked out once, then kept
-    assert (rd / "loudness.json").is_file()
+
+
+def test_without_a_kept_envelope_the_loudness_is_null(sc, rd, monkeypatch):
+    from lull import media
+
+    monkeypatch.setattr(media, "extract_wav", lambda *a, **k: pytest.fail("ffmpeg on a GET"))
+    assert sc.get(f"/v1/runs/{RID}").json()["loudness"] is None
+    assert not (rd / "loudness.json").exists()
 
 
 def test_the_original_is_served_with_ranges(sc, rd):
@@ -1369,12 +1377,20 @@ def test_a_showcase_run_without_its_input_uses_its_sample(make_app, template, da
         j = c.get(f"/v1/runs/{RID}").json()
         assert j["kind"] == "showcase" and j["status"] == "done"
         assert j["source"] == {"kind": "sample", "sample_id": "clip"}
-        assert j["original"] == f"/v1/runs/{RID}/original" and j["loudness"]
+        assert j["original"] == f"/v1/runs/{RID}/original"
+        assert j["loudness"] is None  # a recorded run brings its loudness.json, or has none
         assert c.get(j["original"]).status_code == 200
 
 
-def test_a_fork_says_where_it_came_from(sc, rd, data):
+def test_a_fork_says_where_it_came_from_and_keeps_the_loudness(sc, rd, data, app):
+    from lull.api import facts
+
+    app.state.live.envelope = facts.keep_loudness
     new = sc.post(f"/v1/runs/{RID}/fork").json()["run_id"]
     j = sc.get(f"/v1/runs/{new}").json()
     assert j["source"] == {"kind": "fork", "forked_from": RID, "origin": "upload"}
     assert j["status"] == "done" and j["original"] == f"/v1/runs/{new}/original"
+    assert j["loudness"] and (data / "runs" / new / "loudness.json").is_file()  # at fork time
+    (rd / "loudness.json").write_text(json.dumps({"values": [-1.0, -2.0]}))
+    again = sc.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+    assert sc.get(f"/v1/runs/{again}").json()["loudness"] == [-1.0, -2.0]  # copied, not redone

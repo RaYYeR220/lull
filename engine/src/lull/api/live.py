@@ -50,7 +50,7 @@ from starlette.requests import ClientDisconnect
 from starlette.types import Message
 
 from lull import media
-from lull.api import clip
+from lull.api import clip, facts
 from lull.api.clean import Scrubber, default_roots
 from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import HOUR, RateLimiter
@@ -507,6 +507,9 @@ class Live:
         )
         self.executor = Executor(changed=store.invalidate)
         store.active = lambda run_id: self.executor.get(run_id) is not None
+        # the loudness envelope, worked out once a run has published (in its worker thread)
+        self.envelope: Callable[[Path, Path, float | None], object] | None = facts.keep_loudness
+        self.executor.after_run.append(self._keep_loudness)
         self.heartbeat = HEARTBEAT_S
         self.max_bytes = MAX_UPLOAD_BYTES
         self.max_seconds = MAX_SECONDS
@@ -531,6 +534,10 @@ class Live:
 
     def scrubber(self, run_dir: Path) -> Scrubber:
         return Scrubber(run_dir.absolute(), default_roots(self.settings.lull_data))
+
+    def _keep_loudness(self, job: Job) -> None:
+        if self.envelope is not None and (job.run_dir / MANIFEST).is_file():
+            self.envelope(job.run_dir, job.video, job.duration)
 
     def check_budget(self, run_id: str, duration: float) -> None:
         try:

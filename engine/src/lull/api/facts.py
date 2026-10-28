@@ -8,8 +8,9 @@ for any run, finished or not.
     speech    [[start, end], ...] and gaps [{id, start, end, capacity}] (the usable windows),
               as published in cues.json, at the run's voice rate `wps`
     loudness  dBFS of the original sound per LOUDNESS_HOP seconds (floor FLOOR_DB, 1 decimal),
-              the shape of the showcase export's showcase.json; worked out once, kept in
-              loudness.json
+              the shape of the showcase export's showcase.json; worked out once, when a live
+              run publishes or a run is forked, and kept in loudness.json (a request only
+              reads it; a recorded run brings its own or has none)
     original  the source video the run described: its upload or sample kept in the run
               folder, or for a recorded run the sample of the same name and sha256
 """
@@ -209,7 +210,9 @@ def gap_windows(cues_doc: Any) -> list[dict] | None:
 # -- the loudness envelope ----------------------------------------------------------------------
 
 
-def _envelope(video: Path, length: float | None) -> list[float]:
+def envelope(video: Path, length: float | None) -> list[float]:
+    """dBFS of `video`'s first sound stream per LOUDNESS_HOP, floor FLOOR_DB, one value per hop
+    of `length` (ffmpeg: never on a request)."""
     with tempfile.TemporaryDirectory(prefix="lull-loudness-") as tmp:
         wav = Path(tmp) / "original.wav"
         try:
@@ -224,26 +227,28 @@ def _envelope(video: Path, length: float | None) -> list[float]:
     return out + [FLOOR_DB] * (n - len(out))
 
 
-def loudness(run_dir: Path, video: Path, length: float | None) -> list[float] | None:
-    """The envelope of `video`'s sound, from run_dir/loudness.json when it was worked out for
-    this very file, else worked out (ffmpeg) and kept there."""
+def keep_loudness(run_dir: Path, video: Path, length: float | None) -> list[float] | None:
+    """Work out the envelope of `video` and keep it in run_dir/loudness.json (written whole or
+    not at all). Called when a live run publishes and when a run is forked."""
     try:
-        st = video.stat()
-    except OSError:
-        return None
-    sig = {"name": video.name, "size": st.st_size, "hop": LOUDNESS_HOP}
-    kept = _dict(read_json(run_dir / LOUDNESS))
-    if kept.get("of") == sig and isinstance(kept.get("values"), list):
-        return kept["values"]
-    try:
-        values = _envelope(video, length)
+        values = envelope(video, length)
     except (media.MediaError, OSError, ValueError):
         log.warning("loudness of %s could not be worked out", video.name, exc_info=True)
         return None
     tmp = run_dir / f".loudness-{secrets.token_hex(4)}.tmp"
     try:
-        tmp.write_text(json.dumps({"of": sig, "values": values}), encoding="utf-8")
+        tmp.write_text(json.dumps({"hop": LOUDNESS_HOP, "values": values}), encoding="utf-8")
         os.replace(tmp, run_dir / LOUDNESS)
-    except OSError:  # a read-only run folder: answer anyway
+    except OSError:
         tmp.unlink(missing_ok=True)
+        log.warning("loudness.json could not be written in %s", run_dir.name, exc_info=True)
+        return None
     return values
+
+
+def read_loudness(run_dir: Path) -> list[float] | None:
+    """The kept envelope, or None: a request never works one out."""
+    values = _dict(read_json(run_dir / LOUDNESS)).get("values")
+    if not isinstance(values, list):
+        return None
+    return [v for v in values if isinstance(v, int | float) and not isinstance(v, bool)]

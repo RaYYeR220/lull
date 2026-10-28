@@ -1063,7 +1063,9 @@ async def publish_run(run_id: str, request: Request) -> dict:
 
 async def _detail(studio: Studio, run_dir: Path) -> dict:
     """The run as GET /v1/runs/{id} gives it (in a thread: it may work out the loudness)."""
-    return await anyio.to_thread.run_sync(studio.store.detail, run_dir)
+    return await anyio.to_thread.run_sync(
+        functools.partial(studio.store.detail, run_dir, owner=True)  # the writer owns it
+    )
 
 
 # -- forks --------------------------------------------------------------------------------------
@@ -1106,7 +1108,14 @@ def _rebase(obj: Any, src: Path, dst: Path) -> Any:
 
 
 def fork_run(
-    src: Path, dst: Path, *, run_id: str, token_hash: str, client: str, origin: dict | None = None
+    src: Path,
+    dst: Path,
+    *,
+    run_id: str,
+    token_hash: str,
+    client: str,
+    origin: dict | None = None,
+    envelope: Callable[[Path, Path, float | None], object] | None = None,
 ) -> None:
     """Copy what the Studio and a new publish need from the published run `src` into the new
     live run folder `dst`, left out of the run list until it is complete: the manifest and
@@ -1157,6 +1166,12 @@ def fork_run(
         _write_json(dst / CUES, {**cues, "run_id": run_id} if "run_id" in cues else cues)
     if (src / STUDIO).is_file():
         _copy(src / STUDIO, dst / STUDIO)
+    if (src / facts.LOUDNESS).is_file():  # the same original sound
+        _copy(src / facts.LOUDNESS, dst / facts.LOUDNESS)
+    elif envelope is not None:  # worked out now, at fork time, never on a request
+        original = dst / video if video else facts.source_video(src, manifest, request, Path())
+        if original is not None:
+            envelope(dst, original, facts.duration(manifest, request))
     options = request.get("options") if isinstance(request.get("options"), dict) else None
     options = options or _dict(manifest.get("options"))
     duration = _dict(manifest.get("video")).get("duration")
@@ -1219,6 +1234,7 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
                     token_hash=token_hash,
                     client=client[:16],
                     origin=fork_origin(studio, found[0], src),
+                    envelope=studio.live.envelope,
                 )  # fmt: skip
             )
         except Exception:

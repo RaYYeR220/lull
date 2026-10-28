@@ -10,13 +10,14 @@ import mimetypes
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from lull.api.health import Health
 from lull.api.live import SEARCHES_PER_RUN, Live, LiveError, live_error_handler
 from lull.api.live import router as live_router
+from lull.api.owner import holds_token
 from lull.api.settings import ApiSettings
 from lull.api.store import RunStore
 from lull.api.studio import Studio
@@ -97,11 +98,11 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
         return store.list()
 
     @app.get("/v1/runs/{run_id}")
-    def get_run(run_id: str):
+    def get_run(run_id: str, request: Request):
         found = store.find(run_id)
         if found is None:
             raise HTTPException(404, "run not found")
-        return store.detail(found[1])
+        return store.detail(found[1], owner=holds_token(found[1], request))
 
     @app.api_route("/v1/runs/{run_id}/original", methods=["GET", "HEAD"])
     def get_original(run_id: str):

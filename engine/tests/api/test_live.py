@@ -224,6 +224,7 @@ def app(settings, monkeypatch, tmp_path):
     app.state.live.probe = fake_probe
     app.state.live.trim = fake_trim
     app.state.live.runner = Script()
+    app.state.live.envelope = None  # no ffmpeg on fake videos; tests that need it set it
     yield app
     get_settings.cache_clear()
 
@@ -1361,23 +1362,30 @@ def test_live_runs_make_at_most_3_web_searches(lc, live):
 def test_every_run_has_a_status_and_a_source(lc, live, data):
     stopped = make_unfinished(data)
     j = lc.get(f"/v1/runs/{stopped.name}").json()
-    assert j["status"] == "stopped" and j["manifest"] is None and j["cues"] is None
-    assert j["source"] == {"kind": "upload"} and j["error"] is None
-    assert j["original"] == f"/v1/runs/{stopped.name}/original"
+    # unfinished: others see that it exists and where it stands, nothing of its content
+    assert set(j) == {"id", "status", "source", "created"}
+    assert j["status"] == "stopped" and j["source"] == {"kind": "upload"}
+    mine = lc.get(f"/v1/runs/{stopped.name}", headers=OWNER_AUTH).json()
+    assert mine["status"] == "stopped" and mine["manifest"] is None and mine["cues"] is None
+    assert mine["source"] == {"kind": "upload"} and mine["error"] is None
+    assert mine["original"] is None  # served once the run is finished
 
     live.runner = Script(
         lambda job: [Event("stage_start", "watch", {}, 1.0)],
         exc=lambda job: MediaError("ffmpeg failed (exit 1): Invalid data"),
         manifest=False,
     )
-    failed = parse_sse(post(lc).text)[0]["run_id"]
-    j = lc.get(f"/v1/runs/{failed}").json()
+    first = parse_sse(post(lc).text, keep_token=True)[0]
+    failed, token = first["run_id"], first["edit_token"]
+    assert set(lc.get(f"/v1/runs/{failed}").json()) == {"id", "status", "source", "created"}
+    j = lc.get(f"/v1/runs/{failed}", headers={"Authorization": f"Bearer {token}"}).json()
     assert j["status"] == "failed"
     assert j["error"] == {"type": "MediaError", "message": j["error"]["message"], "stage": "watch"}
 
     live.runner = Script()
     done = parse_sse(post(lc).text)[0]["run_id"]
-    assert lc.get(f"/v1/runs/{done}").json()["status"] == "done"
+    j = lc.get(f"/v1/runs/{done}").json()
+    assert j["status"] == "done" and "speech" in j  # published: anyone with the id
 
     gate = threading.Event()
     live.runner = Script(gate=gate)
@@ -1390,6 +1398,43 @@ def test_every_run_has_a_status_and_a_source(lc, live, data):
         list(lines)
     statuses = {i["id"]: i["status"] for i in lc.get("/v1/runs").json()}
     assert statuses.get(done) in (None, "done")  # the list speaks the same words
+
+
+def test_the_original_is_served_for_finished_runs_only(lc, live, data):
+    stopped = make_unfinished(data)
+    for headers in ({}, OWNER_AUTH):
+        assert lc.get(f"/v1/runs/{stopped.name}/original", headers=headers).status_code == 404
+    run_id = parse_sse(post(lc).text)[0]["run_id"]  # the fake engine publishes
+    r = lc.get(f"/v1/runs/{run_id}/original")
+    assert r.status_code == 200 and r.content == b"fake video"
+
+
+def test_loudness_is_kept_when_a_live_run_publishes_and_only_read_after(
+    lc, live, data, monkeypatch
+):
+    from lull.api import facts
+
+    kept: list[str] = []
+
+    def envelope(video, length):
+        kept.append(video.name)
+        return [-20.0] * 3
+
+    monkeypatch.setattr(facts, "envelope", envelope)
+    live.envelope = facts.keep_loudness
+    run_id = parse_sse(post(lc).text)[0]["run_id"]
+    assert kept == ["clip.mp4"]  # once, when the run published
+    assert (data / "runs" / run_id / "loudness.json").is_file()
+
+    def no_ffmpeg(video, length):
+        raise AssertionError("worked out on a request")
+
+    monkeypatch.setattr(facts, "envelope", no_ffmpeg)
+    assert lc.get(f"/v1/runs/{run_id}").json()["loudness"] == [-20.0] * 3
+
+    live.runner = Script(manifest=False)  # not published: nothing kept
+    parse_sse(post(lc).text)
+    assert kept == ["clip.mp4"]
 
 
 def test_a_sample_run_says_which_sample(lc, live, data):

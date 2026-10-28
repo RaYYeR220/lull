@@ -231,14 +231,24 @@ class RunStore:
     def kind_of(self, d: Path) -> str:
         return "showcase" if d.parent.resolve() == self.settings.showcase_dir.resolve() else "live"
 
-    def detail(self, d: Path) -> dict[str, Any]:
-        """Everything the web reads about the run in `d`, finished or not (lull.api.facts):
-        manifest and cues once published, null before."""
+    def detail(self, d: Path, *, owner: bool = False) -> dict[str, Any]:
+        """Everything the web reads about the run in `d` (lull.api.facts): manifest and cues
+        once published, null before. An unfinished run shows anyone but its owner (`owner`:
+        the request holds its edit token) only {id, status, source.kind, created}. Nothing
+        here runs ffmpeg: the loudness is read from what was kept."""
         kind = self.kind_of(d)
         manifest = self.manifest(d)
         request = _dict(self.read_json(d / facts.REQUEST))
-        published = self.read_json(d / CUES)
         samples = self.settings.samples_dir
+        status = facts.run_status(d, self.active(d.name))
+        source = facts.run_source(kind, manifest or {}, request, samples)
+        created = (
+            _str((manifest or {}).get("created")) or _str(request.get("created")) or _mtime_iso(d)
+        )
+        if status != "done" and not owner:
+            return {"id": d.name, "status": status, "source": {"kind": source["kind"]},
+                    "created": created}  # fmt: skip
+        published = self.read_json(d / CUES)
         video = facts.source_video(d, manifest or {}, request, samples)
         length = facts.duration(manifest or {}, request)
         video_name = _str(_dict((manifest or {}).get("video")).get("name"))
@@ -246,13 +256,11 @@ class RunStore:
         return {
             "id": d.name,
             "kind": kind,
-            "status": facts.run_status(d, self.active(d.name)),
-            "source": facts.run_source(kind, manifest or {}, request, samples),
+            "status": status,
+            "source": source,
             "title": self.scrub(video_name or source_name or d.name),
             "duration": length,
-            "created": _str((manifest or {}).get("created"))
-            or _str(request.get("created"))
-            or _mtime_iso(d),
+            "created": created,
             "error": self.scrub.tree(facts.public_error(d)),
             "manifest": self.public_manifest(manifest) if manifest is not None else None,
             "cues": self.public_cues(d),
@@ -260,13 +268,19 @@ class RunStore:
             "speech": facts.speech_spans(published),
             "gaps": facts.gap_windows(published),
             "wps": facts.voice_rate(manifest or {}, request),
-            "loudness": facts.loudness(d, video, length) if video is not None else None,
+            "loudness": facts.read_loudness(d),
             "loudness_hop_s": facts.LOUDNESS_HOP,
-            "original": f"/v1/runs/{d.name}/original" if video is not None else None,
+            "original": (
+                f"/v1/runs/{d.name}/original" if video is not None and status == "done" else None
+            ),
         }
 
     def original(self, d: Path) -> Path | None:
-        """The source video of the run in `d` (see lull.api.facts), or None."""
+        """The source video of the finished run in `d` (see lull.api.facts), or None: the
+        run id is what lets one read it, and only once it is published (its described.mp4
+        carries the same picture)."""
+        if facts.run_status(d, self.active(d.name)) != "done":
+            return None
         request = _dict(self.read_json(d / facts.REQUEST))
         return facts.source_video(d, self.manifest(d) or {}, request, self.settings.samples_dir)
 
