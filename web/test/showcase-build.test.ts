@@ -38,6 +38,7 @@ describe("a production build ships real runs only", () => {
 
   it("is checked by next.config on a production build, against the site's own showcases", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.lull.example");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://lull.example");
     expect(SHOWCASE_ROOT).toBe(path.join(__dirname, "..", "public", "showcase"));
     // the shipped tree passes
     expect(nextConfig(PHASE_PRODUCTION_BUILD).poweredByHeader).toBe(false);
@@ -45,6 +46,7 @@ describe("a production build ships real runs only", () => {
 
   it("stops next.config's production build when an interim file is in the tree", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.lull.example");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://lull.example");
     const dir = path.join(SHOWCASE_ROOT, "zz-interim-guard-test");
     mkdirSync(dir, { recursive: true });
     try {

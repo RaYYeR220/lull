@@ -20,13 +20,14 @@ work without an API. Try it and the studio need one.
 ## Build
 
 ```sh
-NEXT_PUBLIC_API_URL=https://api.example.org pnpm build
+NEXT_PUBLIC_API_URL=https://api.example.org NEXT_PUBLIC_SITE_URL=https://lull.example pnpm build
 pnpm start
 ```
 
 A production build stops, and says why, when:
 
 - `NEXT_PUBLIC_API_URL` is unset, or is not https (only a local API may be http);
+- the site's own address is unknown: neither `NEXT_PUBLIC_SITE_URL` nor `VERCEL_PROJECT_PRODUCTION_URL` is set;
 - a recorded run in `public/showcase/` is an interim placeholder rather than an engine export;
 - the benchmarks file is the test fixture.
 
@@ -35,7 +36,8 @@ A production build stops, and says why, when:
 | Variable | When | What |
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_URL` | build (required in production) | The Lull API's address. It is inlined into the pages and named in the CSP. |
-| `NEXT_PUBLIC_SITE_URL` | build (optional) | This site's public address, for sharing cards, the sitemap and embed snippets. On Vercel the production domain is used when it is unset. |
+| `NEXT_PUBLIC_SITE_URL` | build (required in production unless on Vercel) | This site's public address, for sharing cards, the sitemap and embed snippets. |
+| `VERCEL_PROJECT_PRODUCTION_URL` | build (set by Vercel) | The production domain, used as the site's address when `NEXT_PUBLIC_SITE_URL` is unset. |
 | `LULL_BENCHMARKS_FILE` | build (optional) | The results file the benchmarks page is built from. Defaults to `public/benchmarks.json`. |
 | `LULL_KITCHEN=1` | build (optional) | Serves `/kitchen`, the design-token page, from a production build. It is always on in development. |
 | `LULL_API_SRC` | tests (optional) | A lull-api checkout's `engine/src/lull/api`, for the API-codes contract check. Defaults to a sibling checkout. |
@@ -71,7 +73,10 @@ pnpm test:screens                          # screenshots into e2e/__screens__/
 ## Deploy (Vercel)
 
 1. Set the project's root directory to `web/`. Keep the framework preset, Next.js.
-2. Set `NEXT_PUBLIC_API_URL` (https) for both Production and Preview. Optionally set `NEXT_PUBLIC_SITE_URL`.
+2. Set the environment for both Production and Preview:
+   - `NEXT_PUBLIC_API_URL`: the API's https address;
+   - `NEXT_PUBLIC_SITE_URL`: this site's address. On Vercel it may be left unset, because Vercel sets
+     `VERCEL_PROJECT_PRODUCTION_URL` itself; set it anyway to use a custom domain.
 3. On the API, list this site's origin in `LULL_WEB_ORIGINS`. Preview deployments have their own
    addresses, so allow them as well, or point previews at a staging API.
 4. After deploying, check four things:

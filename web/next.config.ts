@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD } from "next/constants";
 import { assertApiBaseForBuild, contentSecurityPolicy, resolveApiBase } from "./lib/api-base";
 import { benchmarksFile } from "./lib/benchmarks-file";
-import { siteUrl } from "./lib/site-url";
+import { assertSiteUrlForBuild, siteUrl } from "./lib/site-url";
 import { assertRealBenchmarks, assertRealShowcases } from "./lib/showcase-build";
 
 /** Sent with every response. */
@@ -64,6 +64,7 @@ export const SHOWCASE_ROOT = path.join(__dirname, "public", "showcase");
 export default function nextConfig(phase: string): NextConfig {
   if (phase === PHASE_PRODUCTION_BUILD) {
     assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL, LULL_E2E_BUILD: process.env.LULL_E2E_BUILD });
+    assertSiteUrlForBuild(process.env);
     assertRealShowcases(SHOWCASE_ROOT);
     assertRealBenchmarks(benchmarksFile(process.env, __dirname), { allowFixture: process.env.LULL_E2E_BUILD === "1" });
   }

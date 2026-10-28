@@ -11,8 +11,8 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
         <main id="main" style={{ padding: "96px 24px", maxWidth: 720, margin: "0 auto", display: "grid", gap: 24 }}>
           <h1 className="t-display-2">Lull stopped working.</h1>
           <p className="t-lede">Something went wrong while the page loaded. Try it again, or open a recorded run.</p>
-          <p style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            <button type="button" className="skip" style={{ position: "static" }} onClick={() => reset()}>
+          <p style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+            <button type="button" className="skip" style={{ position: "static", border: 0, cursor: "pointer" }} onClick={() => reset()}>
               Try again
             </button>
             {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- the app itself failed: a full page load, not a client navigation */}

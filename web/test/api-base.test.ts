@@ -53,12 +53,22 @@ describe("next.config", () => {
   });
 
   it("refuses a production build without the API's address", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://lull.example");
     vi.stubEnv("NEXT_PUBLIC_API_URL", "");
     expect(() => nextConfig(PHASE_PRODUCTION_BUILD)).toThrow(/NEXT_PUBLIC_API_URL/);
   });
 
+  it("refuses a production build that doesn't know the site's own address", () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.lull.example");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("VERCEL_PROJECT_PRODUCTION_URL", "");
+    vi.stubEnv("LULL_E2E_BUILD", "");
+    expect(() => nextConfig(PHASE_PRODUCTION_BUILD)).toThrow(/NEXT_PUBLIC_SITE_URL/);
+  });
+
   it("a production build sends the policy with every page", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.lull.example");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://lull.example");
     const rules = await nextConfig(PHASE_PRODUCTION_BUILD).headers!();
     const all = rules.find((r) => r.source === "/:path*")!;
     expect(all.headers.find((h) => h.key === "Content-Security-Policy")?.value).toContain("connect-src 'self' https://api.lull.example blob:");
@@ -66,6 +76,7 @@ describe("next.config", () => {
 
   it("builds with it, and runs the dev server without it", () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.lull.example");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://lull.example");
     expect(nextConfig(PHASE_PRODUCTION_BUILD).poweredByHeader).toBe(false);
     vi.stubEnv("NEXT_PUBLIC_API_URL", "");
     expect(nextConfig(PHASE_DEVELOPMENT_SERVER).poweredByHeader).toBe(false);

@@ -10,8 +10,8 @@ import "./styles/tokens.css";
 import "./styles/global.css";
 
 export const metadata: Metadata = {
-  // absolute addresses for sharing cards: the site's own when the build knows it
-  metadataBase: new URL(SITE_URL ?? "http://localhost:3000"),
+  // absolute addresses for sharing cards: the site's own (a production build must know it)
+  ...(SITE_URL ? { metadataBase: new URL(SITE_URL) } : {}),
   title: { default: SITE.name, template: `%s | ${SITE.name}` },
   description: SITE.description,
   openGraph: { type: "website", siteName: SITE.name, title: SITE.name, description: SITE.description, locale: "en" },
