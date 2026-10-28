@@ -330,3 +330,30 @@ test.describe("studio screens @screens", () => {
     });
   }
 });
+
+/**
+ * The developer page: the top with the REST quick start, the embed tab with its live player,
+ * the reference, and the full page. e2e/__screens__/developers-<part>-<size>.png.
+ */
+test.describe("developers screens @screens", () => {
+  test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
+  test.describe.configure({ timeout: 90_000 });
+
+  for (const size of SIZES) {
+    test(`developers at ${size.name}`, async ({ page }) => {
+      await page.setViewportSize(size.viewport);
+      await page.goto("/developers", { waitUntil: "networkidle" });
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(OUT, `developers-top-${size.name}.png`) });
+      await fullPage(page, `developers-rest-${size.name}-full.png`);
+      await page.getByRole("tab", { name: "Embed" }).click();
+      await waitReady(page);
+      await page.waitForTimeout(400);
+      await page.getByRole("tabpanel", { name: "Embed" }).screenshot({ path: path.join(OUT, `developers-embed-${size.name}.png`) });
+      await page.locator('[data-endpoint="startRun"]').scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: path.join(OUT, `developers-endpoint-${size.name}.png`) });
+    });
+  }
+});

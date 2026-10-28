@@ -28,13 +28,13 @@ export const NAV_LINKS: readonly SiteLink[] = [
   { href: "/studio", label: "Studio", live: true },
   // the recorded runs, until the library (Plan 4) has its own page
   { href: "/watch", label: "Library", live: true },
-  { href: "/developers", label: "Developers", live: false },
+  { href: "/developers", label: "Developers", live: true },
   { href: "/benchmarks", label: "Benchmarks", live: false },
 ];
 
 export const FOOTER_LINKS: readonly SiteLink[] = [
   { href: REPO_URL, label: "GitHub", live: true },
-  { href: "/developers", label: "Docs", live: false },
+  { href: "/developers", label: "Docs", live: true },
   { href: "/benchmarks", label: "Benchmarks", live: false },
 ];
 

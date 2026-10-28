@@ -6,6 +6,7 @@
  * page defines them and fall back to the same values, so an embed off-site looks the same
  * apart from the faces it can't load.
  */
+import { KEYS } from "./reference";
 
 /* The shared glyphs: 12-unit grid, square caps, currentColor. Decorative; a word always
    travels with them (visibly or as the control's name). */
@@ -218,16 +219,6 @@ kbd{display:inline-block;min-width:24px;padding:3px 6px;font-family:var(--lp-mon
 }
 `;
 
-const KEYS: [string[], string][] = [
-  [["K", "Space"], "Play or pause"],
-  [["←", "→"], "Back or ahead 5 s"],
-  [["↑", "↓"], "Volume"],
-  [["M"], "Description mode"],
-  [["C"], "Captions"],
-  [["T"], "Transcript"],
-  [["F"], "Full screen"],
-  [["<", ">"], "Slower or faster"],
-];
 
 const kbdRows = KEYS.map(([keys, what]) => `<div><dt>${keys.map((k) => `<kbd>${k}</kbd>`).join("")}</dt><dd>${what}</dd></div>`).join("");
 

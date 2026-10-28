@@ -18,6 +18,7 @@ import {
   type LintFinding,
   type Obj,
 } from "./api";
+import { routePath } from "./api-routes";
 import { SseParser } from "./sse";
 
 export type Verdict = "supported" | "not_visible" | "contradicted";
@@ -233,11 +234,9 @@ export function readDetail(raw: unknown): RunDetail | null {
   };
 }
 
-const runUrl = (id: string) => `${API_BASE}/v1/runs/${encodeURIComponent(id)}`;
-
 /** A file of a run, as the API serves it (manifest outputs and keyframes only). */
 export function runFileUrl(id: string, rel: string): string {
-  return `${runUrl(id)}/files/${rel.split("/").map(encodeURIComponent).join("/")}`;
+  return `${API_BASE}${routePath("file", { id, path: rel })}`;
 }
 
 /** An API address made absolute: the cue views carry their audio as a path on the API. */
@@ -248,12 +247,13 @@ export const apiUrl = (path: string) => (/^https?:\/\//.test(path) ? path : `${A
  * changes after an edit, so a new take isn't served from the player's cache.
  */
 export function cueAudioPattern(id: string, version: number): string {
-  return `${runUrl(id)}/cues/{id}/audio${version ? `?v=${version}` : ""}`;
+  // the cue id stays a {id} placeholder: the player fills it in
+  return `${API_BASE}${routePath("cueAudio", { id }).replace("{cue_id}", "{id}")}${version ? `?v=${version}` : ""}`;
 }
 
 /** GET /v1/runs/{id}. Throws ApiError: not_found when there is no published run with that id. */
 export async function getRun(id: string, signal?: AbortSignal): Promise<RunDetail> {
-  const res = await request(runUrl(id), { signal, cache: "no-store" });
+  const res = await request(`${API_BASE}${routePath("run", { id })}`, { signal, cache: "no-store" });
   if (!res.ok) throw await toApiError(res);
   const detail = readDetail(await res.json().catch(() => null));
   if (!detail) throw new ApiError({ status: res.status, code: "server", message: "The run’s answer couldn’t be read." });
@@ -305,7 +305,7 @@ export type RunListItem = { id: string; kind: "showcase" | "live"; title: string
 
 /** GET /v1/runs: the recorded runs and the most recent live ones. */
 export async function listRuns(signal?: AbortSignal): Promise<RunListItem[]> {
-  const res = await request(`${API_BASE}/v1/runs`, { signal, cache: "no-store" });
+  const res = await request(`${API_BASE}${routePath("listRuns")}`, { signal, cache: "no-store" });
   if (!res.ok) throw await toApiError(res);
   const raw: unknown = await res.json().catch(() => null);
   if (!Array.isArray(raw)) return [];
@@ -319,7 +319,7 @@ export async function listRuns(signal?: AbortSignal): Promise<RunListItem[]> {
 
 /** Why a finished run stopped: the message of its last `error` event, from the open replay. */
 export async function failureReason(id: string, signal?: AbortSignal): Promise<string | null> {
-  const res = await request(`${runUrl(id)}/events`, { signal, headers: { Accept: "text/event-stream" }, cache: "no-store" });
+  const res = await request(`${API_BASE}${routePath("events", { id })}`, { signal, headers: { Accept: "text/event-stream" }, cache: "no-store" });
   if (!res.ok || !res.body) return null;
   let reason: string | null = null;
   const parser = new SseParser({
@@ -393,7 +393,6 @@ async function write(path: string, token: string, init: { method: "POST" | "PATC
   return res.json().catch(() => null);
 }
 
-const cuePath = (id: string, cueId: string) => `/v1/runs/${encodeURIComponent(id)}/cues/${encodeURIComponent(cueId)}`;
 
 function cueOrThrow(raw: unknown): ApiCue {
   const cue = readCue(raw);
@@ -407,18 +406,18 @@ function cueOrThrow(raw: unknown): ApiCue {
  * and voices it. Resolves with the cue as stored: "edited", or "held" with the reason.
  */
 export async function editCue(id: string, cueId: string, text: string, token: string, signal?: AbortSignal): Promise<ApiCue> {
-  return cueOrThrow(await write(cuePath(id, cueId), token, { method: "PATCH", body: { text } }, signal));
+  return cueOrThrow(await write(routePath("editCue", { id, cue_id: cueId }), token, { method: "PATCH", body: { text } }, signal));
 }
 
 /** Signs off a verified, edited or voiced extended cue (409 invalid_transition otherwise). */
 export async function approveCue(id: string, cueId: string, token: string, signal?: AbortSignal): Promise<ApiCue> {
-  return cueOrThrow(await write(`${cuePath(id, cueId)}/approve`, token, { method: "POST" }, signal));
+  return cueOrThrow(await write(routePath("approveCue", { id, cue_id: cueId }), token, { method: "POST" }, signal));
 }
 
 /** Holds a cue for review, with an optional reason (at most 300 characters). */
 export async function holdCue(id: string, cueId: string, token: string, reason?: string, signal?: AbortSignal): Promise<ApiCue> {
   const body = reason?.trim() ? { reason: reason.trim() } : undefined;
-  return cueOrThrow(await write(`${cuePath(id, cueId)}/hold`, token, { method: "POST", body }, signal));
+  return cueOrThrow(await write(routePath("holdCue", { id, cue_id: cueId }), token, { method: "POST", body }, signal));
 }
 
 /**
@@ -426,7 +425,7 @@ export async function holdCue(id: string, cueId: string, token: string, reason?:
  * `not_voiced`) names the cues in `detail.cueIds` and nothing is written.
  */
 export async function publishRun(id: string, token: string, signal?: AbortSignal): Promise<RunDetail> {
-  const detail = readDetail(await write(`/v1/runs/${encodeURIComponent(id)}/publish`, token, { method: "POST" }, signal));
+  const detail = readDetail(await write(routePath("publish", { id }), token, { method: "POST" }, signal));
   if (!detail) throw new ApiError({ status: 200, code: "server", message: "The run was published, but the answer couldn’t be read. Reload the page to see it." });
   return detail;
 }

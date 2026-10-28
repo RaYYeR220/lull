@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { Eyebrow } from "@/components/ui/Eyebrow";
 import { cx } from "@/lib/cx";
+import { MCP_AVAILABLE } from "@/lib/features";
 import { DevTabs, type DevTab } from "./DevTabs";
 import styles from "./Developers.module.css";
 
@@ -35,33 +37,41 @@ const TABS: DevTab[] = [
           {"\n\n"}
           <span className={styles.note}>{"# streams progress; the first event carries the run id,\n# then GET /v1/runs/{id} lists the six files"}</span>
         </pre>
-        <p className={styles.after}>OpenAPI reference in the docs.</p>
+        <p className={styles.after}>Every endpoint, with its answers, in the developer docs.</p>
       </>
     ),
   },
   {
-    id: "mcp",
-    label: "MCP",
+    id: "embed",
+    label: "Player",
     panel: (
       <>
         <pre tabIndex={0}>
-          {"{\n  "}
-          <span className={styles.str}>&quot;tool&quot;</span>: <span className={styles.str}>&quot;describe_video&quot;</span>
-          {",\n  "}
-          <span className={styles.str}>&quot;arguments&quot;</span>
-          {": {\n    "}
-          <span className={styles.str}>&quot;url&quot;</span>: <span className={styles.str}>&quot;https://example.edu/lectures/week-3.mp4&quot;</span>
-          {"\n  }\n}"}
+          <span className={styles.note}>{"<!-- one script, one tag -->"}</span>
+          {"\n<"}
+          <span className={styles.cmd}>script</span> <span className={styles.flag}>type</span>=<span className={styles.str}>&quot;module&quot;</span>{" "}
+          <span className={styles.flag}>src</span>=<span className={styles.str}>&quot;/player.js&quot;</span>
+          {"></"}
+          <span className={styles.cmd}>script</span>
+          {">\n<"}
+          <span className={styles.cmd}>lull-player</span>
+          {"\n  "}
+          <span className={styles.flag}>src</span>=<span className={styles.str}>&quot;lecture.mp4&quot;</span>
+          {"\n  "}
+          <span className={styles.flag}>descriptions</span>=<span className={styles.str}>&quot;descriptions.vtt&quot;</span>
+          {"\n  "}
+          <span className={styles.flag}>described-audio</span>=<span className={styles.str}>&quot;described-audio.m4a&quot;</span>
+          {"></"}
+          <span className={styles.cmd}>lull-player</span>
+          {">"}
         </pre>
-        <p className={styles.after}>
-          Then <span className="t-mono">get_tracks</span> for the files and <span className="t-mono">review_queue</span> for anything held.
-        </p>
+        <p className={styles.after}>Mixed audio, spoken lines, your screen reader, or the extended version: the viewer chooses.</p>
       </>
     ),
   },
 ];
 
-/** 8. For developers: the same pipeline from a terminal, an API or an agent. */
+/** 8. For developers: the same pipeline from a terminal, an API or a page (and an agent, once MCP ships). */
 export function Developers() {
   return (
     <section id="developers" aria-labelledby="developers-title" className={cx(styles.sec, "ruled")}>
@@ -69,23 +79,45 @@ export function Developers() {
         <div className={styles.copy}>
           <Eyebrow>For developers</Eyebrow>
           <h2 id="developers-title" className="t-display-2">
-            From a terminal, an API or an agent.
+            {MCP_AVAILABLE ? "From a terminal, an API or an agent." : "From a terminal, an API or a web page."}
           </h2>
           <p className={cx("t-lede", styles.lede)}>The same pipeline as the studio, with the same checks and the same six files.</p>
-          <ul className={styles.tools} aria-label="MCP tools">
-            <li>
-              <span className="t-mono">describe_video</span>
-              <span>start a run</span>
-            </li>
-            <li>
-              <span className="t-mono">get_tracks</span>
-              <span>fetch the outputs</span>
-            </li>
-            <li>
-              <span className="t-mono">review_queue</span>
-              <span>lines waiting for a person</span>
-            </li>
-          </ul>
+          {MCP_AVAILABLE ? (
+            <ul className={styles.tools} aria-label="MCP tools">
+              <li>
+                <span className="t-mono">describe_video</span>
+                <span>start a run</span>
+              </li>
+              <li>
+                <span className="t-mono">get_tracks</span>
+                <span>fetch the outputs</span>
+              </li>
+              <li>
+                <span className="t-mono">review_queue</span>
+                <span>lines waiting for a person</span>
+              </li>
+            </ul>
+          ) : (
+            <ul className={styles.tools} aria-label="Where to start">
+              <li>
+                <span className="t-mono">POST /v1/runs</span>
+                <span>describe a clip, streamed</span>
+              </li>
+              <li>
+                <span className="t-mono">GET /v1/runs/{"{id}"}</span>
+                <span>its files and checks</span>
+              </li>
+              <li>
+                <span className="t-mono">&lt;lull-player&gt;</span>
+                <span>play them on your page</span>
+              </li>
+            </ul>
+          )}
+          <p className={styles.docs}>
+            <Link href="/developers" className={styles.docsLink}>
+              Read the developer docs
+            </Link>
+          </p>
         </div>
         <div className={styles.term}>
           <DevTabs label="Ways to call Lull" tabs={TABS} />

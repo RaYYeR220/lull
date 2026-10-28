@@ -1,0 +1,92 @@
+/* The developer page: quick start in tabs, then the reference. Code wells are night-0; the
+   panels around them are the raised night-2. */
+.main{position:relative;isolation:isolate;padding:calc(var(--head-h) + var(--s-7)) 0 var(--s-9)}
+.main::before{content:"";position:absolute;z-index:-1;left:0;right:0;top:0;height:560px;pointer-events:none;
+  background:radial-gradient(40% 55% at 22% 32%,rgb(var(--lamp-rgb) / .10),rgb(var(--lamp-rgb) / .03) 55%,transparent 80%)}
+
+.head{max-width:62rem}
+.eyebrow{margin-bottom:var(--s-4)}
+.title{max-width:16em}
+.lede{margin-top:var(--s-5)}
+.base{margin-top:var(--s-5);font-size:var(--fs-small);color:var(--cream-2)}
+.base .mono{margin-left:8px;color:var(--cream-0)}
+.toc{display:flex;flex-wrap:wrap;gap:6px 0;margin-top:var(--s-5);font-size:var(--fs-small)}
+.toc a{display:inline-flex;align-items:center;min-height:32px;color:var(--cream-1);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.toc a:hover{text-decoration-color:var(--lamp-1)}
+.toc a + a::before{content:"";display:inline-block;width:3px;height:3px;margin:0 14px;background:var(--lamp-2)}
+
+.section{margin-top:var(--s-9);scroll-margin-top:var(--s-6)}
+.head + .section{margin-top:var(--s-8)}
+.h2{font-family:var(--f-display);font-optical-sizing:auto;font-weight:300;font-size:clamp(30px,2.6vw,40px);line-height:1.05;letter-spacing:-.025em;color:var(--cream-0)}
+.sectionLede{margin:var(--s-4) 0 var(--s-5);max-width:var(--measure);font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1)}
+.h3{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:var(--fs-title-s);line-height:1.15;letter-spacing:var(--tr-title-s);color:var(--cream-0)}
+.mono{font-family:var(--f-mono);font-size:.92em;font-variant-numeric:tabular-nums}
+.link{color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.link:hover{text-decoration-color:var(--lamp-1)}
+
+/* the quick start: the landing's tabs, on a raised panel */
+.term{margin-top:var(--s-5);border:1px solid var(--hair-strong);background:var(--night-2)}
+.steps{list-style:none;counter-reset:step;display:flex;flex-direction:column;gap:var(--s-6)}
+/* a real sequence: numbered */
+.step{position:relative;counter-increment:step;padding-left:44px;display:flex;flex-direction:column;gap:10px}
+.step::before{content:counter(step);position:absolute;left:0;top:-2px;font-family:var(--f-display);font-style:italic;font-weight:300;font-size:var(--fs-step-index);line-height:1;color:var(--lamp-1)}
+.stepWhat{max-width:44em;font-size:14.5px;line-height:1.55;color:var(--cream-1)}
+.shape summary{display:inline-flex;align-items:center;min-height:32px;cursor:pointer;font-size:13px;font-weight:600;color:var(--cream-1)}
+.shape[open] summary{margin-bottom:8px}
+.cli{display:flex;flex-direction:column;gap:var(--s-6)}
+.cli > div:not(.embed){display:flex;flex-direction:column;gap:10px}
+/* long code lines scroll inside their wells, never widen the page */
+.steps,.step,.cli,.cli > *,.embed > *{min-width:0;max-width:100%}
+
+/* tables: hairline rows, mono names */
+.table{width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.5;color:var(--cream-1)}
+.caption{padding-bottom:8px;text-align:left;font-size:12.5px;font-weight:600;color:var(--cream-2)}
+.table th,.table td{padding:9px 14px 9px 0;border-top:1px solid var(--hair-faint);text-align:left;vertical-align:baseline}
+.table thead th{border-top:1px solid var(--hair);font-size:12px;font-weight:600;color:var(--cream-2)}
+.table tbody th{font-weight:500;color:var(--cream-0);white-space:nowrap}
+.table tbody tr:last-child th,.table tbody tr:last-child td{border-bottom:1px solid var(--hair-faint)}
+.sub{display:block;margin-top:3px;font-family:var(--f-ui);font-size:12px;font-weight:400;line-height:1.4;color:var(--cream-2);white-space:normal}
+.optional{font-family:var(--f-ui);font-size:11.5px;font-weight:500;color:var(--cream-2)}
+.retry{color:var(--cream-2)}
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:24px;margin-right:6px;padding:0 6px;border:1px solid var(--hair-strong);
+  font-family:var(--f-mono);font-size:12px;color:var(--cream-0)}
+
+/* the embed: snippet and the live player side by side on wide screens */
+.embed{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s-5);align-items:start}
+.live{margin:0}
+.liveCap{margin-top:8px;font-size:12.5px;color:var(--cream-2)}
+
+/* the reference */
+.group{margin-top:var(--s-7)}
+.groupTitle{padding-bottom:10px;border-bottom:1px solid var(--hair);font-size:13.5px;font-weight:600;color:var(--cream-2)}
+.endpoint{display:flex;flex-direction:column;gap:var(--s-4);padding:var(--s-6) 0;border-bottom:1px solid var(--hair-faint)}
+.epHead{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;font-weight:400}
+.method{display:inline-flex;align-items:center;height:24px;padding:0 8px;border:1px solid var(--hair-strong);font-family:var(--f-mono);font-size:12px;font-weight:500;color:var(--cream-0)}
+.method[data-method="POST"]{border-color:rgb(var(--lamp-rgb) / .5);color:var(--lamp-0)}
+.method[data-method="PATCH"]{border-color:rgb(168 184 232 / .55);color:var(--edited)}
+.path{font-family:var(--f-mono);font-size:16px;color:var(--cream-0);overflow-wrap:anywhere}
+.epSummary{max-width:46em;font-size:var(--fs-body-s);line-height:var(--lh-body-s);color:var(--cream-1)}
+.epFacts{display:flex;flex-direction:column;gap:4px;font-size:13.5px;line-height:1.5}
+.epFacts > div{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px}
+.epFacts dt{font-weight:600;color:var(--cream-2)}
+.epFacts dd{color:var(--cream-1)}
+.answer{display:flex;flex-direction:column;gap:8px}
+.answerHead{max-width:56em;font-size:13.5px;line-height:1.5;color:var(--cream-1)}
+.answerHead .mono{color:var(--verified)}
+
+.models th{white-space:normal}
+.modelId{display:block;margin-top:2px;font-family:var(--f-mono);font-size:11.5px;font-weight:400;color:var(--cream-2);overflow-wrap:anywhere}
+
+@media (max-width:1100px){
+  .embed{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:760px){
+  .main{padding-top:calc(var(--head-h) + var(--s-6))}
+  .step{padding-left:34px}
+  .table th,.table td{padding-right:10px}
+  .table tbody th{white-space:normal;overflow-wrap:break-word}
+  .epFacts > div{grid-template-columns:minmax(0,1fr);gap:2px}
+}
+@media (prefers-reduced-motion:reduce){
+  .toc a,.link{transition:none}
+}

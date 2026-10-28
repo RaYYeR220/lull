@@ -34,6 +34,7 @@ const HEADINGS: Record<NoticeKind, string> = {
   timeout: "The upload took too long to arrive.",
   invalid: "The live service didn’t accept the request.",
   sample: "That sample isn’t available.",
+  disconnected: "The upload was cut off.",
   not_found: "There’s no run with that id.",
   forbidden: "This browser can’t change this run.",
   read_only: "Recorded runs are read-only.",

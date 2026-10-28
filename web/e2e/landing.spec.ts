@@ -42,7 +42,7 @@ test.describe("landing", () => {
       "A line it can’t prove, it doesn’t say.",
       "Six files, in formats players already read.",
       "Every line, with its evidence.",
-      "From a terminal, an API or an agent.",
+      "From a terminal, an API or a web page.",
       "Evaluation in progress.",
     ];
     for (const name of sections) await expect(page.getByRole("region", { name, exact: true })).toHaveCount(1);
@@ -234,12 +234,12 @@ test.describe("landing", () => {
     await expect(panel("CLI")).toBeHidden();
 
     await page.keyboard.press("End");
-    await expect(tab("MCP")).toBeFocused();
-    await expect(panel("MCP")).toBeVisible();
+    await expect(tab("Player")).toBeFocused();
+    await expect(panel("Player")).toBeVisible();
     await page.keyboard.press("ArrowRight");
     await expect(tab("CLI")).toBeFocused();
     await page.keyboard.press("ArrowLeft");
-    await expect(tab("MCP")).toBeFocused();
+    await expect(tab("Player")).toBeFocused();
     await page.keyboard.press("Home");
     await expect(tab("CLI")).toBeFocused();
     await expect(tab("CLI")).toHaveAttribute("tabindex", "0");

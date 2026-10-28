@@ -1,4 +1,5 @@
 import { resolveApiBase } from "./api-base";
+import { routePath } from "./api-routes";
 import { SseParser, type SseMessage } from "./sse";
 
 /**
@@ -256,6 +257,7 @@ export type RefusalCode =
   | "timeout"
   | "invalid"
   | "sample"
+  | "disconnected"
   | "not_found"
   | "forbidden"
   | "read_only"
@@ -287,6 +289,7 @@ export const API_REFUSALS: ReadonlySet<string> = new Set([
   "timeout",
   "invalid",
   "sample",
+  "disconnected",
   "not_found",
   // the studio's (engine/src/lull/api/studio.py)
   "forbidden",
@@ -316,6 +319,7 @@ const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
   timeout: "The upload did not arrive in time. Try a smaller file or a faster connection.",
   invalid: "The request was not accepted.",
   sample: "There is no sample with that id.",
+  disconnected: "The upload was cut off before it finished.",
   not_found: "There is no run with that id.",
   forbidden: "Only the person who started this run can change it. Fork it to edit a copy.",
   read_only: "Recorded runs are read-only. Fork one to edit a copy of your own.",
@@ -489,7 +493,7 @@ export type Health = { ok: boolean; speech: boolean | null; liveBusy: boolean | 
 
 /** GET /v1/health. Throws ApiError ("unreachable" when nothing answers). */
 export async function health(signal?: AbortSignal): Promise<Health> {
-  const res = await request(`${API_BASE}/v1/health`, { signal, cache: "no-store" });
+  const res = await request(`${API_BASE}${routePath("health")}`, { signal, cache: "no-store" });
   if (!res.ok) throw await toApiError(res);
   const raw: unknown = await res.json().catch(() => null);
   if (!isObj(raw)) throw new ApiError({ status: res.status, code: "server" });
@@ -518,7 +522,7 @@ export function capReached(budget: Budget | null, estimate: number): "day" | "to
 
 /** GET /v1/samples: the sample clips the API can describe. */
 export async function samples(signal?: AbortSignal): Promise<{ id: string }[]> {
-  const res = await request(`${API_BASE}/v1/samples`, { signal, cache: "no-store" });
+  const res = await request(`${API_BASE}${routePath("samples")}`, { signal, cache: "no-store" });
   if (!res.ok) throw await toApiError(res);
   const raw: unknown = await res.json().catch(() => null);
   if (!Array.isArray(raw)) return [];
@@ -527,7 +531,7 @@ export async function samples(signal?: AbortSignal): Promise<{ id: string }[]> {
 
 /** The run's report page, served by the API. */
 export function reportUrl(runId: string): string {
-  return `${API_BASE}/v1/runs/${encodeURIComponent(runId)}/files/report.html`;
+  return `${API_BASE}${routePath("file", { id: runId, path: "report.html" })}`;
 }
 
 // -- live runs ---------------------------------------------------------------------------------
@@ -602,7 +606,7 @@ export async function startRun(
   form.append("mode", opts.mode);
   form.append("voice", opts.voice);
 
-  const res = await request(`${API_BASE}/v1/runs`, {
+  const res = await request(`${API_BASE}${routePath("startRun")}`, {
     method: "POST",
     body: form,
     signal,
@@ -689,7 +693,7 @@ export function followRun(
   signal?: AbortSignal,
   opts: { token?: string | null } = {},
 ): Promise<StreamEnd> {
-  const url = `${API_BASE}/v1/runs/${encodeURIComponent(id)}/events`;
+  const url = `${API_BASE}${routePath("events", { id })}`;
   const tracker = new Tracker(onEvent);
   if (opts.token) return followWithToken(url, tracker, opts.token, signal);
   const ES = typeof EventSource === "function" ? EventSource : null;
@@ -741,7 +745,7 @@ export type Fork = { runId: string; editToken: string };
  * not published yet, 429 too many forks, 500 the copy failed).
  */
 export async function forkRun(runId: string, signal?: AbortSignal): Promise<Fork> {
-  const res = await request(`${API_BASE}/v1/runs/${encodeURIComponent(runId)}/fork`, { method: "POST", signal, cache: "no-store" });
+  const res = await request(`${API_BASE}${routePath("fork", { id: runId })}`, { method: "POST", signal, cache: "no-store" });
   if (!res.ok) throw await toApiError(res);
   const raw: unknown = await res.json().catch(() => null);
   const id = isObj(raw) ? str(raw.run_id) : null;

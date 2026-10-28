@@ -17,9 +17,9 @@ import { clock, seconds2, spokenTime } from "./time";
 import { ICON, STYLE, TEMPLATE } from "./view";
 import { DEFAULT_EXT, Voice, type Playback, type VoiceSource, type VoiceStatus } from "./voice";
 import { parseVtt, type VttCue } from "./vtt";
+import { MODE_DESC, MODE_NAME, MODES, PLAYER_ATTRIBUTES, type PlayerMode } from "./reference";
 
-export type PlayerMode = "mixed" | "spoken" | "screen-reader" | "extended";
-export const MODES: readonly PlayerMode[] = ["mixed", "spoken", "screen-reader", "extended"];
+export { MODES, type PlayerMode };
 
 export type CueKind = "standard" | "extended";
 export type Cue = VttCue & { kind: CueKind; index: number };
@@ -61,18 +61,6 @@ export type PlayerState = {
 
 type Load = "none" | "loading" | "ready" | "empty" | "error";
 
-const MODE_NAME: Record<PlayerMode, string> = {
-  mixed: "Mixed audio",
-  spoken: "Spoken cues",
-  "screen-reader": "My screen reader",
-  extended: "Extended",
-};
-const MODE_DESC: Record<PlayerMode, string> = {
-  mixed: "The described soundtrack, mixed in advance. The video’s own sound is off.",
-  spoken: "The original soundtrack. Each line is spoken in its pause and the sound dips under it.",
-  "screen-reader": "Each line goes to your screen reader as it comes up. Nothing is spoken here.",
-  extended: "Like spoken cues, and the video waits while a longer line is spoken.",
-};
 const IDLE: Record<PlayerMode, string> = {
   mixed: "Each description shows here as the soundtrack speaks it.",
   spoken: "Each description shows here as it is spoken.",
@@ -91,7 +79,7 @@ const LATE_HOLD = 2;
 const HOLD_CAP_MS = 8000;
 const PREFETCH_AHEAD = 20;
 
-const ATTRS = ["src", "descriptions", "described-audio", "extended", "cue-audio-base", "cue-audio-ext", "captions", "poster", "mode", "label", "crossorigin", "sound"] as const;
+const ATTRS = PLAYER_ATTRIBUTES;
 /** Why the other modes stand down when the video's own sound already carries the descriptions. */
 const DESCRIBED_SOUND = "This video’s own sound already has the descriptions in it.";
 

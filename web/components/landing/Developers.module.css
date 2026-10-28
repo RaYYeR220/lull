@@ -6,6 +6,10 @@
 .tools li{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--hair);font-size:14.5px;color:var(--cream-1)}
 .tools li :global(.t-mono){line-height:inherit;color:var(--cream-0)}
 
+.docs{margin-top:var(--s-5);font-size:var(--fs-small)}
+.docsLink{font-weight:600;color:var(--cream-0);text-decoration:underline;text-decoration-color:var(--hair-door);text-underline-offset:3px;transition:text-decoration-color var(--t-hover)}
+.docsLink:hover{text-decoration-color:var(--lamp-1)}
+
 /* the terminal: night-0 well, three tabs */
 .term{grid-column:7 / span 6;border:1px solid var(--hair-strong);background:var(--night-0)}
 .tabs{display:flex;border-bottom:1px solid var(--hair)}
