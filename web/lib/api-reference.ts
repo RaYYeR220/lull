@@ -188,12 +188,13 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":85.9,"summary":{"cue
       { status: 503, code: "uploads_busy", when: "Two uploads are already being received.", retryAfter: true },
       { status: 503, code: "storage", when: "The upload couldn't be stored just now (the service's disk, not your file).", retryAfter: true },
     ],
-    limits: "One run at a time. 3 runs an hour per visitor and 20 a day across visitors; a run is stopped after 10 minutes.",
+    limits:
+      "One run at a time. 3 runs an hour per visitor and 20 a day across visitors; a run is stopped after 10 minutes. The clip goes to Nebius Token Factory (NVIDIA Nemotron models) and to NVIDIA speech models on the service's server; anyone with a run's id can open it. Uploads are deleted after 7 days, forks after 24 hours.",
     example: `curl -N "$LULL_API/v1/runs" -F sample=ed45 -F mode=standard -F voice=Sofia`,
   },
   listRuns: {
     group: "Reading runs",
-    summary: "The recorded runs and the 20 most recent live runs, newest first, with where each stands.",
+    summary: "The recorded runs and the 20 most recent runs of the samples, newest first, with where each stands. Uploads are never listed: a run of your own clip opens only by its id.",
     auth: "none",
     success: {
       status: 200,
@@ -201,7 +202,7 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":85.9,"summary":{"cue
       what: "status is published, running or failed. Cached for 5 s.",
       shape: `[
   {
-    "id": "live-…", "kind": "live", "title": "lecture.mp4", "duration": 58.2,
+    "id": "live-…", "kind": "live", "title": "ed45.mp4", "duration": 45.0,
     "created": "2026-10-28T09:16:42+00:00", "status": "published",
     "cost_usd": 0.0466, "spend": { "models_usd": 0.0466, "tavily_credits": 1.0 },
     "cues": { "verified": 7, "edited": 0, "approved": 0, "held": 1, "extended": 2 }

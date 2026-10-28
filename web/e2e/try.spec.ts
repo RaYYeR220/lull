@@ -209,6 +209,12 @@ test.describe("try it", () => {
   test("an upload is checked here first: type, size, then length", async ({ page }) => {
     await routeApi(page, "run");
     await openPicker(page);
+    // before any upload: where the clip goes, who can see the run, and how long it is kept
+    const privacy = page.locator("[data-privacy]");
+    await expect(privacy).toContainText("sent to Nebius Token Factory, where NVIDIA Nemotron models");
+    await expect(privacy).toContainText("Anyone with the finished run’s link can open it");
+    await expect(privacy).toContainText("Uploads are deleted after 7 days, and copies made in the studio after 24 hours.");
+    await expect(page.locator('input[type="file"]')).toHaveAccessibleDescription(/Where your clip goes/);
     const input = page.locator('input[type="file"]');
     await input.setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("hello") });
     await expect(page.getByRole("radio", { name: /Your own clip/ })).toBeChecked();

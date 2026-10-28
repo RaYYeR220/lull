@@ -32,6 +32,8 @@
 .fileInput:focus-visible + .choose{outline:var(--focus-ring);outline-offset:var(--focus-offset)}
 .choose{cursor:pointer}
 .hint{font-size:var(--fs-small);color:var(--cream-2)}
+.privacy{grid-column:2;margin:10px 0 0;max-width:62ch;font-size:var(--fs-small);line-height:1.55;color:var(--cream-2)}
+.privacy b{font-weight:600;color:var(--cream-1)}
 .fileStatus{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-size:var(--fs-small);line-height:var(--lh-small);color:var(--cream-1)}
 .fileStatus[data-status="none"]{color:var(--cream-2)}
 .fname{font-size:12.5px;color:var(--cream-0);overflow-wrap:anywhere}

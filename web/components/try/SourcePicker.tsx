@@ -157,6 +157,7 @@ export function SourcePicker({ samples, service, budget, headingRef, onStart }: 
   const reasonId = `${uid}-reason`;
   const fileStatusId = `${uid}-file-status`;
   const fileInputId = `${uid}-file`;
+  const privacyId = `${uid}-privacy`;
 
   return (
     <section aria-labelledby={`${uid}-title`} className={cx(shared.panel, styles.picker)}>
@@ -230,13 +231,18 @@ export function SourcePicker({ samples, service, budget, headingRef, onStart }: 
                 {FORMATS}, up to {megabytes(LIMITS.maxBytes)} and {clock(LIMITS.maxSeconds)} long
               </span>
             </label>
+            <p id={privacyId} className={styles.privacy} data-privacy="">
+              <b>Where your clip goes.</b> It is sent to Nebius Token Factory, where NVIDIA Nemotron models watch it and write the lines, and
+              NVIDIA speech models on our server transcribe and voice it. Anyone with the finished run’s link can open it and its files.
+              Uploads are deleted after 7 days, and copies made in the studio after 24 hours. Don’t upload anything private.
+            </p>
             <div className={styles.drop}>
               <input
                 id={fileInputId}
                 type="file"
                 accept={ACCEPT}
                 className={cx("sr-only", styles.fileInput)}
-                aria-describedby={fileStatusId}
+                aria-describedby={`${privacyId} ${fileStatusId}`}
                 onChange={(e) => {
                   const f = e.currentTarget.files?.[0];
                   if (f) void take(f);
