@@ -24,6 +24,10 @@ class ApiSettings(BaseSettings):
     lull_upload_retention_days: float = Field(
         default=7.0, gt=0, validation_alias="LULL_UPLOAD_RETENTION_DAYS"
     )
+    # how long a live run may take before it is given up (lull.api.live)
+    lull_run_wall_clock_s: float = Field(
+        default=900.0, gt=0, validation_alias="LULL_RUN_WALL_CLOCK_S"
+    )
 
     # the API's public address(es), comma-separated: the first makes the links MCP get_tracks
     # hands out; all are the hosts /mcp answers to (with localhost). Unset: links are relative

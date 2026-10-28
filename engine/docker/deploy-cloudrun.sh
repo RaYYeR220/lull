@@ -74,8 +74,9 @@ LULL_DATA: "/data"
 LULL_HOME: "/tmp/lull-home"
 LULL_BUCKET: "$BUCKET"
 LULL_PROXY_HOPS: "1"
-LULL_SPEECH_THREADS: "4"
+LULL_SPEECH_THREADS: "8"
 LULL_SPEECH_WAIT: "200"
+LULL_RUN_WALL_CLOCK_S: "900"
 LULL_WEB_ORIGINS: "$WEB_ORIGINS"
 LULL_PUBLIC_URL: "$1"
 YAML
@@ -88,7 +89,7 @@ public_urls() {  # the service's URLs, then its smoke tag's
   printf '%s,https://smoke---%s' "$urls" "${host#https://}"
 }
 DEPLOY=(--image "$IMAGE" --region "$REGION" --service-account "$SA"
-  --cpu 4 --memory 8Gi --concurrency 20 --timeout 3600 --min-instances 0 --max-instances 1
+  --cpu 8 --memory 8Gi --concurrency 20 --timeout 3600 --min-instances 0 --max-instances 1
   --execution-environment gen2 --cpu-throttling --cpu-boost --port 8080
   --add-volume "name=data,type=cloud-storage,bucket=$BUCKET"
   --add-volume-mount "volume=data,mount-path=/data"

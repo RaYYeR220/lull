@@ -29,9 +29,9 @@ call or search and ends at the next one or at its next stage start (a stage it f
 cached; the one it was in is not). Until it ends, up to the run's wall clock, other runs get
 409 busy; a restart of the same run waits for it.
 
-A run still going after WALL_CLOCK_S is given up: error event, error.json, the executor
-freed; its thread cannot be killed, but its next model call or search is refused and anything
-it reports after that is dropped.
+A run still going after LULL_RUN_WALL_CLOCK_S (WALL_CLOCK_S by default) is given up: error
+event, error.json, the executor freed; its thread cannot be killed, but its next model call or
+search is refused and anything it reports after that is dropped.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ UPLOAD_DEADLINE_S = 60.0  # to receive the whole body (the visitor's part)
 STORE_DEADLINE_S = 60.0  # to store it (ours: a slow disk is never counted against them)
 FORM_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
 REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
-WALL_CLOCK_S = 600.0
+WALL_CLOCK_S = 900.0  # the default of LULL_RUN_WALL_CLOCK_S
 SEARCHES_PER_RUN = 3  # web searches a live run may make (the day cap is LULL_TAVILY_DAY)
 NOT_COUNTED = (402, 409, 503)  # refusals that are not the visitor's doing
 OPEN_CHECK_ID, OPEN_CHECK_USD = "live-open-check", 1e-6  # "is any spend left at all"
@@ -651,6 +651,7 @@ class Live:
             per_client=REFUSALS_PER_HOUR, client_window=HOUR, per_day=1_000_000
         )
         self.executor = Executor(changed=store.invalidate)
+        self.executor.wall_clock = settings.lull_run_wall_clock_s
         store.active = lambda run_id: self.executor.get(run_id) is not None
         # the loudness envelope, worked out once a run has published (in its worker thread)
         self.envelope: Callable[[Path, Path, float | None], object] | None = facts.keep_loudness

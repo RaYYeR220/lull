@@ -125,6 +125,7 @@ its owner can restart it from the stage cache.
 | `LULL_CAP_RUN` / `LULL_CAP_DAY` / `LULL_CAP_TOTAL` | `0.50` / `3.00` / `35.00` | spend caps in USD on model calls only; `none` = no cap, `0` refuses every call |
 | `LULL_TAVILY_DAY` | `60` | web searches per day (counted, never priced); a live run may make 3 |
 | `LULL_SAMPLES` | `/opt/lull/samples` | the sample clips and `samples.json` baked into the image (read-only) |
+| `LULL_RUN_WALL_CLOCK_S` | `900` | how long a live run may take before it is given up (error event, error.json) |
 | `LULL_UPLOAD_RETENTION_DAYS` | `7` | an upload's run is removed this many days after it was made (a fork: 24 h, and never after the upload it came from), by housekeeping at start, hourly, and from `/v1/health` when an hour has passed; `/v1/health` states it |
 | `LULL_PUBLIC_URL` | none | required in production: the API's public address (e.g. `https://lull-api-xyz.a.run.app`), comma-separated for more than one (a smoke tag URL, a custom domain). The first makes the links MCP `get_tracks` hands out; all are the host names `/mcp` answers to. Unset, links are relative, `/mcp` answers localhost only, and the API warns at start |
 | `LULL_SHOWCASE_EDITABLE` | `0` | local only: lets the Studio change showcase runs |
@@ -167,13 +168,13 @@ line as written (`MSYS2_ARG_CONV_EXCL`); MSYS would otherwise turn them into Win
    and the two files the image runs from `docker/` (60 files, 13 MB). No `.venv`, tests,
    runs, `.env` or keys.
 6. **Deploy** `lull-api` with these flags:
-   - size and scaling: gen2, `--cpu 4 --memory 8Gi --concurrency 20 --timeout 3600
+   - size and scaling: gen2, `--cpu 8 --memory 8Gi --concurrency 20 --timeout 3600
      --min-instances 0 --max-instances 1 --cpu-throttling --cpu-boost`;
    - the bucket at `/data`, the secrets as `NEBIUS_API_KEY` / `TAVILY_API_KEY`;
    - `--allow-unauthenticated`, and the environment from a file (`--env-vars-file`), since
      the origins and URLs hold commas: `LULL_DATA=/data`, `LULL_HOME=/tmp/lull-home`, `LULL_BUCKET`,
-     `LULL_PROXY_HOPS=1`, `LULL_SPEECH_THREADS=4`, `LULL_SPEECH_WAIT=200`, `LULL_WEB_ORIGINS`,
-     `LULL_PUBLIC_URL`.
+     `LULL_PROXY_HOPS=1`, `LULL_SPEECH_THREADS=8`, `LULL_SPEECH_WAIT=200`,
+     `LULL_RUN_WALL_CLOCK_S=900`, `LULL_WEB_ORIGINS`, `LULL_PUBLIC_URL`.
 
    The first deploy takes the traffic; the script then sets `LULL_PUBLIC_URL` to the service's
    two URLs and their `smoke---` tag URLs. Later deploys go out with `--no-traffic --tag
@@ -202,9 +203,12 @@ Notes:
 - **Concurrency:** `--concurrency 20`. The work that loads the CPU is gated in the app (one
   live run, two uploads received at once, two Studio edits re-checked and one publish at a
   time), so the other slots are for reads, health and the event streams (at most 3 follow
-  one run and 8 are open in all). While a run keeps the CPU busy, the platform can still
-  answer a request 429 "no available instance" now and then (seen once while polling twice a
-  second); clients retry.
+  one run and 8 are open in all).
+  - The service has a single instance by design (below). So while a run keeps the CPU busy,
+    the platform itself can answer a request 429 "no available instance" now and then: seen
+    once while polling twice a second.
+  - That 429 is the platform's, without the API's JSON or Retry-After. Clients retry it after
+    a few seconds.
 - **One instance:** `--max-instances 1`, because the rate limits, the live executor and the
   ledger live in one process, and Litestream allows one writer per replica. `max-instances`
   counts per revision, so later deploys go out with `--no-traffic --tag smoke`, and the

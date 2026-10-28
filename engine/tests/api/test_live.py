@@ -2335,3 +2335,13 @@ def test_a_copy_with_more_frames_than_its_rate_allows_is_refused(tmp_path, monke
     monkeypatch.setattr(clip, "_run", run)
     with pytest.raises(MediaError, match="frames"):
         clip.transcode(src, tmp_path / "bad.mp4", 60.0, info)
+
+
+def test_the_run_wall_clock_is_15_minutes_and_a_setting(settings, monkeypatch):
+    from lull.api.settings import ApiSettings
+
+    assert create_app(settings).state.live.executor.wall_clock == 900.0
+    monkeypatch.setenv("LULL_RUN_WALL_CLOCK_S", "1200")
+    s = ApiSettings(lull_data=settings.lull_data)
+    assert s.lull_run_wall_clock_s == 1200.0
+    assert create_app(s).state.live.executor.wall_clock == 1200.0
