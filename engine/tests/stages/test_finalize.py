@@ -1728,3 +1728,56 @@ def test_supported_claims_the_line_does_not_make_are_left_out_and_noted(tmp_path
     out = _run(tmp_path, video, FakeTF(), FakeSpeech([2.0]))
     assert out.status == "verified"
     assert "left out a claim the line does not make: a dog sleeps on the porch" in out.note
+
+
+# -- a look-ahead survives every rewrite ---------------------------------------------------------
+
+
+def test_a_compression_repair_that_drops_the_look_ahead_is_not_taken(tmp_path, video):
+    """The repair a shorter, lint-failing compression gets goes through the look-ahead check
+    like every rewrite: when "In a moment, " is lost and not restored, it is not taken."""
+    before = "A door opens. In a moment, a big bar chart shows the sales figures."
+    tf = FakeTF(repair=[{"text": "A door opens. A chart shows sales."}] * 2)
+    st = fin._Finalise(_cue(before, ahead=True), GAP, [EV], video, tmp_path / "w", tf,
+                       FakeSpeech([]), OPTS, CTX, "r1")  # fmt: skip
+    st.text = before
+    got = st.shorter(before, "I see a door open. In a moment, a chart shows sales.", [])
+    assert got is None
+    assert tf.roles() == ["repair", "repair"]  # the second asks for the look-ahead back
+
+
+def test_a_look_ahead_is_never_lost_to_a_compression_end_to_end(tmp_path, video):
+    door = VisualEvent(id="e001", t_start=12.0, t_end=16.0, kind="action", text="A door opens.",
+                       verbatim_text=None, salience=4, said_in_dialogue=False)  # fmt: skip
+    line = "A door opens. In a moment, a big bar chart shows the sales figures rising."
+    cue = _cue(line, start=10.0, event_ids=["e001", "e009"], ahead=True, parts={
+        "e001": "A door opens.",
+        "e009": "In a moment, a big bar chart shows the sales figures rising.",
+    })  # fmt: skip
+    tf = FakeTF(
+        verify=lambda call: _supported("a door opens", "a chart shows sales"),
+        compress=[{"text": "I see a door open. In a moment, a chart shows sales."}],
+        repair=[{"text": "A door opens. A chart shows sales."}] * 2,
+    )
+    ctx = CTX.model_copy(update={"video_duration": 30.0})
+    out = _run(tmp_path, video, tf, FakeSpeech([9.0, 3.0]), cue=cue, gap=_pause(10.0, 17.0),
+               events={"e001": door, "e009": CHART}, ctx=ctx)  # fmt: skip
+    assert not (out.status == "verified" and "In a moment" not in out.text)
+
+
+def test_a_dropped_sentence_that_leaves_a_line_breaking_a_rule_is_not_taken(tmp_path, video):
+    """Dropping the sentence that introduces a name would leave the name unintroduced (R15):
+    the shorter line is linted like any rewrite, and here it is not taken."""
+    line = "A tall person, Proog, waves. Proog opens the wooden door of the old shed."
+    ctx = CTX.model_copy(update={"cast": {"Proog": "a tall person"}, "named": {"Proog"},
+                                 "priority": {"e001": 2, "e002": 4}})  # fmt: skip
+    cue = _cue(line, event_ids=["e001", "e002"], parts={
+        "e001": "A tall person, Proog, waves.",
+        "e002": "Proog opens the wooden door of the old shed.",
+    })  # fmt: skip
+    tf = FakeTF(verify=lambda call: _supported(_description(call)),
+                compress=[{"text": line + " Slowly."}])  # fmt: skip
+    out = _run(tmp_path, video, tf, FakeSpeech([8.0]), cue=cue,
+               events={"e001": EV, "e002": LOGO}, ctx=ctx)  # fmt: skip
+    assert out.status == "held" and out.text == line
+    assert "dropping the sentence for e001 breaks R15-name" in out.note

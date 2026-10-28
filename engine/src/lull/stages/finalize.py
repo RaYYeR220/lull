@@ -843,6 +843,12 @@ class _Finalise:
                     why = ("the shorter compression broke " + ", ".join(rules)
                            + " even after a repair")  # fmt: skip
                 return self.held(f"{reason}; {why}")
+            broken = sorted({f.rule for f in _lint(candidate, keep, self.ctx)
+                             if f.severity == "error"})  # fmt: skip
+            if broken:  # the shorter line is linted like any rewrite
+                eid = self.dropped.pop()
+                return self.held(f"{reason}; dropping the sentence for {eid} breaks "
+                                 + ", ".join(broken))  # fmt: skip
         if self.words_before is None:
             self.words_before = count_words(before)
         self.claims = []
@@ -858,9 +864,9 @@ class _Finalise:
         errors = [f for f in _lint(candidate, keep, self.ctx) if f.severity == "error"]
         if not errors:
             return candidate
-        fixed = self._repair(candidate, errors)
-        if count_words(fixed) >= count_words(before):
-            return None
+        fixed, lost = self.keep_ahead(before, self._repair(candidate, errors))
+        if lost or count_words(fixed) >= count_words(before):
+            return None  # a repair, like every rewrite, keeps the look-ahead or is not taken
         if any(f.severity == "error" for f in _lint(fixed, keep, self.ctx)):
             return None
         return fixed
