@@ -255,3 +255,25 @@ def test_ledger_totals_are_model_spend_and_searches_are_counted_apart(home):
     assert r.exit_code == 0, r.output
     assert re.search(r"^\s*total\s+2\b.*\$0\.0158", r.output, re.M), r.output
     assert re.search(r"^\s*searches\s+1\b.*not charged.*\$0\.0080", r.output, re.M), r.output
+
+
+def test_an_empty_no_verify_setting_means_verification_on(monkeypatch):
+    from lull import config
+
+    for value, off in (("", False), ("0", False), ("1", True), ("true", True)):
+        monkeypatch.setenv("LULL_NO_VERIFY", value)
+        config.get_settings.cache_clear()
+        try:
+            assert config.get_settings().lull_no_verify is off, value
+        finally:
+            config.get_settings.cache_clear()
+
+
+def test_the_summaries_count_unverified_cues():
+    from lull.cli import _detail
+
+    line = _detail("finalize", {"verified": 0, "held": 1, "extended": 0, "unverified": 3})
+    assert line == "0 verified, 1 held, 0 extended, 3 unverified"
+    assert _detail("finalize", {"verified": 2, "held": 0, "extended": 1}) == (
+        "2 verified, 0 held, 1 extended"
+    )

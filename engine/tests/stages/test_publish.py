@@ -1944,3 +1944,17 @@ def test_unverified_cues_are_published_and_the_manifest_says_verification_is_dis
                             _ledger(tmp_path), "r1", RunOptions(),
                             speech=[]).manifest.read_text(encoding="utf-8"))  # fmt: skip
     assert on["verification"] == "enabled"
+
+
+def test_an_unverified_cue_means_verification_disabled(tmp_path, fake_media):
+    """A republish (from the Studio, say) of a run voiced without verification cannot record
+    verification as enabled: an unverified cue is enough."""
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    cue = _cue("c001", 2.0, 1.0, status="unverified", audio="c.wav")
+    res = publish(tmp_path / "run", video, [cue], [], [_ev("e1", 2.0, 4.0)],
+                  [_gap("g001", 2.0, 5.0)], None, _ledger(tmp_path), "r1", RunOptions(),
+                  speech=[])  # fmt: skip
+    m = json.loads(res.manifest.read_text(encoding="utf-8"))
+    assert m["verification"] == "disabled"
+    assert all(r["status"] != "met (automated checks)" for r in m["summary"]["wcag"])

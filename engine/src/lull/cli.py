@@ -137,7 +137,8 @@ def _detail(stage: str, d: dict) -> str:
             f"{used:.0%} of the room used"
         )
     if stage == "finalize":
-        return f"{d['verified']} verified, {d['held']} held, {d['extended']} extended"
+        line = f"{d['verified']} verified, {d['held']} held, {d['extended']} extended"
+        return line + (f", {d['unverified']} unverified" if d.get("unverified") else "")
     if stage == "publish":
         return f"{d['files']} files"
     return ""
@@ -179,6 +180,7 @@ def _print_summary(summary: dict, seconds: float, out: Path) -> None:
     typer.echo(f"done in {seconds:.1f} s")
     typer.echo(
         f"  cues      {cues['verified']} verified, {cues['held']} held, {cues['extended']} extended"
+        + (f", {cues['unverified']} unverified" if cues.get("unverified") else "")
     )
     for h in summary.get("held", []):
         typer.echo(f"  held      {h['id']}: {h['reason']}")

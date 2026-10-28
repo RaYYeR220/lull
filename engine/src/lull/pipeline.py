@@ -585,7 +585,8 @@ class _Run:
                         cue_id=done.id,
                         reason=done.note,
                     )
-            counts = {s: sum(c.status == s for c in finished) for s in ("verified", "held")}
+            counts = {s: sum(c.status == s for c in finished)
+                      for s in ("verified", "held", "unverified")}  # fmt: skip
             info.update(
                 cached=bool(order) and hits == len(order),
                 cues=len(order),

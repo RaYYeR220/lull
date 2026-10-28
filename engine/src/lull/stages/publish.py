@@ -1026,6 +1026,8 @@ def _stage(
     relative to `final`, where they will live); returns the outputs by published name, the
     manifest left out."""
     cues, extended = [own_claims(c) for c in cues], [own_claims(c) for c in extended]
+    # an unverified cue means verification was off, whatever the caller passes (a republish)
+    verify = verify and not any(c.status == "unverified" for c in cues + extended)
     everything = cues + extended
     spoken, spoken_ext = mixer.voiced(cues), mixer.voiced_extended(extended)
     out: dict[str, Path] = {}

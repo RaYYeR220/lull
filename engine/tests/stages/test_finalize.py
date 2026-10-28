@@ -201,7 +201,7 @@ def test_all_supported_and_short_audio_is_verified(tmp_path, tone_slides):
     call = tf.of("verify")[0]
     assert call["model"] == VL and call["schema"] == VERIFY_SCHEMA
     assert (call["stage"], call["thinking"], call["temperature"]) == ("finalize", False, 0.2)
-    assert (call["max_tokens"], call["estimate"]) == (1500, 0.003)
+    assert (call["max_tokens"], call["estimate"]) == (1500, 0.005)
     user = next(m for m in call["messages"] if m["role"] == "user")["content"]
     assert user[0]["type"] == "video_url"
     assert _description(call) == TEXT
@@ -1781,3 +1781,10 @@ def test_a_dropped_sentence_that_leaves_a_line_breaking_a_rule_is_not_taken(tmp_
                events={"e001": EV, "e002": LOGO}, ctx=ctx)  # fmt: skip
     assert out.status == "held" and out.text == line
     assert "dropping the sentence for e001 breaks R15-name" in out.note
+
+
+def test_the_verify_estimate_covers_the_longest_clip():
+    """The spend check reserves enough for a clip of CLIP_MAX_S (20 s), not just the 12 s cap."""
+    from lull.stages import verify as ver
+
+    assert ver.VERIFY_ESTIMATE >= 0.003 * ver.CLIP_MAX_S / ver.CLIP_CAP_S
