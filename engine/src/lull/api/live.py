@@ -923,11 +923,29 @@ def _since(events: list[dict], after: int | None) -> list[dict]:
 router = APIRouter()
 
 
+SAMPLE_FIELDS = (
+    "id", "file", "title", "credit", "licence", "licence_url", "source_url", "excerpt",
+    "changes", "duration",
+)  # fmt: skip
+
+
 @router.get("/v1/samples")
-def list_samples(request: Request) -> list[dict[str, str]]:
+def list_samples(request: Request) -> list[dict[str, Any]]:
+    """The samples a visitor may describe: samples.json's entries (title, credit, licence,
+    source, duration...) whose <id>.mp4 is there; without samples.json, the ids alone."""
     root = _live(request).settings.samples_dir
     if not root.is_dir():
         return []
+    doc = _read_json(root / "samples.json")
+    if isinstance(doc, dict) and isinstance(doc.get("samples"), list):
+        out = []
+        for e in doc["samples"]:
+            if not isinstance(e, dict) or not isinstance(e.get("id"), str):
+                continue
+            ok = SAMPLE_RE.fullmatch(e["id"]) and e.get("file") == f"{e['id']}.mp4"
+            if ok and (root / e["file"]).is_file():
+                out.append({k: e[k] for k in SAMPLE_FIELDS if k in e})
+        return out
     paths = sorted(p for p in root.glob("*.mp4") if p.is_file() and SAMPLE_RE.fullmatch(p.stem))
     return [{"id": p.stem} for p in paths]
 

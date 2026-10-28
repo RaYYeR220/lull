@@ -114,6 +114,8 @@ COPY --from=build /app/.venv /app/.venv
 COPY --from=build /app/src /app/src
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/lull-entrypoint
 COPY docker/litestream.yml /etc/litestream.yml
+# the licensed sample clips and their credits (samples.json), read-only
+COPY samples /opt/lull/samples
 
 ENV PATH=/app/.venv/bin:/opt/nemo-speech/bin:$PATH \
     PYTHONUNBUFFERED=1 \
@@ -123,6 +125,7 @@ ENV PATH=/app/.venv/bin:/opt/nemo-speech/bin:$PATH \
     LULL_HOME=/data/home \
     LULL_SPEECH_URL=http://127.0.0.1:8089 \
     LULL_PROXY_HOPS=0 \
+    LULL_SAMPLES=/opt/lull/samples \
     PORT=8080
 
 RUN python -m compileall -q /app/src \

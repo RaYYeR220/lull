@@ -15,6 +15,7 @@ class ApiSettings(BaseSettings):
         default_factory=lambda: Path.home() / ".lull" / "data", validation_alias="LULL_DATA"
     )
     lull_web_origins: str = Field(default="", validation_alias="LULL_WEB_ORIGINS")
+    lull_samples: Path | None = Field(default=None, validation_alias="LULL_SAMPLES")
     # trusted proxies in front of the app (Cloud Run: 1); 0 = use the socket peer address
     lull_proxy_hops: int = Field(default=0, ge=0, validation_alias="LULL_PROXY_HOPS")
     # local only: lets the Studio change showcase runs (they are read-only when deployed)
@@ -38,4 +39,5 @@ class ApiSettings(BaseSettings):
 
     @property
     def samples_dir(self) -> Path:
-        return self.lull_data / "samples"
+        """LULL_SAMPLES (the image bakes the licensed samples in), else LULL_DATA/samples."""
+        return self.lull_samples or self.lull_data / "samples"

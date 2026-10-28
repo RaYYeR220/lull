@@ -20,6 +20,7 @@ node_modules/
 # Media, runs and local artifacts
 runs/
 *.mp4
+!engine/samples/*.mp4
 *.wav
 *.m4a
 models/

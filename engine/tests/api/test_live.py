@@ -1473,3 +1473,52 @@ def test_the_public_list_shows_sample_and_showcase_runs_only(lc, live, data, mak
 def test_health_states_how_long_uploads_are_kept(lc):
     j = lc.get("/v1/health").json()
     assert j["retention_days"] == 7 and j["fork_retention_hours"] == 24
+
+
+# -- samples: licensed, at most 45 s, described by samples.json ------------------------------------
+
+SAMPLES_DIR = Path(__file__).resolve().parents[2] / "samples"  # engine/samples, in the image
+
+
+def test_samples_metadata_comes_from_samples_json(lc, data):
+    root = data / "samples"
+    root.mkdir(parents=True)
+    (root / "street.mp4").write_bytes(b"DUR=8;")
+    entries = [
+        {"id": "street", "file": "street.mp4", "title": "A street", "credit": "Someone",
+         "licence": "CC BY 4.0", "source_url": "https://example.org/street", "duration": 8.0},
+        {"id": "gone", "file": "gone.mp4", "title": "Missing file", "licence": "CC0"},
+        {"id": "../x", "file": "x.mp4", "title": "Bad id"},
+        {"id": "other", "file": "street.mp4", "title": "File of another id"},
+    ]  # fmt: skip
+    (root / "samples.json").write_text(json.dumps({"samples": entries}))
+    assert lc.get("/v1/samples").json() == [entries[0]]
+
+
+def test_samples_dir_can_be_set_apart_from_the_data(tmp_path):
+    from lull.api.settings import ApiSettings
+
+    s = ApiSettings(lull_data=tmp_path / "data", lull_samples=tmp_path / "baked")
+    assert s.samples_dir == tmp_path / "baked"
+    assert ApiSettings(lull_data=tmp_path / "data").samples_dir == tmp_path / "data" / "samples"
+
+
+def test_the_shipped_samples_are_licensed_short_and_small():
+    from lull import media
+
+    doc = json.loads((SAMPLES_DIR / "samples.json").read_text(encoding="utf-8"))
+    ids = [e["id"] for e in doc["samples"]]
+    assert ids == ["csc_intro", "ed45", "tos45"]
+    for e in doc["samples"]:
+        f = SAMPLES_DIR / e["file"]
+        assert e["file"] == f"{e['id']}.mp4" and f.is_file()
+        assert f.stat().st_size <= 6 * 1024 * 1024
+        assert (
+            e["title"] and e["credit"] and e["licence"] and e["source_url"].startswith("https://")
+        )
+        info = media.probe(f)
+        media.assert_safe_container(info)
+        assert info.duration <= 45.0 and abs(info.duration - e["duration"]) < 0.05
+        assert info.height <= 480 and info.video_codec == "h264" and info.audio_codec == "aac"
+    allowed = (SAMPLES_DIR.parent / ".dockerignore").read_text(encoding="utf-8")
+    assert "!samples/" in allowed.splitlines()  # baked into the image
