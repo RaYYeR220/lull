@@ -1,6 +1,6 @@
 # Lull: evaluation results
 
-Generated 2026-10-28T12:37:13+00:00 from commit `8c01c24a87af` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
+Generated 2026-10-28T12:52:03+00:00 from commit `b03457c5057d` by `eval/report.py` from the complete results in `eval/results/`. Method: `eval/README.md`. Every number comes from a scorer that checked its pre-registration first; intervals are 95 % percentile bootstraps (10 000 resamples, seed 20261028).
 
 Not included: Suite B (missing); negative control (missing); ablation (missing).
 
@@ -62,6 +62,48 @@ Judge probe (a01, a05, a09): facts credited to their own cue 65/65, near misses 
 | a11 climate | 0/21 | 6/21 | 5/11 | 0.000 | suite-a-a11-20261028T115030Z |
 | a12 engineering | 0/14 | 0/14 | 0/3 | 0.000 | suite-a-a12-20261028T115030Z |
 
+### Supplementary: the unsupported claims (added after the scored run, no new calls)
+
+Every claim the pre-registered hallucination metric counted as unsupported, with its kind as the run's cues.json records it and a class from a manual review: each claim read against the slide on screen at its cue (key.json slide inventory and style text) and the slide image in suite_a/out/<lecture>/slide_<n>.png; done after the scored run, no model calls. Made from the scored results (`suite_a.json`, sha256 `e3e27ed37bf3`) and the judge answers already given; the pre-registered number is unchanged.
+
+| measure | value |
+|---|---|
+| hallucination, claims (pre-registered, unchanged) | 18.1% [4.0%, 37.2%] (19/105) |
+| hallucination, atomic claims only | 16.9% [3.5%, 36.4%] (15/89) |
+| unsupported / all claims of kind atomic | 15/89 |
+| unsupported / all claims of kind sentence | 4/16 |
+
+| class | claims |
+|---|---|
+| (a) true of the rendered slide but absent from the key (styling, colours, layout, slide numbers) | 0 |
+| (b) a whole-sentence claim (kind sentence) that repeats atomic claims of the same cue | 4 |
+| (c) a real error: contradicts the key or the slide | 1 |
+| (d) other | 14 (paraphrase 8, title fragment 5, framing word 1) |
+
+No unsupported claim is about styling, colours, layout or slide numbers: the key covers those (style text, slide inventory), and the one slide-number claim, a03 x001#6 'marked 1 of 4', was judged supported. One claim is a real error (a03 x002#1, chart values read as times); the rest are paraphrases or split-off fragments of on-screen text, which the pre-registered rule counts as unsupported because quoted on-screen text must match exactly, and whole-sentence claims that repeat them.
+
+| lecture | claim | track | kind | class | claim text | judge's reason | review |
+|---|---|---|---|---|---|---|---|
+| a03 | x001#5 | extended | atomic | d, paraphrase | action-reaction pairs | The exact phrase 'action-reaction pairs' is not on the slide; the slide says 'Action and reaction are always paired'. | Slide 1 bullet 3 reads 'Action and reaction are always paired': the same content in other words; the pre-registered rule wants on-screen text quoted exactly. |
+| a03 | x001#7 | extended | sentence | b | A slide titled Newton's Three Laws lists three laws: inertia, force causes acceleration, action-reaction pairs; marked 1 of 4 | The claim includes the exact phrase 'action-reaction pairs' which does not match the slide text, and the summary does not exactly match the bullet wording. | Repeats claims #1 to #6 of the same cue; unsupported only through #5 (the paraphrase). |
+| a03 | x002#1 | extended | atomic | c | A slide titled Velocity Over Time shows a line graph of velocity versus time with data points at 0.5 to 8.5 seconds | Slide 2 shows a line chart titled 'Speed vs Time' with points at specific times and velocities, not 'data points at 0.5 to 8.5 seconds'. | The chart 'Speed vs Time' has its points at t=0s to t=8s; 0.5 to 8.5 are their velocities in m/s, not times (slide_2.png). The title, the line chart and its axes are right. |
+| a07 | c004#1 | standard | atomic | d, title fragment | Temperature | Slide 2 does not display 'Temperature' as a standalone text element. | One word of the slide 2 title 'Temperature and Precipitation', split off by the claim split; the whole title (#3) was judged supported. |
+| a07 | c004#2 | standard | atomic | d, title fragment | Precipitation | Slide 2 does not display 'Precipitation' as a standalone text element. | As #1: one word of the slide 2 title; the whole title (#3) was judged supported. |
+| a07 | c006#1 | standard | atomic | d, framing word | Slide | The word 'Slide' does not appear on any slide. | The framing word of 'Slide: Annual Rainfall by Region', split off as a claim; the rule does not doubt framing words, but the split made it a claim of its own. |
+| a07 | c006#2 | standard | atomic | d, title fragment | Annual Rainfall | 'Annual Rainfall' is only a substring of the title, not a separate text element. | Part of the slide 3 title 'Annual Rainfall by Region' (slide_3.png). |
+| a07 | c006#3 | standard | atomic | d, title fragment | by Region | 'by Region' is only a substring of the title, not a separate text element. | Part of the slide 3 title 'Annual Rainfall by Region'. |
+| a07 | c006#4 | standard | atomic | d, title fragment | Region | 'Region' appears only as part of the title or as 'Regions' on axis label, not as a standalone element. | The last word of the slide 3 title 'Annual Rainfall by Region'. |
+| a07 | c006#5 | standard | sentence | b | Slide: Annual Rainfall by Region | The phrase includes 'Slide:' which is not on screen, and the full string does not match any slide text. | Repeats claims #1 to #4 of the same cue: the slide 3 title after the framing word 'Slide:'. |
+| a10 | x002#1 | extended | atomic | d, paraphrase | slide lists heart pumps five liters per minute | Slide 2 shows 'Heart pumps ~5 liters per minute at rest', not 'five liters per minute' exactly (missing tilde and 'at rest'). | Slide 2 bullet 1 reads 'Heart pumps ~5 liters per minute at rest': the same figure, quoted without '~' and 'at rest' (the qualifier is lost). |
+| a10 | x002#3 | extended | atomic | d, paraphrase | heart rate regulation | Slide 2 says 'Heart rate regulated by autonomic nervous system', not 'heart rate regulation' (different word form). | Slide 2 bullet 4 reads 'Heart rate regulated by autonomic nervous system', shortened. |
+| a10 | x002#4 | extended | sentence | b | Slide lists heart pumps five liters per minute, stroke volume, heart rate regulation | The compound claim includes unsupported phrases ('five liters per minute' missing tilde and 'at rest', 'heart rate regulation' not exact). | Repeats claims #1 to #3 of the same cue. |
+| a10 | x003#1 | extended | atomic | d, paraphrase | Slide lists resting heart rate, exercise increase, age effect, and a line chart | Slide 3 has 'Resting heart rate' exactly, but 'exercise increase' (vs 'Exercise increases') and 'age effect' (vs 'Age affects') are not exact matches. | Slide 3 bullets 1, 2 and 4 ('Resting heart rate varies by fitness level', 'Exercise increases heart rate significantly', 'Age affects maximum heart rate capacity') shortened; the line chart is right. |
+| a11 | x001#1 | extended | atomic | d, paraphrase | Slide titled Global Temperature Rise lists: human activity drives warming, greenhouse gases trap heat, carbon dioxide levels increased, average temperatures rising worldwide | Bullet wording differs from slide (e.g., 'warming trends' vs 'warming'). | The title is exact; the four bullets of slide 1 are shortened ('Human activity drives warming trends', 'Greenhouse gases trap heat in the atmosphere', 'Carbon dioxide levels have increased significantly', 'Average temperatures are rising worldwide'). |
+| a11 | x003#3 | extended | atomic | d, paraphrase | sea levels rising steadily | Slide says 'Sea levels are rising steadily'; claim omits 'are'. | Slide 3 reads 'Sea levels are rising steadily'; 'are' dropped. |
+| a11 | x003#4 | extended | atomic | d, paraphrase | storm intensity increasing | Slide says 'Storm intensity is increasing'; claim omits 'is'. | Slide 3 reads 'Storm intensity is increasing'; 'is' dropped. |
+| a11 | x003#5 | extended | atomic | d, paraphrase | precipitation patterns shifting | Slide says 'Precipitation patterns are shifting'; claim omits 'are'. | Slide 3 reads 'Precipitation patterns are shifting'; 'are' dropped. |
+| a11 | x003#6 | extended | sentence | b | Slide titled Extreme Weather Events lists four points: heatwaves becoming more frequent, sea levels rising steadily, storm intensity increasing, precipitation patterns shifting | Listed points do not match slide text exactly (missing 'are' in three items). | Repeats claims #1 to #5 of the same cue; unsupported only through #3 to #5. |
+
 ## Deviations from the pre-registrations
 
 - **Suite A**: Scorer rules the key does not spell out, applied to primary metrics: a verdict the judge leaves out counts against the system (fact not conveyed, claim unsupported, cue redundant, decoy stated) and is listed under "judge problems"; extended cues count only when the run reports extended_produced.
@@ -77,6 +119,45 @@ Judge probe (a01, a05, a09): facts credited to their own cue 65/65, near misses 
 - **Sparse descriptions compared with human audio description**: Lull says less than a human describer. In the Suite B smoke on Elephants Dream 60-150 s it voiced 55 words per minute (83 with the extended track) against 120 (Silvia Pfeiffer) and 95 (JJ Hunt), and the primary judge credited none of the describers' 46 facts in that clip to its cues. Lull holds or cuts a description it cannot verify against the frames and fits the standard track into the programme's own pauses, which leaves room for far fewer words than a describer who writes for every scene.
 - **Lecture pauses swallowed before the speech-span fix**: Before the engine's fix round the listen stage widened narration spans by 0.2-0.6 s and merged sentences across planned pauses of about 1.9 s, so a Suite A lecture had only 4-5 speech-free windows and the standard track voiced little more than slide titles; extended cues froze the picture before their slide appeared. Found in the Suite A smoke (a01, a02, pre-fix engine) and fixed in the engine; the scored run is on the fixed engine and the smoke numbers are not results.
 - **TTS nondeterminism**: Magpie TTS returns slightly different audio for the same sentence from one call to the next (seed and temperature parameters did not change that in our checks): a01 re-rendered from an empty cache came out 48.56 s instead of 48.40 s. Suite A's lectures are rendered once and cached (the render tarball reproduces them bit for bit), and Lull's own cue durations vary slightly between runs.
+
+## Cost accounting (draft)
+
+A draft for comparison with the provider's billing, not yet checked against it. Model ledger `~/.lull/ledger.db` as of 2026-10-28T12:51:33+00:00: 1520 calls from 2026-10-27T20:18:51+00:00 to 2026-10-28T12:34:48+00:00 (UTC), every run on this machine (engine development, the eval and its judges). `tokens in` is the whole prompt as the provider reported it (`usage.prompt_tokens`), cached part included; `tokens out` is `usage.completion_tokens`. Token Factory total in the ledger: $3.2919.
+
+| provider | model | calls | tokens in | of which cached | tokens out | cost (ledger) | cost (recomputed) |
+|---|---|---|---|---|---|---|---|
+| tavily | tavily-search (48 credits) | 48 | 0 | 0 | 0 | $0.3840 | $0.3840 |
+| tokenfactory | Qwen/Qwen3-235B-A22B-Instruct-2507 | 94 | 94,010 | 18,928 | 48,231 | $0.0449 | $0.0449 |
+| tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 216 | 422,198 | 8,704 | 713,274 | $2.5544 | $2.5544 |
+| tokenfactory | nvidia/Nemotron-3.5-Super-VL | 563 | 1,718,068 | 267,648 | 202,910 | $0.6338 | $0.6338 |
+| tokenfactory | nvidia/Nemotron-3_5-Lightning | 599 | 433,673 | 0 | 136,925 | $0.0589 | $0.0589 |
+
+Per UTC day (billing periods are usually days):
+
+| day | provider | model | calls | tokens in | tokens out | cost (ledger) |
+|---|---|---|---|---|---|---|
+| 2026-10-27 | tavily | tavily-search | 16 | 0 | 0 | $0.1280 |
+| 2026-10-27 | tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 6 | 25,143 | 17,931 | $0.0789 |
+| 2026-10-27 | tokenfactory | nvidia/Nemotron-3.5-Super-VL | 100 | 226,086 | 15,944 | $0.0822 |
+| 2026-10-27 | tokenfactory | nvidia/Nemotron-3_5-Lightning | 19 | 8,436 | 1,694 | $0.0009 |
+| 2026-10-28 | tavily | tavily-search | 32 | 0 | 0 | $0.2560 |
+| 2026-10-28 | tokenfactory | Qwen/Qwen3-235B-A22B-Instruct-2507 | 94 | 94,010 | 48,231 | $0.0449 |
+| 2026-10-28 | tokenfactory | nvidia/Nemotron-3-Ultra-550b-a55b | 210 | 397,055 | 695,343 | $2.4754 |
+| 2026-10-28 | tokenfactory | nvidia/Nemotron-3.5-Super-VL | 463 | 1,491,982 | 186,966 | $0.5516 |
+| 2026-10-28 | tokenfactory | nvidia/Nemotron-3_5-Lightning | 580 | 425,237 | 135,231 | $0.0580 |
+
+Prices, USD per 1M tokens (input / cached input / output):
+
+| model | the engine costs calls at | source | published | source |
+|---|---|---|---|---|
+| nvidia/Nemotron-3-Ultra-550b-a55b | 1.00 / 0.12 / 3.00 | engine/src/lull/ledger.py `PRICES` (unchanged since the ledger's first commit) | 1.00 / 0.12 / 3.00 | research notes, research-models.md (2026-10-27), condensed from the Token Factory model catalog (tokenfactory.nebius.com/api/public/models_info) |
+| nvidia/Nemotron-3.5-Super-VL | 0.30 / 0.06 / 0.90 | engine/src/lull/ledger.py `PRICES` (unchanged since the ledger's first commit) | 0.30 / 0.06 / 0.90 | research notes, research-models.md (2026-10-27), condensed from the Token Factory model catalog (tokenfactory.nebius.com/api/public/models_info) |
+| nvidia/Nemotron-3_5-Lightning | 0.06 / 0.06 / 0.24 | engine/src/lull/ledger.py `PRICES` (unchanged since the ledger's first commit) | 0.06 / n/a / 0.24 | research notes, research-models.md (2026-10-27), condensed from the Token Factory model catalog (tokenfactory.nebius.com/api/public/models_info) |
+| Qwen/Qwen3-235B-A22B-Instruct-2507 | 0.20 / 0.05 / 0.60 | eval/suite_a/score.py `SECOND_JUDGE_PRICE` (Token Factory `/v1/models?verbose=true`, read 2026-10-28) | n/a | n/a |
+
+Web search (Tavily) is costed at $0.008 per credit for reporting only; Tavily bills it, not Token Factory. Lightning: the notes record no cached-input price; the engine charges cached tokens at the input price, and the ledger has no cached Lightning tokens.
+
+To check against the billing: the per-model token totals and the per-day costs above. What is not in this ledger and would show only in the billing: calls made with another `LULL_HOME` (for example inside the API container), requests sent outside the engine's client (manual probes), requests the provider billed but the client never saw answered (a timeout after the provider finished), and anything before the first call above. Whether the provider bills reasoning tokens inside `completion_tokens` (as the ledger assumes) is to be confirmed on the billing page.
 
 ## Run log
 
