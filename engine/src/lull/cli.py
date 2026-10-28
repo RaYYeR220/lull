@@ -29,6 +29,7 @@ from lull.pipeline import Event, run, run_id_for
 from lull.showcase import ShowcaseError, export_showcase
 from lull.speech import DEFAULT_URL, NemoSpeechHTTP, SpeechClient, SpeechError
 from lull.stages.finalize import OverlapError
+from lull.stages.watch import PROFILES
 from lull.store import file_sha256
 from lull.tavily import Tavily
 from lull.tf import LIGHTNING, ULTRA, VL, TFError, TokenFactory
@@ -49,6 +50,9 @@ LOG_FILE = "run.log"
 class Mode(StrEnum):
     standard = "standard"
     extended = "extended"
+
+
+Profile = StrEnum("Profile", {p: p for p in PROFILES})  # the content profiles the prompts know
 
 
 @app.callback()
@@ -214,9 +218,20 @@ def describe(
         Path | None,
         typer.Option(help="Output folder (default: runs/<run id> under the current folder)."),
     ] = None,
-    mode: Annotated[Mode, typer.Option(help="standard, or extended (the video may pause).")] = (
-        Mode.standard
-    ),
+    mode: Annotated[
+        Mode,
+        typer.Option(
+            help="standard, or extended: the plan writes full long versions for the extended "
+            "track. Both modes also build extended.mp4 when a salient visual fits no pause."
+        ),
+    ] = Mode.standard,
+    profile: Annotated[
+        Profile,
+        typer.Option(
+            help="What matters most: education (slides, charts, on-screen text) or "
+            "entertainment (action, people, setting)."
+        ),  # fmt: skip
+    ] = Profile.education,
     voice: Annotated[str, typer.Option(help="Magpie TTS voice.")] = "Sofia",
     source_url: Annotated[
         str | None, typer.Option(help="A page about the video, read for names and terms.")
@@ -230,13 +245,14 @@ def describe(
     ] = None,
 ) -> None:
     """Describe VIDEO: audio description fitted to its pauses, verified against its frames.
+    Descriptions are written and voiced in English only.
 
     Exit codes: 0 published; 1 an error (one line, details in the run log); 2 bad usage;
     3 stopped by a spend cap or the provider's balance; 4 nothing published (overlap)."""
     sha = file_sha256(video)  # once: the run gets it too
     rid = run_id or run_id_for(video, sha)
     out = out or Path(RUNS_DIR) / rid
-    opts = RunOptions(mode=mode.value, voice=voice, source_url=source_url)
+    opts = RunOptions(mode=mode.value, profile=profile.value, voice=voice, source_url=source_url)
     ledger, tf, speech, tavily = _clients(no_research)
     printer = _Printer()
     log_path = out / LOG_FILE

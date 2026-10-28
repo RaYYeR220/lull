@@ -209,3 +209,29 @@ def test_describe_hashes_the_video_once_and_reports_stops(tone_slides, tmp_path,
     line = next(ln for ln in r.output.splitlines() if ln.startswith("error:"))
     assert "RuntimeError: boom" in line and str(tmp_path / "o" / "run.log") in line
     assert "Traceback" not in r.output
+
+
+def test_describe_takes_the_content_profile_and_says_english_only(
+    tone_slides, tmp_path, home, monkeypatch
+):
+    _fake_clients(monkeypatch, _free_ledger(home))
+    seen = {}
+
+    def fake_run(video, out, opts, **kw):
+        seen["opts"] = opts
+        raise OverlapError(["c001"])  # stop right after the options are built
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    r = runner.invoke(cli.app, ["describe", str(tone_slides), "--out", str(tmp_path / "o"),
+                                "--profile", "entertainment", "--mode", "extended"])  # fmt: skip
+    assert r.exit_code == 4
+    assert (seen["opts"].profile, seen["opts"].mode, seen["opts"].language) == (
+        "entertainment", "extended", "en"
+    )  # fmt: skip
+    r = runner.invoke(cli.app, ["describe", str(tone_slides), "--profile", "cinema"])
+    assert r.exit_code == 2
+    raw = runner.invoke(cli.app, ["describe", "--help"], terminal_width=200).output
+    text = " ".join(re.sub(r"[─-╿]", " ", raw).split())  # box drawing aside
+    assert "education" in text and "entertainment" in text
+    assert "English" in text  # descriptions are written in English only
+    assert "full long versions" in text  # what extended mode changes
