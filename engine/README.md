@@ -124,3 +124,17 @@ uv run pytest -m "not live"               # offline: fakes for the models and th
 LULL_LIVE=1 uv run pytest -m live         # calls the real Token Factory API and costs money
 uv run ruff check src tests && uv run ruff format --check src tests
 ```
+
+## Development clips
+
+Description quality is developed and measured only on Tears of Steel (Blender Foundation, CC BY
+3.0; no reference description, in no evaluation suite) and on clips made for the tests. The
+evaluation's videos and their references are never used to develop or tune the engine.
+
+## Evaluation switches
+
+`LULL_NO_VERIFY=1` (an environment variable, not a command-line flag) is for the evaluation's
+ablation only. Finalize then checks no claim against the frames and voices the lint-clean,
+fitted line with status `unverified`. The manifest records `verification: "disabled"` and no
+WCAG row can read "met"; each lists that claim verification was off. Never publish such a run
+as a described version.
