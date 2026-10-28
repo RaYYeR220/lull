@@ -44,6 +44,7 @@ The scored recorded run of the full film (final-ed) finished its descriptions (4
 held, 43 extended) and then failed while saving keyframes: a cue's keyframe time, 656.3 s, lies
 after the last video frame of this file (the video stream ends at 653.8 s, the audio at 658.1
 s), because the engine bounds keyframe times by the container's duration rather than the video
-stream's. ffmpeg returned no frame and the run stopped without publishing. A pipeline failure,
-not re-run: there is no full-film showcase, and Suite B, whose results need all four videos,
-has no results.
+stream's. ffmpeg returned no frame and the run stopped without publishing. Counted as a pipeline
+failure. The bug was then fixed in the engine (main 0b83117, keyframes kept inside the video
+stream) and the full film was run once more (final-ed2); the site's full-film showcase and
+Suite B come from that run (see the Suite B deviations).

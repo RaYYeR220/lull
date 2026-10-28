@@ -400,6 +400,10 @@ below it, the sha256 of every `refs/*.json` (`asr_corrections.json` included),
    - results need runs of all four videos; the overlap presentation rule (below); NOTICE
      files.
 
+### Deviations: the scored runs
+
+- **Engine commits of the scored runs**: Suite A, the negative control and the ablation ran on the engine of main 61e9d81 (merged into the evaluation branch as 7168ea5). The first recorded run of the full Elephants Dream (run id final-ed) failed in publish on a deterministic engine bug: a keyframe time after the file's last video frame. It is listed under the known failures and stays listed. The bug was fixed on main 0b83117 (keyframe and freeze times clamped to the video stream's last frame; nothing else changed), merged, and the full film was run once more under a fresh run id (final-ed2) with the same command and options (paused once when the user stopped the speech server, then resumed from its stage cache). Suite B is scored on that run and on the three USGS runs made on 61e9d81 (Suite B does not require one engine across its runs).
+
 ### What is measured (`suite_b/score.py`, from `rules.json`)
 
 | metric | how |
