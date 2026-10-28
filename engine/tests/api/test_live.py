@@ -16,10 +16,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from lull.api.app import create_app
-from lull.api.clip import ClipProbe
 from lull.api.ratelimit import RateLimiter
 from lull.ledger import BudgetExceeded, Ledger
-from lull.media import MediaError
+from lull.media import MediaError, Probe
 from lull.pipeline import Event
 
 MP4_FORMAT = "mov,mp4,m4a,3gp,3g2,mj2"
@@ -38,7 +37,7 @@ def fake_probe(path):
     if head.startswith(b"BAD"):
         raise MediaError(f"ffprobe failed (exit 1): {path}: Invalid data found")
     secs = float(head[4:].split(b";")[0]) if head.startswith(b"DUR=") else 10.0
-    return ClipProbe(
+    return Probe(
         duration=secs, width=64, height=64, fps=25.0, has_audio=True, format_name=MP4_FORMAT
     )
 
@@ -769,7 +768,7 @@ def test_a_container_that_understates_its_length_is_cut(lc, live, noaudio):
     def lying(path):
         if Path(path).name.startswith(".trim-"):
             return clip.probe(path)
-        return ClipProbe(
+        return Probe(
             duration=1.0, width=720, height=1280, fps=25.0, has_audio=False, format_name=MP4_FORMAT
         )
 
@@ -1281,9 +1280,7 @@ def test_samples_take_up_to_45_s(lc, live, data, secs, ok):
 )
 def test_only_mp4_mov_and_matroska_containers_are_taken(lc, live, fmt, ok):
     def probe(path):
-        return ClipProbe(
-            duration=10.0, width=64, height=64, fps=25.0, has_audio=True, format_name=fmt
-        )
+        return Probe(duration=10.0, width=64, height=64, fps=25.0, has_audio=True, format_name=fmt)
 
     live.probe = probe
     r = post(lc)
@@ -1301,16 +1298,21 @@ def test_the_engine_container_check_is_used_when_it_exists(lc, live, monkeypatch
         seen.append(probe)
         raise media.MediaError("not a container we take")
 
-    monkeypatch.setattr(media, "assert_safe_container", engine_check, raising=False)
+    monkeypatch.setattr(media, "assert_safe_container", engine_check)  # it must exist
     r = post(lc)
     assert r.status_code == 422 and r.json()["error"] == "unreadable"
     assert len(seen) == 1 and seen[0].format_name == MP4_FORMAT
 
 
 def test_the_real_probe_reports_the_container(noaudio):
+    from lull import media
     from lull.api import clip
 
-    assert clip.probe(noaudio).format_name == MP4_FORMAT
+    info = clip.probe(noaudio)
+    assert type(info) is media.Probe  # the engine's own, no API copy of it
+    assert info.format_name == MP4_FORMAT
+    media.assert_safe_container(info)
+    assert not hasattr(clip, "SAFE_CONTAINERS") and not hasattr(clip, "ClipProbe")
 
 
 def test_done_shows_model_spend_and_tavily_credits_apart(lc, live):

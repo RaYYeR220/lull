@@ -1233,7 +1233,7 @@ def test_a_text_change_refreshes_coverage_with_the_engine_helper(sc, rd, templat
         seen.append(cue.text)
         return cue
 
-    monkeypatch.setattr(fin, "refresh_described", refresh, raising=False)
+    monkeypatch.setattr(fin, "refresh_described", refresh)  # the engine has it
     assert patch(sc, "c001", NEW_RED).status_code == 200
     assert seen and set(seen) == {NEW_RED}  # the edit's text (engine finalize and Studio)
     after_edit = len(seen)
@@ -1246,19 +1246,29 @@ def test_a_text_change_refreshes_coverage_with_the_engine_helper(sc, rd, templat
     assert len(seen) == after_edit + 1  # no text change: nothing to recompute
 
 
-def test_without_the_engine_helper_stale_coverage_is_dropped():
-    from lull.api.studio import refreshed
+def test_an_edit_the_frames_contradict_ends_held_never_verified(sc, rd, fakes, app):
+    """The engine's re-verification (atomic claims; a failed claim is never dropped) runs on
+    a Studio edit too: words the frames contradict are held, not voiced."""
 
-    class Covered(Cue):
-        described: dict | None = None
+    def contradicted(call):
+        text = description(call["messages"])
+        return {"claims": [{"text": text, "verdict": "contradicted", "at": 0.5}]}
 
-    base = dict(
-        id="c001", gap_id="g001", start=1.0, end=2.0, text="A red screen.", event_ids=["e001"],
-        status="verified", ahead=False, claims=[], audio_path=None, audio_dur=None,
-    )  # fmt: skip
-    assert refreshed(Covered(**base, described={"e001": 1.0})).described is None
-    plain = Cue(**base)
-    assert refreshed(plain) == plain  # no coverage field yet: nothing to drop
+    fakes.answers = {
+        "verify": contradicted,
+        "remove": lambda call: {"text": description(call["messages"])},
+    }
+    r = patch(sc, "c001", "A green curtain covers the whole screen.")
+    assert r.status_code == 200, r.text
+    cue = r.json()
+    assert cue["status"] == "held" and cue["audio_url"] is None
+    assert "contradicted" in cue["note"]
+    verdicts = [c["verdict"] for check in cue["checks"] for c in check["claims"]]
+    assert "contradicted" in verdicts  # the failed claim is kept with its check
+    stored = cue_of(rd, "c001")
+    assert stored["status"] == "held" and stored["audio_path"] is None
+    assert fakes.spoken() == []  # never voiced
+    assert stage_entry(rd, "c001")["data"]["status"] == "held"
 
 
 def test_fork_a_live_run_with_overrides_and_a_held_previous(sc, rd, fakes, data):

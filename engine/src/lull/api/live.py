@@ -708,22 +708,10 @@ def too_long(duration: float, limit: float) -> LiveError:
     )
 
 
-def check_container(info: media.Probe) -> None:
-    """The engine's media.assert_safe_container when it has one; until then the same rule
-    here: ffprobe's format_name may only name the mp4/mov and Matroska/WebM demuxers."""
-    engine_check = getattr(media, "assert_safe_container", None)
-    if engine_check is not None:
-        engine_check(info)
-        return
-    names = {n for n in str(getattr(info, "format_name", "")).split(",") if n}
-    if not names or not names <= clip.SAFE_CONTAINERS:
-        raise media.MediaError(f"container {getattr(info, 'format_name', '')!r} is not taken")
-
-
 async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
     try:
         info = await anyio.to_thread.run_sync(live.probe, video)
-        check_container(info)
+        media.assert_safe_container(info)  # the engine's rule, right after probing
     except Exception:
         log.info("live run %s: %s does not probe", run_id, video.name, exc_info=True)
         raise unreadable() from None

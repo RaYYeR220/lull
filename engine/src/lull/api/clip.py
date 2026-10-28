@@ -1,10 +1,7 @@
-"""An upload checked before a run: ffprobe and ffmpeg may only read local files through the
-mp4/mov and Matroska/WebM demuxers, each under a time limit, and the run gets a copy remuxed
-and cut at the length limit, so a container that misstates its duration cannot make a longer
-run.
-
-The demuxer whitelist matters: ffmpeg recognises scripts by their content, so an ffconcat
-playlist named clip.mp4 would otherwise read whatever local files it lists.
+"""An upload checked before a run, with the engine's own rules (lull.media: local files only,
+the MP4/MOV and Matroska/WebM demuxers only, assert_safe_container) and two things the engine
+does not do for it: a time limit on each ffprobe/ffmpeg call, and the run's copy remuxed and
+cut at the length limit, so a container that misstates its duration cannot make a longer run.
 """
 
 from __future__ import annotations
@@ -12,25 +9,11 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 
-from lull.media import MediaError, Probe
+from lull.media import SAFE_FORMATS, SAFE_PROTOCOLS, MediaError, Probe
 
-PROTOCOLS = "file,pipe"
-DEMUXERS = "mov,matroska"  # the "mov,mp4,m4a,3gp,3g2,mj2" and "matroska,webm" demuxers
-# the containers taken, as ffprobe names them (format_name is a comma list of these)
-SAFE_CONTAINERS = frozenset({"mov", "mp4", "m4a", "3gp", "3g2", "mj2", "matroska", "webm"})
 PROBE_TIMEOUT = 20.0
-
-
-@dataclass(frozen=True)
-class ClipProbe(Probe):
-    """lull.media.Probe and the container ffprobe found (format_name, e.g. "matroska,webm")."""
-
-    format_name: str = ""
-
-
 TRIM_TIMEOUT = 120.0
 
 
@@ -64,10 +47,12 @@ def _fps(rate: str) -> float:
 
 
 def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Probe:
-    """lull.media.probe, restricted and time-limited."""
+    """What lull.media.probe answers (the engine's Probe, the container in format_name), with
+    the same ffprobe restrictions, under a time limit. The engine probes the run's copy again
+    itself; this one decides whether there is a run."""
     out = _run(
-        [_bin("ffprobe"), "-v", "error", "-protocol_whitelist", PROTOCOLS,
-         "-format_whitelist", DEMUXERS, "-print_format", "json", "-show_format",
+        [_bin("ffprobe"), "-v", "error", "-protocol_whitelist", SAFE_PROTOCOLS,
+         "-format_whitelist", SAFE_FORMATS, "-print_format", "json", "-show_format",
          "-show_streams", str(path)],
         timeout,
     )  # fmt: skip
@@ -81,8 +66,7 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Probe:
         duration = info.get("format", {}).get("duration") or video.get("duration")
         if duration is None:
             raise MediaError(f"cannot determine duration of {path}")
-        return ClipProbe(
-            format_name=str(info.get("format", {}).get("format_name") or ""),
+        return Probe(
             duration=float(duration),
             width=int(video["width"]),
             height=int(video["height"]),
@@ -90,6 +74,9 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Probe:
             has_audio=audio is not None,
             video_codec=video.get("codec_name", ""),
             audio_codec=None if audio is None else audio.get("codec_name", ""),
+            format_name=str(info.get("format", {}).get("format_name") or ""),
+            audio_streams=sum(s.get("codec_type") == "audio" for s in streams),
+            fps_rational=str(video.get("r_frame_rate") or ""),
         )
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise MediaError(f"ffprobe output for {path} does not read: {e}") from None
@@ -100,8 +87,9 @@ def trim(src: Path, dst: Path, seconds: float, *, timeout: float = TRIM_TIMEOUT)
     they are not needed and some (a phone's metadata track) cannot be copied."""
     _run(
         [_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error",
-         "-protocol_whitelist", PROTOCOLS, "-format_whitelist", DEMUXERS, "-i", str(src),
-         "-map", "0", "-map", "-0:d", "-c", "copy", "-t", f"{seconds:g}", str(dst)],
+         "-protocol_whitelist", SAFE_PROTOCOLS, "-format_whitelist", SAFE_FORMATS,
+         "-i", str(src), "-map", "0", "-map", "-0:d", "-c", "copy", "-t", f"{seconds:g}",
+         str(dst)],
         timeout,
     )  # fmt: skip
     return dst

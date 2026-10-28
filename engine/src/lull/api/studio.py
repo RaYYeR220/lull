@@ -403,16 +403,9 @@ MOVED: dict[str, Any] = {  # the person's text on a cue that is not where it was
 
 
 def refreshed(cue: Cue) -> Cue:
-    """`cue` with its coverage data worked out again after its text changed, so coverage and
-    F113 never count words that are gone: the engine's finalize.refresh_described when it has
-    one, else the stored coverage dropped (when the cue carries any)."""
-    refresh = getattr(finalize_mod, "refresh_described", None)
-    if refresh is not None:
-        out = refresh(cue)
-        return out if isinstance(out, Cue) else cue
-    if "described" in type(cue).model_fields:
-        return cue.model_copy(update={"described": None})
-    return cue
+    """`cue` with its coverage data (`described`) worked out again by the engine after its
+    text changed, so coverage and F113 never count words that are gone."""
+    return finalize_mod.refresh_described(cue)
 
 
 def text_hash(text: str) -> str:
