@@ -24,7 +24,7 @@ export function Refusal({ showcase }: { showcase: Showcase }) {
         {v ? (
           <div className={styles.main}>
             <p className={styles.label}>
-              <b>{match ? `Draft, cue ${match.index + 1}` : "Draft"}</b>
+              <b>{match ? `Draft, ${match.label.toLowerCase()}` : "Draft"}</b>
               <span>Checked claim by claim against its frames</span>
             </p>
             <p className={cx("t-proof", styles.draft)}>
@@ -53,7 +53,7 @@ export function Refusal({ showcase }: { showcase: Showcase }) {
                 <Glyph name="voice" />
                 Spoken
               </span>
-              <p className="t-proof-spoken">{match?.cue.text ?? spokenFromDraft(v)}</p>
+              <p className="t-proof-spoken">{match?.text ?? spokenFromDraft(v)}</p>
             </div>
           </div>
         ) : null}

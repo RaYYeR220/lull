@@ -12,8 +12,9 @@ import { routeApi } from "./try-api";
  */
 const OUT = path.join(__dirname, "__screens__");
 const SIZES = [
-  { name: "1440", viewport: { width: 1440, height: 900 }, preview: 9500 },
-  { name: "390", viewport: { width: 390, height: 844 }, preview: 4000 },
+  // into the first line: real sound plays at 1x, the first line starts at 9 s
+  { name: "1440", viewport: { width: 1440, height: 900 }, preview: 11500 },
+  { name: "390", viewport: { width: 390, height: 844 }, preview: 11500 },
 ];
 
 async function fullPage(page: Page, file: string) {
@@ -138,6 +139,7 @@ test.describe("player screens @screens", () => {
 
     test(`player, media missing, at ${size.name}`, async ({ page }) => {
       await page.setViewportSize(size.viewport);
+      await page.route("**/showcase/ed90/**", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "not found" }));
       await page.goto("/kitchen#player", { waitUntil: "networkidle" });
       await page.evaluate(() => document.fonts.ready);
       const p = page.locator("lull-player");

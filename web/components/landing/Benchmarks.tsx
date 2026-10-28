@@ -2,7 +2,7 @@ import { Section } from "@/components/ui/Section";
 import type { BenchmarkKey, Benchmarks as BenchmarkData } from "@/lib/benchmarks";
 import { cx } from "@/lib/cx";
 import type { Showcase } from "@/lib/showcase";
-import { numberWord } from "@/lib/showcase-derive";
+import { spend } from "@/lib/showcase-derive";
 import styles from "./Benchmarks.module.css";
 
 const METRICS: { key: BenchmarkKey; name: string; what: string }[] = [
@@ -11,13 +11,6 @@ const METRICS: { key: BenchmarkKey; name: string; what: string }[] = [
   { key: "recall", name: "Visual-fact recall", what: "Visual facts a viewer needs that the description covers." },
   { key: "costPerMinute", name: "Cost per minute", what: "Model spend for each minute of video." },
 ];
-
-/** The run's model spend, said the way a person would. */
-function spend(usd: number): { figure: string; words: string } {
-  const cents = Math.round(usd * 100);
-  if (cents < 1) return { figure: "<$0.01", words: "Under a cent" };
-  return { figure: `$${usd.toFixed(2)}`, words: `About ${numberWord(cents)} ${cents === 1 ? "cent" : "cents"}` };
-}
 
 /** 9. Benchmarks: four empty cells until they are measured, and the one number that has been. */
 export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData | null; showcase: Showcase }) {
@@ -58,9 +51,12 @@ export function Benchmarks({ benchmarks, showcase }: { benchmarks: BenchmarkData
           <aside className={styles.measured} aria-label="One measured number">
             <span className="t-numeral-xl">{cost.figure}</span>
             <p>
-              {cost.words} in model calls for one {Math.round(showcase.duration)}-second run of <cite>{showcase.title}</cite>.
+              {cost.words} in model calls for the full {Math.round(showcase.duration)}-second run of <cite>{showcase.title}</cite>.
             </p>
-            {measured === 0 ? <p className={styles.after}>The only figure here that has been measured so far.</p> : null}
+            <p className={styles.after}>
+              It counts every model call made for the run, not only its last pass.
+              {measured === 0 ? " The only figure here that has been measured so far." : null}
+            </p>
           </aside>
         ) : null}
       </div>

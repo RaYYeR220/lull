@@ -11,11 +11,17 @@
 .gap{position:absolute;top:calc(var(--line-y) - 54px);display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;pointer-events:none}
 .len{font-family:var(--f-display);font-optical-sizing:auto;font-weight:400;font-size:var(--fs-pause);line-height:1;letter-spacing:var(--tr-pause);color:var(--lamp-0);font-variant-numeric:lining-nums tabular-nums;white-space:nowrap}
 .cap{font-size:12px;line-height:1.2;font-weight:500;letter-spacing:.01em;color:var(--cream-2);white-space:nowrap}
+/* a pause too short for its label: the lamp still marks it */
+.gap[data-tight]{visibility:hidden}
 
 /* the spoken line, typed in step with the voice; italic Newsreader is the voice */
 .cue{position:absolute;bottom:calc(100% - var(--line-y) + 66px);margin:0;padding-left:9px;border-left:1px solid rgb(var(--lamp-rgb) / .55);
   font-family:var(--f-display);font-optical-sizing:auto;font-style:italic;font-weight:350;font-size:var(--fs-cue);line-height:var(--lh-cue);letter-spacing:var(--tr-cue);color:var(--lamp-0);text-wrap:pretty;transition:opacity .4s}
 .cue[data-state="idle"]{opacity:0}
+/* a later line has taken this one's room: it steps back */
+.cue[data-state="rested"]{opacity:0}
+/* a line near the end hangs from the stage's edge, its rule on the right */
+.cue[data-anchor="end"]{padding:0 9px 0 0;border-left:0;border-right:1px solid rgb(var(--lamp-rgb) / .55);text-align:right}
 .rest{visibility:hidden}
 .caret{display:inline-block;width:1px;height:1em;margin-left:1px;vertical-align:-.15em;background:var(--lamp-1)}
 .caret[hidden]{display:none}

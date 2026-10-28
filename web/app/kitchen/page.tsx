@@ -310,7 +310,7 @@ export default function Kitchen() {
           id="player"
           eyebrow="Components"
           heading="Player"
-          lede="The described-video player, as the showcase and embeds use it. Until the recorded run's media is exported it says the video isn't there and why."
+          lede="The described-video player, as the showcase pages and embeds use it, playing the recorded run's own export."
         >
           <div className={styles.player}>
             <Player

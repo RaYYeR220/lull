@@ -8,8 +8,8 @@ import styles from "./Guarantee.module.css";
 
 const LAMP = "233,203,152";
 const CREAM = "246,238,223";
-/** The placed line carries its own text only when it is at least this wide. */
-const FIT_PX = 250;
+/** Room the placed line's own text needs: 12.5px semibold Figtree, two quote marks and the inset. */
+const textPx = (text: string) => Math.ceil((text.length + 2) * 7 + 20);
 
 const P = (x: number) => `${x.toFixed(3)}%`;
 
@@ -71,9 +71,10 @@ function Figure({ narrow, showcase, cu, voiced, overlap }: FigureProps) {
   const cy = wY + (narrow ? 42 : 32);
   const gy = cy + 30;
   const wLen = (gap.end - gap.start).toFixed(2);
+  // a guard is drawn only where the pause really is one guard from speech
   const guards: [number, number][] = [
-    [gap.start - GUARD_S, gap.start],
-    [gap.end, gap.end + GUARD_S],
+    ...(cu.guardBefore ? [[gap.start - GUARD_S, gap.start] as [number, number]] : []),
+    ...(cu.guardAfter ? [[gap.end, gap.end + GUARD_S] as [number, number]] : []),
   ];
   const axis: ReactNode[] = [];
   for (let k = Math.ceil(a * 2); k <= Math.floor(b * 2); k++) {
@@ -157,8 +158,12 @@ function Figure({ narrow, showcase, cu, voiced, overlap }: FigureProps) {
       <text className={styles.mono} x={P(gx1)} dx="-6" y={tcY} textAnchor="end" fill="#f6ddb0">
         {fmt(gap.end)}
       </text>
-      {cu.marks.map((m) => (
-        <g key={m.start}>
+      {/* speech as heard, and the transcribed words inside it */}
+      {cu.spans.map((m) => (
+        <rect key={`s${m.start}`} x={P(dx(m.start))} y={spY} width={P(dx(m.end) - dx(m.start))} height={spH} fill="#f6eedf" fillOpacity={cu.words.length ? 0.34 : 0.92} />
+      ))}
+      {cu.words.map((m) => (
+        <g key={`w${m.start}`}>
           <rect x={P(dx(m.start))} y={spY} width={P(dx(m.end) - dx(m.start))} height={spH} fill="#f6eedf" fillOpacity=".92" />
           {dx(m.end) - dx(m.start) < 0.6 ? <rect x={P(dx(m.start))} y={spY} width="2" height={spH} fill="#f6eedf" fillOpacity=".92" /> : null}
         </g>
@@ -175,12 +180,16 @@ function Figure({ narrow, showcase, cu, voiced, overlap }: FigureProps) {
       ) : null}
       {narrow ? null : (
         <>
-          <text x={P(dx(gap.start - GUARD_S))} dx="-8" y={spY + spH + 16} textAnchor="end" fill="#aca491" fontSize="12">
-            {GUARD_S.toFixed(2)} s guard
-          </text>
-          <text x={P(dx(gap.end + GUARD_S))} dx="8" y={spY + spH + 16} fill="#aca491" fontSize="12">
-            {GUARD_S.toFixed(2)} s guard
-          </text>
+          {cu.guardBefore ? (
+            <text x={P(dx(gap.start - GUARD_S))} dx="-8" y={spY + spH + 16} textAnchor="end" fill="#aca491" fontSize="12">
+              {GUARD_S.toFixed(2)} s guard
+            </text>
+          ) : null}
+          {cu.guardAfter ? (
+            <text x={P(dx(gap.end + GUARD_S))} dx="8" y={spY + spH + 16} fill="#aca491" fontSize="12">
+              {GUARD_S.toFixed(2)} s guard
+            </text>
+          ) : null}
         </>
       )}
       <rect x={P(gx0)} y={wY} width={P(gx1 - gx0)} height={wH} fill={`rgba(${LAMP},.08)`} stroke={`rgba(${LAMP},.55)`} />
@@ -260,11 +269,16 @@ function figureLabel(s: Showcase, cu: CloseUp, placed: number): string {
   const after = cu.after.length ? `the ${cu.after.length === 1 ? "word" : "words"} ${quoted(cu.after)}` : "the next speech";
   const afterShort = cu.after.length ? quoted(cu.after) : "the next speech";
   const guard = `a ${GUARD_S.toFixed(2)} second guard`;
+  const opening = Number.isFinite(cu.prevSpeechEnd)
+    ? `${before} ${cu.before.length === 1 ? "ends" : "end"} at ${fmt(cu.prevSpeechEnd)}, ${cu.guardBefore ? `${guard} follows, ` : ""}`
+    : "";
+  const closing = Number.isFinite(cu.nextSpeechStart)
+    ? `, then ${cu.guardAfter ? `${cu.guardBefore ? "another" : "a"} guard before ` : ""}${after} at ${fmt(cu.nextSpeechStart)}`
+    : "";
   return (
     `Timeline of the ${Math.round(s.duration)}-second clip: speech blocks, ${numberWord(n)} usable windows and a description placed inside ${where}. ` +
-    `Below, a close-up of ${fmt(a, 1)} to ${fmt(b, 1)}: ${before} ${cu.before.length === 1 ? "ends" : "end"} at ${fmt(cu.prevSpeechEnd)}, ${guard} follows, ` +
-    `the usable window runs from ${fmt(gap.start)} to ${fmt(gap.end)} with room for ${gap.capacity} words, then another guard before ${after}` +
-    `${Number.isFinite(cu.nextSpeechStart) ? ` at ${fmt(cu.nextSpeechStart)}` : ""}. ` +
+    `Below, a close-up of ${fmt(a, 1)} to ${fmt(b, 1)}: ${opening}` +
+    `the usable window runs from ${fmt(gap.start)} to ${fmt(gap.end)} with room for ${gap.capacity} words${closing}. ` +
     `The short version of the line, ‘${cue.text}’, sits inside the window. The long version would run past the window into ${afterShort}, so it is not used.`
   );
 }
@@ -276,7 +290,7 @@ export function Guarantee({ showcase }: { showcase: Showcase }) {
   const overlap = speechOverlap(showcase).seconds;
   const placed = new Set(voiced.map((c) => c.gap.id)).size;
   // the placed line carries its text once the figure is wide enough for it
-  const fitAt = cu ? Math.ceil((FIT_PX * (cu.b - cu.a)) / Math.max(1e-3, cu.cue.end - cu.cue.start)) : 0;
+  const fitAt = cu ? Math.ceil((textPx(cu.cue.text) * (cu.b - cu.a)) / Math.max(1e-3, cu.cue.end - cu.cue.start)) : 0;
 
   return (
     <Section id="guarantee" eyebrow="The guarantee" heading="Zero overlap, by construction." headCols={12} className={styles.guarantee}>
@@ -344,9 +358,8 @@ export function Guarantee({ showcase }: { showcase: Showcase }) {
               </li>
             </ul>
             <p className={cx("t-small", styles.note)}>
-              {showcase.interim
-                ? "Speech, guards and windows come from the real run. Description lengths are estimated at the measured Magpie rate of 2.36 words a second; the long version is drawn for illustration."
-                : "Speech, guards, windows and description lengths come from the real run; the long version is drawn for illustration."}
+              Speech, words, guards, windows and the line&rsquo;s voiced length come from the real run; the long version is drawn for
+              illustration.
             </p>
           </figcaption>
         </figure>

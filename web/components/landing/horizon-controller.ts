@@ -57,10 +57,22 @@ export class HorizonController {
     };
   }
 
-  /** Both soundtracks are loaded: switch to real sound. */
+  /**
+   * Both soundtracks are loaded: switch to real sound. If the silent preview is already
+   * playing, the sound takes over from the same moment; should the browser refuse to start
+   * it, the preview stops there rather than run on silently in "audio" mode.
+   */
   attachAudio(tracks: Record<Track, HTMLAudioElement>) {
     this.audio = tracks;
     this.set({ mode: "audio" });
+    if (this.snap.playing) {
+      const a = this.activeAudio();
+      if (a) {
+        a.currentTime = this.t;
+        a.play().catch(() => this.pause());
+      }
+      this.kick();
+    }
     return () => {
       Object.values(tracks).forEach((a) => a.pause());
       this.audio = {};

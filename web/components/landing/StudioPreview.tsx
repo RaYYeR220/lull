@@ -3,8 +3,8 @@ import { Glyph } from "@/components/ui/Glyph";
 import { Section } from "@/components/ui/Section";
 import { STATUS, StatusMark } from "@/components/ui/StatusMark";
 import { cx } from "@/lib/cx";
-import type { CueStatus, Showcase } from "@/lib/showcase";
-import { clamp, gapOf, plural, slug, verifiedCue, wordCount } from "@/lib/showcase-derive";
+import { keyframeUrl, type CueStatus, type Showcase } from "@/lib/showcase";
+import { clamp, numberedCues, plural, slug, verifiedCue, wordCount } from "@/lib/showcase-derive";
 import { formatTimecode as fmt } from "@/lib/timecode";
 import styles from "./StudioPreview.module.css";
 
@@ -51,10 +51,11 @@ function Waveform({ loudness, speech }: Pick<Showcase, "loudness" | "speech">) {
 /** 7. The studio: a still of the review surface, drawn from the showcase run. */
 export function StudioPreview({ showcase }: { showcase: Showcase }) {
   const T = showcase.duration;
-  const cues = [...showcase.cues].sort((a, b) => a.start - b.start).map((c) => ({ ...c, gap: gapOf(c, showcase.gaps) }));
+  const cues = numberedCues(showcase);
+  const standard = cues.filter((c) => c.kind === "standard");
+  const extended = cues.filter((c) => c.kind === "extended");
   const match = verifiedCue(showcase);
-  const selected = cues.find((c) => c.id === match?.cue.id) ?? cues[0];
-  const selIndex = selected ? cues.indexOf(selected) : -1;
+  const selected = cues.find((c) => c.id === match?.id) ?? cues[0];
   const counts = ORDER.map((s) => [s, cues.filter((c) => c.status === s).length] as const).filter(([, n]) => n > 0);
   const held = cues.filter((c) => c.status === "held").length;
 
@@ -69,7 +70,7 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
     ruler.push(<i key={`i${t}`} style={{ left: pct(t, T) }} />);
   }
 
-  const claims = match && selected?.id === match.cue.id ? showcase.verifyExample?.claims : undefined;
+  const claims = match && selected?.id === match.id ? showcase.verifyExample?.claims : undefined;
   const words = selected ? wordCount(selected.text) : 0;
   const capacity = selected?.gap?.capacity;
 
@@ -115,7 +116,7 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
                 <Row kind={styles.spk} label="Speakers">
                   {showcase.speech.map(([a, b]) => {
                     const said =
-                      b - a >= 10 && showcase.words
+                      b - a >= 3 && showcase.words
                         ? showcase.words
                             .filter((w) => w.start >= a - 0.01 && w.end <= b + 0.01)
                             .map((w) => w.text)
@@ -137,17 +138,27 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
                   ))}
                 </Row>
                 <Row kind={styles.cues} label="Cues">
-                  {cues.map((c, i) => (
+                  {standard.map((c) => (
                     <span
                       key={c.id}
                       className={cx(styles.blk, styles.blkCue, styles[c.status], c === selected && styles.sel)}
                       style={{ left: pct(c.start, T), width: pct(Math.max(c.end - c.start, 0.3), T) }}
                     >
                       <Glyph name={STATUS[c.status].glyph} />
-                      <span className={styles.cn}>Cue {i + 1}</span>
+                      <span className={styles.cn}>{c.label}</span>
                     </span>
                   ))}
                 </Row>
+                {extended.length ? (
+                  // the video stops for these: a mark at each freeze point, not a span of the clip
+                  <Row kind={styles.ext} label="Extended">
+                    {extended.map((c) => (
+                      <span key={c.id} className={cx(styles.blk, styles.blkExt, c === selected && styles.sel)} style={{ left: pct(c.start, T) }}>
+                        <Glyph name="extended" />
+                      </span>
+                    ))}
+                  </Row>
+                ) : null}
                 {selected?.gap ? (
                   <span className={styles.playhead} style={{ left: `calc(92px + (100% - 110px) * ${(selected.gap.start / T).toFixed(4)})` }} />
                 ) : null}
@@ -171,9 +182,9 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
                 </span>
               </p>
               <ol className={styles.list}>
-                {cues.map((c, i) => (
+                {cues.map((c) => (
                   <li key={c.id} className={cx(c === selected && styles.sel)}>
-                    <span className={styles.n}>Cue {i + 1}</span>
+                    <span className={styles.n}>{c.label}</span>
                     <span className={styles.mono}>{fmt(c.start)}</span>
                     <span className={styles.ln}>{c.text}</span>
                     <span className={styles.wc}>{c.gap ? `${wordCount(c.text)} of ${c.gap.capacity}` : plural(wordCount(c.text), "word")}</span>
@@ -190,7 +201,7 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
               <div className={styles.drawer}>
                 <div>
                   <div className={styles.drHead}>
-                    <h3>Cue {selIndex + 1}</h3>
+                    <h3>{selected.label}</h3>
                     <StatusMark status={selected.status} variant="pill" />
                   </div>
                   <p className={styles.drTime}>
@@ -198,30 +209,11 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
                   </p>
                 </div>
                 <figure className={styles.frame}>
-                  <svg viewBox="0 0 320 180" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid slice">
-                    <defs>
-                      <linearGradient id="fr-sky" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0" stopColor="#e9cb98" stopOpacity=".34" />
-                        <stop offset="1" stopColor="#e9cb98" stopOpacity=".08" />
-                      </linearGradient>
-                      <radialGradient id="fr-glow" cx=".62" cy=".42" r=".55">
-                        <stop offset="0" stopColor="#e9cb98" stopOpacity=".18" />
-                        <stop offset="1" stopColor="#e9cb98" stopOpacity="0" />
-                      </radialGradient>
-                    </defs>
-                    <rect width="320" height="180" fill="#0d0f17" />
-                    <rect width="320" height="180" fill="url(#fr-glow)" />
-                    <g transform="translate(150 26)">
-                      <rect width="120" height="112" fill="url(#fr-sky)" />
-                      <path d="M40 0v112M80 0v112M0 37h120M0 74h120" stroke="#13151f" strokeWidth="5" />
-                      <rect width="120" height="112" fill="none" stroke="#31364c" strokeWidth="6" />
-                    </g>
-                    <path d="M118 180v-62c0-14 9-24 22-27 4-1 8-1 12 0 13 3 22 13 22 27v62z" fill="#13151f" />
-                    <circle cx="146" cy="70" r="15" fill="#13151f" />
-                    <path d="M0 158h320" stroke="#232739" strokeWidth="1" />
-                  </svg>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a 854x480 still from the export, already small */}
+                  <img src={keyframeUrl(showcase.id, selected.id)} alt="" width={854} height={480} loading="lazy" decoding="async" />
                   <figcaption>
-                    <span>Frame placeholder</span>
+                    <span>Evidence frame</span>
+                    <span className={styles.mono}>{fmt(selected.start)}</span>
                   </figcaption>
                 </figure>
                 <div>
@@ -271,9 +263,7 @@ export function StudioPreview({ showcase }: { showcase: Showcase }) {
           </div>
         </div>
         <figcaption className={styles.cap}>
-          {showcase.interim
-            ? "Interface preview. Speech, pauses and the waveform come from the real run; cue statuses are shown for illustration."
-            : "Interface preview, drawn from the real run."}
+          Interface preview, drawn from the real run: its soundtrack, pauses, lines, statuses and evidence frame.
         </figcaption>
       </figure>
     </Section>

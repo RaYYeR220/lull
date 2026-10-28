@@ -389,8 +389,23 @@ test("player.js may be loaded by any site", async ({ request }) => {
 });
 
 test.describe("player, in the site", () => {
-  test("the kitchen instance says the recorded run's media isn't exported yet", async ({ page }) => {
+  test("the kitchen instance plays the recorded run's own export", async ({ page }) => {
     const errors = pageErrors(page);
+    await page.goto("/kitchen#player");
+    await waitReady(page);
+    const state = await playerState(page);
+    expect(state).toMatchObject({ video: "ready", descriptions: "ready", extended: "ready", mode: "mixed" });
+    // the engine's real lines, from descriptions.vtt
+    await player(page).getByRole("button", { name: "Transcript" }).click();
+    await expect(player(page).getByRole("region", { name: "Descriptions transcript" })).toContainText(
+      "A second person in a light outfit joins the bald person in a doorway.",
+    );
+    expect(errors).toEqual([]);
+  });
+
+  test("with the media gone, the kitchen instance says so and why", async ({ page }) => {
+    const errors = pageErrors(page);
+    await page.route("**/showcase/ed90/**", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "not found" }));
     await page.goto("/kitchen#player");
     const p = page.locator("#player lull-player");
     await expect(p.getByText("This video isn’t available")).toBeVisible();

@@ -23,6 +23,11 @@ export type HorizonData = {
 
 const pct = (t: number, T: number) => `${((t / T) * 100).toFixed(3)}%`;
 
+/** A line's preferred width: about three rows of a long description, never narrower than its pause. */
+const LINE_W = 210;
+/** Clear air kept between a line and the stage's edge, and between two lines that both show. */
+const LINE_GAP = 10;
+
 /** Pause labels, cue lines and the timecode ruler. Static markup: the frame loop types into it. */
 const Overlay = memo(function Overlay({ gaps, cues, duration: T }: Pick<HorizonData, "gaps" | "cues" | "duration">) {
   const ticks: number[] = [];
@@ -30,23 +35,26 @@ const Overlay = memo(function Overlay({ gaps, cues, duration: T }: Pick<HorizonD
   return (
     <>
       {gaps.map((g) => (
-        <div key={g.id} className={styles.gap} style={{ left: pct(g.start, T), width: pct(g.end - g.start, T) }}>
+        <div key={g.id} className={styles.gap} data-gap="" style={{ left: pct(g.start, T), width: pct(g.end - g.start, T) }}>
           <span className={styles.len}>{(g.end - g.start).toFixed(2)} s</span>
           <span className={styles.cap}>{g.capacity} words</span>
         </div>
       ))}
-      {cues.map((c, i) => {
-        // as wide as its pause (at least 150px), but always 14px short of the next line
-        const next = cues[i + 1];
-        const room = (((next ? next.gapStart : T) - c.gapStart) / T) * 100;
+      {cues.map((c) => {
+        // until the frame loop measures the stage: from its pause, as wide as the pause (at least
+        // LINE_W), never past the stage's edge
         const own = ((c.gapEnd - c.gapStart) / T) * 100;
+        const room = 100 - (c.gapStart / T) * 100;
         return (
           <p
             key={c.id}
             className={styles.cue}
             data-cue=""
             data-state="idle"
-            style={{ left: pct(c.gapStart, T), width: `min(calc(${room.toFixed(3)}% - 14px), max(${own.toFixed(3)}%, 150px))` }}
+            style={{
+              left: pct(c.gapStart, T),
+              width: `min(max(${own.toFixed(3)}%, ${LINE_W}px), calc(${room.toFixed(3)}% + var(--pad) - ${LINE_GAP}px))`,
+            }}
           >
             <span />
             <span className={styles.caret} hidden />
@@ -116,7 +124,10 @@ export function Horizon({ data }: { data: HorizonData }) {
       caret: p.children[1] as HTMLElement,
       rest: p.children[2] as HTMLElement,
     }));
-    const shown = cues.map(() => -1);
+    const gapLabels = [...overlay.querySelectorAll<HTMLElement>("[data-gap]")];
+    const shown = cues.map(() => "");
+    // the first later line that needs a line's room: once it starts, the earlier line rests
+    let coveredBy = cues.map(() => -1);
     const frame: HorizonFrame = {
       width: 0,
       height: 0,
@@ -139,18 +150,62 @@ export function Horizon({ data }: { data: HorizonData }) {
       return Math.min(1, Math.max(0, (controller.t - c.start) / Math.max(1e-3, c.end - c.start)));
     };
 
+    /**
+     * Places the lines on the measured stage. Each starts at its pause and is as wide as the
+     * pause, at least LINE_W; one that would run off the stage hangs from the stage's end
+     * instead. Where two lines would overlap, the later one takes the room when it starts.
+     * A pause label wider than its pause, or one that would run into the label before it, is
+     * left out: the lamp still marks the pause.
+     */
+    const layout = () => {
+      const W = frame.width;
+      const axis = W - 2 * frame.pad;
+      if (axis <= 0) return;
+      const X = (t: number) => frame.pad + (t / T) * axis;
+      const boxes = cues.map((c, i) => {
+        const x0 = X(c.gapStart);
+        const w = Math.min(W - 2 * LINE_GAP, Math.max(X(c.gapEnd) - x0, LINE_W));
+        const end = W - LINE_GAP - x0 < w;
+        const left = end ? W - LINE_GAP - w : x0;
+        const line = lines[i];
+        if (line) {
+          line.p.style.left = `${(left - frame.pad).toFixed(1)}px`;
+          line.p.style.width = `${w.toFixed(1)}px`;
+          if (end) line.p.dataset.anchor = "end";
+          else delete line.p.dataset.anchor;
+        }
+        return [left, left + w] as const;
+      });
+      coveredBy = boxes.map(([a, b], i) => boxes.findIndex(([c, d], j) => j > i && c < b + LINE_GAP && d > a - LINE_GAP));
+      // left to right: a label shows when it fits over its pause and clears the last one shown
+      let lastRight = -Infinity;
+      gapLabels.forEach((el, i) => {
+        const g = data.gaps[i];
+        if (!g) return;
+        const need = Math.max(0, ...[...el.children].map((c) => (c as HTMLElement).offsetWidth));
+        const mid = (X(g.start) + X(g.end)) / 2;
+        const tight = need > X(g.end) - X(g.start) + 8 || mid - need / 2 < lastRight + 6;
+        el.toggleAttribute("data-tight", tight);
+        if (!tight) lastRight = mid + need / 2;
+      });
+      shown.fill("");
+    };
+
     const updateLines = (started: boolean) => {
       let now = -1;
       cues.forEach((c, i) => {
         const line = lines[i];
         const p = frame.progress[i] ?? 0;
         const k = p >= 1 ? c.text.length : Math.floor(c.text.length * p);
-        if (line && k !== shown[i]) {
-          shown[i] = k;
+        const by = coveredBy[i] ?? -1;
+        const rests = by !== -1 && (frame.progress[by] ?? 0) > 0;
+        const key = `${k}|${rests ? 1 : 0}`;
+        if (line && key !== shown[i]) {
+          shown[i] = key;
           line.typed.textContent = c.text.slice(0, k);
           line.rest.textContent = c.text.slice(k);
-          line.p.dataset.state = k === 0 ? "idle" : k < c.text.length ? "typing" : "done";
-          line.caret.hidden = !(k > 0 && k < c.text.length);
+          line.p.dataset.state = rests && k > 0 ? "rested" : k === 0 ? "idle" : k < c.text.length ? "typing" : "done";
+          line.caret.hidden = !(k > 0 && k < c.text.length) || rests;
         }
         if (started && controller.t >= c.start && controller.t < c.end) now = i;
       });
@@ -179,6 +234,7 @@ export function Horizon({ data }: { data: HorizonData }) {
       frame.lineY = parseFloat(getComputedStyle(stage).getPropertyValue("--line-y")) || 166;
       canvas.width = Math.round(frame.width * frame.dpr);
       canvas.height = Math.round(frame.height * frame.dpr);
+      layout();
       render();
     };
 
@@ -329,8 +385,8 @@ export function Horizon({ data }: { data: HorizonData }) {
       </p>
       {data.audio ? (
         <>
-          <audio ref={originalRef} preload="metadata" src={data.audio.original} />
-          <audio ref={describedRef} preload="metadata" src={data.audio.described} />
+          <audio ref={originalRef} preload="metadata" src={data.audio.original} data-track="original" />
+          <audio ref={describedRef} preload="metadata" src={data.audio.described} data-track="described" />
         </>
       ) : null}
     </figure>

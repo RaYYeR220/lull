@@ -8,14 +8,10 @@ const ROUTES = [
 
 const PHONE = { width: 390, height: 844 };
 
-/** The recorded run's media isn't exported yet: the kitchen player asks for it and shows its missing state. */
-const awaitingExport = (url: string) => new URL(url, "http://x").pathname.startsWith("/showcase/");
-
 function collectErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (msg) => {
     if (msg.type() !== "error") return;
-    if (/status of 404/.test(msg.text()) && awaitingExport(msg.location().url)) return;
     errors.push(`console: ${msg.text()}`);
   });
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));

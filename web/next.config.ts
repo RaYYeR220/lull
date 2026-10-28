@@ -1,6 +1,8 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { assertApiBaseForBuild } from "./lib/api-base";
+import { assertRealShowcases } from "./lib/showcase-build";
 
 /** Sent with every response. */
 const SECURITY_HEADERS = [
@@ -33,8 +35,17 @@ const config: NextConfig = {
   },
 };
 
-/** A production build must know the API's address; the dev server falls back to a local one. */
+/** The recorded runs the site ships. */
+export const SHOWCASE_ROOT = path.join(__dirname, "public", "showcase");
+
+/**
+ * A production build must know the API's address (the dev server falls back to a local one)
+ * and must ship real engine exports, never an interim placeholder.
+ */
 export default function nextConfig(phase: string): NextConfig {
-  if (phase === PHASE_PRODUCTION_BUILD) assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL });
+  if (phase === PHASE_PRODUCTION_BUILD) {
+    assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL });
+    assertRealShowcases(SHOWCASE_ROOT);
+  }
   return config;
 }
