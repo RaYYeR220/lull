@@ -99,6 +99,7 @@ REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
 WALL_CLOCK_S = 600.0
 SEARCHES_PER_RUN = 3  # web searches a live run may make (the day cap is LULL_TAVILY_DAY)
 NOT_COUNTED = (402, 409, 503)  # refusals that are not the visitor's doing
+OPEN_CHECK_ID, OPEN_CHECK_USD = "live-open-check", 1e-6  # "is any spend left at all"
 MAX_FOLLOWERS = 3  # GET .../events streams following one run
 MAX_STREAMS = 8  # GET .../events streams in all (follows and replays)
 FOLLOW_RETRY_S = 30
@@ -532,6 +533,7 @@ class Executor:
         """Wait for `fut` until `deadline` (loop time): "done", "unwatched" (nobody listens any
         more: checked again, a listener may have come back) or "late"."""
         loop = asyncio.get_running_loop()
+        await asyncio.sleep(0)  # what the engine thread queued (its last events) runs first
         while True:
             left = deadline - loop.time()
             if fut.done():
@@ -683,6 +685,14 @@ class Live:
     def _keep_loudness(self, job: Job) -> None:
         if self.envelope is not None and (job.run_dir / MANIFEST).is_file():
             self.envelope(job.run_dir, job.video, job.duration)
+
+    def check_open_budget(self) -> None:
+        """402 at once when the day or total model cap is already reached: before an upload's
+        body is read, so nobody sends 30 MB to be refused."""
+        try:
+            self.ledger.check(OPEN_CHECK_ID, OPEN_CHECK_USD)
+        except BudgetExceeded as e:
+            raise LiveError(402, "budget", budget_message(e.scope), scope=e.scope) from None
 
     def check_budget(self, run_id: str, duration: float) -> None:
         try:
@@ -911,6 +921,8 @@ async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
     try:
         info = await anyio.to_thread.run_sync(live.probe, video)
         media.assert_safe_container(info)  # the engine's rule, right after probing
+    except clip.OverLimits as e:
+        raise LiveError(422, "unsupported", str(e)) from None
     except Exception:
         log.info("live run %s: %s does not probe", run_id, video.name, exc_info=True)
         raise unreadable() from None
@@ -1200,6 +1212,7 @@ async def create_run(request: Request) -> StreamingResponse:
         raise busy()
     live.check_rate(key)
     live.check_refusals(key)
+    live.check_open_budget()  # before the body: a spent cap refuses at once
     _check_headers(request, live.max_bytes)
     # the slots, only for a request whose headers hold up
     if key in live.upload_keys:

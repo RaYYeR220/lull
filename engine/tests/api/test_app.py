@@ -221,7 +221,10 @@ def test_the_deploy_notes_state_the_platform_settings():
     docker = Path(__file__).resolve().parents[2] / "docker"
     notes = (docker / "README.md").read_text()
     for needed in ("--concurrency 20", "--enable-hierarchical-namespace",
-                   "--uniform-bucket-level-access", "smoke.py", "--no-cpu-throttling"):  # fmt: skip
+                   "--uniform-bucket-level-access", "smoke.py", "--no-cpu-throttling",
+                   "--soft-delete-duration=0", "--tag smoke", "--env-vars-file",
+                   '"matchesPrefix": ["runs/"]', "--lifecycle-file"):  # fmt: skip
         assert needed in notes, needed
+    assert "after engine merge" in notes  # the per-file rename fallback is not in yet
     assert "CPU always allocated" not in notes  # request-based billing
     assert (docker / "smoke.py").is_file()

@@ -54,7 +54,8 @@ then removes, one run at a time under the run's lock and hidden from the routes,
 uploads older than LULL_UPLOAD_RETENTION_DAYS; forks past their expiry (a day after they were
 made, and never past the upload they came from: a fork of an upload goes with it, its copy of
 the original too); run folders still marked .pending an hour on (an upload or fork that never
-finished); sample runs past the newest KEEP_SAMPLE_RUNS. Nothing the executor is describing,
+finished) and folders with neither that mark nor a request.json an hour on (left over); sample
+runs past the newest KEEP_SAMPLE_RUNS. Nothing the executor is describing,
 a stopped run's thread is finishing, or a change holds is touched.
 
 The engine is reached only through the adapters below (load_context, check_text, edit_context,
@@ -734,8 +735,9 @@ def scan_runs(
     pending_ttl: float,
     keep_samples: int,
 ) -> list[str]:
-    """The live run folders due to go (see the module notes), oldest reasons first. Reads
-    only; a folder that says nothing about itself is never due."""
+    """The live run folders due to go (see the module notes). Reads only. A folder with
+    neither .pending nor request.json (a store that hung, a removal cut short) is left over
+    and goes after `pending_ttl` too."""
     due: list[str] = []
     samples: list[tuple[float, str]] = []
     for d in sorted(runs_dir.iterdir()) if runs_dir.is_dir() else []:
@@ -748,6 +750,13 @@ def scan_runs(
         if marked is not None:
             if now - marked >= pending_ttl:
                 due.append(d.name)
+            continue
+        if not (d / REQUEST).exists():  # neither being filled nor a run: left over
+            try:
+                if now - d.stat().st_mtime >= pending_ttl:
+                    due.append(d.name)
+            except OSError:
+                pass
             continue
         req = _dict(_read_json(d / REQUEST))
         kind = _dict(req.get("source")).get("kind")
@@ -959,9 +968,16 @@ class Studio:
             raise LiveError(409, "busy", DESCRIBING, headers={"Retry-After": "60"})
 
     def check_rate(
-        self, request: Request, limiter: RateLimiter | None = None, what: str = "changes"
+        self,
+        request: Request,
+        limiter: RateLimiter | None = None,
+        what: str = "changes",
+        *,
+        count: bool = True,
     ) -> None:
-        """The visitor's short window, their share of the day, everyone's day (429)."""
+        """The visitor's short window, their share of the day, everyone's day (429). The
+        routes check once early without counting (`count=False`) and again, counted, once they
+        hold the run's lock: a change refused busy (409) costs the visitor nothing."""
         limiter = limiter or self.limiter
         key = limiter.client_key(client_ip(request, self.settings.lull_proxy_hops))
         stop = limiter.retry_after(key)
@@ -980,7 +996,8 @@ class Studio:
                     f"The Studio has had too many {what} today. Try again in {wait_words(wait)}."
                 )
             raise LiveError(429, "rate_limited", message, headers={"Retry-After": str(wait)})
-        limiter.hit(key)
+        if count:
+            limiter.hit(key)
 
     def spent_by(self, kind: str, run_dir: Path) -> float:
         """The model spend that counts against the run's cap: what it was forked with, its own
@@ -1130,7 +1147,7 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
     run_dir = studio.writable(run_id, request)
     if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
-    studio.check_rate(request)
+    studio.check_rate(request, count=False)
     text = (await _body(request)).get("text")
     if not isinstance(text, str) or not text.strip():
         raise LiveError(422, "invalid", "Send the new description as text.")
@@ -1138,6 +1155,7 @@ async def edit_cue(run_id: str, cue_id: str, request: Request) -> dict:
         raise LiveError(422, "invalid", f"A description takes at most {MAX_TEXT} characters.")
 
     async with studio.locked(run_id):
+        studio.check_rate(request)
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
@@ -1193,8 +1211,9 @@ async def approve_cue(run_id: str, cue_id: str, request: Request) -> dict:
     run_dir = studio.writable(run_id, request)
     if not CUE_ID_RE.fullmatch(cue_id):
         raise no_cue()
-    studio.check_rate(request)
+    studio.check_rate(request, count=False)
     async with studio.locked(run_id):
+        studio.check_rate(request)
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
@@ -1225,8 +1244,9 @@ async def hold_cue(run_id: str, cue_id: str, request: Request) -> dict:
     reason = " ".join((reason or "").split())
     if len(reason) > MAX_REASON:
         raise LiveError(422, "invalid", f"A reason takes at most {MAX_REASON} characters.")
-    studio.check_rate(request)
+    studio.check_rate(request, count=False)
     async with studio.locked(run_id):
+        studio.check_rate(request)
         studio.not_described(run_id)
         doc = await studio.load(run_dir)
         cue = _cue(doc, cue_id)
@@ -1466,12 +1486,14 @@ async def fork(run_id: str, request: Request) -> JSONResponse:
     studio.not_described(run_id)
     if not (src / MANIFEST).is_file():
         raise LiveError(409, "not_ready", NOT_READY)
-    studio.check_rate(request, studio.fork_limiter, "copies")
-    studio.check_rate(request)
+    studio.check_rate(request, studio.fork_limiter, "copies", count=False)
+    studio.check_rate(request, count=False)
     new_id, (token, token_hash) = new_run_id(), new_token()
     client = studio.limiter.client_key(client_ip(request, studio.settings.lull_proxy_hops))
     dst = studio.settings.runs_dir / new_id
     async with studio.locked(run_id):  # the source holds still while it is copied
+        studio.check_rate(request, studio.fork_limiter, "copies")
+        studio.check_rate(request)
         try:
             await anyio.to_thread.run_sync(
                 functools.partial(

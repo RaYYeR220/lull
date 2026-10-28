@@ -136,21 +136,43 @@ Default Credentials); it needs object read/write on the bucket.
 
 The data bucket is created with hierarchical namespace and uniform access. Publishing a run
 (live or from the Studio) renames folders; on a hierarchical bucket a folder rename is one
-atomic operation, where a flat bucket mounted with Cloud Storage FUSE refuses it (the engine
-falls back to moving the files one by one when a folder rename fails).
+atomic operation, where a flat bucket mounted with Cloud Storage FUSE refuses it
+(after engine merge: the engine falls back to moving the files one by one when a folder rename
+fails). Soft delete is off, so what retention removes is gone, and a lifecycle rule removes anything under
+`runs/` older than 8 days as a backstop to the app's own retention (uploads 7 days, forks a
+day); it is part of the setup, not optional.
 
 ```bash
+# once: the bucket and its lifecycle rule
 gcloud storage buckets create "gs://$LULL_BUCKET" --location "$REGION" \
-  --uniform-bucket-level-access --enable-hierarchical-namespace
+  --uniform-bucket-level-access --enable-hierarchical-namespace --soft-delete-duration=0
+cat > lifecycle.json <<'JSON'
+{"rule": [{"action": {"type": "Delete"},
+           "condition": {"age": 8, "matchesPrefix": ["runs/"]}}]}
+JSON
+gcloud storage buckets update "gs://$LULL_BUCKET" --lifecycle-file=lifecycle.json
 
+# the environment in a file: LULL_WEB_ORIGINS may hold commas
+cat > env.yaml <<YAML
+LULL_PROXY_HOPS: "1"
+LULL_BUCKET: "$LULL_BUCKET"
+LULL_WEB_ORIGINS: "$WEB_ORIGINS"
+YAML
+
+# the first deploy takes the traffic (there is no revision yet to keep it)
 gcloud run deploy lull-api --image "$IMAGE" --region "$REGION" \
   --cpu 4 --memory 8Gi --concurrency 20 --max-instances 1 --min-instances 0 \
   --timeout 900 --execution-environment gen2 \
   --add-volume name=data,type=cloud-storage,bucket="$LULL_BUCKET" \
   --add-volume-mount volume=data,mount-path=/data \
-  --set-env-vars LULL_PROXY_HOPS=1,LULL_BUCKET="$LULL_BUCKET",LULL_WEB_ORIGINS="$WEB_ORIGIN" \
-  --set-secrets NEBIUS_API_KEY=nebius-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest \
-  --no-traffic
+  --env-vars-file env.yaml \
+  --set-secrets NEBIUS_API_KEY=nebius-api-key:latest,TAVILY_API_KEY=tavily-api-key:latest
+
+# later deploys: no traffic, a tag to smoke-test, then the traffic once the old one is idle
+gcloud run deploy lull-api --image "$IMAGE" --region "$REGION" --no-traffic --tag smoke
+uv run python docker/smoke.py "$(gcloud run services describe lull-api --region "$REGION" \
+  --format 'value(status.traffic.filter(tag=smoke).url)' | head -n 1)"
+gcloud run services update-traffic lull-api --region "$REGION" --to-tags smoke=100
 ```
 
 - Request-based billing (the default; not `--no-cpu-throttling`): the instance has CPU only
@@ -165,23 +187,24 @@ gcloud run deploy lull-api --image "$IMAGE" --region "$REGION" \
   8 are open in all).
 - `--max-instances 1`: the rate limits, the live executor and the ledger live in one process,
   and Litestream allows one writer per replica. Two instances would replicate over each other.
-  `max-instances` counts per revision, so deploy with `--no-traffic` and move the traffic once
-  the old revision's `/v1/health` says `"live_busy": false`.
+  `max-instances` counts per revision, so later deploys go out with `--no-traffic --tag smoke`
+  and the traffic moves once the old revision's `/v1/health` says `"live_busy": false`.
 - `LULL_PROXY_HOPS=1` (Cloud Run's front end appends the visitor's address).
 - `LULL_HOME` stays on local disk (the image's `/tmp/lull-home`); `LULL_BUCKET` set so the
   ledger survives restarts.
 - Raise `LULL_SPEECH_WAIT` (e.g. 180) if cold starts on the platform are slower than measured
   here; the default startup probe allows 240 s.
-- Optional backstop for retention: a bucket lifecycle rule deleting objects under `runs/` older
-  than 8 days.
+- The lifecycle rule (above) deletes objects under `runs/` 8 days after they were written,
+  whatever the app did: an upload's run is gone by then anyway, and a visitor's sample run
+  that old goes with it. The showcase (`showcase/`) is not touched.
 
 ### Deploy smoke
 
-Against the new revision's URL (`--no-traffic` gives it a tagged URL), from `engine/` with
-ffmpeg on PATH:
+Against the `smoke` tag's URL of the new revision (it has no traffic yet; on the first
+deploy, the service URL), from `engine/` with ffmpeg on PATH:
 
 ```bash
-uv run python docker/smoke.py "$REVISION_URL"
+uv run python docker/smoke.py "$SMOKE_URL"
 ```
 
 It checks health; starts a sample run (bbb45) and leaves it once its first stage starts (the

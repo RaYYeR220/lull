@@ -12,8 +12,9 @@ are never read: the copy leaves them out.
 
 The frame rate is the higher of the nominal and average rates; a nominal rate over 240 (a
 browser recording's 1000/1) is not believed, and the rate is measured instead from the packets
-themselves: the video packets of the first MEASURE_S seconds, (packets - 1) over the span of
-their times, never the duration the header states (ffprobe, under the same time limit). A rate
+themselves: the video packets of the first MEASURE_S seconds (the whole window a run may
+take), (packets - 1) over the span of their times, never the duration the header states
+(ffprobe, under the same time limit). A rate
 that cannot be measured (fewer than 2 packets, no span) is refused. The live side also refuses
 a file whose copy's length is more than 20 % off the length the file states.
 
@@ -33,6 +34,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -47,11 +49,19 @@ MAX_LONG_SIDE, MAX_SHORT_SIDE, MAX_PIXELS = 1920, 1080, 2_100_000
 MAX_FPS = 60.0
 FPS_SLACK = 0.5  # a nominal 60 that a phone reports as 60.02
 PLAUSIBLE_FPS = 240.0  # a stated rate above this is measured, not believed
-MEASURE_S = 5  # seconds of packets the measured rate is taken over
+MEASURE_S = 60  # seconds of packets the measured rate is taken over: the longest a run takes
+FRAME_SLACK = 2  # frames the copy may have past OUT_FPS times its length
 MAX_CHANNELS, MAX_SAMPLE_RATE = 8, 192_000
 MAX_BIT_RATE = 100_000_000  # bits a second, the whole file
 OUT_LONG_SIDE, OUT_SHORT_SIDE = 1280, 720  # the run's copy
 OUT_FPS, OUT_CHANNELS, OUT_SAMPLE_RATE = 30, 2, 48_000
+
+
+class OverLimits(MediaError):
+    """The file is outside the limits, in plain words for the visitor (lull.api.live: 422)."""
+
+
+_OVER_PIXELS = re.compile(r"Picture size (\d+)x(\d+) exceeds specified max pixel count")
 
 
 @dataclass(frozen=True)
@@ -75,15 +85,28 @@ def _bin(name: str) -> str:
     return path
 
 
-def _run(cmd: list[str], timeout: float) -> subprocess.CompletedProcess[bytes]:
+def _run(
+    cmd: list[str], timeout: float, *, pixels: bool = False
+) -> subprocess.CompletedProcess[bytes]:
+    """Run an ffmpeg tool under `timeout`. With `pixels`, a picture over the -max_pixels cap
+    (ffprobe decodes a few frames of every stream to describe them; the cap keeps that cheap)
+    is OverLimits, naming its size."""
     name = Path(cmd[0]).stem
     try:
         return subprocess.run(cmd, check=True, capture_output=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise MediaError(f"{name} timed out after {timeout:g} s") from None
     except subprocess.CalledProcessError as e:
-        tail = e.stderr.decode("utf-8", "replace").strip()[-800:]
-        raise MediaError(f"{name} failed (exit {e.returncode}): {tail}") from None
+        err = e.stderr.decode("utf-8", "replace")
+        over = _OVER_PIXELS.search(err) if pixels else None
+        if over is not None:
+            w, h = over.group(1), over.group(2)
+            raise OverLimits(
+                f"This file holds a {w}x{h} picture. Live descriptions take videos up to "
+                f"{MAX_LONG_SIDE}x{MAX_SHORT_SIDE}: export it again at 1080p or less, with "
+                "one picture."
+            ) from None
+        raise MediaError(f"{name} failed (exit {e.returncode}): {err.strip()[-800:]}") from None
     except OSError as e:
         raise MediaError(f"could not run {name}: {e}") from None
 
@@ -173,9 +196,10 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Media:
     engine probes the run's copy again itself; this one decides whether there is a run."""
     out = _run(
         [_bin("ffprobe"), "-v", "error", "-protocol_whitelist", SAFE_PROTOCOLS,
-         "-format_whitelist", SAFE_FORMATS, "-print_format", "json", "-show_format",
-         "-show_streams", str(path)],
+         "-format_whitelist", SAFE_FORMATS, "-max_pixels", str(MAX_PIXELS),
+         "-print_format", "json", "-show_format", "-show_streams", str(path)],
         timeout,
+        pixels=True,
     )  # fmt: skip
     try:
         info = json.loads(out.stdout)
@@ -231,7 +255,8 @@ def _measured_rate(path: Path, timeout: float) -> float:
     0.0 when there are fewer than 2 or no span. The header's duration plays no part."""
     out = _run(
         [_bin("ffprobe"), "-v", "error", "-protocol_whitelist", SAFE_PROTOCOLS,
-         "-format_whitelist", SAFE_FORMATS, "-select_streams", "v:0",
+         "-format_whitelist", SAFE_FORMATS, "-max_pixels", str(MAX_PIXELS),
+         "-select_streams", "v:0",
          "-read_intervals", f"%+{MEASURE_S}", "-show_entries", "packet=pts_time",
          "-of", "csv=p=0", str(path)],
         timeout,
@@ -269,7 +294,8 @@ def transcode(
         [_bin("ffmpeg"), "-y", "-hide_banner", "-loglevel", "error", "-nostdin",
          "-protocol_whitelist", SAFE_PROTOCOLS, "-format_whitelist", SAFE_FORMATS,
          "-max_pixels", str(MAX_PIXELS), "-i", str(src),
-         "-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1", "-map_chapters", "-1",
+         "-map", "0:v:0", "-map", "0:a:0?", "-map_metadata", "-1", "-map_metadata:s", "-1",
+         "-map_chapters", "-1", "-write_tmcd", "0",
          "-t", f"{seconds:g}", "-frames:v", str(math.ceil(seconds * OUT_FPS)),
          "-vf", f"{_SCALE},fps=fps={_out_rate(info)},format=yuv420p",
          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
@@ -277,4 +303,27 @@ def transcode(
          "-movflags", "+faststart", "-f", "mp4", str(dst)],
         timeout,
     )  # fmt: skip
+    _check_frames(dst, timeout)
     return dst
+
+
+def _check_frames(copy: Path, timeout: float) -> None:
+    """The copy holds at most OUT_FPS frames a second of its length (+ FRAME_SLACK), counted
+    from its packets; MediaError otherwise. The copy is ours (constant rate H.264), so this
+    only fails if the transcode's bounds did not hold."""
+    out = _run(
+        [_bin("ffprobe"), "-v", "error", "-protocol_whitelist", SAFE_PROTOCOLS,
+         "-format_whitelist", "mov,mp4,m4a,3gp,3g2,mj2", "-max_pixels", str(MAX_PIXELS),
+         "-select_streams", "v:0",
+         "-count_packets", "-show_entries", "stream=nb_read_packets:format=duration",
+         "-print_format", "json", str(copy)],
+        timeout,
+    )  # fmt: skip
+    try:
+        info = json.loads(out.stdout)
+        frames = int(info["streams"][0]["nb_read_packets"])
+        seconds = float(info["format"]["duration"])
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise MediaError(f"the frames of {copy.name} could not be counted") from None
+    if frames > OUT_FPS * seconds + FRAME_SLACK:
+        raise MediaError(f"{copy.name} has {frames} frames over {seconds:g} s")

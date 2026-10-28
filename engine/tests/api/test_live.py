@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from lull.api.app import create_app
 from lull.api.ratelimit import RateLimiter
-from lull.ledger import BudgetExceeded, Ledger
+from lull.ledger import BudgetExceeded, CallRecord, Ledger
 from lull.media import MediaError, Probe
 from lull.pipeline import Event
 
@@ -1607,7 +1607,11 @@ def bombs(tmp_path_factory) -> dict[str, Path]:
     return {p.stem: p for p in d.iterdir() if p.suffix in (".mp4", ".mov")}
 
 
-@pytest.mark.parametrize("name,says", [("big", "2560x1440"), ("fast", "frames a second")])
+@pytest.mark.parametrize(
+    "name,says",
+    [("big", "2560x1440"), ("fast", "frames a second"),
+     ("two", "2560x1440")],  # a second picture is never read, but probing it would decode it
+)  # fmt: skip
 def test_media_over_the_limits_is_refused_before_any_work(lc, live, bombs, name, says):
     from lull.api import clip
 
@@ -1622,7 +1626,7 @@ def test_media_over_the_limits_is_refused_before_any_work(lc, live, bombs, name,
     assert post(lc).status_code == 429  # it counted as a refused upload
 
 
-@pytest.mark.parametrize("name", ["phone", "subs", "two"])
+@pytest.mark.parametrize("name", ["phone", "subs", "two_sounds"])
 def test_streams_the_run_never_reads_are_ignored(lc, live, bombs, name):
     """A phone's data (timecode) track, a subtitle track, a second picture: the run's copy
     maps the first video and the first audio stream only, so they are left out, not refused."""
@@ -1630,7 +1634,7 @@ def test_streams_the_run_never_reads_are_ignored(lc, live, bombs, name):
 
     live.probe, live.transcode = clip.probe, clip.transcode
     src = bombs[name]
-    assert clip.probe(src).others or len(clip.probe(src).videos) == 2  # they are there
+    assert clip.probe(src).others or len(clip.probe(src).audios) == 2  # they are there
     r = post(lc, src.read_bytes(), name=src.name)
     assert types(parse_sse(r.text))[-1] == "done", r.text
     (job,) = live.runner.jobs
@@ -2183,7 +2187,7 @@ def _fake_ffprobe(monkeypatch, *, r_rate: str, avg_rate: str, pts: list, duratio
 
     calls: list = []
 
-    def run(cmd, timeout):
+    def run(cmd, timeout, **kw):
         calls.append((cmd, timeout))
         if "-read_intervals" in cmd:
             text = "".join(f"{t}\n" for t in pts)
@@ -2219,7 +2223,8 @@ def test_an_implausible_stated_frame_rate_is_measured(monkeypatch):
     assert clip.over_limits(info) is None
     read = [c for c in calls if "-read_intervals" in c[0]]
     assert len(read) == 1 and read[0][1] == clip.PROBE_TIMEOUT
-    assert "v:0" in read[0][0] and "%+5" in read[0][0]
+    # over the whole window a run may take (the samples' 45 s are within it)
+    assert clip.MEASURE_S == 60 and "v:0" in read[0][0] and "%+60" in read[0][0]
 
 
 @pytest.mark.parametrize("times", [[], [1.0], [2.0, 2.0, 2.0], ["N/A", "N/A"]])
@@ -2244,3 +2249,88 @@ def test_a_plausible_stated_rate_is_not_counted(monkeypatch):
     calls = _fake_ffprobe(monkeypatch, r_rate="30/1", avg_rate="30/1", pts=[0.0, 0.001])
     assert clip.probe(Path("rec.webm")).fps == 30.0
     assert not any("-read_intervals" in c[0] for c in calls)
+
+
+# -- refused before the body; the copy carries no timecode -----------------------------------------
+
+
+def test_a_spent_day_cap_is_402_before_the_body_is_read(app, live, data, tmp_path):
+    ledger = Ledger(tmp_path / "spent.db", cap_run=None, cap_day=0.01, cap_total=None)
+    ledger.record(
+        CallRecord(run_id="earlier", stage="watch", role="watch", provider="tokenfactory",
+                   model="m", tokens_in=1, tokens_cached=0, tokens_out=1, latency_s=0.1,
+                   cost_usd=0.01, ts=time.time())
+    )  # fmt: skip
+    live.ledger = ledger
+    live.upload_deadline = 5.0
+    t0 = time.monotonic()
+    status, body = _asgi_post_stalling(app)  # the body never arrives
+    assert status == 402 and body["error"] == "budget" and body["scope"] == "day"
+    assert time.monotonic() - t0 < 2.0  # not after the upload deadline
+    assert live.uploading == 0 and run_dirs(data) == []
+
+
+def test_the_copy_never_carries_a_timecode_and_probes_cap_the_picture(lc, live, bombs, monkeypatch):
+    import subprocess
+
+    from lull.api import clip
+
+    seen: list = []
+    real = clip._run
+
+    def run(cmd, timeout, **kw):
+        seen.append(cmd)
+        return real(cmd, timeout, **kw)
+
+    monkeypatch.setattr(clip, "_run", run)
+    live.probe, live.transcode = clip.probe, clip.transcode
+    assert types(parse_sse(post(lc, bombs["phone"].read_bytes(), name="phone.mov").text))[-1] == (
+        "done"
+    )
+    (copy,) = [c for c in seen if Path(c[0]).stem == "ffmpeg"]
+    assert "-write_tmcd" in copy and copy[copy.index("-write_tmcd") + 1] == "0"
+    assert "-map_metadata:s" in copy
+    probes = [c for c in seen if Path(c[0]).stem == "ffprobe"]
+    assert probes and all("-max_pixels" in c for c in probes)
+    (job,) = live.runner.jobs
+    tags = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type:stream_tags",
+         "-of", "json", str(job.video)],
+        check=True, capture_output=True, text=True,
+    ).stdout  # fmt: skip
+    assert "timecode" not in tags and '"data"' not in tags
+
+
+def test_events_sent_just_before_the_run_ends_all_go_out(lc, live):
+    many = [Event("cue", "finalize", {"id": f"c{i:03d}", "status": "verified"}, float(i))
+            for i in range(300)]  # fmt: skip
+    live.limiter = RateLimiter(per_client=100, client_window=3600, per_day=10**6)
+    for _ in range(5):
+        live.runner = Script(lambda job: many)
+        events = parse_sse(post(lc).text)
+        assert types(events).count("cue") == 300 and events[-1]["type"] == "done"
+
+
+def test_a_copy_with_more_frames_than_its_rate_allows_is_refused(tmp_path, monkeypatch):
+    """After the transcode the copy's frames are counted: more than 30 a second of its length
+    (plus a little) means the copy is not what it should be, and the upload is refused."""
+    import subprocess
+
+    from lull.api import clip
+
+    src = tmp_path / "in.mp4"
+    _ff("-f", "lavfi", "-i", "testsrc2=s=160x120:r=10:d=1", "-c:v", "libx264", "-preset",
+        "ultrafast", "-pix_fmt", "yuv420p", str(src))  # fmt: skip
+    info = clip.probe(src)
+    assert clip.transcode(src, tmp_path / "ok.mp4", 60.0, info).is_file()  # honest: passes
+    real = clip._run
+
+    def run(cmd, timeout, **kw):
+        if "-count_packets" in cmd:
+            out = {"streams": [{"nb_read_packets": "500"}], "format": {"duration": "1.0"}}
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(out).encode(), b"")
+        return real(cmd, timeout, **kw)
+
+    monkeypatch.setattr(clip, "_run", run)
+    with pytest.raises(MediaError, match="frames"):
+        clip.transcode(src, tmp_path / "bad.mp4", 60.0, info)

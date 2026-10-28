@@ -702,6 +702,41 @@ def test_a_change_waiting_more_than_2_s_for_its_run_is_409_busy(app, rd):
     assert [e[0] for e in log] == ["start", "end"]  # the second never reached the engine
 
 
+def test_a_change_refused_busy_does_not_use_up_the_visitors_limit(app, rd):
+    """The edit limit counts a change once it has its run's lock: a 409 busy costs nothing."""
+    app.state.studio.lock_wait = 0.1
+    app.state.studio.limiter = RateLimiter(per_client=2, client_window=60, per_day=1000)
+    log: list = []
+    app.state.studio.finalizer = _slow_finalizer(log, threading.Event(), 0.5)
+
+    async def go():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://t", headers={**AUTH, **CLIENT}
+        ) as c:
+            first = await asyncio.gather(
+                c.patch(f"/v1/runs/{RID}/cues/c001", json={"text": NEW_RED}),
+                c.patch(f"/v1/runs/{RID}/cues/c002", json={"text": "The screen turns blue."}),
+            )
+            third = await c.post(f"/v1/runs/{RID}/cues/c001/approve")
+            return [r.status_code for r in first], third
+
+    codes, third = asyncio.run(go())
+    assert sorted(codes) == [200, 409]
+    assert third.status_code == 200, third.text  # the 409 did not count: one slot was left
+
+
+def test_a_run_folder_that_says_nothing_goes_after_an_hour(make_app, data):
+    """A folder with neither .pending nor request.json (a store that hung, a removal cut
+    short) is left over: it goes once it is an hour old."""
+    runs = data / "runs"
+    old = _live_run(runs, "nothing-2h", None, 2)
+    new = _live_run(runs, "nothing-new", None, 0.1)
+    app = make_app()
+    assert _housekeep(app) == ["nothing-2h"]
+    assert not old.exists() and new.is_dir()
+
+
 def test_edits_of_different_runs_run_side_by_side(app, rd, template, data):
     place(template, data / "runs", RID2)
     log: list = []
@@ -1466,7 +1501,6 @@ def test_uploads_expire_after_7_days_samples_and_showcase_never(make_app, data):
     kept = [
         _live_run(runs, "up-6d", {"kind": "upload", "name": "a.mp4"}, 6 * 24),
         _live_run(runs, "sample-30d", {"kind": "sample", "id": "street"}, 30 * 24),
-        _live_run(runs, "legacy-30d", None, 30 * 24),  # says nothing: never swept
         _live_run(data / "showcase", "show-old", {"kind": "upload"}, 90 * 24),
     ]
     app = make_app()
