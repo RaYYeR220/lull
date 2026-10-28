@@ -27,8 +27,9 @@ async function axe(page: Page, where: string) {
 async function openPicker(page: Page) {
   await page.goto("/try");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Watch a description being made.");
-  await expect(page.locator("[data-how-long]")).toContainText("A live run takes several minutes");
-  await expect(page.locator("[data-how-long]")).toContainText("if you leave, the run stops, and this browser can resume it");
+  await expect(page.locator("[data-how-long]")).toContainText("A live run takes about six minutes for a 45-second clip");
+  await expect(page.locator("[data-how-long]")).toContainText("You can leave this page: the run keeps going");
+  await expect(page.locator("[data-how-long]")).toContainText("resume it if it ever stopped");
   await expect(page.getByText("Ready", { exact: true })).toBeVisible();
   await expect(page.getByRole("radio", { name: /Big Buck Bunny/ })).toBeChecked();
 }

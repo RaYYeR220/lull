@@ -30,8 +30,8 @@ export default async function TryPage() {
                   or fails its check against the frames shows up here as it happens.
                 </p>
                 <p className={styles.howLong} data-how-long="">
-                  A live run takes several minutes, about three for a 45-second clip. Keep this page open while it runs: if you leave, the run
-                  stops, and this browser can resume it from where it stopped.
+                  A live run takes about six minutes for a 45-second clip. You can leave this page: the run keeps going, and this browser
+                  can open it when it&rsquo;s finished (or resume it if it ever stopped).
                 </p>
               </>
             }
