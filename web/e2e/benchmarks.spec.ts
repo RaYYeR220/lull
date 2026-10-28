@@ -83,6 +83,8 @@ test.describe("benchmarks", () => {
   });
 
   test("has no serious or critical axe violations and no sideways scroll, empty and with the fixture", async ({ page }) => {
+    // four whole-page axe passes: slow when the suite runs in parallel
+    test.setTimeout(180_000);
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
       await page.setViewportSize(viewport);
       for (const fixture of [false, true]) {

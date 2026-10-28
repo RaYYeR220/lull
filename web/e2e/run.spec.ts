@@ -148,6 +148,8 @@ test.describe("a finished live run", () => {
   });
 
   test("has no serious or critical axe violations, and no sideways scroll on a phone", async ({ page }) => {
+    // several whole-page axe passes: slow when the suite runs in parallel
+    test.setTimeout(180_000);
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });

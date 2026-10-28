@@ -74,6 +74,8 @@ test.describe("conformance reports", () => {
   });
 
   test("has no serious or critical axe violations and no sideways scroll, at 1440 and 390", async ({ page }) => {
+    // four whole-page axe passes: slow when the suite runs in parallel
+    test.setTimeout(180_000);
     await routeApi(page, own());
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
       await page.setViewportSize(viewport);

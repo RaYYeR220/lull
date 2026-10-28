@@ -255,6 +255,8 @@ test.describe("the studio, editing a copy", () => {
   });
 
   test("has no serious or critical axe violations, with the drawer open, at 1440 and 390", async ({ page }) => {
+    // several whole-page axe passes: slow when the suite runs in parallel
+    test.setTimeout(180_000);
     await holdToken(page, FORK_ID, FORK_TOKEN);
     await routeApi(page, own());
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {

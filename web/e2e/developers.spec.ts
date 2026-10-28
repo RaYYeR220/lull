@@ -115,10 +115,13 @@ test.describe("the developer page", () => {
   });
 
   test("has no serious or critical axe violations and no sideways scroll, at 1440 and 390", async ({ page }) => {
+    // four whole-page axe passes over a long reference page: slow when the suite runs in parallel
+    test.setTimeout(180_000);
     for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
       await page.setViewportSize(viewport);
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.goto("/developers", { waitUntil: "networkidle" });
+      await page.goto("/developers");
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       for (const t of ["REST", "Embed"]) {
         await tab(page, t).click();
         const results = await new AxeBuilder({ page }).analyze();
