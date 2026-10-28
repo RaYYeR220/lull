@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import shutil
 import threading
 import time
@@ -27,7 +28,7 @@ from lull.api.settings import ApiSettings
 from lull.ledger import BudgetExceeded, CallRecord, Ledger
 from lull.pipeline import run as run_engine
 from lull.types import Cue, RunOptions
-from pipeline_fakes import CUE_TEXT, FakeSpeech, FakeTF, description
+from pipeline_fakes import CUE_TEXT, FakeSpeech, FakeTF
 
 RID = "live-20261027-120000-abcdef"
 RID2 = "live-20261027-120500-123456"
@@ -124,6 +125,20 @@ def place(template: Path, root: Path, run_id: str = RID) -> Path:
     d = root / run_id
     shutil.copytree(template, d)
     return d
+
+
+def judge(verdict: str):
+    """A verify answer in the engine's shape: `verdict` for every claim (k1, ...) and whole
+    sentence (s1, ...) the judge is given."""
+
+    def answer(call):
+        content = next(m for m in call["messages"] if m["role"] == "user")["content"]
+        text = " ".join(p["text"] for p in content if p.get("type") == "text")
+        listed = re.findall(r"^([ks]\d+): ", text, re.M)
+        return {"verdicts": [{"id": i, "verdict": verdict, "evidence": "", "at": 0.5}
+                             for i in listed]}  # fmt: skip
+
+    return answer
 
 
 class Fakes:
@@ -275,15 +290,18 @@ def test_edit_is_verified_voiced_and_stored(sc, rd, fakes, app):
     assert r.status_code == 200, r.text
     cue = r.json()
     assert cue["id"] == "c001" and cue["status"] == "edited" and cue["text"] == NEW_RED
-    assert [(c["text"], c["verdict"]) for c in cue["claims"]] == [(NEW_RED, "supported")]
+    # the engine's check: its atomic claims (a claim carries no final stop) and the sentence
+    atomic = [(c["text"], c["verdict"]) for c in cue["claims"] if c.get("kind") == "atomic"]
+    assert atomic == [(NEW_RED.rstrip("."), "supported")]
+    assert cue["claims"] and all(c["verdict"] == "supported" for c in cue["claims"])
     assert "audio_path" not in cue
     assert cue["audio_url"].startswith(f"/v1/runs/{RID}/cues/c001/audio?v=")
     assert cue["start"] == 1.8 and cue["audio_dur"] == pytest.approx(7 / 3, abs=0.01)
     assert cue["end"] == pytest.approx(cue["start"] + cue["audio_dur"])
     assert isinstance(cue["findings"], list)
-    assert fakes.roles() == ["verify"] and fakes.spoken() == [NEW_RED]
+    assert fakes.roles() == ["split", "verify"] and fakes.spoken() == [NEW_RED]
     calls = app.state.live.ledger.calls(RID)
-    assert [(c.stage, c.role) for c in calls] == [("finalize", "verify")]
+    assert [(c.stage, c.role) for c in calls] == [("finalize", "split"), ("finalize", "verify")]
 
     stored = cue_of(rd, "c001")
     assert stored["status"] == "edited" and stored["text"] == NEW_RED
@@ -331,22 +349,18 @@ def test_edit_of_an_extended_cue(sc, rd, fakes):
 
 
 def test_edit_the_frames_do_not_support_is_held_with_a_note(sc, rd, fakes, app):
-    def not_visible(call):
-        text = description(call["messages"])
-        return {"claims": [{"text": text, "verdict": "not_visible", "at": 0.5}]}
-
     fakes.answers = {
-        "verify": not_visible,
-        "remove": lambda call: {"text": description(call["messages"])},
+        "verify": judge("not_visible"),
     }
     r = patch(sc, "c001", "A red curtain falls across the stage.")
     assert r.status_code == 200, r.text
     cue = r.json()
     assert cue["status"] == "held"
-    assert "the rewrite removed nothing" in cue["note"]
+    assert "nothing left once the unverified claims were removed" in cue["note"]
     assert cue["audio_url"] is None and cue["audio_dur"] is None
-    assert cue["claims"][0]["verdict"] == "not_visible"
-    assert fakes.roles() == ["verify", "remove"] and fakes.spoken() == []
+    verdicts = [c["verdict"] for check in cue["checks"] for c in check["claims"]]
+    assert "not_visible" in verdicts  # the failed claim is kept with its check
+    assert fakes.roles() == ["split", "verify"] and fakes.spoken() == []  # never voiced
     stored = cue_of(rd, "c001")
     assert stored["status"] == "held" and stored["note"] == cue["note"]
     assert stage_entry(rd, "c001")["data"]["status"] == "held"
@@ -508,7 +522,7 @@ def test_publish_writes_a_new_manifest(sc, rd):
     assert j["dirty"] is False
     man = j["manifest"]
     assert man["summary"]["cues"] == {
-        "verified": 0, "edited": 1, "approved": 1, "held": 0, "extended": 1,
+        "verified": 0, "edited": 1, "approved": 1, "held": 0, "extended": 1, "unverified": 0,
     }  # fmt: skip
     new = json.loads((rd / "manifest.json").read_text(encoding="utf-8"))
     assert new["outputs"]["cues.json"]["sha256"] != old["outputs"]["cues.json"]["sha256"]
@@ -1046,7 +1060,7 @@ def test_fork_a_showcase_run_into_an_editable_copy(make_app, template, data, fas
         r = c.patch(f"/v1/runs/{new}/cues/c001", json={"text": NEW_RED}, headers=auth)
         assert r.status_code == 200 and r.json()["status"] == "edited", r.text
         calls = app.state.live.ledger.calls(new)
-        assert [(x.stage, x.role) for x in calls] == [("finalize", "verify")]
+        assert [(x.stage, x.role) for x in calls] == [("finalize", "split"), ("finalize", "verify")]
         assert c.post(f"/v1/runs/{new}/publish", headers=auth).status_code == 200
         assert NEW_RED in (d / "descriptions.vtt").read_text(encoding="utf-8")
         assert c.post(f"/v1/runs/{RID}/cues/c001/approve", headers=auth).status_code == 403
@@ -1155,15 +1169,10 @@ def test_an_approval_of_text_the_engine_has_replaced_is_not_applied(sc, rd):
 
 
 def test_a_held_edit_keeps_the_previous_voiced_take(sc, rd, fakes):
-    def not_visible(call):
-        text = description(call["messages"])
-        return {"claims": [{"text": text, "verdict": "not_visible", "at": 0.5}]}
-
     assert patch(sc, "c001", NEW_RED).status_code == 200
     take = rd / cue_of(rd, "c001")["audio_path"]
     fakes.answers = {
-        "verify": not_visible,
-        "remove": lambda call: {"text": description(call["messages"])},
+        "verify": judge("not_visible"),
     }
     r = patch(sc, "c001", "A red curtain falls across the stage.")
     assert r.status_code == 200 and r.json()["status"] == "held"
@@ -1334,19 +1343,14 @@ def test_an_edit_the_frames_contradict_ends_held_never_verified(sc, rd, fakes, a
     """The engine's re-verification (atomic claims; a failed claim is never dropped) runs on
     a Studio edit too: words the frames contradict are held, not voiced."""
 
-    def contradicted(call):
-        text = description(call["messages"])
-        return {"claims": [{"text": text, "verdict": "contradicted", "at": 0.5}]}
-
     fakes.answers = {
-        "verify": contradicted,
-        "remove": lambda call: {"text": description(call["messages"])},
+        "verify": judge("contradicted"),
     }
     r = patch(sc, "c001", "A green curtain covers the whole screen.")
     assert r.status_code == 200, r.text
     cue = r.json()
     assert cue["status"] == "held" and cue["audio_url"] is None
-    assert "contradicted" in cue["note"]
+    assert "claim removed" in cue["note"]  # the note says what went
     verdicts = [c["verdict"] for check in cue["checks"] for c in check["claims"]]
     assert "contradicted" in verdicts  # the failed claim is kept with its check
     stored = cue_of(rd, "c001")
@@ -1356,15 +1360,10 @@ def test_an_edit_the_frames_contradict_ends_held_never_verified(sc, rd, fakes, a
 
 
 def test_fork_a_live_run_with_overrides_and_a_held_previous(sc, rd, fakes, data):
-    def not_visible(call):
-        text = description(call["messages"])
-        return {"claims": [{"text": text, "verdict": "not_visible", "at": 0.5}]}
-
     assert patch(sc, "c001", NEW_RED).status_code == 200
     take = rd / cue_of(rd, "c001")["audio_path"]
     fakes.answers = {
-        "verify": not_visible,
-        "remove": lambda call: {"text": description(call["messages"])},
+        "verify": judge("not_visible"),
     }
     assert patch(sc, "c001", "A red curtain falls across the stage.").json()["status"] == "held"
     fakes.answers = {}

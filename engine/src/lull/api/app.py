@@ -28,6 +28,7 @@ from lull.api.settings import ApiSettings
 from lull.api.store import RunStore
 from lull.api.studio import Studio
 from lull.api.studio import router as studio_router
+from lull.config import get_settings
 
 log = logging.getLogger(__name__)
 
@@ -55,9 +56,11 @@ FALSE_WORDS = ("", "0", "false", "no", "off")
 
 def refuse_unverified() -> None:
     """The API never describes without frame verification: with LULL_NO_VERIFY set to
-    anything true it does not start at all (so /v1/health is never answered)."""
+    anything true, in the environment or where the engine reads it (lull.config, a .env file
+    included), it does not start at all (so /v1/health is never answered)."""
     value = os.environ.get(NO_VERIFY)
-    if value is not None and value.strip().lower() not in FALSE_WORDS:
+    engine_off = get_settings().lull_no_verify  # the engine's own setting (.env included)
+    if engine_off or (value is not None and value.strip().lower() not in FALSE_WORDS):
         message = (
             f"{NO_VERIFY}={value!r} turns frame verification off (evaluation only): "
             "the API does not start with it; unset it"

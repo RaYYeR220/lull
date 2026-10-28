@@ -1981,7 +1981,8 @@ def test_a_stopped_run_makes_no_model_call_after_the_stop(
     tried = len(CheckingTF.attempts)
     gate.set()
     assert ended.wait(20)
-    assert CheckingTF.attempts[tried:] == [("finalize", "verify")]  # tried once, refused
+    # one more model call was tried in that stage (a split or a judge) and refused
+    assert [stage for stage, _ in CheckingTF.attempts[tried:]] == ["finalize"]
     assert len(live.ledger.calls(run_id)) == made  # nothing spent after the stop
     assert lc.get(f"/v1/runs/{run_id}").json()["status"] == "stopped"
     deadline = time.time() + 5

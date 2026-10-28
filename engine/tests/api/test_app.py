@@ -185,6 +185,27 @@ def test_the_api_refuses_to_start_without_frame_verification(settings, monkeypat
     assert any("LULL_NO_VERIFY" in r.getMessage() for r in caplog.records)
 
 
+def test_the_engines_own_no_verify_setting_is_refused_too(settings, monkeypatch, tmp_path):
+    """The engine reads LULL_NO_VERIFY from a .env file as well as the environment: the API
+    refuses whatever turns the engine's setting on."""
+    from fastapi.testclient import TestClient
+
+    from lull.api.app import create_app
+    from lull.config import get_settings
+
+    monkeypatch.delenv("LULL_NO_VERIFY", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("LULL_NO_VERIFY=1" + chr(10))
+    get_settings.cache_clear()
+    try:
+        assert get_settings().lull_no_verify is True  # the engine's real setting
+        with pytest.raises(RuntimeError, match="LULL_NO_VERIFY"):
+            with TestClient(create_app(settings)):
+                pass
+    finally:
+        get_settings.cache_clear()
+
+
 @pytest.mark.parametrize("value", ["", "0", "false", "no"])
 def test_a_false_no_verify_is_no_obstacle(settings, monkeypatch, value):
     from fastapi.testclient import TestClient
@@ -225,6 +246,7 @@ def test_the_deploy_notes_state_the_platform_settings():
                    "--soft-delete-duration=0", "--tag smoke", "--env-vars-file",
                    '"matchesPrefix": ["runs/"]', "--lifecycle-file"):  # fmt: skip
         assert needed in notes, needed
-    assert "after engine merge" in notes  # the per-file rename fallback is not in yet
+    assert "after engine merge" not in notes  # the per-file rename fallback is in
+    assert "falls back to moving the files one by one" in notes
     assert "CPU always allocated" not in notes  # request-based billing
     assert (docker / "smoke.py").is_file()

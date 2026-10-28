@@ -137,9 +137,9 @@ Default Credentials); it needs object read/write on the bucket.
 
 The data bucket is created with hierarchical namespace and uniform access. Publishing a run
 (live or from the Studio) renames folders; on a hierarchical bucket a folder rename is one
-atomic operation, where a flat bucket mounted with Cloud Storage FUSE refuses it
-(after engine merge: the engine falls back to moving the files one by one when a folder rename
-fails). Soft delete is off, so what retention removes is gone, and a lifecycle rule removes anything under
+atomic operation, where a flat bucket mounted with Cloud Storage FUSE refuses it (the engine
+then falls back to moving the files one by one, which works but is not atomic). Soft delete is
+off, so what retention removes is gone, and a lifecycle rule removes anything under
 `runs/` older than 8 days as a backstop to the app's own retention (uploads 7 days, forks a
 day); it is part of the setup, not optional.
 
