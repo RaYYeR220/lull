@@ -1514,3 +1514,75 @@ def test_alive_tells_a_running_process_from_a_finished_one():
     assert pub._alive(os.getpid()) is True
     assert pub._alive(gone.pid) is False
     assert pub._alive(0) is False and pub._alive(-5) is False
+
+
+# -- Task 17 fix round 2 ------------------------------------------------------------------------
+
+
+def test_waiters_never_disturb_a_live_lock(tmp_path, monkeypatch, caplog):
+    """A holder with a running heartbeat and three waiters polling for about 3 s: the lock
+    file is never missing or replaced while held, no waiter gets in, the heartbeat is still
+    running at the end, and after the release the waiters take turns, one at a time."""
+    import threading
+    import time
+
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "LOCK_HEARTBEAT_S", 0.05)
+    monkeypatch.setattr(pub, "LOCK_POLL_S", 0.01)
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = run / ".publish.lock"
+    held, release = threading.Event(), threading.Event()
+    problems: list[str] = []
+    times: dict[str, float] = {}
+    turns: list[tuple[float, float]] = []
+
+    def holder() -> None:
+        with pub._lock(run):
+            held.set()
+            release.wait(20)
+            if not any(t.name == "publish-lock" and t.is_alive() for t in threading.enumerate()):
+                problems.append("the heartbeat stopped")
+            times["released"] = time.monotonic()
+
+    def waiter() -> None:
+        with pub._lock(run):
+            t0 = time.monotonic()
+            time.sleep(0.05)
+            turns.append((t0, time.monotonic()))
+
+    with caplog.at_level("WARNING", logger="lull.stages.publish"):
+        h = threading.Thread(target=holder)
+        h.start()
+        assert held.wait(5)
+        token = pub._owner(lock)
+        waiters = [threading.Thread(target=waiter) for _ in range(3)]
+        for w in waiters:
+            w.start()
+        end = time.monotonic() + 3.0
+        while time.monotonic() < end and not problems:
+            if pub._owner(lock) != token:
+                problems.append("the lock went missing or changed while held")
+        release.set()
+        h.join(20)
+        for w in waiters:
+            w.join(20)
+    assert problems == []
+    assert "no longer ours" not in caplog.text and "broke" not in caplog.text
+    assert len(turns) == 3 and all(t0 >= times["released"] for t0, _ in turns)
+    turns.sort()
+    assert all(b[0] >= a[1] for a, b in zip(turns, turns[1:], strict=False))  # one at a time
+    assert not lock.exists()
+
+
+def test_the_report_explains_a_pass_without_visual_information(tmp_path, fake_media):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    run = tmp_path / "run"
+    res = publish(run, video, [], [], [], [], None, _ledger(tmp_path), "r1", RunOptions(),
+                  speech=[Span(start=0.0, end=60.0)])  # fmt: skip
+    rows = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]["wcag"]
+    assert {r["status"] for r in rows} == {"met (no visual information beyond the soundtrack)"}
+    html = (run / "report.html").read_text(encoding="utf-8")
+    assert "needs no description" in html

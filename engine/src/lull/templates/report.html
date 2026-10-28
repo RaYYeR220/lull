@@ -89,6 +89,12 @@
   <p class="note">“met (automated checks)” means the engine’s checks pass; no person has
   approved every published line yet.</p>
   {% endif %}
+  {% if wcag | selectattr("status", "equalto", "met (no visual information beyond the soundtrack)") | list %}
+  <p class="note">“met (no visual information beyond the soundtrack)” means the inventory found no
+  salient visual event and the plan rated none important: the soundtrack already carries the
+  programme’s information, so it needs no description (G203). A person should confirm that
+  nothing on screen matters.</p>
+  {% endif %}
 </section>
 
 <section>

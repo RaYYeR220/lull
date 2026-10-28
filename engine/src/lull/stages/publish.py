@@ -101,6 +101,7 @@ LOCK_QUIET_S = 150.0  # no touch for this long: the lock is stale ...
 LOCK_STALE_S = 600.0  # ... and breakable when its publisher is gone, or it is this old
 LOCK_POLL_S = 0.2
 BREAKING_STALE_S = 30.0  # a breaker's marker this old was left by a crash
+OWNER_RECHECK_S = 0.05  # a lock that cannot be read is looked at once more after this
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
 OUTPUTS = frozenset(
     {
@@ -560,6 +561,16 @@ def _owner(path: Path) -> str | None:
     return fields[3] if len(fields) >= 4 else None
 
 
+def _ours(path: Path, token: str) -> bool:
+    """Whether the lock at `path` still holds `token`; a lock that cannot be read (a moment
+    of not found) is read once more after OWNER_RECHECK_S before the answer is no."""
+    owner = _owner(path)
+    if owner is None:
+        time.sleep(OWNER_RECHECK_S)
+        owner = _owner(path)
+    return owner == token
+
+
 def _break(path: Path) -> bool:
     """Break the lock at `path` if it may be broken, and say whether this call did.
 
@@ -635,7 +646,9 @@ def _lock(run_dir: Path) -> Iterator[None]:
     path = run_dir / LOCK
     token = secrets.token_hex(16)
     while not _take(path, token):
-        if path.exists() and _break(path):
+        # judged in place first (cheap, moves nothing): a live, heartbeating lock is never
+        # set aside; _break judges again, authoritatively, on the file it moved
+        if path.exists() and _breakable(path) and _break(path):
             log.warning("publish: broke a stale lock in %s", run_dir)
             continue
         time.sleep(LOCK_POLL_S)
@@ -643,7 +656,7 @@ def _lock(run_dir: Path) -> Iterator[None]:
 
     def heartbeat() -> None:
         while not stop.wait(LOCK_HEARTBEAT_S):
-            if _owner(path) != token:
+            if not _ours(path, token):
                 log.warning("publish: the lock in %s is no longer ours", run_dir)
                 return
             try:
@@ -661,7 +674,7 @@ def _lock(run_dir: Path) -> Iterator[None]:
         stop.set()
         if started:
             beat.join(timeout=5)
-        if _owner(path) == token:
+        if _ours(path, token):
             path.unlink(missing_ok=True)
 
 
