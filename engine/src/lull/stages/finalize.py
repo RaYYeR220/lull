@@ -40,7 +40,7 @@ from pydantic import BaseModel, Field
 
 from lull.media import audio_duration, cut_clip, probe
 from lull.speech import SpeechClient
-from lull.stages.lint import Finding, autofix, lint, quoted_spans
+from lull.stages.lint import Finding, autofix, lint, quoted_spans, screen_spans
 from lull.stages.plan import count_words
 from lull.stages.schedule import AHEAD_PREFIX, lower_first
 from lull.stages.verify import (
@@ -129,26 +129,38 @@ def _descriptor_at(descriptor: str, sentence_start: bool) -> str:
     return descriptor
 
 
+def _first_name(name: str, text: str, verbatim: list[str]) -> re.Match[str] | None:
+    """The first mention of `name` in `text` that names someone: not where the line reads the
+    screen (lint.screen_spans)."""
+    screen = screen_spans(text, verbatim)
+    return next((m for m in _name_re(name).finditer(text)
+                 if not any(a <= m.start() < b for a, b in screen)), None)  # fmt: skip
+
+
 def introduce_names(
-    text: str, cast: dict[str, str], introduced: set[str]
+    text: str, cast: dict[str, str], introduced: set[str], verbatim: list[str] = ()
 ) -> tuple[str, set[str], list[str]]:
     """Give each cast name not yet introduced its descriptor at its first mention (R15).
 
     "Proog climbs." becomes "A bald person in a dark coat, Proog, climbs."; the descriptor is
     capitalised at a sentence start and its leading article lower-cased elsewhere. A name the
     text already introduces (inside quoted on-screen text, or right after its descriptor) is left
-    as it is; a possessive first mention ("Proog's") is left to lint and repair. Returns the
-    text, the names this cue introduces, and the names that got a descriptor, in text order.
+    as it is, and so is a mention where the line reads the screen (capitals, or the on-screen
+    text in `verbatim`); a possessive first mention ("Proog's") is left to lint and repair.
+    Returns the text, the names this cue introduces, and the names that got a descriptor, in
+    text order.
     """
+    verbatim = list(verbatim)
     already = introduced_in(text, cast)
     found = sorted(
         (m.start(), n)
         for n in cast
-        if n and n not in introduced and n not in already and (m := _name_re(n).search(text))
-    )
+        if n and n not in introduced and n not in already
+        and (m := _first_name(n, text, verbatim))
+    )  # fmt: skip
     inserted: list[str] = []
     for _, name in found:
-        m = _name_re(name).search(text)
+        m = _first_name(name, text, verbatim)
         before, after = text[: m.start()], text[m.end() :]
         descriptor = _descriptor(cast, name)
         if not descriptor or _POSSESSIVE.match(after):
@@ -460,7 +472,9 @@ class _Finalise:
 
     def run(self) -> Cue:
         ctx = self.ctx
-        self.text, _, self.inserted = introduce_names(self.cue.text, ctx.cast, ctx.introduced)
+        self.text, _, self.inserted = introduce_names(
+            self.cue.text, ctx.cast, ctx.introduced, ctx.verbatim
+        )
         self.names = set(ctx.named) | set(ctx.cast) | set(ctx.introduced) | set(ctx.proper_nouns)
         self.keep = _verbatim_in(self.text, ctx.verbatim)
         for rnd in range(1, MAX_ROUNDS + 1):

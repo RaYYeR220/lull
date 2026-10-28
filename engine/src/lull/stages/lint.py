@@ -103,6 +103,23 @@ def _inside(pos: int, spans: list[tuple[int, int]]) -> bool:
     return any(s <= pos < e for s, e in spans)
 
 
+# two or more tokens of capitals and digits in a row ("STEP 2: BAKE"): on-screen text read out
+_CAPS_RUN = re.compile(
+    r"\b[A-Z0-9][A-Z0-9'\u2019&\-]*(?:[ \t:,./+\-\u2013\u2014]+[A-Z0-9][A-Z0-9'\u2019&\-]*)+\b"
+)
+
+
+def screen_spans(text: str, verbatim: list[str]) -> list[tuple[int, int]]:
+    """Where `text` reads the screen: runs of capitals ("STEP 2: BAKE", with at least one word
+    of two capitals) and each occurrence of the on-screen text watch read (`verbatim`)."""
+    spans = [m.span() for m in _CAPS_RUN.finditer(text)
+             if re.search(r"[A-Z]{2}", m.group())]  # fmt: skip
+    for v in verbatim:
+        if v:
+            spans += [(m.start(), m.end()) for m in re.finditer(re.escape(v), text)]
+    return spans
+
+
 def _is_numeral_i(text: str, m: re.Match[str]) -> bool:
     before = text[: m.start()].rstrip()
     prev = re.search(r"([A-Za-z]+)$", before)
@@ -150,11 +167,14 @@ def lint(
 
     quoted_text = " ".join(text[s:e] for s, e in quoted)
     known = {n.lower() for n in introduced}
+    screen = screen_spans(text, verbatim)
     for name in sorted(named):
         pat = rf"\b{re.escape(name)}\b"
         if name.lower() in known or re.search(pat, quoted_text):
             continue
         for m in re.finditer(pat, text):
+            if _inside(m.start(), screen):
+                continue  # the line reads the screen here; it names nobody
             msg = f"'{name}' used before being introduced in dialogue or on screen"
             add("R15-name", msg, m.span(), exempt=False)
 

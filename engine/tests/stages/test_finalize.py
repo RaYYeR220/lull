@@ -1278,3 +1278,16 @@ def test_claims_of_the_text_tolerate_inflection_and_framing_words():
     assert said_in("The slide lists Glycolysis occurs in cytoplasm.", text) is False
     assert said_in("NADH and FADH2 are carriers", text) is False
     assert said_in("a slide is there", "A slide.")  # nothing but framing: the text says it
+
+
+def test_a_name_read_off_the_screen_gets_no_descriptor_there():
+    """Where the line reads the screen (capitals, or the text watch read) it names nobody:
+    the descriptor goes to the first mention that is a name, if any."""
+    cast = {"BAKE": "a baker", "Proog": PROOG}
+    text, _, inserted = introduce_names("A card reads STEP 2: BAKE.", cast, set())
+    assert (text, inserted) == ("A card reads STEP 2: BAKE.", [])
+    text, _, inserted = introduce_names(
+        "A banner reads Welcome, Proog. Proog waves.", cast, set(), ["Welcome, Proog"]
+    )
+    assert text == f"A banner reads Welcome, Proog. {PROOG[0].upper()}{PROOG[1:]}, Proog, waves."
+    assert inserted == ["Proog"]

@@ -193,3 +193,16 @@ def test_a_quote_ending_a_sentence_keeps_the_next_look_ahead_at_its_start():
     assert "R2-ahead-format" not in rules('A sign reads "Exit!" In a moment, it flickers.')
     assert "R2-ahead-format" not in rules("A caption reads: Day one. In a moment, rain falls.")
     assert "R2-ahead-format" in rules('A card says "Hi" and in a moment a door opens.')
+
+
+def test_on_screen_text_read_out_is_not_an_unintroduced_name():
+    """A line that reads the screen names nobody: an ALL-CAPS run ("STEP 2: BAKE") or the
+    text watch read off the screen. The same name used as a name still needs introducing."""
+    assert "R15-name" not in rules("A card reads STEP 2: BAKE.", named={"BAKE"})
+    banner = ["Welcome, Proog"]
+    t = "A banner reads Welcome, Proog. A man waves."
+    assert "R15-name" not in rules(t, named={"Proog"}, verbatim=banner)
+    t = "A banner reads Welcome, Proog. Proog waves."
+    found = [f for f in lint(t, named={"Proog"}, verbatim=banner) if f.rule == "R15-name"]
+    assert [f.span for f in found] == [(31, 36)]  # the second Proog, a name
+    assert "R15-name" in rules("HAL watches the crew.", named={"HAL"})  # a lone capital name
