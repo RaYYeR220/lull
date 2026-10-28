@@ -172,7 +172,13 @@ def audio_duration(path: Path) -> float:
 
 
 def extract_wav(src: Path, dst: Path, rate: int = 16000) -> Path:
-    _ffmpeg(*input_args(src), "-vn", "-ac", "1", "-ar", str(rate), "-c:a", "pcm_s16le", str(dst))
+    """The first audio stream as mono 16-bit PCM on the container's clock: an audio stream
+    that starts after the video is padded from 0, exactly as the mix plays it, so transcript
+    times, pauses and the mix agree."""
+    _ffmpeg(
+        *input_args(src), "-map", "0:a:0", "-af", "aresample=async=1:first_pts=0",
+        "-vn", "-ac", "1", "-ar", str(rate), "-c:a", "pcm_s16le", str(dst),
+    )  # fmt: skip
     return dst
 
 

@@ -1,7 +1,10 @@
+import subprocess
 from pathlib import Path
 
 import pytest
 
+from lull import media
+from lull.media import loudness_profile
 from lull.stages.listen import ClampedWord, ListenResult, clamp_words, listen, protected_spans
 from lull.timeline import find_gaps, speech_spans
 from lull.types import Span, Turn, Word
@@ -163,3 +166,50 @@ def test_listen_clamps_before_speech_and_gaps(tone_slides: Path, tmp_path: Path)
     assert res.gaps == find_gaps(res.speech, res.duration, protected=res.protected, wps=3.0)
     assert max(g.usable_end for g in res.gaps) > 11.0  # the stretched tail is usable again
     assert ListenResult.model_validate_json(res.model_dump_json()) == res
+
+
+# -- the audio clock -----------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def late_audio(tmp_path_factory) -> Path:
+    """6 s of picture whose audio stream starts 1 s after the video (a stream-copy trim or a
+    remux does this): a 440 Hz tone for the first 2 s of the stream, i.e. 1.0-3.0 s on the
+    video's clock."""
+    out = tmp_path_factory.mktemp("media") / "late_audio.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error",
+         "-f", "lavfi", "-i", "color=c=gray:s=320x180:r=25:d=6",
+         "-itsoffset", "1.0", "-f", "lavfi", "-i", "sine=frequency=440:duration=2,apad=whole_dur=5",
+         "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+         "-t", "6", str(out)],
+        check=True, capture_output=True,
+    )  # fmt: skip
+    return out
+
+
+class _HearsTone:
+    """A speech client that hears a word wherever the WAV it is given is loud."""
+
+    def transcribe(self, wav):
+        loud = [t for t, db in loudness_profile(wav, hop=0.05) if db > -40]
+        return [Word(text="continuing", start=loud[0], end=loud[-1] + 0.05)]  # not clamped
+
+    def diarize(self, wav):
+        return []
+
+
+def test_listen_and_the_mix_hear_late_audio_on_the_video_clock(late_audio, tmp_path):
+    """Speech spans (and so every pause) and the mixed programme use one clock: the tone at
+    1.0-3.0 s of the video is speech at 1.0-3.0 s, and the mix plays it there too. Before,
+    the transcript came 1 s early while the mix kept it in place, so a cue placed after the
+    speech would have overlapped it."""
+    from lull.stages import mix as mixer
+
+    heard = listen(late_audio, tmp_path / "work", _HearsTone(), wps=3.0)
+    [span] = heard.speech
+    assert span.start == pytest.approx(1.0, abs=0.1) and span.end == pytest.approx(3.0, abs=0.1)
+    out = mixer.mix(late_audio, [], tmp_path / "out")
+    wav = media.extract_wav(out.ad_audio, tmp_path / "mixed.wav")
+    loud = [t for t, db in loudness_profile(wav, hop=0.05) if db > -40]
+    assert loud[0] == pytest.approx(span.start, abs=0.1)
