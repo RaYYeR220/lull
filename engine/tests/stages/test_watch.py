@@ -519,3 +519,17 @@ def test_the_fold_never_crosses_a_scene_cut():
               _ve(10.0, 11.0, "on_screen_text", "Tag #A on black", verb="#A")]  # fmt: skip
     assert len(merge_events([(_span(30, 130), slices)], cuts=[20.0, 45.0])) == 1  # cuts elsewhere
     assert len(merge_events([(_span(30, 130), slices)], cuts=[40.0])) == 2  # absolute times
+
+
+# -- Task 17 ------------------------------------------------------------------------------------
+
+
+def test_said_in_dialogue_ignores_pronouns_fragments_and_auxiliaries():
+    """Pronouns, 's/'t fragments, be/have/do forms and this/that prove nothing: "she" and
+    "him" said nearby do not mean the dialogue conveys the hand-over."""
+    words = [_w("It's", 1.0), _w("fine,", 1.4), _w("she", 1.8), _w("told", 2.2), _w("him.", 2.6)]
+    event = _ve(2.0, 4.0, "action", "She hands him the man's key.", said=True)
+    assert confirm_said([event], words)[0].said_in_dialogue is False
+    said = _ve(2.0, 4.0, "action", "She hands him the key; that is fine, he was told.",
+               said=True)  # fmt: skip
+    assert confirm_said([said], words)[0].said_in_dialogue is True  # fine + told: 2 of 4

@@ -44,6 +44,13 @@ _STOP = frozenset(
     "a an the and or of to in on at by for from with into onto is are its their".split()
 )
 _WORD = re.compile(r"\w+")
+# words that say nothing about what is on screen: they never show the dialogue conveys it
+_SAID_STOP = _STOP | frozenset(
+    "he she him her his hers it its they them their we us our you your i me my "
+    "s t ll re ve d m "
+    "is are was were be been being am has have had do does did "
+    "this that these those".split()
+)
 
 _EVENT_PROPS: dict = {  # VisualEvent minus id
     "t_start": {"type": "number"},
@@ -352,11 +359,13 @@ def _combine(a: VisualEvent, b: VisualEvent) -> VisualEvent:
 def confirm_said(events: list[VisualEvent], words: list[Word]) -> list[VisualEvent]:
     """Ruling R1: an event keeps the model's said_in_dialogue only when at least SAID_SHARE of
     its content words are said within SAID_AROUND_S of it; otherwise the flag is cleared (an
-    undescribed visual is worse than a repeated one). The flag is never set here."""
+    undescribed visual is worse than a repeated one). Content words leave out pronouns, the
+    fragments of contractions and possessives, be/have/do forms and this/that/these/those as
+    well as the usual stopwords. The flag is never set here."""
     out = []
     for e in events:
         if e.said_in_dialogue:
-            mine = _tokens(e.text)
+            mine = _tokens(e.text) - _SAID_STOP
             near = set().union(*(
                 _tokens(w.text) for w in words
                 if w.end > e.t_start - SAID_AROUND_S and w.start < e.t_end + SAID_AROUND_S
