@@ -2,6 +2,7 @@
 name = "lull"
 version = "0.2.0"
 description = "Audio description engine: gap-fitted, frame-verified descriptions for prerecorded video."
+readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 dependencies = [
