@@ -1099,3 +1099,48 @@ def test_a_held_edit_keeps_the_previous_voiced_take(sc, rd, fakes):
     assert r.status_code == 200 and r.json()["status"] == "edited"
     assert not take.exists()  # superseded by a new voiced take
     assert "previous" not in overrides(rd)["c001"]
+
+
+# -- fix round 2: an override never re-applies to a cue that moved --------------------------------
+
+
+def _engine_cues(template: Path) -> dict:
+    return json.loads((template / "cues.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("moved", ["start", "gap_id", "event_ids"])
+def test_a_moved_cue_gets_the_human_text_but_is_held(sc, rd, template, moved):
+    assert patch(sc, "c001", NEW_RED).status_code == 200
+    doc = _engine_cues(template)  # a rerun: cue ids are positional and c001 is elsewhere now
+    c1 = doc["cues"][0]
+    if moved == "start":
+        c1.update(start=c1["start"] + 0.5, end=c1["end"] + 0.5)
+    elif moved == "gap_id":
+        c1["gap_id"] = "g002"
+    else:
+        c1["event_ids"] = ["e003"]
+    (rd / "cues.json").write_text(json.dumps(doc))
+    assert sc.post(f"/v1/runs/{RID}/cues/x002/approve").status_code == 200  # reconciles
+    c = cue_of(rd, "c001")
+    assert c["text"] == NEW_RED
+    assert c["status"] == "held" and c["note"] == "moved since it was checked"
+    assert c["audio_path"] is None and c["audio_dur"] is None
+    assert c[moved] == c1[moved]  # the engine's timing and visuals stay
+    assert overrides(rd)["c001"]["status"] == "edited"  # the override itself is kept
+
+
+def test_an_approval_does_not_follow_a_moved_cue(sc, rd, template):
+    assert sc.post(f"/v1/runs/{RID}/cues/c002/approve").status_code == 200
+    doc = _engine_cues(template)
+    doc["cues"][1]["event_ids"] = ["e001"]  # same words, other visuals
+    (rd / "cues.json").write_text(json.dumps(doc))
+    assert sc.post(f"/v1/runs/{RID}/cues/x002/hold").status_code == 200
+    assert cue_of(rd, "c002")["status"] == "verified"
+
+
+def test_an_unmoved_cue_takes_its_override_as_before(sc, rd, template):
+    assert patch(sc, "c001", NEW_RED).status_code == 200
+    (rd / "cues.json").write_text(json.dumps(_engine_cues(template)))
+    assert sc.post(f"/v1/runs/{RID}/cues/x002/approve").status_code == 200
+    c = cue_of(rd, "c001")
+    assert c["text"] == NEW_RED and c["status"] == "edited" and c["audio_path"]

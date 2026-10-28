@@ -425,3 +425,29 @@ def test_no_known_root_survives_inside_a_url(text):
 
 def test_a_root_right_after_a_url_host_leaves_a_readable_url():
     assert _scrubber()("https://example.org/data/report.html") == "https://example.org/report.html"
+
+
+# -- fix round 2: the scrubber's last gaps ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        r"[C:\Users\egori]",
+        r"x=C:\Users\egori|y",
+        "'/home/app'.",
+        "file://C:/Users/egori/secret/x.log",
+        r"C:\\Users\\egori\\secret\\x.log",
+        r'{"path": "C:\\Users\\egori\\x.log"}',
+    ],
+)
+def test_scrubber_round_2_forms(text):
+    out = _win_scrubber()(text)
+    assert "egori" not in out.lower() and "/home/app" not in out
+
+
+@pytest.mark.parametrize(
+    "url", ["https://example.com/home/app-store", "https://example.com/home/apps/x"]
+)
+def test_scrubber_leaves_a_root_that_only_starts_a_word(url):
+    assert _win_scrubber()(url) == url

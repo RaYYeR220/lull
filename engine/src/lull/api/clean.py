@@ -25,9 +25,11 @@ URL_HOST = re.compile(
     r"\b(?!file:)[A-Za-z][A-Za-z0-9+.-]*://(?![A-Za-z]:(?!\d))[^\s/\\?#'\"<>()\x00]+",
     re.IGNORECASE,
 )
-_FILE_URL = re.compile(r"\bfile://[^\s/\\'\"<>\x00]*", re.IGNORECASE)  # file://host
-# A root ends at a separator or where the path does: /data is not the start of /datasets.
-_ROOT_END = r"(?:[\\/]|(?=[\s'\"),;:?&#=\x00]|\Z))"
+# file://host, where a drive letter is not a host (file://C:/... keeps its C:)
+_FILE_URL = re.compile(r"\bfile://(?![A-Za-z]:)[^\s/\\'\"<>\x00]*", re.IGNORECASE)
+# A root ends at a separator or wherever no word goes on: /data is not the start of /datasets
+# or /data-2, but [/data] and /data. are cut.
+_ROOT_END = r"(?:[\\/]|(?![\w-]))"
 # An absolute path (optionally \\?\ or //?/ prefixed) not glued to a word, a ".", a slash or a
 # set-aside URL host before it (so not 24/7/365, not a URL's path); it shrinks to its last part.
 ABS_PATH = re.compile(
@@ -49,7 +51,8 @@ def default_roots(data_dir: Path) -> tuple[Path, ...]:
 
 def root_forms(root: str) -> set[str]:
     """The ways a root folder can be written: as given, with either slash, and for a drive
-    path also /C:/..., MSYS (/c/...) and extended-length (\\\\?\\C:\\..., //?/C:/...)."""
+    path also /C:/..., MSYS (/c/...), extended-length (\\\\?\\C:\\..., //?/C:/...) and with
+    doubled backslashes, as a repr or a JSON string shows it (C:\\\\Users\\\\...)."""
     native = root.rstrip("/\\")
     posix = native.replace("\\", "/")
     forms = {native, posix}
@@ -58,6 +61,7 @@ def root_forms(root: str) -> set[str]:
         letter, rest = drive.groups()
         back = posix.replace("/", "\\")
         forms |= {back, "/" + posix, f"/{letter}/{rest}", "\\\\?\\" + back, "//?/" + posix}
+        forms.add(back.replace("\\", "\\\\"))
     return {f for f in forms if len(f.strip("/\\")) > 1}
 
 

@@ -373,6 +373,10 @@ def mark(run_dir: Path, *, dirty: bool, overrides: dict[str, dict] | None = None
 OVERLAY_FIELDS = ("text", "status", "note", "claims", "findings", "audio_path", "audio_dur",
                   "tempo", "end")  # fmt: skip
 STATUS_FIELDS = ("status", "note")  # what an approval or a hold changes
+MOVED: dict[str, Any] = {  # the person's text on a cue that is not where it was checked
+    "status": "held", "note": "moved since it was checked", "claims": [], "findings": [],
+    "audio_path": None, "audio_dur": None, "end": None, "tempo": 1.0,
+}  # fmt: skip
 
 
 def text_hash(text: str) -> str:
@@ -398,7 +402,9 @@ def override(run_dir: Path, old: Cue, new: Cue, prior: dict | None, *, authored:
     entry.update(
         base=prior.get("base") or text_hash(old.text),
         authored=bool(authored or prior.get("authored")),
-        start=new.start,
+        start=new.start,  # where it was checked: the slot the take and the checks fit
+        gap_id=new.gap_id,
+        event_ids=list(new.event_ids),
         updated=_now(),
     )
     if new.status == "held" and new.audio_path is None:  # a held edit: no take of its own
@@ -417,10 +423,14 @@ def apply_overlay(run_dir: Path, doc: CueDoc, overrides: dict[str, dict]) -> lis
 
     Precedence, cue by cue:
     1. a cue id the engine no longer has: its override waits in studio.json, unused;
-    2. text the person wrote (authored) wins over the engine's text for that id, with its take
-       and check results; the engine's timing (start, pause, visuals) stays, and when the start
-       moved the end follows it (publish's overlap gate then judges the take);
-    3. an approval or hold of the engine's own text holds only while the engine's text is the
+    2. a cue that moved (cue ids are positional: after a rerun the same id can be another
+       slot): its start, pause or visuals differ from those the change was checked at. Text the
+       person wrote comes back held ("moved since it was checked"), without a take or checks,
+       to be edited again; an approval or hold is not applied. Nothing checked elsewhere is
+       ever marked edited or approved here;
+    3. text the person wrote (authored) wins over the engine's text for that id, with its take
+       and check results;
+    4. an approval or hold of the engine's own text holds only while the engine's text is the
        one it was made on (base); otherwise it is not applied (kept, unused).
     """
     changed = []
@@ -428,11 +438,17 @@ def apply_overlay(run_dir: Path, doc: CueDoc, overrides: dict[str, dict]) -> lis
         o = overrides.get(cue.id)
         if o is None:
             continue
-        if o.get("authored"):
+        moved = (o.get("start"), o.get("gap_id"), o.get("event_ids")) != (
+            cue.start,
+            cue.gap_id,
+            list(cue.event_ids),
+        )
+        if moved and o.get("authored") and isinstance(o.get("text"), str):
+            fields = {"text": o["text"], **MOVED}
+        elif moved:
+            continue
+        elif o.get("authored"):
             fields = {k: o[k] for k in OVERLAY_FIELDS if k in o}
-            dur = fields.get("audio_dur")
-            if o.get("start") != cue.start and isinstance(dur, int | float):
-                fields["end"] = cue.start + dur
         elif o.get("base") == text_hash(cue.text):
             fields = {k: o[k] for k in STATUS_FIELDS if k in o}
         else:

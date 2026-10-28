@@ -43,6 +43,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import ValidationError
 from starlette.datastructures import FormData, UploadFile
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import ClientDisconnect
 from starlette.types import Message
 
 from lull import media
@@ -77,6 +78,7 @@ UPLOAD_DEADLINE_S = 60.0  # to receive and store the whole body
 FORM_TYPES = ("multipart/form-data", "application/x-www-form-urlencoded")
 REFUSALS_PER_HOUR = 10  # uploads refused after they were read, per visitor
 WALL_CLOCK_S = 600.0
+NOT_COUNTED = (402, 409, 503)  # refusals that are not the visitor's doing
 
 EVENTS, REQUEST, ERROR, MANIFEST, INPUT = (
     "events.jsonl",
@@ -427,13 +429,18 @@ class Executor:
 
         work = loop.run_in_executor(None, self._work, runner, job, on_event)
         try:
-            extra = await asyncio.wait_for(asyncio.shield(work), self.wall_clock)
-        except TimeoutError:
-            job.stop.set()  # its next model call is refused; what it reports now is dropped
-            work.add_done_callback(_late(job.run_id))
-            log.warning("live run %s given up after %g s", job.run_id, self.wall_clock)
-            limit = _wait_words(math.ceil(self.wall_clock))
-            run.fail(RunTimeout(f"This description took longer than {limit} and was stopped."))
+            # the wall clock is the wait running out, never an exception the run raised (an
+            # engine TimeoutError is the engine's error)
+            await asyncio.wait({work}, timeout=self.wall_clock)
+            if not work.done():
+                job.stop.set()  # its next model call is refused; what it reports is dropped
+                work.add_done_callback(_late(job.run_id))
+                log.warning("live run %s given up after %g s", job.run_id, self.wall_clock)
+                limit = _wait_words(math.ceil(self.wall_clock))
+                raise RunTimeout(f"This description took longer than {limit} and was stopped.")
+            extra = work.result()
+        except RunTimeout as e:
+            run.fail(e)
         except Exception as e:
             if isinstance(e, BudgetExceeded):
                 log.warning("live run %s stopped by the %s cap", job.run_id, e.scope)
@@ -449,9 +456,12 @@ class Executor:
             self._changed(job.run_dir)
 
     def _work(self, runner: Runner, job: Job, on_event: Callable[[Event], None]) -> dict:
-        """The run, then the after_run hooks (one failing is logged, never fails the run)."""
+        """The run, then the after_run hooks (one failing is logged, never fails the run). A run
+        the wall clock stopped skips them: nobody waits for it any more."""
         runner(job, on_event)
         extra: dict = {}
+        if job.stop.is_set():
+            return extra
         for hook in self.after_run:
             try:
                 extra.update(hook(job) or {})
@@ -593,6 +603,8 @@ async def _read_form(request: Request, limit: int) -> FormData:
         return await Request(request.scope, counted).form(max_files=1, max_fields=8)
     except _TooLarge:
         raise too_large(limit) from None
+    except ClientDisconnect:
+        raise LiveError(400, "disconnected", "The upload was cut off before it finished.") from None
     except StarletteHTTPException as e:  # a body the multipart parser refuses
         raise LiveError(400, "invalid", f"The upload could not be read: {e.detail}") from None
 
@@ -618,6 +630,21 @@ def _save(src: BinaryIO, dst: Path, limit: int) -> int:
                 raise too_large(limit)
             out.write(chunk)
     return size
+
+
+async def _store(fn: Callable[..., Any], *args: Any) -> Any:
+    """Write the video into the run folder; a disk that fails (a timeout on a network mount,
+    say) is our trouble, not the visitor's: 503, not counted against them."""
+    try:
+        return await anyio.to_thread.run_sync(fn, *args)
+    except OSError:
+        log.exception("live: storing an upload failed")
+        raise LiveError(
+            503,
+            "storage",
+            "The video could not be stored just now. Try again in a minute.",
+            headers={"Retry-After": "60"},
+        ) from None
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -708,11 +735,12 @@ async def _accept(
     """Receive the form (within the upload deadline: 408), put the video in run_dir/input,
     probe and cut it, check the spend caps and write request.json, which keeps the sha256 of
     the edit token returned with the job. Raises LiveError; the caller then removes run_dir."""
-    try:
-        with anyio.fail_after(live.upload_deadline):
-            opts, video, source = await _receive(live, request, run_dir)
-    except TimeoutError:
-        raise upload_timeout(live.upload_deadline) from None
+    received = None
+    with anyio.move_on_after(live.upload_deadline):
+        received = await _receive(live, request, run_dir)
+    if received is None:  # the deadline, not a TimeoutError from the disk (that is ours)
+        raise upload_timeout(live.upload_deadline)
+    opts, video, source = received
     info = await _cut(live, run_id, video)
     live.check_budget(run_id, info.duration)
     token, token_hash = new_token()
@@ -756,7 +784,7 @@ async def _receive(
             if upload.size is not None and upload.size > live.max_bytes:
                 raise too_large(live.max_bytes)
             video = _new_run_dir(run_dir) / name
-            size = await anyio.to_thread.run_sync(_save, upload.file, video, live.max_bytes)
+            size = await _store(_save, upload.file, video, live.max_bytes)
             source: dict[str, Any] = {"kind": "upload", "name": name, "bytes": size}
         else:
             assert isinstance(sample, str)
@@ -764,7 +792,7 @@ async def _receive(
             if path is None:
                 raise LiveError(422, "sample", "There is no sample with that id.")
             video = _new_run_dir(run_dir) / path.name
-            await anyio.to_thread.run_sync(_link_or_copy, path, video)
+            await _store(_link_or_copy, path, video)
             source = {"kind": "sample", "id": sample, "name": path.name}
     finally:
         await form.close()
@@ -903,8 +931,11 @@ async def create_run(request: Request) -> StreamingResponse:
     try:
         try:
             job, token = await _accept(live, request, run_id, run_dir, key)
-        except LiveError as e:
-            if e.status in (400, 408, 413, 422):  # read, then refused: counts against them
+        except BaseException as e:
+            # an upload slot used without starting a run counts against the visitor, however
+            # it ended (refused, cut off, crashed), unless it was the spend caps, a busy
+            # executor or our storage
+            if not (isinstance(e, LiveError) and e.status in NOT_COUNTED):
                 live.refusals.hit(key)
             raise
         # checked again with the claim, in one step: the upload took a while

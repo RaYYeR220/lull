@@ -925,8 +925,11 @@ def test_resume_with_a_damaged_request_json_is_404(lc, live, data, body):
 # -- the upload gate: a deadline, one upload per visitor, the slot after the headers ------------
 
 
-def _asgi_post_stalling(app, *, client=("testclient", 50000)) -> tuple[int, dict]:
-    """POST /v1/runs whose body stops arriving after its first bytes."""
+def _asgi_post_stalling(
+    app, *, client=("testclient", 50000), disconnect: bool = False
+) -> tuple[int | None, dict | None]:
+    """POST /v1/runs whose body stops arriving after its first bytes: it stalls, or with
+    `disconnect` the client goes away. (None, None) when no response was sent."""
     import asyncio
 
     head = b'--b\r\nContent-Disposition: form-data; name="file"; filename="a.mp4"\r\n\r\nxx'
@@ -939,7 +942,8 @@ def _asgi_post_stalling(app, *, client=("testclient", 50000)) -> tuple[int, dict
             if not sent:
                 sent = True
                 return {"type": "http.request", "body": head, "more_body": True}
-            await asyncio.sleep(30)
+            if not disconnect:
+                await asyncio.sleep(30)
             return {"type": "http.disconnect"}
 
         out: list = []
@@ -965,11 +969,16 @@ def _asgi_post_stalling(app, *, client=("testclient", 50000)) -> tuple[int, dict
             "server": ("t", 80),
             "state": {},
         }
-        await asyncio.wait_for(app(scope, receive, send), 10)
+        try:
+            await asyncio.wait_for(app(scope, receive, send), 10)
+        except Exception:  # an app may raise once the client is gone
+            pass
         return out
 
     messages = asyncio.run(call())
-    start = next(m for m in messages if m["type"] == "http.response.start")
+    start = next((m for m in messages if m["type"] == "http.response.start"), None)
+    if start is None:
+        return None, None
     body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.response.body")
     return start["status"], json.loads(body)
 
@@ -1102,3 +1111,89 @@ def test_cors_allows_the_authorization_header_and_only_the_ones_in_use(lc):
         h.strip() for h in allowed.split(",")
     }
     assert preflight("x-something-else").status_code == 400
+
+
+# -- fix round 2: refusals, engine timeouts, stopped runs ------------------------------------------
+
+
+def test_a_client_that_disconnects_mid_body_counts_as_refused(app, live, data):
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+    status, body = _asgi_post_stalling(app, disconnect=True)
+    assert status in (None, 400)
+    assert live.uploading == 0 and not live.upload_keys
+    assert run_dirs(data) == []
+    with TestClient(app) as c:
+        r = post(c)  # the cut-off upload counted against this visitor
+        assert r.status_code == 429 and r.json()["error"] == "rate_limited"
+
+
+def test_any_failure_inside_the_slot_counts_as_refused(lc, live):
+    from lull.api import live as live_mod
+
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+
+    def broken(*a, **kw):
+        raise RuntimeError("something odd in the form")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(live_mod, "_options", broken)
+        with pytest.raises(RuntimeError):
+            post(lc)
+    assert live.uploading == 0 and not live.upload_keys
+    assert post(lc).status_code == 429
+
+
+def test_budget_and_busy_refusals_do_not_count(lc, live, tmp_path):
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+    live.ledger = Ledger(tmp_path / "caps.db", cap_run=0, cap_day=0.001, cap_total=0)
+    assert post(lc).status_code == 402
+    live.ledger = Ledger(tmp_path / "free.db", cap_run=0, cap_day=0, cap_total=0)
+    assert post(lc).status_code == 200  # the 402 was not this visitor's doing
+
+
+def test_a_storage_timeout_while_saving_is_not_the_visitors_408(lc, live):
+    import errno
+
+    from lull.api import live as live_mod
+
+    live.refusals = RateLimiter(per_client=1, client_window=3600, per_day=10**6)
+
+    def stuck(src, dst, limit):
+        raise OSError(errno.ETIMEDOUT, "Connection timed out")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(live_mod, "_save", stuck)
+        r = post(lc)
+    assert r.status_code == 503 and r.json()["error"] == "storage"
+    assert "retry-after" in r.headers
+    assert post(lc).status_code == 200  # ours, not the visitor's: not counted
+
+
+def test_an_engine_timeout_is_the_engines_error_not_the_wall_clock(lc, live, data):
+    live.runner = Script(
+        lambda job: [Event("stage_start", "listen", {}, 1.0)],
+        exc=lambda job: TimeoutError("the speech server did not answer in 300 s"),
+        manifest=False,
+    )
+    events = parse_sse(post(lc).text)
+    err = events[-1]
+    assert err["type"] == "error" and err["kind"] == "TimeoutError"
+    assert "speech server did not answer" in err["message"]
+    assert not live.runner.jobs[0].stop.is_set()
+
+
+def test_a_stopped_run_skips_the_after_run_steps(lc, live, data):
+    seen: list = []
+    live.executor.after_run.append(lambda job: seen.append(job.run_id) or None)
+    gate = threading.Event()
+    live.executor.wall_clock = 0.3
+    slow = Script(gate=gate, gate_at=1)
+    live.runner = slow
+    assert parse_sse(post(lc).text)[-1]["kind"] == "RunTimeout"
+    gate.set()
+    assert slow.finished.wait(10)
+    time.sleep(0.2)
+    assert seen == []  # the stopped run's thread finished, but its hooks did not run
+    live.runner = Script()
+    parse_sse(post(lc).text)
+    assert len(seen) == 1
