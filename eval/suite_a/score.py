@@ -83,7 +83,8 @@ EXTENDED_PUBLISHED = ("extended", "edited", "approved")
 PROBE_VIDEOS = ("a01", "a05", "a09")
 BOOTSTRAP_N, BOOTSTRAP_SEED = 10_000, 20261028
 JUDGE_MAX_TOKENS = 16_000
-JUDGE_ESTIMATE = 0.08  # USD reserved before each judge call
+JUDGE_ESTIMATE = 0.08  # USD reserved before each coverage or claims call
+VOICED_ESTIMATE = 0.02  # ... before each voiced-text call (one short cue)
 RUN_CAP_DEFAULT = 0.30
 SUITE_CAP_DEFAULT = 3.00
 PARTIAL_BULLETS = 3  # bullet_partial negative probes per video
@@ -692,7 +693,7 @@ def judge_voiced(entry: dict, cues: list[dict], judge: Judge, run_id: str) -> di
     out = {}
     for c in cues:
         prompt, schema = voiced_request(entry, c)
-        out[c["id"]] = judge.ask(prompt, schema, run_id, "suite_a_voiced")
+        out[c["id"]] = judge.ask(prompt, schema, run_id, "suite_a_voiced", VOICED_ESTIMATE)
     return out
 
 
@@ -743,7 +744,9 @@ class Judge:
     paid_by: set = field(default_factory=set)
     files: list = field(default_factory=list)
 
-    def ask(self, prompt: str, schema: dict, run_id: str, stage: str) -> dict:
+    def ask(
+        self, prompt: str, schema: dict, run_id: str, stage: str, estimate: float = JUDGE_ESTIMATE
+    ) -> dict:
         request = {"model": self.model, "prompt": prompt, "schema": schema, "temperature": 0.0,
                    "thinking": self.thinking, "max_tokens": JUDGE_MAX_TOKENS}  # fmt: skip
         digest = hashlib.sha256(json.dumps(request, sort_keys=True).encode("utf-8")).hexdigest()
@@ -753,13 +756,13 @@ class Judge:
             self.paid_by.add(saved["run_id"])
             self.files.append(path)
             return saved["answer"]
-        self.budget.check(JUDGE_ESTIMATE, f"judge {stage}")
+        self.budget.check(estimate, f"judge {stage}")
         self.budget.add_run(run_id)
         t0 = time.monotonic()
         answer = self.tf.json(
             self.model, [{"role": "user", "content": prompt}], schema, run_id=run_id,
             stage=stage, role="eval-judge", thinking=self.thinking, max_tokens=JUDGE_MAX_TOKENS,
-            temperature=0.0, estimate=JUDGE_ESTIMATE,
+            temperature=0.0, estimate=estimate,
         )  # fmt: skip
         self.paid_by.add(run_id)
         write_json(path, {"request_sha256": digest, "run_id": run_id, "stage": stage,
