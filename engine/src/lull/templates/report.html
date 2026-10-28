@@ -98,7 +98,7 @@
     <div class="stat"><b>{{ extended_count }}</b><span>extended descriptions voiced</span></div>
     <div class="stat"><b>{{ summary.cues.held }}</b><span>held for review</span></div>
     <div class="stat"><b>{% if summary.coverage.ratio is none %}n/a{% else %}{{ "%.0f" | format(summary.coverage.ratio * 100) }}%{% endif %}</b>
-      <span>coverage: {{ summary.coverage.described }} of {{ summary.coverage.salient_events }} salient events described</span></div>
+      <span>coverage: {{ summary.coverage.described }} of {{ summary.coverage.important_events }} important events described</span></div>
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.speech_s) }} s</b><span>overlap with speech</span></div>
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.between_cues_s) }} s</b><span>overlap between descriptions</span></div>
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.outside_pauses_s) }} s</b><span>outside the usable pauses (speech guards, protected sound)</span></div>
@@ -107,12 +107,18 @@
   </div>
   {% if summary.extended_produced %}
   <p class="note">With the extended version: {{ summary.coverage.described_with_extended }} of
-  {{ summary.coverage.salient_events }} salient events described.</p>
+  {{ summary.coverage.important_events }} important events described.</p>
   {% else %}
   <p class="note">extended version not produced{% if summary.extended_error %}: {{ summary.extended_error }}{% endif %}.</p>
   {% endif %}
+  <p class="note">Important events are those the plan rates priority 3 or more (the inventory's
+  salience 4 or more when the plan gave none).</p>
   {% if summary.coverage.undescribed %}
-  <p class="note">Salient events not described: {{ summary.coverage.undescribed | join(", ") }}.</p>
+  <p class="note">Important events not described: {{ summary.coverage.undescribed | join(", ") }}.</p>
+  {% endif %}
+  {% if summary.repetitive %}
+  <p class="note">Not counted, judged repetitive by the planner:</p>
+  <ul>{% for e in summary.repetitive %}<li>{{ e.id }}: {{ e.text }}</li>{% endfor %}</ul>
   {% endif %}
 </section>
 

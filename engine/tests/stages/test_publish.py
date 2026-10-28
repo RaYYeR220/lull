@@ -308,12 +308,14 @@ def test_coverage_counts_salient_events_in_voiced_cues():
     ext = [_cue("x001", 4.0, 1.0, gap=None, status="extended", ev=["e5"])]
     cov = coverage(cues, ext, events, extended_produced=True)
     assert cov == {
-        "salient_events": 4,
+        "important_events": 4,
+        "salient_events": 4,  # the old name, kept for readers of older summaries
         "described": 1,
         "ratio": 0.25,
         "described_with_extended": 2,
         "ratio_with_extended": 0.5,
         "undescribed": ["e2", "e3"],
+        "repetitive": [],
     }
     assert coverage(cues, ext, events, extended_produced=False)["described_with_extended"] == 1
     assert coverage([], [], [_ev("e9", 0, 1, salience=2)], extended_produced=False)["ratio"] is None
@@ -377,7 +379,7 @@ def test_wcag_without_a_voiced_standard_track():
 
 def _cov(salient: int, described: int, with_ext: int | None = None) -> dict:
     with_ext = described if with_ext is None else with_ext
-    return {"salient_events": salient, "described": described,
+    return {"important_events": salient, "described": described,
             "ratio": round(described / salient, 3) if salient else None,
             "described_with_extended": with_ext,
             "ratio_with_extended": round(with_ext / salient, 3) if salient else None,
@@ -390,22 +392,22 @@ def test_wcag_met_needs_four_in_five_salient_events_described():
     rows = _wcag(extended_produced=True, coverage=_cov(10, 7, 8))
     assert rows["1.2.3"]["status"] == "met"
     assert rows["1.2.5"]["status"] == "needs review"
-    assert rows["1.2.5"]["reasons"] == ["3 salient events undescribed (7 of 10 described)"]
+    assert rows["1.2.5"]["reasons"] == ["3 important events undescribed (7 of 10 described)"]
     assert rows["1.2.7"]["status"] == "met" and rows["1.2.7"]["reasons"] == []
     rows = _wcag(extended_produced=True, coverage=_cov(10, 7, 7))
     assert rows["1.2.7"]["status"] == "needs review"
-    assert rows["1.2.7"]["reasons"] == ["3 salient events undescribed (7 of 10 described)"]
+    assert rows["1.2.7"]["reasons"] == ["3 important events undescribed (7 of 10 described)"]
     rows = _wcag(coverage=_cov(5, 4), reviewed=False)
     assert rows["1.2.5"]["status"] == "met (automated checks)"
     rows = _wcag(coverage=_cov(4, 3))
-    assert rows["1.2.5"]["reasons"] == ["1 salient event undescribed (3 of 4 described)"]
+    assert rows["1.2.5"]["reasons"] == ["1 important event undescribed (3 of 4 described)"]
     rows = _wcag(coverage=_cov(0, 0))  # nothing salient: nothing to miss
     assert rows["1.2.5"]["status"] == "met"
     # continuous speech: the extended version is the described version, so it counts
     rows = _wcag(standard=0, extended_produced=True, coverage=_cov(5, 0, 4))
     assert rows["1.2.5"]["status"] == "met"
     rows = _wcag(standard=0, extended_produced=True, coverage=_cov(5, 0, 3))
-    assert rows["1.2.5"]["reasons"] == ["2 salient events undescribed (3 of 5 described)"]
+    assert rows["1.2.5"]["reasons"] == ["2 important events undescribed (3 of 5 described)"]
 
 
 def test_events_the_dialogue_conveys_are_never_counted_undescribed():
@@ -417,7 +419,7 @@ def test_events_the_dialogue_conveys_are_never_counted_undescribed():
         _ev("e3", 7.0, 9.0, salience=4).model_copy(update={"said_in_dialogue": True}),
     ]
     cov = coverage([], [], events, extended_produced=False)
-    assert cov["salient_events"] == 1 and cov["undescribed"] == ["e2"]
+    assert cov["important_events"] == 1 and cov["undescribed"] == ["e2"]
     flags = f113_flags([_gap("g001", 0.5, 4.0), _gap("g002", 6.5, 9.5)], [], events)
     assert [f["event_ids"] for f in flags] == [["e2"]]
 
@@ -595,7 +597,7 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
         assert meta == {"sha256": _sha(run / name), "bytes": (run / name).stat().st_size}
     s = m["summary"]
     assert s["cues"] == {"verified": 1, "edited": 0, "approved": 0, "held": 1, "extended": 1}
-    assert s["coverage"]["described"] == 1 and s["coverage"]["salient_events"] == 2
+    assert s["coverage"]["described"] == 1 and s["coverage"]["important_events"] == 2
     assert s["overlap_seconds"] == 0.0
     assert s["overlap"] == {"speech_s": 0.0, "between_cues_s": 0.0, "outside_pauses_s": 0.0,
                             "total_s": 0.0}  # fmt: skip
@@ -1249,3 +1251,50 @@ def test_a_lock_is_broken_only_when_quiet_and_its_holder_is_gone_or_very_old(tmp
     assert not breakable(elsewhere, 180)  # cannot check a process on another host
     assert breakable(elsewhere, 11 * 60)
     assert not breakable("garbage", 180) and breakable("garbage", 11 * 60)
+
+
+# -- Task 17: the events a description is owed ---------------------------------------------------
+
+
+IMPORTANT = [
+    _ev("e1", 1.0, 3.0, salience=5),  # plan 4: important, described
+    _ev("e2", 5.5, 7.0, salience=4, text="The two keep walking."),  # plan 2: repetitive
+    _ev("e3", 9.5, 11.0, salience=3),  # plan 3: important although watch said 3
+    _ev("e4", 13.5, 15.0, salience=4),  # no plan priority: watch salience counts
+    _ev("e5", 17.5, 19.0, salience=2),  # no plan priority, not salient
+    _ev("e6", 21.5, 23.0, salience=4).model_copy(update={"said_in_dialogue": True}),  # R21
+]
+PRIORITY = {"e1": 4, "e2": 2, "e3": 3}
+
+
+def test_coverage_and_f113_count_what_the_plan_rates_important():
+    """Ruling (Task 17): important = plan priority >= 3; without a plan priority, watch
+    salience >= 4. Watch-salient events the plan rated 1-2 are judged repetitive: listed, not
+    counted as undescribed and never F113."""
+    cues = [_cue("c001", 1.0, 1.5, ev=["e1"])]
+    cov = coverage(cues, [], IMPORTANT, extended_produced=False, priority=PRIORITY)
+    assert (cov["important_events"], cov["described"]) == (3, 1)
+    assert cov["undescribed"] == ["e3", "e4"] and cov["repetitive"] == ["e2"]
+    gaps = [_gap(f"g00{i}", 5.0 + 4 * (i - 1), 7.5 + 4 * (i - 1)) for i in range(1, 6)]
+    flags = f113_flags(gaps, cues, IMPORTANT, priority=PRIORITY)
+    assert [f["event_ids"] for f in flags] == [["e3"], ["e4"]]
+    # without a plan the watch salience decides, as before
+    assert coverage(cues, [], IMPORTANT, extended_produced=False)["important_events"] == 3
+
+
+def test_the_report_lists_what_the_planner_judged_repetitive(tmp_path, fake_media):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    cues = [_cue("c001", 1.0, 1.5, ev=["e1"])]
+    gaps = [_gap("g001", 1.0, 3.0)]
+    run = tmp_path / "run"
+    res = publish(run, video, cues, [], IMPORTANT, gaps, None, _ledger(tmp_path), "r1",
+                  RunOptions(), speech=[], priority=PRIORITY)  # fmt: skip
+    summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert summary["repetitive"] == [{"id": "e2", "text": "The two keep walking."}]
+    assert summary["coverage"]["important_events"] == 3
+    reasons = {r["criterion"]: r["reasons"] for r in summary["wcag"]}
+    assert "2 important events undescribed (1 of 3 described)" in reasons["1.2.5"]
+    html = (run / "report.html").read_text(encoding="utf-8")
+    assert "judged repetitive by the planner" in html and "The two keep walking." in html
+    assert "1 of 3 important events described" in html

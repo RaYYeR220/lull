@@ -736,6 +736,7 @@ def _stages(r: _Run) -> PublishResult:
             r.opts,
             speech=heard.speech,
             duplicates=planned.duplicates,
+            priority=planned.priority,
         )
         info["files"] = len(result.files) + 1
     return result

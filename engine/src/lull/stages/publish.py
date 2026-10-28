@@ -76,7 +76,8 @@ REPORT = "report.html"
 MANIFEST = "manifest.json"
 KEYFRAMES = "keyframes"
 F113_MIN_PAUSE = 2.0  # seconds of usable pause
-MIN_COVERAGE = 0.8  # salient events described, for 1.2.5 / 1.2.7 to be met (ruling, Task 16)
+MIN_COVERAGE = 0.8  # important events described, for 1.2.5 / 1.2.7 to be met (ruling, Task 16)
+IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is owed (Task 17)
 REVIEWED = ("edited", "approved")  # statuses a person has signed off
 STATUSES = ("verified", "edited", "approved", "held", "extended")  # counted in the summary
 TTS_NAME = mixer.TTS_NAME
@@ -174,9 +175,26 @@ def outside_pauses(gaps: Sequence[Gap], cues: Sequence[Cue]) -> list[Span]:
     return complement(windows, 0.0, end)
 
 
-def _counted(e: VisualEvent) -> bool:
-    """Salient, and not left to the dialogue (R21): the events a description is owed."""
-    return e.salience >= SALIENT and not said_already(e)
+def important(e: VisualEvent, priority: dict[str, int] | None = None) -> bool:
+    """Whether a description is owed for `e` (ruling, Task 17): the plan rates it priority 3
+    or more; an event the plan gave no priority counts when the watch rated it salience 4 or
+    more. Events the dialogue already conveys (R21) never count."""
+    if said_already(e):
+        return False
+    if priority and e.id in priority:
+        return priority[e.id] >= IMPORTANT_PRIORITY
+    return e.salience >= SALIENT
+
+
+def repetitive(events: Sequence[VisualEvent], priority: dict[str, int] | None) -> list[VisualEvent]:
+    """Watch-salient events the plan rated 1-2, by start: judged repetitive by the planner,
+    listed in the report and never counted as undescribed."""
+    return [
+        e
+        for e in sorted(events, key=lambda e: (e.t_start, e.id))
+        if priority and e.id in priority and e.salience >= SALIENT and not said_already(e)
+        and priority[e.id] < IMPORTANT_PRIORITY
+    ]  # fmt: skip
 
 
 def _says(c: Cue) -> list[str]:
@@ -193,15 +211,18 @@ def _in(eid: str, described: set[str], duplicates: dict[str, str]) -> bool:
 def coverage(
     cues: Sequence[Cue], extended: Sequence[Cue], events: Sequence[VisualEvent], *,
     extended_produced: bool, duplicates: dict[str, str] | None = None,
+    priority: dict[str, int] | None = None,
 ) -> dict:  # fmt: skip
-    """Salient events (salience >= 4) described by a voiced standard cue (an event whose
-    sentence a rewrite cut does not count, see Cue.described), and also counting voiced
-    extended cues when the extended version exists. Events the dialogue conveys (R21)
-    are not counted; an event the plan dropped as a near-duplicate (`duplicates`: dropped ->
-    kept) is described when its twin is. Ratios are None without salient events."""
+    """Important events (see `important`: plan priority >= 3, else watch salience >= 4)
+    described by a voiced standard cue (an event whose sentence a rewrite cut does not count,
+    see Cue.described), and also counting voiced extended cues when the extended version
+    exists. An event the plan dropped as a near-duplicate (`duplicates`: dropped -> kept) is
+    described when its twin is. `repetitive` lists the watch-salient events the plan rated
+    1-2. Ratios are None without important events; `salient_events` repeats
+    `important_events` under its old name."""
     dup = duplicates or {}
     ordered = sorted(events, key=lambda e: (e.t_start, e.id))
-    salient = [e.id for e in ordered if _counted(e)]
+    salient = [e.id for e in ordered if important(e, priority)]
     std = {i for c in mixer.voiced(cues) for i in _says(c)}
     ext = set()
     if extended_produced:
@@ -213,29 +234,32 @@ def coverage(
         return round(n / len(salient), 3) if salient else None
 
     return {
+        "important_events": len(salient),
         "salient_events": len(salient),
         "described": len(described),
         "ratio": ratio(len(described)),
         "described_with_extended": len(with_ext),
         "ratio_with_extended": ratio(len(with_ext)),
         "undescribed": [i for i in salient if i not in with_ext],
+        "repetitive": [e.id for e in repetitive(events, priority)],
     }
 
 
 def f113_flags(
     gaps: Sequence[Gap], cues: Sequence[Cue], events: Sequence[VisualEvent], *,
-    duplicates: dict[str, str] | None = None,
+    duplicates: dict[str, str] | None = None, priority: dict[str, int] | None = None,
 ) -> list[dict]:  # fmt: skip
-    """Pauses of >= 2 s usable time with no voiced cue while a salient (>= 4) event of any
-    kind that no voiced standard cue describes is on screen (WCAG F113, a failure of 1.2.5).
-    A held cue leaves its pause empty. Events the dialogue conveys (R21) and near-duplicates
-    whose twin is described are not missing."""
+    """Pauses of >= 2 s usable time with no voiced cue while an important event (see
+    `important`) of any kind that no voiced standard cue describes is on screen (WCAG F113, a
+    failure of 1.2.5). A held cue leaves its pause empty. Events the dialogue conveys (R21),
+    events the plan judged repetitive and near-duplicates whose twin is described are not
+    missing."""
     dup = duplicates or {}
     spoken = mixer.voiced(cues)
     used = {c.gap_id for c in spoken}
     described = {i for c in spoken for i in _says(c)}
     candidates = sorted(
-        (e for e in events if _counted(e) and not _in(e.id, described, dup)),
+        (e for e in events if important(e, priority) and not _in(e.id, described, dup)),
         key=lambda e: (e.t_start, e.id),
     )
     flags = []
@@ -268,15 +292,16 @@ def _n(count: int, word: str) -> str:
 
 
 def _missing(cov: dict | None, key: str) -> list[str]:
-    """Why coverage blocks a pass: fewer than MIN_COVERAGE of the salient events described
+    """Why coverage blocks a pass: fewer than MIN_COVERAGE of the important events described
     (`key`: "described" or "described_with_extended")."""
-    if not cov or not cov.get("salient_events"):
+    total = (cov or {}).get("important_events", (cov or {}).get("salient_events"))
+    if not total:
         return []
-    total, done = cov["salient_events"], cov[key]
+    done = cov[key]
     if done >= MIN_COVERAGE * total - _EPS:
         return []
     n = total - done
-    return [f"{_n(n, 'salient event')} undescribed ({done} of {total} described)"]
+    return [f"{_n(n, 'important event')} undescribed ({done} of {total} described)"]
 
 
 def wcag_status(
@@ -288,7 +313,7 @@ def wcag_status(
 
     1.2.5 passes when a described version exists (standard track G78/G173, or the extended
     version G8) and nothing overlaps, no F113 pause is left, no cue is held and at least
-    MIN_COVERAGE of the salient events are described by the standard track (by the extended
+    MIN_COVERAGE of the important events are described by the standard track (by the extended
     version when it is the only one); every technique used for it also meets 1.2.3, which does
     not depend on coverage. 1.2.7 is claimed only for extended.mp4, on the same checks with
     extended descriptions counted (a held cue or an unused pause is missing from it too). A
@@ -697,12 +722,14 @@ def publish(
     *,
     speech: list[Span],
     duplicates: dict[str, str] | None = None,
+    priority: dict[str, int] | None = None,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
     protected sound or another cue; any other failure leaves the previous outputs untouched.
     `speech` is the listen stage's speech spans; `duplicates` the events the plan dropped as
-    near-duplicates of another (dropped -> kept), counted as described with their twin."""
+    near-duplicates of another (dropped -> kept), counted as described with their twin;
+    `priority` the plan's priorities, which decide what is important (see `important`)."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -728,7 +755,7 @@ def publish(
         try:
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
-                run_id, opts, speech, duplicates, overlap,
+                run_id, opts, speech, duplicates, overlap, priority,
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -744,6 +771,7 @@ def _stage(
     extended: list[Cue], events: list[VisualEvent], gaps: list[Gap],
     research: ResearchResult | None, ledger: Ledger, run_id: str, opts: RunOptions,
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
+    priority: dict[str, int] | None = None,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
@@ -777,9 +805,10 @@ def _stage(
 
     counts = Counter(c.status for c in everything)
     held = [c for c in sorted(everything, key=lambda c: (c.start, c.id)) if c.status == "held"]
-    flags = f113_flags(gaps, cues, events, duplicates=duplicates)
+    flags = f113_flags(gaps, cues, events, duplicates=duplicates, priority=priority)
     cov = coverage(cues, extended, events, extended_produced=ext_video is not None,
-                   duplicates=duplicates)  # fmt: skip
+                   duplicates=duplicates, priority=priority)  # fmt: skip
+    judged = [{"id": e.id, "text": e.text} for e in repetitive(events, priority)]
     signed_off = reviewed(everything)
     wcag = wcag_status(
         standard=len(spoken), extended_produced=ext_video is not None, held=len(held),
@@ -800,6 +829,7 @@ def _stage(
     summary = {
         "cues": {s: counts.get(s, 0) for s in STATUSES},
         "coverage": cov,
+        "repetitive": judged,  # watch-salient, rated 1-2 by the plan: not counted
         "overlap_seconds": overlap["total_s"],
         "overlap": overlap,
         "held": [{"id": c.id, "reason": c.note} for c in held],

@@ -420,6 +420,7 @@ def test_a_near_duplicate_the_plan_dropped_is_neither_placed_nor_missing(
     assert [e.id for e in seen["schedule"][0]["events"]] == ["e001", "e002"]
     assert seen["placement_report"][0]["priority"] == {"e001": 4, "e002": 5}
     assert seen["publish"][0]["duplicates"] == {"e003": "e001"}
+    assert seen["publish"][0]["priority"] == {"e001": 4, "e002": 5}  # what is important
     kinds = [e.data["kind"] for e in events if e.type == "warning"]
     assert "undescribed" not in kinds
     summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
