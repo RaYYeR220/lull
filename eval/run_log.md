@@ -22,9 +22,11 @@ tos180.mp4 = Tears of Steel 3:30-6:30, cut with ffmpeg; ED and the USGS videos u
   plan finished; finalize stopped at the 402 after cue c041 (4:56 of 10:58); exit 3; 170
   calls, $0.3648. Its finished stages are cached in lull-runs/final/ed: the same command
   resumes where it stopped.
-- `ed90`: listen finished, watch hit the 402 at its first call; exit 3; no spend.
-- `bbb120`: listen finished, watch hit the 402; stopped; no spend.
-- `tos180`, `woodshole`, `aquatic_connectivity`, `csc_intro`: not started.
+- `ed90`, `bbb120`, `tos180`, `woodshole`, `aquatic_connectivity`, `csc_intro` (started one
+  after another by the driver, 12:34:51 to 12:37:40): listen finished (local speech), watch
+  hit the 402 at its first call; exit 3 each; no spend. (Corrected: an earlier version of this
+  log said the last four were not started and bbb120 was stopped; the driver's own log,
+  lull-runs/final/logs/recorded.log, shows all six ran to the 402.)
 
 The failure policy allows one retry of an infrastructure failure. That retry needs the
 provider account topped up first; it is the same `lull describe` command with the same
