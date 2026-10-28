@@ -4,6 +4,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { STATUS, StatusMark } from "@/components/ui/StatusMark";
 import type { CueStatus } from "@/lib/api";
 import { cx } from "@/lib/cx";
+import { wcagTone } from "@/lib/wcag";
 import type { ReportData } from "@/lib/report-data";
 import { runHref, studioHref, watchHref } from "@/lib/routes";
 import { modelName } from "@/lib/run-format";
@@ -14,11 +15,6 @@ const ORDER: CueStatus[] = ["verified", "edited", "approved", "extended", "held"
 const pct = (r: number | null) => (r === null ? null : `${Math.round(r * 100)} %`);
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function tone(status: string): "good" | "warn" | "none" {
-  if (status.startsWith("met")) return "good";
-  if (status === "needs review") return "warn";
-  return "none";
-}
 
 /**
  * A run's conformance report: WCAG 1.2.3, 1.2.5 and 1.2.7 as the run's own data rates them,
@@ -87,7 +83,7 @@ export function RunReport({ r }: { r: ReportData }) {
                     <span className={styles.mono}>{w.criterion}</span> <span className={styles.level}>{w.level}</span>
                     <span className={styles.sub}>{w.name}</span>
                   </th>
-                  <td className={styles.status} data-tone={tone(w.status)}>
+                  <td className={styles.status} data-tone={wcagTone(w.status)}>
                     {sentence(w.status)}
                   </td>
                   <td>

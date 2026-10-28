@@ -35,7 +35,7 @@ const TABS: DevTab[] = [
           {" \\\n    "}
           <span className={styles.flag}>-F</span> <span className={styles.str}>&quot;file=@lecture.mp4&quot;</span>
           {"\n\n"}
-          <span className={styles.note}>{"# streams progress; the first event carries the run id,\n# then GET /v1/runs/{id} lists the six files"}</span>
+          <span className={styles.note}>{"# streams progress; the first event carries the run id.\n# GET /v1/runs/{id} then lists its nine files:\n#   descriptions.vtt  extended.vtt  described-audio.m4a\n#   described.mp4  extended.mp4 (when made)  cues.json\n#   script.md  report.html  manifest.json"}</span>
         </pre>
         <p className={styles.after}>Every endpoint, with its answers, in the developer docs.</p>
       </>
@@ -81,7 +81,7 @@ export function Developers() {
           <h2 id="developers-title" className="t-display-2">
             {MCP_AVAILABLE ? "From a terminal, an API or an agent." : "From a terminal, an API or a web page."}
           </h2>
-          <p className={cx("t-lede", styles.lede)}>The same pipeline as the studio, with the same checks and the same six files.</p>
+          <p className={cx("t-lede", styles.lede)}>The same pipeline as the studio, with the same checks and the same files.</p>
           {MCP_AVAILABLE ? (
             <ul className={styles.tools} aria-label="MCP tools">
               <li>

@@ -1,5 +1,6 @@
 import type { WcagStatus } from "@/lib/api-runs";
 import { cx } from "@/lib/cx";
+import { wcagTone } from "@/lib/wcag";
 import type { RunData } from "@/lib/run-data";
 import styles from "./Studio.module.css";
 
@@ -8,17 +9,12 @@ const pct = (r: number) => `${Math.round(r * 100)} %`;
 /** "met (automated checks)" → "Met (automated checks)". */
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function tone(status: string): "good" | "warn" | "none" {
-  if (status.startsWith("met")) return "good";
-  if (status === "needs review") return "warn";
-  return "none";
-}
 
 function Wcag({ rows, stale }: { rows: WcagStatus[]; stale: boolean }) {
   return (
     <ul className={styles.wcag} aria-label="WCAG statuses" data-stale={stale ? "" : undefined}>
       {rows.map((w) => (
-        <li key={w.criterion} data-tone={tone(w.status)}>
+        <li key={w.criterion} data-tone={wcagTone(w.status)}>
           <span className={styles.crit}>
             {w.criterion} <span className={styles.level}>{w.level}</span>
           </span>

@@ -47,4 +47,6 @@ export const KEYS: readonly [readonly string[], string][] = [
   [["T"], "Transcript"],
   [["F"], "Full screen"],
   [["<", ">"], "Slower or faster"],
+  [["Home", "End"], "Start or end, on the seek bar"],
+  [["?"], "Show or hide this list"],
 ];

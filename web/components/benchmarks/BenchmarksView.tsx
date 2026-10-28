@@ -1,12 +1,8 @@
-"use client";
-
-import { useEffect, useState, type ReactNode } from "react";
-import { BenchmarksError, parseBenchmarks, type Agreement, type Benchmarks, type Count, type SuiteA } from "@/lib/benchmarks-schema";
+import type { ReactNode } from "react";
+import { costPerMinute, preregCalls, type Agreement, type Benchmarks, type Count, type SuiteA } from "@/lib/benchmarks-schema";
 import { modelName } from "@/lib/run-format";
 import { IntervalChart } from "./IntervalChart";
 import styles from "./Benchmarks.module.css";
-
-type State = { kind: "loading" } | { kind: "none" } | { kind: "broken"; reason: string } | { kind: "ready"; data: Benchmarks };
 
 const pct = (x: number | null, digits = 1) => (x === null ? "None" : `${(x * 100).toFixed(digits)} %`);
 const frac = (c: Count | null) => (c ? `${c[0]} of ${c[1]}` : "None");
@@ -48,10 +44,10 @@ function Method({ a }: { a: SuiteA }) {
           {a.gitDirty ? " (with uncommitted changes)" : ""}, {day(a.date)}
         </dd>
       </div>
-      {a.callsAfterPreregistration !== null ? (
-        <div>
-          <dt>Model calls after the key</dt>
-          <dd>{a.callsAfterPreregistration ? "Every call the results use came after the pre-registration commit." : "Some calls the results use came before the pre-registration commit."}</dd>
+      {preregCalls(a) ? (
+        <div data-fact="prereg-calls">
+          <dt>Model calls and the key</dt>
+          <dd>{preregCalls(a)}</dd>
         </div>
       ) : null}
       <div>
@@ -100,6 +96,7 @@ function AgreementRow({ name, a }: { name: string; a: Agreement | null }) {
 
 function SuiteAView({ a }: { a: SuiteA }) {
   const g = a.aggregate;
+  const cost = costPerMinute(g);
   const hw = a.hardware;
   return (
     <>
@@ -149,9 +146,9 @@ function SuiteAView({ a }: { a: SuiteA }) {
           />
           <Stat
             id="cost"
-            name="Model spend per minute"
-            value={usd(g.cost.modelUsdPerMin)}
-            detail={`${usd(g.cost.modelUsd, 4)} in all${g.cost.perMinCi95 ? `; 95 % interval ${usd(g.cost.perMinCi95[0])} to ${usd(g.cost.perMinCi95[1])} per minute (model and web searches together)` : ""}. Web searches apart: ${usd(g.cost.tavilyUsdPerMin)} per minute.`}
+            name="Spend per minute of video"
+            value={usd(cost.combined)}
+            detail={`Model calls and web searches together${cost.combinedCi ? `; 95 % interval ${usd(cost.combinedCi[0])} to ${usd(cost.combinedCi[1])}` : ""}. Model calls alone: ${usd(cost.modelOnly)} per minute${cost.modelOnlyCi ? ` (95 % interval ${usd(cost.modelOnlyCi[0])} to ${usd(cost.modelOnlyCi[1])})` : ""}; web searches: ${usd(cost.webSearches)}. ${usd(g.cost.modelUsd, 4)} on model calls in all.`}
           />
           <Stat
             id="speed"
@@ -292,41 +289,12 @@ function SuiteAView({ a }: { a: SuiteA }) {
 /**
  * The evaluation as published in public/benchmarks.json: method first, every share with its
  * interval, supplementary measures labelled as added later, each video, the judges' agreement
- * and the known failures. With no file yet it says so. Test data says so on every view.
+ * and the known failures. Whether there are results is decided when the site is built: with
+ * none, the empty state, and nothing is fetched in the browser. Test data says so on every view.
  */
-export function BenchmarksView({ initial, readme, empty }: { initial: Benchmarks | null; readme: string; empty: ReactNode }) {
-  const [state, setState] = useState<State>(initial ? { kind: "ready", data: initial } : { kind: "loading" });
-
-  // a site built before the results existed still picks them up once the file is published
-  useEffect(() => {
-    if (initial) return;
-    const ctl = new AbortController();
-    fetch("/benchmarks.json", { signal: ctl.signal, cache: "no-store" })
-      .then(async (res) => {
-        if (res.status === 404) return setState({ kind: "none" });
-        if (!res.ok) throw new Error(`the file answered ${res.status}`);
-        setState({ kind: "ready", data: parseBenchmarks(await res.json()) });
-      })
-      .catch((e: unknown) => {
-        if (ctl.signal.aborted) return;
-        setState({ kind: "broken", reason: e instanceof BenchmarksError || e instanceof Error ? e.message : String(e) });
-      });
-    return () => ctl.abort();
-  }, [initial]);
-
-  if (state.kind === "loading") return <p className={styles.loading}>Looking for the published results…</p>;
-  if (state.kind === "none") return <>{empty}</>;
-  if (state.kind === "broken")
-    return (
-      <>
-        <p className={styles.partial} role="status">
-          The published results couldn’t be read: {state.reason}
-        </p>
-        {empty}
-      </>
-    );
-
-  const b = state.data;
+export function BenchmarksView({ data, readme, empty }: { data: Benchmarks | null; readme: string; empty: ReactNode }) {
+  if (!data) return <>{empty}</>;
+  const b = data;
   return (
     <div className={styles.results}>
       {b.fixture ? (

@@ -39,7 +39,7 @@ const REST_STEPS: { title: string; what: string; code: string; label: string; an
   },
   {
     title: "See what it can describe",
-    what: "Sample clips by id; or send your own file instead (up to 30 MB, the first 60 s).",
+    what: "Sample clips by id; or send your own file instead, up to 60 s and 30 MB; longer clips are refused (too_long).",
     code: `curl -s "$LULL_API/v1/samples"`,
     label: "Samples",
     answer: API_REFERENCE.samples.success.shape,
@@ -353,7 +353,7 @@ export default function DevelopersPage() {
             </h2>
             <p className={styles.sectionLede}>
               JSON in and out, except the run streams (text/event-stream) and the files. A refusal is JSON with the API’s own code and plain
-              words, plus the code’s extras (cue_ids, findings, scope); 402, 409, 429 and 503 may send Retry-After in seconds.
+              words, plus the code’s extras (cue_ids, findings, scope); some 409, 429 and 503 refusals send Retry-After in seconds.
             </p>
             <CopyCode code={REFUSAL_SHAPE} label="Shape of a refusal" />
             {GROUPS.map((g) => (

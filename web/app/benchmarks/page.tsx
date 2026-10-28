@@ -52,7 +52,7 @@ export default async function BenchmarksPage() {
           </header>
           <MethodSummary />
           <BenchmarksView
-            initial={data}
+            data={data}
             readme={README}
             empty={
               <section aria-labelledby="empty-title" className={styles.empty}>

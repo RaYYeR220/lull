@@ -2,6 +2,7 @@ import path from "node:path";
 import type { NextConfig } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { assertApiBaseForBuild } from "./lib/api-base";
+import { benchmarksFile } from "./lib/benchmarks-file";
 import { assertRealBenchmarks, assertRealShowcases } from "./lib/showcase-build";
 
 /** Sent with every response. */
@@ -46,7 +47,7 @@ export default function nextConfig(phase: string): NextConfig {
   if (phase === PHASE_PRODUCTION_BUILD) {
     assertApiBaseForBuild({ NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL });
     assertRealShowcases(SHOWCASE_ROOT);
-    assertRealBenchmarks(path.join(__dirname, "public", "benchmarks.json"));
+    assertRealBenchmarks(benchmarksFile(process.env, __dirname), { allowFixture: process.env.LULL_E2E_BUILD === "1" });
   }
   return config;
 }

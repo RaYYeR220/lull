@@ -92,7 +92,16 @@ export type SuiteA = {
     claimsNotInCueText: Ratio | null;
     hallucinationClaimsInCueText: Ratio | null;
     decoysAbsentPart: number | null;
-    cost: { modelUsd: number; tavilyUsd: number; modelUsdPerMin: number | null; tavilyUsdPerMin: number | null; perMinCi95: [number, number] | null };
+    cost: {
+      modelUsd: number;
+      tavilyUsd: number;
+      modelUsdPerMin: number | null;
+      tavilyUsdPerMin: number | null;
+      /** The interval of model and web searches together per minute (how the scorer pairs them). */
+      perMinCi95: [number, number] | null;
+      /** The model-only interval, when the scorer writes one. */
+      modelPerMinCi95: [number, number] | null;
+    };
     processing: { seconds: number; sPerMin: number | null; sPerMinCi95: [number, number] | null };
     cueCounts: Record<string, number>;
   };
@@ -300,6 +309,7 @@ export function parseSuiteA(raw: unknown): SuiteA {
         modelUsdPerMin: at(cost, "model_usd_per_min", `${where}.aggregate.cost`).optNum(),
         tavilyUsdPerMin: at(cost, "tavily_usd_per_min", `${where}.aggregate.cost`).optNum(),
         perMinCi95: pair(cost.per_min_ci95),
+        modelPerMinCi95: pair(cost.model_per_min_ci95),
       },
       processing: {
         seconds: at(proc, "seconds", `${where}.aggregate.processing`).num(),
@@ -339,4 +349,40 @@ export function parseBenchmarks(raw: unknown): Benchmarks {
       return { title: at(x, "title", `.known_failures[${i}]`).str(), detail: at(x, "detail", `.known_failures[${i}]`).str() };
     }),
   };
+}
+
+/**
+ * The spend per minute as the page shows it, each value with only its own interval: model
+ * calls and web searches together (the scorer's per_min_ci95 is over that sum), then model
+ * calls alone (with an interval only when the scorer wrote one for them), then web searches.
+ */
+export function costPerMinute(g: SuiteA["aggregate"]): {
+  combined: number | null;
+  combinedCi: [number, number] | null;
+  modelOnly: number | null;
+  modelOnlyCi: [number, number] | null;
+  webSearches: number | null;
+} {
+  const m = g.cost.modelUsdPerMin;
+  const t = g.cost.tavilyUsdPerMin;
+  return {
+    combined: m === null ? null : m + (t ?? 0),
+    combinedCi: g.cost.perMinCi95,
+    modelOnly: m,
+    modelOnlyCi: g.cost.modelPerMinCi95,
+    webSearches: t,
+  };
+}
+
+/**
+ * What the results say about when their model calls were made. The scorer's flag is false
+ * both when a call came before the pre-registration and when the ledger has nothing for these
+ * runs; the spend over the referenced runs (spend_usd) tells the two apart as far as the file
+ * can: with no spend found, the page says only that.
+ */
+export function preregCalls(a: Pick<SuiteA, "callsAfterPreregistration" | "spendUsd">): string | null {
+  if (a.callsAfterPreregistration === null) return null;
+  if (a.callsAfterPreregistration) return "Every model call the results use came after the pre-registration commit.";
+  if (a.spendUsd !== null && a.spendUsd > 0) return "Some model calls the results use came before the pre-registration commit.";
+  return "No model spend for these results was found in the ledger, so when their calls were made can’t be checked.";
 }

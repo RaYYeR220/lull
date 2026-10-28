@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { API_REFUSALS } from "../lib/api";
@@ -49,6 +49,36 @@ describe("the endpoint reference", () => {
       // a write says its method (curl's -F is a POST of its own)
       if (route.method !== "GET") expect(doc.example.includes(`-X ${route.method}`) || (route.method === "POST" && / -F /.test(doc.example)), name).toBe(true);
     }
+  });
+});
+
+/** The API's own source (read-only), where every refusal is a LiveError(<status>, "<code>", …). */
+const API_SRC = "C:/Users/egori/Desktop/projects/lull-api/engine/src/lull/api";
+
+describe("the reference against the API's source", () => {
+  it.skipIf(!existsSync(API_SRC))(`every code the API raises is documented and known to the client (reads ${API_SRC}; skipped where it isn't checked out)`, () => {
+    const raised = new Map<string, Set<number>>();
+    for (const f of readdirSync(API_SRC).filter((x) => x.endsWith(".py"))) {
+      for (const m of readFileSync(path.join(API_SRC, f), "utf8").matchAll(/LiveError\(\s*(\d{3}),\s*"([a-z_]+)"/g)) {
+        const set = raised.get(m[2]!) ?? new Set<number>();
+        set.add(Number(m[1]));
+        raised.set(m[2]!, set);
+      }
+    }
+    expect(raised.size).toBeGreaterThan(10);
+    const documented = new Map<string, Set<number>>();
+    for (const d of Object.values(API_REFERENCE)) for (const r of d.refusals) documented.set(r.code, (documented.get(r.code) ?? new Set()).add(r.status));
+    expect([...raised.keys()].filter((c) => !documented.has(c)), "raised by the API, not in the reference").toEqual([]);
+    expect([...raised.keys()].filter((c) => !API_REFUSALS.has(c)), "raised by the API, unknown to lib/api.ts").toEqual([]);
+    // each documented status is one the API raises that code with
+    const wrong = [...documented].flatMap(([code, statuses]) => [...statuses].filter((st) => raised.has(code) && !raised.get(code)!.has(st)).map((st) => `${st} ${code}`));
+    expect(wrong, "documented with a status the API never uses").toEqual([]);
+  });
+
+  it("the live start documents what the API says about long clips and its own storage", () => {
+    const start = API_REFERENCE.startRun;
+    expect(start.body?.fields.find((f) => f.name === "file")?.what).toMatch(/up to 60 s and 30 MB; longer clips are refused \(too_long\)/);
+    expect(start.refusals).toContainEqual(expect.objectContaining({ status: 503, code: "storage", retryAfter: true }));
   });
 });
 

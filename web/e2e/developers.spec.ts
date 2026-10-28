@@ -73,7 +73,7 @@ test.describe("the developer page", () => {
     await expect(embed.locator("pre").first()).toContainText(`src="${origin}/showcase/ed90/video.mp4"`);
     for (const a of ["src", "descriptions", "described-audio", "extended", "cue-audio-base", "cue-audio-ext", "captions", "poster", "mode", "label", "crossorigin", "sound"])
       await expect(embed.locator(`[data-attribute="${a}"]`)).toHaveCount(1);
-    await expect(embed.getByRole("table", { name: /^Keys/ }).getByRole("row")).toHaveCount(8);
+    await expect(embed.getByRole("table", { name: /^Keys/ }).getByRole("row")).toHaveCount(10);
 
     const p = embed.locator("lull-player");
     await expect(p).toHaveAttribute("src", "/showcase/ed90/video.mp4");

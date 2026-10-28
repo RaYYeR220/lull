@@ -66,6 +66,8 @@ describe("a production build ships the evaluation's own results only", () => {
       expect(() => assertRealBenchmarks(file)).not.toThrow();
       writeFileSync(file, JSON.stringify({ fixture: true, generated_at: "x", git_commit: "y", suites: {}, known_failures: [] }));
       expect(() => assertRealBenchmarks(file)).toThrow(/is a test fixture, not the published evaluation/);
+      // the e2e build, and only it, may be built from the fixture
+      expect(() => assertRealBenchmarks(file, { allowFixture: true })).not.toThrow();
       writeFileSync(file, JSON.stringify({ generated_at: "x", git_commit: "y", suites: {}, known_failures: [] }));
       expect(() => assertRealBenchmarks(file)).not.toThrow();
     } finally {

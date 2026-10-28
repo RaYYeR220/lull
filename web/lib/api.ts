@@ -11,7 +11,10 @@ export const API_BASE = resolveApiBase({ NEXT_PUBLIC_API_URL: process.env.NEXT_P
 /** What the live route takes (engine/src/lull/api/live.py). Checked here first so a refusal costs no upload. */
 export const LIMITS = {
   maxBytes: 30 * 1024 * 1024,
-  maxSeconds: 120,
+  /** An upload (MAX_SECONDS); a longer one is refused, not cut. */
+  maxSeconds: 60,
+  /** A sample (MAX_SAMPLE_SECONDS): the API checks its own file. */
+  maxSampleSeconds: 45,
   extensions: [".mp4", ".mov", ".webm", ".mkv"],
 } as const;
 
@@ -253,6 +256,7 @@ export type RefusalCode =
   | "unreadable"
   | "rate_limited"
   | "uploads_busy"
+  | "storage"
   | "one_upload_at_a_time"
   | "timeout"
   | "invalid"
@@ -285,6 +289,7 @@ export const API_REFUSALS: ReadonlySet<string> = new Set([
   "unreadable",
   "rate_limited",
   "uploads_busy",
+  "storage",
   "one_upload_at_a_time",
   "timeout",
   "invalid",
@@ -311,10 +316,11 @@ const FALLBACK_MESSAGE: Record<RefusalCode, string> = {
   busy: "Another description is running. Try again in a minute, or open a recorded run.",
   too_large: "This file is over 30 MB. Live descriptions take files up to 30 MB.",
   format: "Send an mp4, mov, webm or mkv video.",
-  too_long: "Live descriptions take videos up to 120 s.",
+  too_long: "Live descriptions take videos up to 60 s (samples up to 45 s).",
   unreadable: "This file could not be read as a video.",
   rate_limited: "You have reached the limit of live descriptions for now.",
   uploads_busy: "Other videos are being uploaded right now. Try again in a few seconds.",
+  storage: "The video could not be stored just now. Try again in a minute.",
   one_upload_at_a_time: "Your previous upload is still being received. Wait for it to finish, then try again.",
   timeout: "The upload did not arrive in time. Try a smaller file or a faster connection.",
   invalid: "The request was not accepted.",

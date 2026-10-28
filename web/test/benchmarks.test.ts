@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { landingMetrics } from "../lib/benchmarks-landing";
-import { BenchmarksError, parseBenchmarks } from "../lib/benchmarks-schema";
+import { BenchmarksError, costPerMinute, parseBenchmarks, preregCalls } from "../lib/benchmarks-schema";
+import { benchmarksFile } from "../lib/benchmarks-file";
 
 const FIXTURE = JSON.parse(readFileSync(path.join(__dirname, "..", "e2e", "fixtures", "benchmarks.sample.json"), "utf8")) as Record<string, unknown>;
 const clone = () => structuredClone(FIXTURE) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -75,5 +76,40 @@ describe("benchmarks.json", () => {
     expect(cells.hallucination?.value).toBe("0.0 %");
     expect(cells.costPerMinute?.value).toBe("$0.024");
     expect(landingMetrics(parseBenchmarks(FIXTURE))).toEqual({});
+  });
+});
+
+describe("what the page says from the results", () => {
+  it("the cost per minute pairs each value with its own interval: model and web searches together, model alone without one", () => {
+    const g = parseBenchmarks(FIXTURE).suiteA!.aggregate;
+    const c = costPerMinute(g);
+    expect(c.combined).toBeCloseTo(0.023789 + 0, 6);
+    expect(c.combinedCi?.[0]).toBeCloseTo(0.022768, 5);
+    expect(c.modelOnly).toBeCloseTo(0.023789, 6);
+    expect(c.modelOnlyCi).toBeNull();
+    // a scorer that also writes the model-only interval gets it shown
+    const raw = clone();
+    raw.suites.suite_a.aggregate.cost.model_per_min_ci95 = [0.02, 0.03];
+    raw.suites.suite_a.aggregate.cost.tavily_usd_per_min = 0.004;
+    const c2 = costPerMinute(parseBenchmarks(raw).suiteA!.aggregate);
+    expect(c2.modelOnlyCi).toEqual([0.02, 0.03]);
+    expect(c2.combined).toBeCloseTo(0.027789, 6);
+    expect(c2.webSearches).toBeCloseTo(0.004, 6);
+  });
+
+  it("tells calls that came before the key apart from calls not found at all", () => {
+    const a = parseBenchmarks(FIXTURE).suiteA!;
+    expect(preregCalls({ ...a, callsAfterPreregistration: true })).toBe("Every model call the results use came after the pre-registration commit.");
+    expect(preregCalls({ ...a, callsAfterPreregistration: false, spendUsd: 0.2 })).toBe("Some model calls the results use came before the pre-registration commit.");
+    expect(preregCalls({ ...a, callsAfterPreregistration: false, spendUsd: 0 })).toBe("No model spend for these results was found in the ledger, so when their calls were made can’t be checked.");
+    expect(preregCalls({ ...a, callsAfterPreregistration: false, spendUsd: null })).toMatch(/^No model spend for these results was found/);
+    expect(preregCalls({ ...a, callsAfterPreregistration: null })).toBeNull();
+  });
+});
+
+describe("which file the page is built from", () => {
+  it("public/benchmarks.json, unless the build names another (the e2e build names the fixture)", () => {
+    expect(benchmarksFile({}, "/site")).toBe(path.resolve("/site", "public", "benchmarks.json"));
+    expect(benchmarksFile({ LULL_BENCHMARKS_FILE: "e2e/fixtures/benchmarks.sample.json" }, "/site")).toBe(path.resolve("/site", "e2e", "fixtures", "benchmarks.sample.json"));
   });
 });

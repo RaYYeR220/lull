@@ -139,7 +139,7 @@ const REFUSALS = {
   409: [409, { error: "busy", message: "Another description is running. Try again in a minute, or open a recorded run." }, { "Retry-After": "2" }],
   413: [413, { error: "too_large", message: "This file is over 30 MB. Live descriptions take files up to 30 MB." }],
   "422-format": [422, { error: "format", message: "Send an mp4, mov, webm or mkv video." }],
-  "422-too_long": [422, { error: "too_long", message: "This video is 121.5 s long. Live descriptions take videos up to 120 s." }],
+  "422-too_long": [422, { error: "too_long", message: "This video is 61.5 s long. Live descriptions take videos up to 60 s." }],
   "422-unreadable": [422, { error: "unreadable", message: "This file could not be read as a video. Send an mp4, mov, webm or mkv video." }],
   429: [429, { error: "rate_limited", message: "You have started 3 live descriptions in the last hour. Try again in 52 minutes, or open a recorded run." }, { "Retry-After": "3120" }],
   503: [503, { error: "uploads_busy", message: "Other videos are being uploaded right now. Try again in a few seconds." }, { "Retry-After": "15" }],

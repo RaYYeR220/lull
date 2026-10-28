@@ -131,7 +131,7 @@ test.describe("try it", () => {
     { scenario: "409", heading: "Another description is running.", body: "Try again in a minute", retry: true },
     { scenario: "413", heading: "This file is too large.", body: "files up to 30 MB", retry: false },
     { scenario: "422-format", heading: "Lull can’t take this file type.", body: "Send an mp4, mov, webm or mkv video.", retry: false },
-    { scenario: "422-too_long", heading: "This video is too long.", body: "This video is 121.5 s long.", retry: false },
+    { scenario: "422-too_long", heading: "This video is too long.", body: "This video is 61.5 s long.", retry: false },
     { scenario: "422-unreadable", heading: "This file couldn’t be read as a video.", body: "could not be read as a video", retry: false },
     { scenario: "429", heading: "You’ve reached the live limit for now.", body: "Try again in 52 minutes", retry: true },
     { scenario: "503", heading: "Other uploads are being checked.", body: "Try again in a few seconds.", retry: true },

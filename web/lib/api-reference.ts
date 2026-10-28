@@ -128,7 +128,7 @@ export const API_REFERENCE: Record<RouteName, EndpointDoc> = {
     body: {
       type: "multipart/form-data",
       fields: [
-        { name: "file", type: "file", required: false, what: "The video: mp4, mov, webm or mkv, up to 30 MB. Only its first 60 s are described." },
+        { name: "file", type: "file", required: false, what: "The video: mp4, mov, webm or mkv, up to 60 s and 30 MB; longer clips are refused (too_long)." },
         { name: "sample", type: "string", required: false, what: "A sample id instead of a file (samples run up to 45 s)." },
         { name: "mode", type: "standard | extended", required: false, what: "extended also writes long versions for the extended track. Default standard." },
         { name: "voice", type: "Sofia | Aria", required: false, what: "The voice. Default Sofia." },
@@ -174,6 +174,7 @@ data: {"type":"done","seq":30,"run_id":"live-…","seconds":85.9,"summary":{"cue
       { status: 429, code: "rate_limited", when: "3 runs an hour from you, 20 a day in all, or 10 of your uploads refused in an hour.", retryAfter: true },
       { status: 429, code: "one_upload_at_a_time", when: "Your previous upload is still arriving.", retryAfter: true },
       { status: 503, code: "uploads_busy", when: "Two uploads are already being received.", retryAfter: true },
+      { status: 503, code: "storage", when: "The upload couldn't be stored just now (the service's disk, not your file).", retryAfter: true },
     ],
     limits: "One run at a time. 3 runs an hour per visitor and 20 a day across visitors; a run is stopped after 10 minutes.",
     example: `curl -N "$LULL_API/v1/runs" -F sample=ed90 -F mode=standard -F voice=Sofia`,

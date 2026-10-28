@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   API_BASE,
   ApiError,
+  LIMITS,
   budgetEstimate,
   capReached,
   followRun,
@@ -326,6 +327,19 @@ describe("followRun", () => {
     vi.stubGlobal("EventSource", undefined);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 204 })));
     await expect(followRun("live-3", () => {})).resolves.toEqual({ end: "closed", runId: null, lastSeq: -1 });
+  });
+});
+
+describe("the live limits", () => {
+  it("match the API: uploads up to 60 s and 30 MB, samples up to 45 s", () => {
+    expect(LIMITS.maxSeconds).toBe(60);
+    expect(LIMITS.maxSampleSeconds).toBe(45);
+    expect(LIMITS.maxBytes).toBe(30 * 1024 * 1024);
+  });
+
+  it("knows the API's storage refusal", async () => {
+    const e = await toApiError(json(503, { error: "storage", message: "The video could not be stored just now. Try again in a minute." }, { "retry-after": "60" }));
+    expect(e).toMatchObject({ code: "storage", retryAfter: 60, apiCode: "storage" });
   });
 });
 

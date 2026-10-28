@@ -30,10 +30,12 @@ export function assertRealShowcases(root: string): void {
 }
 
 /**
- * Stops a production build that would publish test data as the evaluation: a
- * public/benchmarks.json marked `"fixture": true` (the e2e sample) never ships.
+ * Stops a production build that would publish test data as the evaluation: a results file
+ * marked `"fixture": true` (the e2e sample) never ships. Only the e2e build (`allowFixture`,
+ * from LULL_E2E_BUILD=1, set by scripts/build-e2e.mjs) may be built from it.
  */
-export function assertRealBenchmarks(file: string): void {
+export function assertRealBenchmarks(file: string, { allowFixture = false }: { allowFixture?: boolean } = {}): void {
+  if (allowFixture) return;
   if (!existsSync(file)) return;
   let raw: unknown;
   try {
