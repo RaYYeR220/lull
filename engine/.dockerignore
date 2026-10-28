@@ -2,6 +2,7 @@
 *
 !pyproject.toml
 !uv.lock
+!README.md
 !src/
 !docker/entrypoint.sh
 !docker/litestream.yml

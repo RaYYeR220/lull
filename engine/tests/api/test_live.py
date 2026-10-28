@@ -1522,3 +1522,4 @@ def test_the_shipped_samples_are_licensed_short_and_small():
         assert info.height <= 480 and info.video_codec == "h264" and info.audio_codec == "aac"
     allowed = (SAMPLES_DIR.parent / ".dockerignore").read_text(encoding="utf-8")
     assert "!samples/" in allowed.splitlines()  # baked into the image
+    assert "!README.md" in allowed.splitlines()  # pyproject's readme: the build needs it

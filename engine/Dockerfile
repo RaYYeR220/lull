@@ -96,6 +96,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 # the dependencies first: this layer only changes with the lockfile
 RUN uv sync --frozen --no-dev --no-install-project
+# the project itself (its pyproject names README.md as the readme)
+COPY README.md ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
 
