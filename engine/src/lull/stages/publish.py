@@ -100,7 +100,7 @@ LOCK_HEARTBEAT_S = 60.0  # a publish touches its lock this often
 LOCK_QUIET_S = 150.0  # no touch for this long: the lock is stale ...
 LOCK_STALE_S = 600.0  # ... and breakable when its publisher is gone, or it is this old
 LOCK_POLL_S = 0.2
-LOCK_CREATE_TRIES = 50  # a lock file that cannot be created this many times running: raise
+LOCK_CREATE_TRIES = 50  # a lock file that cannot be created (or removed) this many times: stop
 BREAKING_STALE_S = 30.0  # a breaker's marker this old was left by a crash
 OWNER_RECHECK_S = 0.05  # a lock that cannot be read is looked at once more after this
 _TEMP_DIRS = (".mix-", ".extended-", STAGING)
@@ -118,6 +118,10 @@ OUTPUTS = frozenset(
     }
 )  # fmt: skip  (top-level names publish owns, besides the manifest)
 _EPS = 1e-9
+
+
+class PublishError(ValueError):
+    """The run folder holds files publish did not write under the names it writes."""
 
 
 class PublishResult(BaseModel):
@@ -694,7 +698,22 @@ def _lock(run_dir: Path) -> Iterator[None]:
         if started:
             beat.join(timeout=5)
         if _ours(path, token):
+            _release(path)
+
+
+def _release(path: Path) -> None:
+    """Remove our lock file. Windows cannot delete a file another thread is reading at that
+    moment (a waiter judging it), so a refusal is tried again a few times; a lock that still
+    cannot go is logged, and waiters break it once it is stale."""
+    for attempt in range(LOCK_CREATE_TRIES):
+        try:
             path.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if attempt == LOCK_CREATE_TRIES - 1:
+                log.warning("publish: could not remove the lock %s", path)
+                return
+            time.sleep(OWNER_RECHECK_S)
 
 
 def _move(src: Path, dst: Path) -> None:
@@ -721,6 +740,15 @@ def _recover(run_dir: Path) -> None:
     for backup in sorted(p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith(BACKUP)):
         finished = (run_dir / MANIFEST).exists() and (backup / MANIFEST).exists()
         midway = not (run_dir / MANIFEST).exists()
+        if midway and not (backup / MANIFEST).exists():
+            # a first publish (nothing published before, and _guard let no foreign file stay
+            # under an output name): every output-named entry is its own, half moved in
+            for name in sorted(OUTPUTS):
+                dst = run_dir / name
+                if dst.is_dir():
+                    shutil.rmtree(dst)
+                elif dst.exists():
+                    dst.unlink()
         if not finished:
             for item in sorted(backup.iterdir()):
                 dst = run_dir / item.name
@@ -731,6 +759,30 @@ def _recover(run_dir: Path) -> None:
         log.warning("publish: an interrupted publish left %s (%s)", backup.name,
                     "removed" if finished else "its outputs were put back")  # fmt: skip
         shutil.rmtree(backup, ignore_errors=True)
+
+
+def _guard(run_dir: Path, video: Path) -> None:
+    """Raise PublishError rather than replace what publish did not write: the input video
+    under an output name in the run folder, or output-named files in a folder no publish has
+    written (no manifest)."""
+    root = run_dir.resolve()
+    try:
+        top = video.resolve().relative_to(root).parts[0]
+    except ValueError:
+        top = None
+    if top in OUTPUTS | {MANIFEST}:
+        raise PublishError(
+            f"the input video is {top} in the run folder, a name publish writes; move it "
+            "out of the folder first"
+        )
+    if (run_dir / MANIFEST).exists():
+        return
+    foreign = sorted(name for name in OUTPUTS if (run_dir / name).exists())
+    if foreign:
+        raise PublishError(
+            "the run folder holds files publish did not write: " + ", ".join(foreign)
+            + "; move them or publish into another folder"
+        )  # fmt: skip
 
 
 def _clear_temp(run_dir: Path) -> None:
@@ -893,6 +945,7 @@ def publish(
     run_dir.mkdir(parents=True, exist_ok=True)
     with _lock(run_dir):
         _recover(run_dir)
+        _guard(run_dir, video)
         _clear_temp(run_dir)
         staging = Path(tempfile.mkdtemp(dir=run_dir, prefix=STAGING))
         try:

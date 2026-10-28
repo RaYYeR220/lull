@@ -534,6 +534,9 @@ def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
     (run / "keyframes").mkdir(parents=True)  # left by an earlier run of the same directory
     (run / "keyframes" / "c009.jpg").write_bytes(b"old")
     (run / "extended.mp4").write_bytes(b"old")
+    (run / "manifest.json").write_text(  # that earlier publish's manifest
+        json.dumps({"outputs": {"extended.mp4": {}, "keyframes/c009.jpg": {}}}), encoding="utf-8"
+    )
     (run / ".mix-old").mkdir()
     res = publish(run, video, [], ext, events, [], None, _ledger(tmp_path), "r1", RunOptions(),
                   speech=[Span(start=0.0, end=60.0)])  # fmt: skip
@@ -1765,3 +1768,69 @@ def test_a_lock_file_that_cannot_be_created_for_a_moment_is_tried_again(tmp_path
     monkeypatch.setattr(pub.os, "open", never)
     with pytest.raises(PermissionError), pub._lock(run):
         pass
+
+
+# -- files publish did not write ------------------------------------------------------------------
+
+
+def test_publish_never_replaces_files_it_did_not_write(tmp_path, fake_media):
+    """A run folder that holds files under output names but no manifest (someone else's) is
+    refused, untouched; so is an input video that sits in the run folder under an output name
+    (publishing would move it aside and delete it)."""
+    from lull.stages.publish import PublishError
+
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "report.html").write_text("my notes", encoding="utf-8")
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    args = ([], [], None, _ledger(tmp_path), "r1", RunOptions())
+    with pytest.raises(PublishError, match="report.html"):
+        publish(run, video, [], [], *args, speech=[])
+    assert _files(run) == {"report.html": "my notes"}
+
+    inside = tmp_path / "out"
+    inside.mkdir()
+    own = inside / "described.mp4"
+    own.write_bytes(b"the only copy")
+    with pytest.raises(PublishError, match="described.mp4"):
+        publish(inside, own, [], [], *args, speech=[])
+    assert own.read_bytes() == b"the only copy"
+
+    publish(run.parent / "fresh", video, [], [], *args, speech=[])  # an empty folder is fine
+    publish(run.parent / "fresh", video, [], [], *args, speech=[])  # and so is its own output
+
+
+def test_outputs_of_a_first_publish_that_crashed_are_cleared(tmp_path, fake_media):
+    """A first publish (no previous manifest) that stopped while moving its outputs in left
+    them without a manifest: they are its own, so the next publish clears them, not refuses."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    (run / ".publish-old-x3").mkdir(parents=True)  # its backup: nothing was there before
+    (run / "cues.json").write_text("half", encoding="utf-8")
+    (run / "notes.txt").write_text("mine", encoding="utf-8")  # not an output name: kept
+    pub._recover(run)
+    assert _files(run) == {"notes.txt": "mine"}
+
+
+def test_a_release_that_meets_a_reader_tries_again(tmp_path, monkeypatch):
+    """Windows cannot delete a file another thread is reading (a waiter judging the lock):
+    the release tries again rather than leave a live-looking lock behind."""
+    from lull.stages import publish as pub
+
+    monkeypatch.setattr(pub, "OWNER_RECHECK_S", 0.001)
+    run = tmp_path / "run"
+    run.mkdir()
+    real = Path.unlink
+    busy = iter([True, True])
+
+    def unlink(self, missing_ok=False):
+        if self.name == ".publish.lock" and next(busy, False):
+            raise PermissionError(32, "in use by another process")
+        return real(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", unlink)
+    with pub._lock(run):
+        pass
+    assert not (run / ".publish.lock").exists()
