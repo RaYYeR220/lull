@@ -242,10 +242,10 @@ def test_continuous_speech_leaves_only_extended_candidates():
 
 
 def test_extended_candidates_follow_the_plan_priority_not_the_first_guess():
-    """Live csc_intro: the inventory rated 42 one-second shots salience 4; the plan, seeing the
-    whole video, rated most of them priority 1, yet each one stopped the video. Only what the
-    plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and stays
-    undescribed, which the pipeline reports)."""
+    """A fast-cut intro: the inventory rated 42 one-second shots salience 4; the plan, seeing
+    the whole video, rated most of them priority 1, yet each one stopped the video. Only what
+    the plan rates 4-5 may stop it; an event the plan gave nothing keeps its salience (and
+    stays undescribed, which the pipeline reports)."""
     events = [_ev("e001", 1.0, 2.0, sal=4), _ev("e002", 2.0, 3.0, sal=3),
               _ev("e003", 3.0, 4.0, sal=5), _ev("e004", 4.0, 5.0, sal=4)]  # fmt: skip
     variants = [_var(e, "short", 4) for e in ("e001", "e002", "e003")]
@@ -631,3 +631,48 @@ def test_events_the_dialogue_conveys_never_stop_the_video():
     for run in (schedule, schedule_greedy):
         assert run([said, loud], [], {}, []) == ([], ["e002"])
     assert placement_report([], [], [said, loud], [])["unplaced_salient"] == ["e002"]
+
+
+# -- what scheduling may never do to the measures -----------------------------------------------
+
+
+def _voiced(cues):
+    return [c.model_copy(update={"status": "verified", "audio_path": "a.wav", "audio_dur": 2.0})
+            for c in cues]  # fmt: skip
+
+
+def test_a_minor_visual_never_takes_a_pause_an_important_one_left_empty():
+    """An important visual (priority 4) whose only line is too long for its 6 s window leaves
+    the window empty: F113 flags it. No scheduling choice puts a priority-1 line there and
+    makes the flag go while the important visual is still undescribed."""
+    from lull.stages.publish import coverage, f113_flags
+
+    important = _ev("e001", 10.0, 16.0, sal=5)
+    minor = _ev("e002", 11.0, 15.0, sal=2)
+    variants = [_var("e001", "short", 18), _var("e002", "short", 5)]
+    gaps = [_gap("g001", 10.0, 16.0, 16)]
+    prio = {"e001": 4, "e002": 1}
+    for run in (schedule, schedule_greedy):
+        placements, _ = run([important, minor], variants, prio, gaps)
+        assert placements == []
+        cues = _voiced(compose_cues(placements, variants, [important, minor], gaps, extended=[]))
+        assert len(f113_flags(gaps, cues, [important, minor], priority=prio)) == 1
+        cov = coverage(cues, [], [important, minor], extended_produced=False, priority=prio)
+        assert (cov["important_events"], cov["described"]) == (1, 0)
+
+
+def test_a_long_stretch_without_speech_is_not_filled_with_minor_visuals():
+    """30 s without speech in 6 s windows, one important visual and nine priority-1 ones: the
+    important one is described, the minor ones are not."""
+    from lull.types import Gap
+
+    events = [_ev("e001", 1.0, 5.0, sal=5)] + [
+        _ev(f"e{i:03d}", 1.0 + 3 * i, 4.0 + 3 * i, sal=2) for i in range(2, 11)
+    ]
+    variants = [_var("e001", "short", 6)] + [_var(e.id, "short", 4) for e in events[1:]]
+    big = Gap(id="g001", start=0.0, end=30.2, usable_start=0.2, usable_end=30.0,
+              capacity_words=82)  # fmt: skip
+    gaps = split_gaps([big], max_window=6.0, breath=0.3, wps=2.8)
+    prio = {"e001": 4, **{e.id: 1 for e in events[1:]}}
+    placements, _ = schedule(events, variants, prio, gaps, wps=2.8)
+    assert [p.event_id for p in placements] == ["e001"]

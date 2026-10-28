@@ -37,6 +37,7 @@ removes it (see _break). Every status in the report is computed here;
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import logging
@@ -85,7 +86,7 @@ IMPORTANT_PRIORITY = 3  # the plan rates an event this high: a description is ow
 MAX_DEMOTED = 0.25  # share of the watch-salient events the plan may judge repetitive
 MET_NOTHING_VISUAL = "met (no visual information beyond the soundtrack)"  # G203
 REVIEWED = ("edited", "approved")  # statuses a person has signed off
-STATUSES = ("verified", "edited", "approved", "held", "extended")  # counted in the summary
+STATUSES = ("verified", "edited", "approved", "held", "extended", "unverified")  # counted
 TTS_NAME = mixer.TTS_NAME
 MET, MET_AUTOMATED = "met", "met (automated checks)"
 REVIEW, NOT_CLAIMED = "needs review", "not claimed"
@@ -342,6 +343,7 @@ def _nothing_visual(cov: dict | None) -> bool:
 def wcag_status(
     *, standard: int, extended_produced: bool, held: int, overlap_s: float, f113: int,
     reviewed: bool = False, extended_error: str | None = None, coverage: dict | None = None,
+    verified: bool = True,
 ) -> list[dict]:  # fmt: skip
     """1.2.3, 1.2.5 and 1.2.7 as met / met (automated checks) / needs review / not claimed,
     with what meets them and why not.
@@ -375,6 +377,8 @@ def wcag_status(
         )
     if held:
         blockers.append(f"{_n(held, 'description')} held for review")
+    if not verified:  # the evaluation's ablation: nothing was checked against the frames
+        blockers.append("claim verification was off for this run (LULL_NO_VERIFY)")
     passed = MET if reviewed else MET_AUTOMATED
     if nothing_visual:
         passed = MET_NOTHING_VISUAL
@@ -717,8 +721,59 @@ def _release(path: Path) -> None:
             time.sleep(OWNER_RECHECK_S)
 
 
+_rename = os.replace  # one name to stand in for a filesystem in the tests
+# what a filesystem without folder renames (a flat namespace such as Cloud Storage FUSE)
+# answers when asked to rename one
+_NO_FOLDER_RENAME = {
+    errno.EXDEV,
+    errno.EPERM,
+    errno.ENOTSUP,
+    getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+}
+
+
 def _move(src: Path, dst: Path) -> None:
-    os.replace(src, dst)
+    """`src` renamed to `dst`. When a folder cannot be renamed because the filesystem has no
+    folder renames (EXDEV, EPERM, ENOTSUP, EOPNOTSUPP) and `dst` does not exist yet, its
+    entries are moved one by one into a new `dst` and the emptied folder removed; when one of
+    them fails, those already moved go back, `dst` is removed and the error is raised, so the
+    commit can roll back from a whole folder. Any other failure raises as it is."""
+    try:
+        _rename(src, dst)
+    except OSError as e:
+        if (e.errno not in _NO_FOLDER_RENAME or not src.is_dir() or src.is_symlink()
+                or dst.exists()):  # fmt: skip
+            raise
+        log.info("publish: cannot rename the folder %s; moving its files one by one", src.name)
+        dst.mkdir()
+        moved: list[str] = []
+        try:
+            for item in sorted(src.iterdir()):
+                _move(item, dst / item.name)
+                moved.append(item.name)
+        except BaseException as first:
+            try:
+                for name in reversed(moved):
+                    _move(dst / name, src / name)
+                dst.rmdir()
+            except OSError as second:  # never hides why the move failed: both are logged
+                log.error("publish: moving %s back failed too (%s) after: %s", src.name,
+                          second, first)  # fmt: skip
+            raise
+        src.rmdir()
+
+
+def _merge_back(item: Path, dst: Path) -> None:
+    """Put a backed-up `item` back at `dst`: a folder whose place holds the part of it a
+    crash had not moved yet gets its missing entries back; anything else goes back only into
+    an empty place."""
+    if item.is_dir() and not item.is_symlink() and dst.is_dir():
+        for entry in sorted(item.iterdir()):
+            _merge_back(entry, dst / entry.name)
+        if not any(item.iterdir()):
+            item.rmdir()
+    elif not dst.exists():
+        _move(item, dst)
 
 
 def _replace_with(item: Path, dst: Path) -> None:
@@ -736,7 +791,7 @@ def _recover(run_dir: Path) -> None:
     - the manifest in place and one in the backup: the commit finished and only removing the
       backup failed, so the backup just goes;
     - otherwise (it stopped while moving the old outputs aside): each backed-up output whose
-      place is empty goes back.
+      place is empty goes back, and a folder it was moving file by file is merged back.
     The backup folder is removed afterwards."""
     for backup in sorted(p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith(BACKUP)):
         finished = (run_dir / MANIFEST).exists() and (backup / MANIFEST).exists()
@@ -755,8 +810,8 @@ def _recover(run_dir: Path) -> None:
                 dst = run_dir / item.name
                 if midway:
                     _replace_with(item, dst)
-                elif not dst.exists():
-                    _move(item, dst)
+                else:  # a folder may be half moved: what is still in place stays
+                    _merge_back(item, dst)
         log.warning("publish: an interrupted publish left %s (%s)", backup.name,
                     "removed" if finished else "its outputs were put back")  # fmt: skip
         shutil.rmtree(backup, ignore_errors=True)
@@ -916,6 +971,8 @@ def publish(
     since: float | None = None,
     words: list[Word] | None = None,
     reviewer: dict[str, list[str]] | None = None,
+    verify: bool = True,
+    watch_windows_split: int = 0,
 ) -> PublishResult:
     """Write every output into `run_dir` (see the module doc), all or nothing. Raises
     OverlapError, writing nothing, when a voiced standard cue overlaps speech, a guard,
@@ -928,7 +985,9 @@ def publish(
     whose sentence ends decide where the extended version stops (mix.hold_point); `reviewer`
     the event ids a person should look at: "plan_unanswered" (salient events the plan wrote
     nothing for, even when asked again) and "undescribed" (salient events that got no
-    description anywhere), listed in the manifest and under "For the reviewer"."""
+    description anywhere), listed in the manifest and under "For the reviewer"; `verify`
+    False records an evaluation run without claim verification (manifest `verification:
+    "disabled"`, no WCAG row met)."""
     run_dir, video = Path(run_dir), Path(video)
     cues, extended, speech = list(cues), list(extended), list(speech)
     everything = cues + extended
@@ -957,7 +1016,7 @@ def publish(
             out = _stage(
                 staging, run_dir, video, info, cues, extended, events, gaps, research, ledger,
                 run_id, opts, speech, duplicates, overlap, priority, since, words or [],
-                reviewer or {},
+                reviewer or {}, verify, watch_windows_split,
             )  # fmt: skip
             _commit(staging, run_dir, out)
         except BaseException:
@@ -1014,11 +1073,14 @@ def _stage(
     speech: list[Span], duplicates: dict[str, str] | None, overlap: dict,
     priority: dict[str, int] | None = None, since: float | None = None,
     words: list[Word] | None = None, reviewer: dict[str, list[str]] | None = None,
+    verify: bool = True, watch_windows_split: int = 0,
 ) -> dict[str, Path]:  # fmt: skip
     """Every output written into the staging folder `run_dir` (paths inside the outputs are
     relative to `final`, where they will live); returns the outputs by published name, the
     manifest left out."""
     cues, extended = [own_claims(c) for c in cues], [own_claims(c) for c in extended]
+    # an unverified cue means verification was off, whatever the caller passes (a republish)
+    verify = verify and not any(c.status == "unverified" for c in cues + extended)
     everything = cues + extended
     spoken, spoken_ext = mixer.voiced(cues), mixer.voiced_extended(extended)
     out: dict[str, Path] = {}
@@ -1062,7 +1124,7 @@ def _stage(
     wcag = wcag_status(
         standard=len(spoken), extended_produced=ext_video is not None, held=len(held),
         overlap_s=overlap["total_s"], f113=len(flags), reviewed=signed_off,
-        extended_error=ext_error, coverage=cov,
+        extended_error=ext_error, coverage=cov, verified=verify,
     )  # fmt: skip
     disclosure = tts_disclosure(everything)
     calls = ledger.summary(run_id, since=since)
@@ -1098,6 +1160,7 @@ def _stage(
     summary = {
         "cues": {s: counts.get(s, 0) for s in STATUSES},
         "for_reviewer": for_reviewer,
+        "watch_windows_split": watch_windows_split,  # cut off by the token limit: in halves
         "coverage": cov,
         "repetitive": judged,  # watch-salient, rated 1-2 by the plan: not counted
         "overlap_seconds": overlap["total_s"],
@@ -1170,6 +1233,7 @@ def _stage(
             for name, path in sorted(out.items())
         },
         "summary": summary,
+        "verification": "enabled" if verify else "disabled",
         "versions": {"engine": lull.__version__, "models": models, "tts": TTS_NAME},
     }
     _write(run_dir / MANIFEST, json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")

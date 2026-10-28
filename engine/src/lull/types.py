@@ -80,6 +80,10 @@ class Claim(BaseModel):
     text: str
     verdict: Literal["supported", "not_visible", "contradicted"]
     at: float | None
+    span: str | None = None  # the exact words of the cue text the claim comes from
+    evidence: str | None = None  # what the frames showed, in the vision model's words
+    tokens: list[list[int]] | None = None  # the line's token ranges it comes from (inclusive)
+    kind: Literal["atomic", "sentence"] = "atomic"  # a whole sentence: judged as written
 
 
 class Check(BaseModel):
@@ -97,7 +101,8 @@ class Cue(BaseModel):
     end: float | None
     text: str
     event_ids: list[str]
-    status: Literal["verified", "held", "edited", "extended", "approved"]
+    # "unverified": voiced with claim verification turned off (LULL_NO_VERIFY, evaluation)
+    status: Literal["verified", "held", "edited", "extended", "approved", "unverified"]
     ahead: bool
     claims: list[Claim]
     audio_path: str | None

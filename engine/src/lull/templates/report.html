@@ -109,7 +109,7 @@
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.between_cues_s) }} s</b><span>overlap between descriptions</span></div>
     <div class="stat"><b>{{ "%.3f" | format(summary.overlap.outside_pauses_s) }} s</b><span>outside the usable pauses (speech guards, protected sound)</span></div>
     <div class="stat"><b>{{ summary.f113 | length }}</b><span>unused pauses (F113)</span></div>
-    <div class="stat"><b>${{ "%.4f" | format(summary.cost_usd) }}</b><span>Model spend, this run{% if summary.cost_per_min is not none %} (${{ "%.4f" | format(summary.cost_per_min) }} per minute){% endif %}{% if summary.spend is defined %}; ${{ "%.4f" | format(summary.spend.model_usd_all_runs) }} over all runs under run id {{ run_id }}; {{ summary.spend.tavily_searches_this_run }} web search{% if summary.spend.tavily_searches_this_run != 1 %}es{% endif %} this run (Tavily, counted, not charged: ${{ "%.4f" | format(summary.spend.tavily_notional_usd_this_run) }} at list price){% endif %}{% if summary.spend_from_cache | default(false) %}. Every stage of this attempt came from the cache: this is the spend of the attempt that made these outputs{% endif %}</span></div>
+    <div class="stat"><b>${{ "%.4f" | format(summary.cost_usd) }}</b><span>Model spend, this run{% if summary.cost_per_min is not none %} (${{ "%.4f" | format(summary.cost_per_min) }} per minute){% endif %}{% if summary.spend is defined %}; ${{ "%.4f" | format(summary.spend.model_usd_all_runs) }} over all runs under run id {{ run_id }}; {{ summary.spend.tavily_searches_this_run }} web search{% if summary.spend.tavily_searches_this_run != 1 %}es{% endif %} this run (Tavily: counted, not charged){% endif %}{% if summary.spend_from_cache | default(false) %}. Every stage of this attempt came from the cache: this is the spend of the attempt that made these outputs{% endif %}</span></div>
   </div>
   {% if summary.extended_produced %}
   <p class="note">With the extended version: {{ summary.coverage.described_with_extended }} of
@@ -221,7 +221,7 @@
     {% for c in calls %}
       <tr><td>{{ c.role }}</td><td><code>{{ c.model }}</code></td><td class="num">{{ c.calls }}</td>
         <td class="num">{{ c.tokens_in }}</td><td class="num">{{ c.tokens_cached }}</td><td class="num">{{ c.tokens_out }}</td>
-        <td class="num">{% if c.model.startswith('tavily') %}({{ "%.4f" | format(c.cost_usd) }} list price, not charged){% else %}{{ "%.4f" | format(c.cost_usd) }}{% endif %}</td><td class="num">{{ "%.1f" | format(c.latency_s) }}</td></tr>
+        <td class="num">{% if c.model.startswith('tavily') %}not charged{% else %}{{ "%.4f" | format(c.cost_usd) }}{% endif %}</td><td class="num">{{ "%.1f" | format(c.latency_s) }}</td></tr>
     {% endfor %}
     </tbody>
     <tfoot><tr><th colspan="6">Model spend, this run{% if summary.cost_per_min is not none %} (${{ "%.4f" | format(summary.cost_per_min) }} per minute of video){% endif %}</th>

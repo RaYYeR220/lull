@@ -39,7 +39,16 @@ from typing import NamedTuple
 
 from pydantic import BaseModel
 
-from lull.media import MediaError, Probe, _bin, _run, input_args, probe, wav_input_args
+from lull.media import (
+    MediaError,
+    Probe,
+    _bin,
+    _run,
+    ffmpeg_timeout,
+    input_args,
+    probe,
+    wav_input_args,
+)
 from lull.timeline import merge_spans
 from lull.types import Cue, Span, Word
 
@@ -69,8 +78,8 @@ SENTENCE_PAUSE_S = 0.25  # a pause this long between words ends a sentence
 WORD_GAP_S = 0.15  # the shortest gap between words a freeze may fall in
 FREEZE_WAIT_S = 6.0  # how long a freeze waits for a sentence to end before taking a word gap
 _EPS_T = 1e-6
-STANDARD_VOICED = ("verified", "edited", "approved")
-EXTENDED_VOICED = ("extended", "edited", "approved")
+STANDARD_VOICED = ("verified", "edited", "approved", "unverified")
+EXTENDED_VOICED = ("extended", "edited", "approved", "unverified")
 MP4_VIDEO = frozenset({"h264", "hevc", "av1", "mpeg4", "vp9"})
 MP4_AUDIO = frozenset({"aac", "mp3", "ac3", "eac3", "alac"})
 TTS_NAME = "NVIDIA Magpie TTS"
@@ -256,7 +265,8 @@ def measure_levels(video: Path, info: Probe, cues: Sequence[Cue]) -> Levels:
         graph_file = Path(tmp) / "levels.graph"
         graph_file.write_text(graph, encoding="utf-8")
         cmd += ["-/filter_complex", str(graph_file), "-map", "[all]", "-f", "null", "-"]
-        proc = _run(cmd, cwd=cwd)
+        audio = sum(c.audio_dur or 0.0 for c in cues)
+        proc = _run(cmd, cwd=cwd, timeout=ffmpeg_timeout(info.duration + audio))
     found = [
         _parse(s, ["input_i"])["input_i"]
         for s in _summaries(proc.stderr.decode("utf-8", "replace"))
@@ -355,7 +365,7 @@ def _relative(paths: Sequence[Path]) -> tuple[Path | None, list[str]]:
 
 def _premix(
     video: Path, programme: str, duck_cues: Sequence[Cue],
-    placements: Sequence[tuple[float, Path, float]], wav: Path,
+    placements: Sequence[tuple[float, Path, float]], wav: Path, seconds: float,
 ) -> dict[str, float]:  # fmt: skip
     """Render the un-normalised mix to a float WAV and measure it in the same run."""
     graph_file = wav.with_suffix(".graph")
@@ -370,7 +380,7 @@ def _premix(
         "-map", "[out]", "-c:a", "pcm_f32le", str(wav.resolve()),
         "-map", "[meas]", "-f", "null", "-",
     ]  # fmt: skip
-    proc = _run(cmd, cwd=cwd)
+    proc = _run(cmd, cwd=cwd, timeout=ffmpeg_timeout(seconds))
     summaries = _summaries(proc.stderr.decode("utf-8", "replace"))
     if not summaries:
         raise MediaError("ebur128 printed no measurement of the mix")
@@ -422,7 +432,7 @@ def mix(
     with tempfile.TemporaryDirectory(dir=out_dir, prefix=".mix-") as tmp:
         premix = Path(tmp) / "premix.wav"
         placements = [(c.start, Path(c.audio_path), _gain(levels, c)) for c in spoken]
-        stats = _premix(video, _programme(info), spoken, placements, premix)
+        stats = _premix(video, _programme(info), spoken, placements, premix, info.duration)
         graph = f"[1:a]{_normalise(stats)},aresample={RATE},asplit=2[a1][a2]"
         original = ["-map", "0:a:0"] if info.has_audio else []
         keep = ["-c:a:1", "copy"] if info.audio_codec in MP4_AUDIO else _aac("a:1")
@@ -439,7 +449,7 @@ def mix(
             "-disposition:a:0", "default", *(["-disposition:a:1", "0"] if info.has_audio else []),
             *_disclose(bool(spoken)), "-movflags", "+faststart", str(ad_video),
         ]  # fmt: skip
-        _run(cmd)
+        _run(cmd, timeout=ffmpeg_timeout(info.duration))
     log.info("mix: %d cues mixed into %s and %s", len(spoken), AD_AUDIO, AD_VIDEO)
     return MixResult(ad_audio=ad_audio, ad_video=ad_video)
 
@@ -665,7 +675,8 @@ def extended_video(
     dst = out_dir / EXTENDED_VIDEO
     with tempfile.TemporaryDirectory(dir=out_dir, prefix=".extended-") as tmp:
         premix = Path(tmp) / "premix.wav"
-        stats = _premix(video, programme, moved, placements, premix)
+        long = info.duration + sec(sum(f.frames for f in freezes))
+        stats = _premix(video, programme, moved, placements, premix, long)
         graph_file = Path(tmp) / "final.graph"
         graph_file.write_text(
             f"{picture};[1:a]{_normalise(stats)},aresample={RATE}[a]", encoding="utf-8"
@@ -677,7 +688,8 @@ def extended_video(
              "-map", "[v]", "-map", "[a]",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
              *_aac(), *_track(0, "Described (extended)", _lang3(language)), *_disclose(True),
-             "-movflags", "+faststart", str(dst)]
+             "-movflags", "+faststart", str(dst)],
+            timeout=ffmpeg_timeout(long),
         )  # fmt: skip
     added = sec(sum(f.frames for f in freezes))
     log.info("mix: %d extended pauses, %.2f s added, in %s", len(freezes), added, dst.name)

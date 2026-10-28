@@ -104,8 +104,11 @@ def _inside(pos: int, spans: list[tuple[int, int]]) -> bool:
 
 
 # two or more tokens of capitals and digits in a row ("STEP 2: BAKE"): on-screen text read out
+# (a full stop joins tokens only when no space follows it, "U.S", so a run never crosses a
+# sentence end: "OK. I" is two sentences)
 _CAPS_RUN = re.compile(
-    r"\b[A-Z0-9][A-Z0-9'\u2019&\-]*(?:[ \t:,./+\-\u2013\u2014]+[A-Z0-9][A-Z0-9'\u2019&\-]*)+\b"
+    r"\b[A-Z0-9][A-Z0-9'’&\-]*"
+    r"(?:(?:[ \t,/+\-–—]|:[ \t]*|\.(?=[A-Z0-9]))+[A-Z0-9][A-Z0-9'’&\-]*)+\b"
 )
 
 
@@ -139,9 +142,10 @@ def lint(
 ) -> list[Finding]:
     out: list[Finding] = []
     quoted = quoted_spans(text)
+    screen = screen_spans(text, verbatim)  # text read off the screen: not the describer's
 
     def add(rule, msg, span, severity="error", *, exempt=True):
-        if exempt and span and _inside(span[0], quoted):
+        if exempt and span and (_inside(span[0], quoted) or _inside(span[0], screen)):
             return
         out.append(Finding(rule=rule, message=msg, span=span, severity=severity))
 
@@ -167,7 +171,6 @@ def lint(
 
     quoted_text = " ".join(text[s:e] for s, e in quoted)
     known = {n.lower() for n in introduced}
-    screen = screen_spans(text, verbatim)
     for name in sorted(named):
         pat = rf"\b{re.escape(name)}\b"
         if name.lower() in known or re.search(pat, quoted_text):

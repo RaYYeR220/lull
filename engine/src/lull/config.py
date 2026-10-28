@@ -37,6 +37,14 @@ class Settings(BaseSettings):
             return None
         return value
 
+    # Evaluation only: finalize skips claim verification and voices lines "unverified".
+    lull_no_verify: bool = Field(default=False, validation_alias="LULL_NO_VERIFY")
+
+    @field_validator("lull_no_verify", mode="before")
+    @classmethod
+    def _empty_is_off(cls, value: object) -> object:
+        return False if isinstance(value, str) and not value.strip() else value
+
     # Ledger and voice calibration files live here.
     lull_home: Path = Field(
         default_factory=lambda: Path.home() / ".lull", validation_alias="LULL_HOME"

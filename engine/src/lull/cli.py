@@ -122,7 +122,12 @@ def _detail(stage: str, d: dict) -> str:
         )
         return text + (f", {d['clamped']} stretched words clamped" if d["clamped"] else "")
     if stage == "watch":
-        return f"{d['events']} visual events"
+        split = d.get("windows_split") or 0
+        return f"{d['events']} visual events" + (
+            f", {split} window{'s' * (split != 1)} split in halves (answer cut off)"
+            if split
+            else ""
+        )
     if stage == "research":
         text = f"{d['terms']} terms" + (" (not looked up)" if d["skipped"] else "")
         return text + (f", {d['errors']} lookup errors" if d["errors"] else "")
@@ -137,7 +142,8 @@ def _detail(stage: str, d: dict) -> str:
             f"{used:.0%} of the room used"
         )
     if stage == "finalize":
-        return f"{d['verified']} verified, {d['held']} held, {d['extended']} extended"
+        line = f"{d['verified']} verified, {d['held']} held, {d['extended']} extended"
+        return line + (f", {d['unverified']} unverified" if d.get("unverified") else "")
     if stage == "publish":
         return f"{d['files']} files"
     return ""
@@ -179,6 +185,7 @@ def _print_summary(summary: dict, seconds: float, out: Path) -> None:
     typer.echo(f"done in {seconds:.1f} s")
     typer.echo(
         f"  cues      {cues['verified']} verified, {cues['held']} held, {cues['extended']} extended"
+        + (f", {cues['unverified']} unverified" if cues.get("unverified") else "")
     )
     for h in summary.get("held", []):
         typer.echo(f"  held      {h['id']}: {h['reason']}")
@@ -411,7 +418,9 @@ def export_showcase_cmd(
     data = json.loads(path.read_text(encoding="utf-8"))
     files = sum(1 for p in Path(out_dir).rglob("*") if p.is_file())
     typer.echo(
-        f"{data['id']}: {len(data['cues'])} cues, {len(data['gaps'])} pauses, "
+        f"{data['id']}: {sum(c['status'] != 'held' for c in data['cues'])} cues "
+        f"({sum(c['status'] == 'held' for c in data['cues'])} held listed), "
+        f"{len(data['gaps'])} pauses, "
         f"{data['duration']:.1f} s, ${data['costUsd']:.4f}; {files} files in {out_dir} "
         f"({path.name})"
     )

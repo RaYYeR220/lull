@@ -555,7 +555,7 @@ def test_publish_with_an_empty_standard_track(tmp_path, fake_media):
     rows = {r["criterion"]: r["status"] for r in manifest["summary"]["wcag"]}
     assert rows == {"1.2.3": "needs review", "1.2.5": "needs review", "1.2.7": "not claimed"}
     assert manifest["summary"]["cues"] == {
-        "verified": 0, "edited": 0, "approved": 0, "held": 1, "extended": 0,
+        "verified": 0, "edited": 0, "approved": 0, "held": 1, "extended": 0, "unverified": 0,
     }  # fmt: skip
     assert manifest["summary"]["held"] == [{"id": "x001", "reason": "not verified"}]
     html = (run / "report.html").read_text(encoding="utf-8")
@@ -605,7 +605,14 @@ def test_publish_report_and_manifest_contents(tmp_path, fake_media):
     for name, meta in m["outputs"].items():
         assert meta == {"sha256": _sha(run / name), "bytes": (run / name).stat().st_size}
     s = m["summary"]
-    assert s["cues"] == {"verified": 1, "edited": 0, "approved": 0, "held": 1, "extended": 1}
+    assert s["cues"] == {
+        "verified": 1,
+        "edited": 0,
+        "approved": 0,
+        "held": 1,
+        "extended": 1,
+        "unverified": 0,
+    }
     assert s["coverage"]["described"] == 1 and s["coverage"]["important_events"] == 2
     assert s["overlap_seconds"] == 0.0
     assert s["overlap"] == {"speech_s": 0.0, "between_cues_s": 0.0, "outside_pauses_s": 0.0,
@@ -795,14 +802,14 @@ def published(tmp_path_factory):
     ]
     run = root / "run"
     commands: list[list[str]] = []
-    real = subprocess.run
+    real = media._exec
 
     def spy(cmd, *args, **kwargs):
         commands.append([str(c) for c in cmd])
         return real(cmd, *args, **kwargs)
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(media.subprocess, "run", spy)
+        mp.setattr(media, "_exec", spy)
         res = publish(run, video, cues, ext, events, gaps, None, _ledger(root), "r1",
                       RunOptions(), speech=SPEECH)  # fmt: skip
     return {"video": video, "run": run, "res": res, "root": root, "commands": commands}
@@ -1643,6 +1650,8 @@ def test_the_report_states_this_attempts_spend_and_all_runs_apart(tmp_path, fake
     html = " ".join((tmp_path / "run" / "report.html").read_text(encoding="utf-8").split())
     assert "Model spend, this run" in html and "all runs under run id r1" in html
     assert "1 web search" in html
+    # searches are a count: their list price never shows as money in the report
+    assert "0.0080" not in html and "list price" not in html
 
 
 # -- where the picture freezes for an extended description ------------------------------------
@@ -1904,3 +1913,213 @@ def test_a_publish_from_the_cache_keeps_the_spend_and_models_of_the_run(tmp_path
     assert first["summary"]["spend_from_cache"] is False
     html = " ".join((run / "report.html").read_text(encoding="utf-8").split())
     assert "Every stage of this attempt came from the cache" in html
+
+
+def test_wcag_never_reads_met_with_verification_off():
+    cov = {"important_events": 2, "salient_events": 2, "described": 2, "ratio": 1.0,
+           "described_with_extended": 2, "ratio_with_extended": 1.0, "undescribed": [],
+           "repetitive": 0, "watch_salient": 2}  # fmt: skip
+    on = wcag_status(standard=2, extended_produced=True, held=0, overlap_s=0.0, f113=0,
+                     coverage=cov)  # fmt: skip
+    assert {r["status"] for r in on} == {"met (automated checks)"}
+    off = wcag_status(standard=2, extended_produced=True, held=0, overlap_s=0.0, f113=0,
+                      coverage=cov, verified=False)  # fmt: skip
+    assert {r["status"] for r in off} == {"needs review"}
+    assert all(any("verification was off" in why for why in r["reasons"]) for r in off)
+
+
+def test_unverified_cues_are_published_and_the_manifest_says_verification_is_disabled(
+    tmp_path, fake_media
+):
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    cue = _cue("c001", 2.0, 1.0, status="unverified", audio="c.wav")
+    run = tmp_path / "run"
+    res = publish(run, video, [cue], [], [_ev("e1", 2.0, 4.0)], [_gap("g001", 2.0, 5.0)], None,
+                  _ledger(tmp_path), "r1", RunOptions(), speech=[], verify=False)  # fmt: skip
+    m = json.loads(res.manifest.read_text(encoding="utf-8"))
+    assert m["verification"] == "disabled"
+    assert m["summary"]["cues"]["unverified"] == 1
+    assert "c001" in (run / "descriptions.vtt").read_text(encoding="utf-8")
+    on = json.loads(publish(run, video, [cue.model_copy(update={"status": "verified"})], [],
+                            [_ev("e1", 2.0, 4.0)], [_gap("g001", 2.0, 5.0)], None,
+                            _ledger(tmp_path), "r1", RunOptions(),
+                            speech=[]).manifest.read_text(encoding="utf-8"))  # fmt: skip
+    assert on["verification"] == "enabled"
+
+
+def test_an_unverified_cue_means_verification_disabled(tmp_path, fake_media):
+    """A republish (from the Studio, say) of a run voiced without verification cannot record
+    verification as enabled: an unverified cue is enough."""
+    video = tmp_path / "talk.mp4"
+    video.write_bytes(b"video")
+    cue = _cue("c001", 2.0, 1.0, status="unverified", audio="c.wav")
+    res = publish(tmp_path / "run", video, [cue], [], [_ev("e1", 2.0, 4.0)],
+                  [_gap("g001", 2.0, 5.0)], None, _ledger(tmp_path), "r1", RunOptions(),
+                  speech=[])  # fmt: skip
+    m = json.loads(res.manifest.read_text(encoding="utf-8"))
+    assert m["verification"] == "disabled"
+    assert all(r["status"] != "met (automated checks)" for r in m["summary"]["wcag"])
+
+
+# -- filesystems that cannot rename a folder ------------------------------------------------------
+
+
+def _refuse_folders(monkeypatch, refused: list):
+    """A filesystem with a flat namespace (Cloud Storage FUSE): renaming a folder fails, as
+    os.replace there does with EXDEV; renaming a file works."""
+    import errno
+
+    from lull.stages import publish as pub
+
+    real = pub._rename
+
+    def rename(src, dst):
+        if Path(src).is_dir():
+            refused.append(Path(src).name)
+            raise OSError(errno.EXDEV, "Invalid cross-device link", str(src))
+        return real(src, dst)
+
+    monkeypatch.setattr(pub, "_rename", rename)
+
+
+def test_publish_moves_a_folder_file_by_file_where_folders_cannot_be_renamed(
+    tmp_path, fake_media, monkeypatch
+):
+    refused: list = []
+    _refuse_folders(monkeypatch, refused)
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    publish(run, video, [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")], [], *args,
+            speech=[])  # fmt: skip
+    publish(run, video, [_cue("c002", 2.0, 1.2, ev=["e1"], audio="d.wav")], [], *args,
+            speech=[])  # fmt: skip
+    assert "keyframes" in refused
+    assert sorted(p.name for p in (run / "keyframes").iterdir()) == ["c002.jpg"]
+    assert not [p.name for p in run.iterdir() if p.name.startswith(".publish")]
+
+
+def test_a_failed_publish_rolls_back_where_folders_cannot_be_renamed(
+    tmp_path, fake_media, monkeypatch
+):
+    from lull.stages import publish as pub
+
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+    publish(run, video, [_cue("c001", 2.0, 1.5, ev=["e1"], audio="c.wav")], [], *args,
+            speech=[])  # fmt: skip
+    before = _tree(run)
+    _refuse_folders(monkeypatch, [])
+    real = pub._rename
+    said_no = []
+
+    def no_manifest(src, dst):  # the new manifest cannot move in (once)
+        if not said_no and Path(dst) == run / "manifest.json" and ".publish-" in str(src):
+            said_no.append(src)
+            raise OSError("the bucket said no")
+        return real(src, dst)
+
+    monkeypatch.setattr(pub, "_rename", no_manifest)
+    with pytest.raises(OSError, match="the bucket said no"):
+        publish(run, video, [_cue("c002", 2.0, 1.2, ev=["e1"], audio="d.wav")], [], *args,
+                speech=[])  # fmt: skip
+    assert _tree(run) == before
+
+
+def _flat_fs_failing_on(monkeypatch, fail):
+    """Folders cannot be renamed (EXDEV); file renames work except the first one `fail`
+    picks, which fails with EIO."""
+    import errno
+
+    from lull.stages import publish as pub
+
+    real = pub._rename
+    hit = []
+
+    def rename(src, dst):
+        if Path(src).is_dir():
+            raise OSError(errno.EXDEV, "Invalid cross-device link", str(src))
+        if not hit and fail(Path(src), Path(dst)):
+            hit.append((src, dst))
+            raise OSError(errno.EIO, "the bucket said no", str(src))
+        return real(src, dst)
+
+    monkeypatch.setattr(pub, "_rename", rename)
+    return hit
+
+
+@pytest.mark.parametrize("phase", ["old-to-backup", "staging-to-run"])
+def test_a_folder_moved_file_by_file_that_fails_halfway_rolls_back(
+    tmp_path, fake_media, monkeypatch, phase
+):
+    video, args = _publish_args(tmp_path)
+    run = tmp_path / "run"
+
+    def two(ids):
+        cues = [_cue(ids[0], 2.0, 0.5, ev=["e1"], audio="c.wav"),
+                _cue(ids[1], 3.0, 0.5, ev=["e1"], audio="d.wav")]  # fmt: skip
+        return publish(run, video, cues, [], *args, speech=[])
+
+    two(["c001", "c002"])
+    before = _tree(run)
+    if phase == "old-to-backup":  # the 2nd old keyframe cannot move into the backup
+
+        def fail(src, dst):
+            return ".publish-old-" in str(dst) and src.name == "c002.jpg"
+    else:  # the 2nd new keyframe cannot move into the run folder
+
+        def fail(src, dst):
+            return dst.parent == run / "keyframes" and src.name == "c004.jpg"
+
+    hit = _flat_fs_failing_on(monkeypatch, fail)
+    with pytest.raises(OSError):
+        two(["c003", "c004"])
+    assert hit, "the failure was never triggered"
+    assert _tree(run) == before
+
+
+def test_recovery_puts_back_a_folder_a_crash_left_half_moved(tmp_path):
+    """A crash while keyframes/ was moving file by file into the backup (the manifest not yet
+    moved) leaves half the frames in each place: recovery merges them back."""
+    from lull.stages import publish as pub
+
+    run = tmp_path / "run"
+    backup = run / ".publish-old-x9"
+    (backup / "keyframes").mkdir(parents=True)
+    (backup / "keyframes" / "c001.jpg").write_text("one", encoding="utf-8")
+    (run / "keyframes").mkdir()
+    (run / "keyframes" / "c002.jpg").write_text("two", encoding="utf-8")
+    (run / "manifest.json").write_text("old manifest", encoding="utf-8")
+    pub._recover(run)
+    assert _files(run) == {"manifest.json": "old manifest", "keyframes/c001.jpg": "one",
+                           "keyframes/c002.jpg": "two"}  # fmt: skip
+
+
+def test_a_rollback_that_fails_too_raises_the_first_error_and_logs_both(
+    tmp_path, monkeypatch, caplog
+):
+    import errno
+
+    from lull.stages import publish as pub
+
+    src = tmp_path / "src"
+    src.mkdir()
+    for name in ("a.txt", "b.txt"):
+        (src / name).write_text(name, encoding="utf-8")
+    real = pub._rename
+
+    def rename(s, d):
+        s, d = Path(s), Path(d)
+        if s.is_dir():
+            raise OSError(errno.EXDEV, "Invalid cross-device link", str(s))
+        if s.name == "b.txt":
+            raise OSError(errno.EIO, "the bucket said no", str(s))
+        if d.parent == src:  # moving a.txt back
+            raise OSError(errno.EACCES, "the rollback was refused", str(s))
+        return real(s, d)
+
+    monkeypatch.setattr(pub, "_rename", rename)
+    with pytest.raises(OSError) as err:
+        pub._move(src, tmp_path / "dst")
+    assert err.value.errno == errno.EIO
+    assert "the rollback was refused" in caplog.text and "the bucket said no" in caplog.text

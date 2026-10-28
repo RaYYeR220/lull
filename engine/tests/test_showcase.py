@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import wave
 from pathlib import Path
@@ -105,7 +106,9 @@ def run_dir(tmp_path_factory) -> Path:
         "cues": [
             _cue("c001", 0.5, 1.0, "A red door opens.", audio=audio["c001"],
                  claims=[_claim("A red door opens.")]),
-            _cue("c002", 2.2, None, "A dog barks.", gap="g002", status="held"),
+            _cue("c002", 2.2, None, "A dog barks.", gap="g002", status="held",
+                 note="not verified after 2 repairs: a dog barks (not visible)",
+                 claims=[_claim("a dog is there"), _claim("a dog barks", "not_visible", None)]),
             _cue("c004", 3.0, 0.8, "In a moment, a sign appears.", gap="g003",
                  audio=audio["c004"], claims=[_claim("A sign appears.", at=3.5)], ahead=True),
         ],
@@ -198,6 +201,17 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "extended": True,
         },
         {
+            "id": "c002",
+            "start": 2.2,
+            "end": 2.7,
+            "text": "A dog barks.",
+            "status": "held",
+            "ahead": False,
+            "extended": False,
+            "note": "not verified after 2 repairs: a dog barks (not visible)",
+            "claims": [{"text": "a dog barks", "verdict": "not_visible"}],
+        },
+        {
             "id": "c004",
             "start": 3.0,
             "end": 3.8,
@@ -206,7 +220,7 @@ def test_cues_are_the_published_lines_ending_with_their_audio(exported):
             "ahead": True,
             "extended": False,
         },
-    ]  # fmt: skip  (held c002 is not published; x003 sits at its freeze point)
+    ]  # fmt: skip  (x003 sits at its freeze point; held c002 has its reason, no audio)
 
 
 def test_the_run_summary_comes_with_the_showcase(exported):
@@ -352,13 +366,13 @@ def test_a_reused_folder_keeps_no_old_cue_audio_or_keyframes(run_dir, tmp_path):
 def test_every_showcase_input_is_locked_to_local_files(run_dir, tmp_path, monkeypatch):
     """The export's probe and ffmpeg calls read local files only, like the pipeline's."""
     seen: list[list[str]] = []
-    real = media.subprocess.run
+    real = media._exec
 
     def spy(cmd, *args, **kwargs):
         seen.append([str(c) for c in cmd])
         return real(cmd, *args, **kwargs)
 
-    monkeypatch.setattr(media.subprocess, "run", spy)
+    monkeypatch.setattr(media, "_exec", spy)
     export_showcase(run_dir, tmp_path / "site")
     assert len(seen) >= 5  # probe, video, sound, 3 cue files
     for cmd in seen:
@@ -390,3 +404,38 @@ def test_exporting_inside_the_run_folder_or_around_it_is_refused(run_dir):
             export_showcase(run_dir, out)
     assert sorted(p.relative_to(run_dir).as_posix() for p in run_dir.rglob("*")) == before
     assert not (run_dir / "site").exists()
+
+
+def test_held_cues_come_with_their_reason_but_no_audio(exported, run_dir):
+    """A recorded-run page shows what was held and why: the held cue is listed with its note
+    and the pause it would have filled, has no audio file, is in no description track, and
+    the counts stay as published."""
+    out, data = exported
+    held = [c for c in data["cues"] if c["status"] == "held"]
+    assert [c["id"] for c in held] == ["c002"]
+    assert not (out / "audio" / "c002.m4a").exists()
+    for name in ("descriptions.vtt", "extended.vtt"):
+        assert "c002" not in (out / name).read_text(encoding="utf-8")
+    assert data["summary"]["counts"] == SUMMARY["cues"]
+    assert data["verifyExample"]["cueId"] != "c002"
+
+
+def test_a_held_cue_whose_text_was_withheld_shows_the_claims_of_its_last_check(run_dir, tmp_path):
+    """The text of a held cue can be withheld (a contradicted claim that could not be cut):
+    it publishes no claim, so the export takes the failed claims from its last check."""
+    data = json.loads((run_dir / "cues.json").read_text(encoding="utf-8"))
+    withheld = dict(
+        data["cues"][1],
+        text="",
+        claims=[],
+        note="text withheld",
+        checks=[{"text": "A dog barks.", "claims": [_claim("a dog barks", "contradicted", 2.4)]}],
+    )
+    copy = tmp_path / "run"
+    shutil.copytree(run_dir, copy)
+    (copy / "cues.json").write_text(
+        json.dumps({**data, "cues": [data["cues"][0], withheld, data["cues"][2]]}),
+        encoding="utf-8")  # fmt: skip
+    out = json.loads(export_showcase(copy, tmp_path / "site").read_text(encoding="utf-8"))
+    [held] = [c for c in out["cues"] if c["status"] == "held"]
+    assert held["claims"] == [{"text": "a dog barks", "verdict": "contradicted"}]

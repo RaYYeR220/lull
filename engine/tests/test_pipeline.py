@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 import lull
-from lull import pipeline
+from lull import media, pipeline
 from lull.config import get_settings
 from lull.ledger import BudgetExceeded, CallRecord, Ledger
 from lull.media import MediaError
@@ -38,6 +38,7 @@ from pipeline_fakes import (
     FakeSpeech,
     FakeTF,
     description,
+    split_all,
     verify_all,
 )
 
@@ -115,7 +116,15 @@ def test_full_run_publishes_every_output(runs):
     manifest = json.loads(res.manifest.read_text(encoding="utf-8"))
     assert manifest["run_id"] == "t1"
     summary = manifest["summary"]
-    assert summary["cues"] == {"verified": 2, "edited": 0, "approved": 0, "held": 0, "extended": 1}
+    assert summary["watch_windows_split"] == 0
+    assert summary["cues"] == {
+        "verified": 2,
+        "edited": 0,
+        "approved": 0,
+        "held": 0,
+        "extended": 1,
+        "unverified": 0,
+    }
     assert summary["overlap_seconds"] == 0.0
     assert summary["research"] == {"skipped": True, "terms": 1, "errors": [], "notes": []}
     cues = json.loads((run_dir / "cues.json").read_text(encoding="utf-8"))
@@ -130,7 +139,8 @@ def test_full_run_publishes_every_output(runs):
     vtt = (run_dir / "descriptions.vtt").read_text(encoding="utf-8")
     assert f"c001\n00:00:01.800 --> 00:00:03.800\n{CUE_TEXT['c001']}\n" in vtt
     assert "<html" in (run_dir / "report.html").read_text(encoding="utf-8").lower()
-    assert tf.roles() == ["watch", "research", "plan", "verify", "verify", "verify"]
+    # each cue's line is split into claims (Lightning), then the claims are judged (Super VL)
+    assert tf.roles() == ["watch", "research", "plan"] + ["split", "verify"] * 3
     assert speech.calls == ["transcribe", "diarize"] + ["synthesize"] * 3
     stages = run_dir / "stages"
     names = sorted(p.relative_to(stages).as_posix() for p in stages.rglob("*.json"))
@@ -224,7 +234,7 @@ def test_second_run_hits_the_cache_for_every_stage(runs):
         ("x002", "extended", True),
     ]
     assert events[-1].data["summary"]["cues"] == first_events[-1].data["summary"]["cues"]
-    assert len(runs["ledger"].calls("t1")) == 6  # only the first run's calls
+    assert len(runs["ledger"].calls("t1")) == 9  # only the first run's calls
 
 
 # -- spend: the pre-run check and a provider 402 mid-run ------------------------------------------
@@ -280,8 +290,13 @@ def test_a_crafted_container_stops_the_run_before_any_stage(tone_slides, tmp_pat
     assert not (tmp_path / "run").exists()
 
 
-def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> TokenFactory:
-    """The real client against a fake server that answers 402 to the plan call."""
+def _token_factory(
+    ledger: Ledger, seen: list[str], *, fail_plan: bool, cut_off_watch: bool = False
+) -> TokenFactory:
+    """The real client against a fake server that answers 402 to the plan call, or (with
+    `cut_off_watch`) cuts the first watch answer off at its token limit, both times the client
+    asks, then answers the window's two halves (split at the 6 s cut) with their events."""
+    watched = [0]
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -289,12 +304,31 @@ def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> Token
         seen.append(fmt["name"])
         if fmt["name"] == "plan" and fail_plan:
             return httpx.Response(402, json={"error": "insufficient balance"})
+        if fmt["name"] == "watch" and cut_off_watch:
+            watched[0] += 1
+            if watched[0] <= 2:
+                return httpx.Response(200, json={
+                    "choices": [{"message": {"content": '{"events": [{"t_st'},
+                                 "finish_reason": "length"}],
+                    "usage": {"prompt_tokens": 1000, "completion_tokens": 100},
+                })  # fmt: skip
+            late = watched[0] == 4  # the second half, [6, 12]
+            half = [{**e, "t_start": e["t_start"] - 6 * late, "t_end": e["t_end"] - 6 * late}
+                    for e in WATCH["events"] if (e["t_start"] >= 6) == late]  # fmt: skip
+            return httpx.Response(200, json={
+                "choices": [{"message": {"content": json.dumps({"events": half})},
+                             "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 100},
+            })  # fmt: skip
         if fmt["name"] == "finalize":
             props = fmt["schema"]["properties"]
             msgs = body["messages"]
-            answer = (
-                verify_all({"messages": msgs}) if "claims" in props else {"text": description(msgs)}
-            )
+            if "verdicts" in props:
+                answer = verify_all({"messages": msgs})
+            elif "claims" in props:
+                answer = split_all({"messages": msgs})
+            else:
+                answer = {"text": description(msgs)}
         else:
             answer = {"watch": WATCH, "research": TERMS, "plan": PLAN}[fmt["name"]]
         return httpx.Response(
@@ -306,6 +340,20 @@ def _token_factory(ledger: Ledger, seen: list[str], *, fail_plan: bool) -> Token
         )
 
     return TokenFactory("k", ledger, transport=httpx.MockTransport(handler), sleep=lambda s: None)
+
+
+def test_a_watch_answer_cut_off_is_watched_in_halves_and_the_split_is_in_the_manifest(
+    tone_slides, tmp_path, fast_media
+):
+    ledger = _ledger(tmp_path)
+    seen: list[str] = []
+    tf = _token_factory(ledger, seen, fail_plan=False, cut_off_watch=True)
+    res, _, _, events = _run(tone_slides, tmp_path / "run", ledger, tf=tf, run_id="tcut")
+    assert seen[:4] == ["watch"] * 4  # the window (and its retry), then its two halves
+    ends = _ends(events)
+    assert ends["watch"]["events"] == 3 and ends["watch"]["windows_split"] == 1
+    summary = json.loads(res.manifest.read_text(encoding="utf-8"))["summary"]
+    assert summary["watch_windows_split"] == 1
 
 
 def test_provider_402_at_plan_keeps_earlier_stages_and_a_rerun_resumes(
@@ -352,7 +400,7 @@ def test_provider_402_at_plan_keeps_earlier_stages_and_a_rerun_resumes(
         speech=speech,
         run_id="t402",
     )
-    assert seen == ["plan", "finalize", "finalize", "finalize"]  # resumed at plan
+    assert seen == ["plan"] + ["finalize"] * 6  # resumed at plan: a split and a check per cue
     assert speech.calls == ["synthesize"] * 3
     assert res.manifest.exists()
 
@@ -477,7 +525,12 @@ def test_finalize_resumes_cue_by_cue(tone_slides, tmp_path, fast_media):
     entry = json.loads((run_dir / "stages" / "finalize" / "x002.json").read_text("utf-8"))
     (run_dir / entry["data"]["audio_path"]).unlink()  # a cached cue whose audio is gone
     _, tf, speech, events = _run(tone_slides, run_dir, ledger)
-    assert [description(c["messages"]) for c in tf.calls] == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
+    assert [description(c["messages"]) for c in tf.calls] == [
+        CUE_TEXT["c002"],
+        CUE_TEXT["c002"],
+        CUE_TEXT["x002"],
+        CUE_TEXT["x002"],
+    ]  # fmt: skip  (split, then judge, for each)
     assert speech.spoken == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
     cached = {e.data["id"]: e.data["cached"] for e in events if e.type == "cue"}
     assert cached == {"c001": True, "c002": False, "x002": False}
@@ -722,7 +775,12 @@ def test_a_spend_stop_mid_finalize_keeps_the_finished_cues(tone_slides, tmp_path
     with pytest.raises(BudgetExceeded):
         _run(tone_slides, tmp_path / "run", ledger, tf=FakeTF(ledger, verify=verify))
     _, tf, speech, events = _run(tone_slides, tmp_path / "run", ledger)
-    assert [description(c["messages"]) for c in tf.calls] == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
+    assert [description(c["messages"]) for c in tf.calls] == [
+        CUE_TEXT["c002"],
+        CUE_TEXT["c002"],
+        CUE_TEXT["x002"],
+        CUE_TEXT["x002"],
+    ]  # fmt: skip  (split, then judge, for each)
     assert speech.spoken == [CUE_TEXT["c002"], CUE_TEXT["x002"]]
     cached = {e.data["id"]: e.data["cached"] for e in events if e.type == "cue"}
     assert cached == {"c001": True, "c002": False, "x002": False}
@@ -741,7 +799,7 @@ def test_an_option_change_reruns_only_the_stages_that_depend_on_it(
     # another voice: only the voiced cues
     _, tf, _, events = _run(tone_slides, run_dir, ledger, opts=RunOptions(voice="Aria"))
     assert _cached(events) == {**dict.fromkeys(CACHED, True), "finalize": False}
-    assert set(tf.roles()) == {"verify"}
+    assert set(tf.roles()) == {"split", "verify"}
     # a source page: research again; without Tavily nobody reads it, so the term list is the
     # kept one and nothing after research changes
     opts = RunOptions(voice="Aria", source_url="https://example.org/page")
@@ -980,3 +1038,48 @@ def test_capped_research_is_reported_and_not_cached(tone_slides, tmp_path, fast_
     report = (tmp_path / "run" / "report.html").read_text(encoding="utf-8")
     assert "research capped: 3 searches" in report
     assert not (tmp_path / "run" / "stages" / "research.json").exists()
+
+
+def test_lull_no_verify_turns_verification_off_for_the_whole_run(
+    tone_slides, tmp_path, fast_media, monkeypatch
+):
+    from lull import config
+
+    monkeypatch.setenv("LULL_NO_VERIFY", "1")
+    config.get_settings.cache_clear()
+    try:
+        ledger = _ledger(tmp_path)
+        res, tf, _, _ = _run(tone_slides, tmp_path / "run", ledger)
+    finally:
+        config.get_settings.cache_clear()
+    assert "verify" not in tf.roles()
+    m = json.loads(res.manifest.read_text(encoding="utf-8"))
+    assert m["verification"] == "disabled"
+    cues = json.loads((tmp_path / "run" / "cues.json").read_text(encoding="utf-8"))
+    assert {c["status"] for c in cues["cues"] + cues["extended"]} == {"unverified"}
+    assert all(r["status"] != "met (automated checks)" for r in m["summary"]["wcag"])
+
+
+def test_each_verification_records_a_split_call_in_the_ledger(tone_slides, tmp_path, fast_media):
+    """One Lightning call splits each line into claims before Super VL judges them; the
+    ledger has it under role "split"."""
+    ledger = _ledger(tmp_path)
+    _run(tone_slides, tmp_path / "run", ledger)
+    rows = {(r["role"], r["model"]): r["calls"] for r in ledger.summary("t1")["by_role_model"]}
+    assert rows[("split", "nvidia/Nemotron-3_5-Lightning")] == 3
+    assert rows[("verify", "nvidia/Nemotron-3.5-Super-VL")] == 3
+
+
+def test_a_stage_that_times_out_is_reported_as_a_failed_stage(tone_slides, tmp_path, fast_media,
+                                                              monkeypatch):  # fmt: skip
+    def hang(*a, **kw):
+        raise media.MediaTimeout("ffmpeg ran past its 30 s limit and was stopped")
+
+    monkeypatch.setattr(pipeline, "watch", hang)
+    ledger = _ledger(tmp_path)
+    events: list[Event] = []
+    with pytest.raises(TimeoutError):
+        run(tone_slides, tmp_path / "run", RunOptions(), tf=FakeTF(ledger), speech=FakeSpeech(),
+            tavily=None, ledger=ledger, on_event=events.append, run_id="tt", wps=3.0)  # fmt: skip
+    last = events[-1]
+    assert (last.type, last.stage, last.data["kind"]) == ("error", "watch", "MediaTimeout")

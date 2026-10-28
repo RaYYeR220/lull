@@ -44,6 +44,7 @@ from pydantic import BaseModel, ValidationError
 
 import lull
 from lull import media
+from lull.config import get_settings
 from lull.ledger import CallRecord, Ledger
 from lull.speech import SpeechClient
 from lull.stages import mix as mixer
@@ -79,6 +80,7 @@ class Event:
 
 class _Events(BaseModel):
     events: list[VisualEvent]
+    windows_split: int = 0  # watch windows cut off by the token limit and watched in halves
 
 
 class _Schedule(BaseModel):
@@ -193,6 +195,8 @@ def cue_context(
     speech: list[Span],
     finished: list[Cue],
     info: media.Probe | None = None,
+    verify: bool = True,
+    priority: dict[str, int] | None = None,
 ) -> CueContext:
     """What finalising `cue` needs to know about the rest of the programme. `named` are the
     names lint checks for introduction (cast and glossary people); `proper_nouns` every
@@ -209,6 +213,8 @@ def cue_context(
         verbatim=[e.verbatim_text for e in own if e.verbatim_text],
         proper_nouns=set(proper_nouns),
         video_duration=duration,
+        verify=verify,
+        priority={i: p for i, p in (priority or {}).items() if i in cue.event_ids},
     )
 
 
@@ -257,6 +263,8 @@ class _Run:
     stage: str | None = None
     info: media.Probe | None = None  # the probed video: frame rate and length for freezes
     undescribed: list[str] = field(default_factory=list)  # salient, and the plan wrote nothing
+    verify: bool = True  # False only with LULL_NO_VERIFY (the evaluation's ablation)
+    windows_split: int = 0  # watch windows whose answer was cut off and watched in halves
 
     @property
     def store(self) -> Store:
@@ -357,24 +365,25 @@ class _Run:
     def watch(self, words: list[Word]) -> list[VisualEvent]:
         with self.step("watch") as info:
             inputs = {"words": words, "profile": self.opts.profile}
-            out = self.cached(
-                info,
-                "watch",
-                inputs,
-                _Events,
-                lambda: _Events(
-                    events=watch(
-                        self.video,
-                        self.work,
-                        words,
-                        self.tf,
-                        run_id=self.run_id,
-                        profile=self.opts.profile,
-                        memo=self.memo_in("watch"),
-                    )
-                ),
-            )
+
+            def compute() -> _Events:
+                splits: list[str] = []
+                events = watch(
+                    self.video,
+                    self.work,
+                    words,
+                    self.tf,
+                    run_id=self.run_id,
+                    profile=self.opts.profile,
+                    memo=self.memo_in("watch"),
+                    splits=splits,
+                )
+                return _Events(events=events, windows_split=len(splits))
+
+            out = self.cached(info, "watch", inputs, _Events, compute)
             info["events"] = len(out.events)
+            info["windows_split"] = out.windows_split
+        self.windows_split = out.windows_split
         return out.events
 
     def memo_in(self, stage: str) -> Callable[[str, dict, Callable[[], object]], object]:
@@ -530,6 +539,7 @@ class _Run:
     def finalize(
         self, cues: list[Cue], gaps: list[Gap], events: list[VisualEvent], heard: ListenResult,
         cast: dict[str, str], named: set[str], proper: set[str],
+        priority: dict[str, int] | None = None,
     ) -> tuple[list[Cue], list[Cue]]:  # fmt: skip
         by_gap = {g.id: g for g in gaps}
         by_event = {e.id: e for e in events}
@@ -551,6 +561,8 @@ class _Run:
                     speech=heard.speech,
                     finished=finished,
                     info=self.info,
+                    verify=self.verify,
+                    priority=priority,
                 )
                 gap = by_gap.get(cue.gap_id) if cue.gap_id is not None else None
                 own = {i: by_event[i] for i in cue.event_ids if i in by_event}
@@ -576,7 +588,8 @@ class _Run:
                         cue_id=done.id,
                         reason=done.note,
                     )
-            counts = {s: sum(c.status == s for c in finished) for s in ("verified", "held")}
+            counts = {s: sum(c.status == s for c in finished)
+                      for s in ("verified", "held", "unverified")}  # fmt: skip
             info.update(
                 cached=bool(order) and hits == len(order),
                 cues=len(order),
@@ -716,7 +729,12 @@ def run(
             ledger,
             emit,
             info=info,
+            verify=not get_settings().lull_no_verify,
         )
+        if not state.verify:
+            emit("warning", None, kind="verification_off",
+                 message="LULL_NO_VERIFY is set: lines are voiced without claim verification "
+                 "(an evaluation run; nothing it publishes reads as met)")  # fmt: skip
 
         def on_call(rec: CallRecord) -> None:
             if rec.run_id == run_id:
@@ -764,7 +782,9 @@ def _stages(r: _Run, started: float | None = None) -> PublishResult:
     proper = set(planned.cast) | spelled  # spellings to keep
     named = set(planned.cast) | people  # names a listener must be introduced to (R15)
     cues = r.schedule(events, planned, gaps, proper)
-    standard, extended = r.finalize(cues, gaps, events, heard, planned.cast, named, proper)
+    standard, extended = r.finalize(
+        cues, gaps, events, heard, planned.cast, named, proper, planned.priority
+    )
     with r.step("publish") as info:
         assert_no_overlap(standard, heard.speech)
         result = publish(
@@ -787,6 +807,8 @@ def _stages(r: _Run, started: float | None = None) -> PublishResult:
                 "plan_unanswered": list(planned.unanswered),
                 "undescribed": list(r.undescribed),
             },  # fmt: skip
+            verify=r.verify,
+            watch_windows_split=r.windows_split,
         )
         info["files"] = len(result.files) + 1
     return result

@@ -38,7 +38,10 @@ packages = ["src/lull"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["live: hits the real Token Factory API (needs LULL_LIVE=1)"]
+markers = [
+    "live: hits the real Token Factory API (needs LULL_LIVE=1)",
+    "strict_split: a finalize test that runs the claim-split check as it is",
+]
 
 [tool.ruff]
 line-length = 100

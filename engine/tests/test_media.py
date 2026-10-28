@@ -103,13 +103,13 @@ def test_loudness_profile(tone_slides: Path, tmp_path: Path):
 def commands(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Every command lull.media launches, still run for real."""
     seen: list[list[str]] = []
-    real = media.subprocess.run
+    real = media._exec
 
     def spy(cmd, *args, **kwargs):
         seen.append([str(c) for c in cmd])
         return real(cmd, *args, **kwargs)
 
-    monkeypatch.setattr(media.subprocess, "run", spy)
+    monkeypatch.setattr(media, "_exec", spy)
     return seen
 
 
@@ -123,7 +123,9 @@ def test_every_media_input_is_locked_to_local_files(tone_slides, tmp_path, comma
     media.frame_at(tone_slides, 1.0, tmp_path / "f.jpg")
     media.frames_at(tone_slides, [(1.0, tmp_path / "g.jpg"), (2.0, tmp_path / "h.jpg")])
     media.scene_cuts(tone_slides)
-    assert len(commands) == 9
+    # 9 runs, plus the duration probes their time limits need (extract_wav, make_proxy,
+    # atempo, scene_cuts)
+    assert len(commands) == 13
     for cmd in commands:
         assert_locked(cmd)
 
@@ -233,7 +235,7 @@ def test_probe_reports_the_displayed_size_of_a_rotated_video(tmp_path, noaudio):
 def test_make_proxy_never_goes_above_the_requested_height_and_cleans_up(tmp_path, monkeypatch):
     heights: list[str] = []
 
-    def fake(*args):
+    def fake(*args, **kw):
         heights.append(next(a for a in args if str(a).startswith("scale=")))
         Path(args[-1]).write_bytes(b"\0" * 2000)  # always too big
         return None
@@ -307,3 +309,93 @@ def test_probe_refuses_a_list_before_opening_what_it_names(tone_slides, tmp_path
     debug = [("debug" if a == "error" else a) for a in cmd]  # the same call, verbose
     log = subprocess.run(debug, capture_output=True, text=True).stderr
     assert "a.mp4" in log and "real.mp4" not in log  # opened the list, never what it names
+
+
+# -- time limits ---------------------------------------------------------------------------------
+
+
+def test_a_tool_that_runs_past_its_limit_is_stopped_and_raises_a_timeout(tmp_path):
+    """A command that hangs is killed at its limit (no process left behind) and raises a
+    TimeoutError the pipeline reports like any failed stage."""
+    import sys
+    import time
+
+    from lull.stages.publish import _alive
+
+    pid_file = tmp_path / "pid"
+    code = f"import os, time; open(r'{pid_file}', 'w').write(str(os.getpid())); time.sleep(60)"
+    slow = [sys.executable, "-c", code]
+    t0 = time.monotonic()
+    with pytest.raises(media.MediaTimeout) as err:
+        media._run(slow, timeout=2.0)
+    assert time.monotonic() - t0 < 20
+    assert isinstance(err.value, TimeoutError) and isinstance(err.value, media.MediaError)
+    assert "2 s" in str(err.value)
+    assert not _alive(int(pid_file.read_text()))
+
+
+def test_every_tool_runs_with_a_limit_that_grows_with_the_media(tone_slides, tmp_path,
+                                                                monkeypatch):  # fmt: skip
+    """ffmpeg gets max(30 s, 8 x the media it handles); a probe gets 30 s."""
+    limits: list = []
+    real = media._exec
+
+    def spy(cmd, *a, **kw):
+        limits.append((Path(cmd[0]).stem.lower(), kw.get("timeout")))
+        return real(cmd, *a, **kw)
+
+    monkeypatch.setattr(media, "_exec", spy)
+    media.probe(tone_slides)
+    media.cut_clip(tone_slides, tmp_path / "c.mp4", 1.0, 2.0, height=180)
+    media.extract_wav(tone_slides, tmp_path / "a.wav", seconds=100.0)
+    assert limits == [("ffprobe", 30.0), ("ffmpeg", 30.0), ("ffmpeg", 800.0)]
+    assert media.ffmpeg_timeout(60.0) == 480.0 and media.ffmpeg_timeout(None) == 30.0
+
+
+def test_a_tool_that_times_out_takes_the_processes_it_started_with_it(tmp_path):
+    """ffmpeg can start helpers; on expiry the whole process tree is killed (a new session
+    killed as a group on POSIX, taskkill /T /F on Windows), not only the direct child."""
+    import sys
+
+    from lull.stages.publish import _alive
+
+    pids = tmp_path / "pids"
+    grandchild = "import time; time.sleep(60)"
+    code = (
+        "import os, subprocess, sys, time; "
+        f"g = subprocess.Popen([sys.executable, '-c', {grandchild!r}]); "
+        f"open(r'{pids}', 'w').write(f'{{os.getpid()}} {{g.pid}}'); time.sleep(60)"
+    )
+    import time
+
+    t0 = time.monotonic()
+    with pytest.raises(media.MediaTimeout):
+        media._run([sys.executable, "-c", code], timeout=3.0)
+    assert time.monotonic() - t0 < 20  # not held up until the helper's own end (60 s)
+    child, grand = (int(p) for p in pids.read_text().split())
+    assert not _alive(child) and not _alive(grand)
+
+
+def test_the_wait_after_a_kill_is_bounded_too(monkeypatch):
+    """A process whose pipes never close after the kill cannot hang the run: the wait after
+    the kill has a limit of its own, and the timeout is raised."""
+    waits = []
+
+    class Hung:
+        pid, returncode = 4242, None
+
+        def communicate(self, timeout=None):
+            waits.append(timeout)
+            raise subprocess.TimeoutExpired("ffmpeg", timeout)
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            pass
+
+    monkeypatch.setattr(media.subprocess, "Popen", lambda *a, **k: Hung())
+    monkeypatch.setattr(media, "_kill_tree", lambda proc: None)
+    with pytest.raises(subprocess.TimeoutExpired):
+        media._exec(["ffmpeg"], cwd=None, timeout=1)
+    assert len(waits) == 2 and None not in waits
