@@ -1601,3 +1601,17 @@ def test_a_long_whole_sentence_claim_counts_as_several_facts():
     whole = "A young person in a blue jacket walks toward the mechanical figure on the bridge"
     assert bundles_facts(Claim(text=whole, verdict="not_visible", at=None))
     assert not bundles_facts(Claim(text="a person in a blue jacket", verdict="supported", at=1.0))
+
+
+def test_a_cut_that_leaves_only_the_look_ahead_leaves_nothing(tmp_path, video):
+    """Live: a cut left "In a moment, ." and the cue was held for having no claim to check.
+    A line with nothing but its look-ahead prefix says nothing: held as nothing left."""
+    tf = FakeTF(
+        verify=[_claims(("a screen reads MEMORY OVERRIDE", "not_visible"))],
+        remove=[{"text": "In a moment, ."}],
+    )
+    cue = _cue("In a moment, a screen reads MEMORY OVERRIDE.", ahead=True)
+    out = _run(tmp_path, video, tf, FakeSpeech([]), cue=cue)
+    assert out.status == "held" and out.text == ""
+    assert "nothing left once the unverified claims were removed" in out.note
+    assert tf.roles() == ["verify", "remove"]

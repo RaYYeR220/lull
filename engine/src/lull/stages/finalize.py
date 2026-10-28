@@ -687,6 +687,8 @@ class _Finalise:
             if lost and not _same(new, before):
                 reason = f'the claim cut dropped "{lost[0]}" twice: ' + _claims_note(bad)
                 return self.hold_unverified(reason, bad, cut_tried=True)
+        if not _content(_AHEAD.sub(" ", new)):
+            new = ""  # nothing but a look-ahead prefix and punctuation is left
         if _same(new, before):
             fresh = self.fresh_check(bad, last)
             if fresh is not False:
