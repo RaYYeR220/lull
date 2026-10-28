@@ -55,7 +55,7 @@ docker run --rm -p 8080:8080 -v "$PWD/lull-data:/data" \
 curl localhost:8080/v1/health   # {"ok":true,"speech":true,...} once both processes are up
 ```
 
-- Add `--cpuset-cpus 0-3 --memory 8g` to match the Cloud Run instance (4 vCPU, 8 GiB).
+- Add `--cpuset-cpus 0-7 --memory 8g` to match the Cloud Run instance (8 vCPU, 8 GiB).
 - `/data` must be writable by uid 10001 (Docker Desktop bind mounts are; on Linux,
   `chown 10001 lull-data`).
 - Nothing listens until the speech server is ready: allow up to a minute.
@@ -177,8 +177,8 @@ line as written (`MSYS2_ARG_CONV_EXCL`); MSYS would otherwise turn them into Win
      `LULL_RUN_WALL_CLOCK_S=900`, `LULL_WEB_ORIGINS`, `LULL_PUBLIC_URL`.
 
    The first deploy takes the traffic; the script then sets `LULL_PUBLIC_URL` to the service's
-   two URLs and their `smoke---` tag URLs. Later deploys go out with `--no-traffic --tag
-   smoke`.
+   two URLs (and their `smoke---` tag URLs). A later deploy waits until `/v1/health` says
+   `"live_busy": false`, then deploys with the traffic.
 7. **Keep-warm:** a Cloud Scheduler job `lull-keep-warm` sends `GET /v1/health` every 10
    minutes, 07:00-23:00 UTC (`*/10 7-22 * * *`).
 
@@ -196,10 +196,31 @@ Notes:
   - Litestream syncs while requests run and at shutdown.
   - Housekeeping (retention) runs at start, hourly while the instance lives, and from
     `/v1/health` when an hour has passed, so the keep-warm ping keeps it going.
-- **Speed:** a run is slower on Cloud Run's 4 vCPU than on a desktop, mostly in voicing. bbb45
-  (45 s) took 514 s end to end (listen 33 s, watch 15 s, plan 7 s, finalize 427 s, publish
-  29 s), against 182 s in Docker on a Ryzen 5 5600X. That is close to the 10-minute wall
-  clock, so a 60 s upload with many lines may hit it.
+- **Speed:** a run is slower on Cloud Run than on a desktop, mostly in voicing (finalize).
+  bbb45 (45 s, 12 cues, 53 model calls) end to end:
+
+  | | 4 vCPU, 4 TTS threads | 8 vCPU, 8 TTS threads |
+  |---|---|---|
+  | listen | 33.3 s | 28.7 s |
+  | watch | 14.5 s | 14.4 s |
+  | research | 2.2 s | 3.7 s |
+  | plan | 6.9 s | 8.1 s |
+  | schedule | 0.4 s | 0.4 s |
+  | finalize | 426.8 s | 280.8 s |
+  | publish | 29.0 s | 27.1 s |
+  | **whole run** | **514 s** | **377 s** |
+
+  The same run takes 182 s in Docker on a Ryzen 5 5600X. The run wall clock
+  (`LULL_RUN_WALL_CLOCK_S`) is 900 s, so a 60 s upload has room.
+- **Free tier:** Cloud Run's monthly free tier is 180,000 vCPU-s and 360,000 GiB-s, shared by
+  every service on the billing account. At 8 vCPU and 8 GiB:
+  - a 45 s sample run (about 380 s) uses about 3,000 vCPU-s and 3,000 GiB-s;
+  - a cold start (about 130 s) about 1,000 of each;
+  - a keep-warm ping well under 10.
+  - With one cold start a day and the pings, about 38,000 vCPU-s a month go before any run,
+    which leaves room for about 45 sample runs a month.
+  - Past the free tier, a run costs about $0.08 of compute, besides about $0.035 of model
+    spend.
 - **Concurrency:** `--concurrency 20`. The work that loads the CPU is gated in the app (one
   live run, two uploads received at once, two Studio edits re-checked and one publish at a
   time), so the other slots are for reads, health and the event streams (at most 3 follow
@@ -210,9 +231,13 @@ Notes:
   - That 429 is the platform's, without the API's JSON or Retry-After. Clients retry it after
     a few seconds.
 - **One instance:** `--max-instances 1`, because the rate limits, the live executor and the
-  ledger live in one process, and Litestream allows one writer per replica. `max-instances`
-  counts per revision, so later deploys go out with `--no-traffic --tag smoke`, and the
-  traffic moves once the old revision's `/v1/health` says `"live_busy": false`.
+  ledger live in one process, and Litestream allows one writer per replica.
+  - `max-instances` counts per revision, so a revision deployed with `--no-traffic` and smoked
+    on a tag URL would run a second instance, a second Litestream writer, beside an old one
+    the keep-warm keeps alive.
+  - So a later deploy takes the traffic as soon as nothing runs: Cloud Run starts the new
+    instance, moves the traffic and stops the idle old one within seconds. The smoke then
+    goes to the service URL.
 - **Visitor address:** `LULL_PROXY_HOPS=1`, because Cloud Run's front end appends the visitor's
   address. Checked: requests carrying made-up `X-Forwarded-For` values still count against
   the sender's own limit.
@@ -281,7 +306,7 @@ binaries) if the image ever needs to shrink.
 
 ## Speed (Docker on a Ryzen 5 5600X host, which was busy, so read these as rough)
 
-4 vCPU, 8 GiB (`--cpuset-cpus 0-3 --memory 8g`), the Cloud Run size:
+4 vCPU, 8 GiB (`--cpuset-cpus 0-3 --memory 8g`), the first Cloud Run size:
 
 - Cold start: 55 s from `docker run` to a healthy API (52 s of it the speech server loading and
   warming its models); 19 s with the model files already in the page cache.

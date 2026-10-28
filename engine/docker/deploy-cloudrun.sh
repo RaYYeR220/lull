@@ -104,12 +104,17 @@ if ! g run services describe "$SERVICE" --region "$REGION" >/dev/null 2>&1; then
   g run services update "$SERVICE" --region "$REGION" --env-vars-file "$WORK/env.yaml"
   SMOKE_URL=$(g run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)')
 else
-  step "deploy of $SERVICE without traffic, tagged smoke"
+  # with the traffic, once nothing runs: a revision kept aside (--no-traffic) would start a
+  # second instance, a second Litestream writer on the ledger's replica, beside a warm old one
+  URL=$(g run services describe "$SERVICE" --region "$REGION" --format 'value(status.url)')
+  until curl -fsS "$URL/v1/health" | grep -q '"live_busy":false'; do
+    step "waiting for the live run to end"
+    sleep 20
+  done
+  step "deploy of $SERVICE (the old revision is idle; it stops as the traffic moves)"
   env_file "$(public_urls)"
-  g run deploy "$SERVICE" "${DEPLOY[@]}" --env-vars-file "$WORK/env.yaml" --no-traffic \
-    --tag smoke
-  SMOKE_URL=$(g run services describe "$SERVICE" --region "$REGION" \
-    --format 'value(status.traffic.filter(tag=smoke).url)' | head -n 1)
+  g run deploy "$SERVICE" "${DEPLOY[@]}" --env-vars-file "$WORK/env.yaml"
+  SMOKE_URL=$URL
 fi
 
 step "keep-warm: GET /v1/health every 10 minutes, 07:00-23:00 UTC"
@@ -121,7 +126,6 @@ else
     --time-zone UTC --uri "$URL/v1/health" --http-method GET --attempt-deadline 300s
 fi
 
-step "done: smoke it, then move the traffic (later deploys) once the old revision is idle"
-echo "uv run python docker/smoke.py $SMOKE_URL"
+step "done: smoke it"
+echo "uv run python docker/smoke.py $SMOKE_URL --platform-keeps-requests"
 echo "uv run python docker/smoke.py $SMOKE_URL --mcp --mcp-list-only"
-echo "gcloud run services update-traffic $SERVICE --region $REGION --to-tags smoke=100"

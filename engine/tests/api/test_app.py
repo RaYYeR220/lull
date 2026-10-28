@@ -243,7 +243,7 @@ def test_the_deploy_notes_state_the_platform_settings():
     notes = (docker / "README.md").read_text()
     for needed in ("--concurrency 20", "--enable-hierarchical-namespace",
                    "--uniform-bucket-level-access", "smoke.py", "--no-cpu-throttling",
-                   "--soft-delete-duration=0", "--tag smoke", "--env-vars-file",
+                   "--soft-delete-duration=0", '"live_busy": false', "--env-vars-file",
                    '"matchesPrefix": ["runs/"]', "--lifecycle-file"):  # fmt: skip
         assert needed in notes, needed
     assert "after engine merge" not in notes  # the per-file rename fallback is in
