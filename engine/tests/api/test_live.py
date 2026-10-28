@@ -551,8 +551,9 @@ def test_follow_active_run_live(lc, live, data):
     with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as r:
         plines = r.iter_lines()
         head = lines_until(plines, "event: call")
-        run_id = json.loads(head[2].split(": ", 1)[1])["run_id"]
-        with lc.stream("GET", f"/v1/runs/{run_id}/events") as g:
+        first = json.loads(head[2].split(": ", 1)[1])
+        run_id, owner = first["run_id"], {"Authorization": f"Bearer {first['edit_token']}"}
+        with lc.stream("GET", f"/v1/runs/{run_id}/events", headers=owner) as g:
             glines = g.iter_lines()
             replayed = lines_until(glines, "event: call")  # what happened before we came
             gate.set()
@@ -1818,28 +1819,142 @@ def test_a_run_nobody_watches_stops_at_its_next_stage(lc, live, data):
     run_id = parse_sse(w.seen("event: stage_start"))[0]["run_id"]
     w.leave()
     w.wait()
-    # stopped at once: the executor is free and the run reads stopped (not failed)
+    # stopped at once: the run is let go and reads stopped (not failed)
     deadline = time.time() + 5
-    while live.executor.busy and time.time() < deadline:
+    while live.executor.lock.locked() and time.time() < deadline:
         time.sleep(0.01)
-    assert not live.executor.busy
+    assert not live.executor.lock.locked() and live.executor.lingers(run_id)
     d = data / "runs" / run_id
     assert lc.get(f"/v1/runs/{run_id}").json()["status"] == "stopped"
     assert not (d / "error.json").exists()
     stored = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()]
     assert types(stored) == ["run", "stage_start", "stopped"]
     assert stored[-1]["stage"] == "listen" and stored[-1]["message"]
+    # while its thread still runs it holds the executor: another start is 409 busy
+    stuck = runner = live.runner
+    live.runner = Script()
+    r = post(lc)
+    assert r.status_code == 409 and r.json()["error"] == "busy"
+    assert live.executor.busy and lc.get("/v1/health").json()["live_busy"] is True
     # the thread finishes its stage and goes no further: the next stage never starts
     gate.set()
-    assert live.runner.finished.wait(10)
-    (job,) = live.runner.jobs
+    assert stuck.finished.wait(10)
+    (job,) = runner.jobs
     assert job.cancel.is_set() and not job.stop.is_set()
-    time.sleep(0.1)
+    deadline = time.time() + 5
+    while live.executor.busy and time.time() < deadline:
+        time.sleep(0.01)
+    assert not live.executor.lingers(run_id) and not live.executor.busy
     after = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()]
     assert after == stored and not (d / "manifest.json").exists()
-    # someone else may start a run meanwhile
+    # the thread is gone: the next start goes ahead
+    assert types(parse_sse(post(lc).text))[-1] == "done"
+
+
+def test_a_lingering_thread_is_abandoned_at_its_wall_clock(lc, live, data):
+    gate = threading.Event()
+    live.executor.wall_clock = 1.0
+    live.runner = stuck = Script(staged, gate=gate, gate_at=1)
+    w = Watcher(lc)
+    run_id = parse_sse(w.seen("event: stage_start"))[0]["run_id"]
+    w.leave()
+    w.wait()
+    deadline = time.time() + 5
+    while live.executor.busy and time.time() < deadline:
+        time.sleep(0.05)
+    assert not live.executor.busy and not live.executor.lingers(run_id)  # given up on
+    assert not stuck.finished.is_set()  # though it still hangs
     live.runner = Script()
     assert types(parse_sse(post(lc).text))[-1] == "done"
+    gate.set()
+    assert stuck.finished.wait(10)
+
+
+class CheckingTF:
+    """The engine's FakeTF, checking the ledger before every call as the real client does; it
+    notes every attempt, refused or not."""
+
+    attempts: list = []
+
+    def __init__(self, ledger):
+        from pipeline_fakes import FakeTF
+
+        self.inner, self.ledger = FakeTF(ledger), ledger
+
+    def json(self, model, messages, schema, *, run_id, stage, role, **kw):
+        CheckingTF.attempts.append((stage, role))
+        self.ledger.check(run_id, 0.001)
+        return self.inner.json(model, messages, schema, run_id=run_id, stage=stage, role=role, **kw)
+
+
+def test_a_stopped_run_makes_no_model_call_after_the_stop(
+    lc, live, data, tmp_path, tone_slides, fast_media, monkeypatch
+):
+    """The visitor leaves while finalize verifies its first cue: the next verify in that same
+    stage is refused before it is made, and the thread ends there."""
+    from lull.api import clip
+    from lull.api import live as live_mod
+    from pipeline_fakes import FakeSpeech
+
+    CheckingTF.attempts = []
+    monkeypatch.setattr(live_mod.TokenFactory, "from_settings", staticmethod(CheckingTF))
+    monkeypatch.setattr(live_mod.Tavily, "from_settings", staticmethod(lambda ledger: None))
+    monkeypatch.setattr(live_mod.NemoSpeechHTTP, "from_settings", staticmethod(FakeSpeech))
+    live.probe, live.transcode = clip.probe, clip.transcode
+    live.ledger = Ledger(tmp_path / "ledger.db", cap_run=None, cap_day=None, cap_total=None)
+    reached, gate, ended = threading.Event(), threading.Event(), threading.Event()
+
+    def runner(job, on_event):
+        def hook(ev):
+            on_event(ev)
+            if ev.type == "call" and ev.data.get("role") == "verify" and not reached.is_set():
+                reached.set()
+                assert gate.wait(20)
+
+        try:
+            live_mod._run_pipeline(job, hook)
+        finally:
+            ended.set()
+
+    live.runner = runner
+    w = Watcher(lc, tone_slides.read_bytes())
+    assert reached.wait(60)
+    run_id = parse_sse(w.seen("event: run"))[0]["run_id"]
+    w.leave()
+    w.wait()
+    made = len(live.ledger.calls(run_id))
+    tried = len(CheckingTF.attempts)
+    gate.set()
+    assert ended.wait(20)
+    assert CheckingTF.attempts[tried:] == [("finalize", "verify")]  # tried once, refused
+    assert len(live.ledger.calls(run_id)) == made  # nothing spent after the stop
+    assert lc.get(f"/v1/runs/{run_id}").json()["status"] == "stopped"
+    deadline = time.time() + 5
+    while live.executor.busy and time.time() < deadline:
+        time.sleep(0.01)
+    assert not live.executor.busy
+
+
+def test_following_an_unfinished_run_is_its_owners(lc, live, data):
+    gate = threading.Event()
+    live.runner = Script(gate=gate, gate_at=2)
+    with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as p:
+        plines = p.iter_lines()
+        head = lines_until(plines, "event: call")
+        first = json.loads(head[2].split(": ", 1)[1])
+        url = f"/v1/runs/{first['run_id']}/events"
+        r = lc.get(url)
+        assert r.status_code == 403 and r.json()["error"] == "forbidden"
+        owner = {"Authorization": f"Bearer {first['edit_token']}"}
+        with lc.stream("GET", url, headers=owner) as g:
+            assert g.status_code == 200
+            glines = g.iter_lines()
+            seen = lines_until(glines, "event: call")
+            gate.set()
+            followed = parse_sse("\n".join(seen + list(glines)))
+        list(plines)
+    assert types(followed)[-1] == "done"
+    assert lc.get(url).status_code == 200  # published: its replay is open to anyone
 
 
 def test_a_stopped_run_is_replayed_to_its_owner_only(lc, live, data):
@@ -1932,17 +2047,18 @@ def test_at_most_3_follow_a_run_and_8_streams_in_all(lc, live, data):
     with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as p:
         plines = p.iter_lines()
         head = lines_until(plines, "event: call")
-        run_id = json.loads(head[2].split(": ", 1)[1])["run_id"]
+        first = json.loads(head[2].split(": ", 1)[1])
+        run_id, owner = first["run_id"], {"Authorization": f"Bearer {first['edit_token']}"}
         url = f"/v1/runs/{run_id}/events"
         with contextlib.ExitStack() as stack:
-            follows = [stack.enter_context(lc.stream("GET", url)) for _ in range(3)]
+            follows = [stack.enter_context(lc.stream("GET", url, headers=owner)) for _ in range(3)]
             assert all(g.status_code == 200 for g in follows)
-            r = lc.get(url)
+            r = lc.get(url, headers=owner)
             assert r.status_code == 429 and r.json()["error"] == "busy"
             assert int(r.headers["retry-after"]) > 0 and r.json()["message"]
             assert lc.get("/v1/health").status_code == 200  # the rest still answers
         # the three left: room again
-        with lc.stream("GET", url) as g:
+        with lc.stream("GET", url, headers=owner) as g:
             assert g.status_code == 200
         gate.set()
         list(plines)
@@ -1959,11 +2075,12 @@ def test_the_streams_in_all_are_capped_replays_included(lc, live, data):
     with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as p:
         plines = p.iter_lines()
         head = lines_until(plines, "event: call")
-        run_id = json.loads(head[2].split(": ", 1)[1])["run_id"]
-        with (
-            lc.stream("GET", f"/v1/runs/{run_id}/events"),
-            lc.stream("GET", f"/v1/runs/{run_id}/events"),
-        ):
+        first = json.loads(head[2].split(": ", 1)[1])
+        url, owner = (
+            f"/v1/runs/{first['run_id']}/events",
+            {"Authorization": f"Bearer {first['edit_token']}"},
+        )
+        with lc.stream("GET", url, headers=owner), lc.stream("GET", url, headers=owner):
             r = lc.get("/v1/runs/demo/events")
             assert r.status_code == 429 and r.json()["error"] == "busy"
         assert lc.get("/v1/runs/demo/events").status_code == 200
