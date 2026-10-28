@@ -1650,6 +1650,8 @@ def test_the_report_states_this_attempts_spend_and_all_runs_apart(tmp_path, fake
     html = " ".join((tmp_path / "run" / "report.html").read_text(encoding="utf-8").split())
     assert "Model spend, this run" in html and "all runs under run id r1" in html
     assert "1 web search" in html
+    # searches are a count: their list price never shows as money in the report
+    assert "0.0080" not in html and "list price" not in html
 
 
 # -- where the picture freezes for an extended description ------------------------------------
