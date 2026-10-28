@@ -101,3 +101,7 @@
     --hit-door:58px;
   }
 }
+/* under 360 px the nav wraps to a second row: the header is that much taller */
+@media (max-width:359px){
+  :root{--head-h:128px}
+}

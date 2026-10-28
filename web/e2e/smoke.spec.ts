@@ -68,6 +68,17 @@ for (const width of [320, 390]) {
       const { scrollWidth, clientWidth, spill } = await page.evaluate(spillOf);
       expect(scrollWidth, `${path} at ${width}px`).toBeLessThanOrEqual(clientWidth);
       expect(spill, `${path} at ${width}px`).toEqual([]);
+      // the nav, wrapped or not, sits clear of the page's content
+      const under = await page.evaluate(() => {
+        const nav = document.querySelector("header nav ul")!.getBoundingClientRect();
+        return [...document.querySelectorAll("main h1, main h2, main p, main li, main a, main span")]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && r.top < nav.bottom && r.bottom > nav.top && r.left < nav.right && r.right > nav.left;
+          })
+          .map((el) => (el.textContent ?? "").trim().slice(0, 30));
+      });
+      expect(under, `${path} at ${width}px: under the nav`).toEqual([]);
     }
   });
 }
@@ -86,7 +97,7 @@ for (const route of ROUTES) {
       expect(errors).toEqual([]);
     });
 
-    test("has no serious or critical axe violations", async ({ page }) => {
+    test("has no moderate, serious or critical axe violations", async ({ page }) => {
       for (const viewport of [{ width: 1440, height: 900 }, PHONE]) {
         await page.setViewportSize(viewport);
         // judge the resting state, not a frame of the entrance
@@ -94,7 +105,7 @@ for (const route of ROUTES) {
         await page.goto(route.path, { waitUntil: "networkidle" });
         const results = await new AxeBuilder({ page }).analyze();
         const blocking = results.violations
-          .filter((v) => v.impact === "serious" || v.impact === "critical")
+          .filter((v) => v.impact === "moderate" || v.impact === "serious" || v.impact === "critical")
           .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
         expect(blocking, `at ${viewport.width}px`).toEqual([]);
       }
