@@ -124,6 +124,8 @@ PUBLISHES_PER_DAY = 500
 MAX_EDITS, MAX_PUBLISHES = 2, 1  # re-checked / published at once, across all runs
 OVERLOADED_RETRY_S = 10
 FORKS_PER_HOUR, FORKS_PER_DAY = 5, 100  # each fork copies the run's media: keep them few
+FORK_TTL_S = 24 * 3600.0  # a fork is removed a day after it was made
+FORK_SWEEP_S = 3600.0
 MAX_TEXT = 1000
 MAX_REASON = 300
 MAX_BODY = 64 * 1024
@@ -702,11 +704,44 @@ class Studio:
         )
         self.max_edits, self.max_publishes = MAX_EDITS, MAX_PUBLISHES
         self.editing = self.publishing = 0  # across all runs, now
+        self.fork_ttl, self.fork_sweep_every = FORK_TTL_S, FORK_SWEEP_S
         self._locks: dict[str, asyncio.Lock] = {}
         live.executor.after_run.append(self.after_run)
 
     def sweep(self) -> int:
         return sweep_edits([self.settings.runs_dir, self.settings.showcase_dir])
+
+    def expire_forks(self, now: float | None = None) -> list[str]:
+        """Remove the forks made more than fork_ttl ago, but not one the live executor is
+        describing or the Studio is changing right now. Runs on the event loop, so no change
+        can start in between. Returns the run ids removed."""
+        now = time.time() if now is None else now
+        root = self.settings.runs_dir
+        gone: list[str] = []
+        for d in sorted(root.iterdir()) if root.is_dir() else []:
+            req = _dict(_read_json(d / REQUEST)) if d.is_dir() else {}
+            if _dict(req.get("source")).get("kind") != "fork":
+                continue
+            if now - _made_at(d, req) < self.fork_ttl:
+                continue
+            lock = self._locks.get(d.name)
+            if self.live.executor.get(d.name) is not None or (lock is not None and lock.locked()):
+                continue
+            shutil.rmtree(d, ignore_errors=True)
+            self._locks.pop(d.name, None)
+            gone.append(d.name)
+        if gone:
+            self.store.invalidate()
+            log.info("studio: %d forks expired", len(gone))
+        return gone
+
+    async def expire_forks_forever(self) -> None:
+        while True:
+            await asyncio.sleep(self.fork_sweep_every)
+            try:
+                self.expire_forks()
+            except Exception:
+                log.exception("studio: expiring forks failed")
 
     def lock(self, run_id: str) -> asyncio.Lock:
         return self._locks.setdefault(run_id, asyncio.Lock())
@@ -1017,6 +1052,17 @@ def _detail(studio: Studio, run_dir: Path) -> dict:
 
 
 # -- forks --------------------------------------------------------------------------------------
+
+
+def _made_at(run_dir: Path, request: dict) -> float:
+    """When a run was made: request.json's created, else its folder's mtime."""
+    try:
+        return datetime.fromisoformat(request["created"]).timestamp()
+    except (KeyError, TypeError, ValueError):
+        try:
+            return run_dir.stat().st_mtime
+        except OSError:
+            return time.time()
 
 
 def _copy(src: Path, dst: Path) -> None:

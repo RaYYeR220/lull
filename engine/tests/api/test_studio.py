@@ -1144,3 +1144,68 @@ def test_an_unmoved_cue_takes_its_override_as_before(sc, rd, template):
     assert sc.post(f"/v1/runs/{RID}/cues/x002/approve").status_code == 200
     c = cue_of(rd, "c001")
     assert c["text"] == NEW_RED and c["status"] == "edited" and c["audio_path"]
+
+
+# -- fix round 2: forks expire after a day ---------------------------------------------------------
+
+
+def _age(d: Path, hours: float) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    req = json.loads((d / "request.json").read_text(encoding="utf-8"))
+    req["created"] = (datetime.now(UTC) - timedelta(hours=hours)).isoformat(timespec="seconds")
+    (d / "request.json").write_text(json.dumps(req))
+
+
+def test_forks_older_than_a_day_are_removed(make_app, template, data, fast_media):
+    place(template, data / "showcase")
+    plain = place(template, data / "runs")  # a live run of its own, not a fork
+    _age(plain, 48)
+    app = make_app()
+    with TestClient(app) as c:
+        old = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+        new = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+        _age(data / "runs" / old, 25)
+        _age(data / "runs" / new, 23)
+        assert app.state.studio.expire_forks() == [old]
+        assert not (data / "runs" / old).exists()
+        assert (data / "runs" / new).is_dir() and plain.is_dir()
+        assert c.get(f"/v1/runs/{old}").status_code == 404
+        assert old not in {i["id"] for i in c.get("/v1/runs").json()}
+
+
+def test_a_fork_being_changed_is_not_removed(make_app, template, data, fast_media):
+    import asyncio
+
+    place(template, data / "showcase")
+    app = make_app()
+    with TestClient(app) as c:
+        fid = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+    _age(data / "runs" / fid, 25)
+    studio = app.state.studio
+
+    async def held():
+        async with studio.lock(fid):
+            return studio.expire_forks()
+
+    assert asyncio.run(held()) == []
+    assert (data / "runs" / fid).is_dir()
+
+
+def test_fork_expiry_runs_at_startup_and_then_on_a_timer(make_app, template, data, fast_media):
+    place(template, data / "showcase")
+    app = make_app()
+    with TestClient(app) as c:
+        first = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+    _age(data / "runs" / first, 25)
+    app = make_app()
+    app.state.studio.fork_sweep_every = 0.05
+    with TestClient(app) as c:
+        assert not (data / "runs" / first).exists()  # at startup
+        second = c.post(f"/v1/runs/{RID}/fork").json()["run_id"]
+        _age(data / "runs" / second, 25)
+        for _ in range(100):
+            if not (data / "runs" / second).exists():
+                break
+            time.sleep(0.05)
+        assert not (data / "runs" / second).exists()  # by the timer, while serving

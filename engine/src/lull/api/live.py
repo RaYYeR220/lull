@@ -3,20 +3,23 @@
 POST /v1/runs takes an upload (or a sample id). Before anything streams, it checks that no
 other run is going (409) and at most MAX_UPLOADS uploads are being received (503), the
 visitor's rate limits (429: runs started, and uploads refused), the size (413), the format and
-the duration (422) and the spend caps (402). The run gets a remuxed copy cut at MAX_SECONDS
-and probed again (lull.api.clip), so the duration that counts is the copy's, not what the
-container claims. Then it answers with text/event-stream: a `run` event,
-every engine event as it happens (stage_start / stage_end / call / cue / warning), a final
-`done` or `error`, and a `: ping` comment whenever the stream has been quiet for 15 s.
+the duration (422: uploads up to MAX_SECONDS, samples MAX_SAMPLE_SECONDS) and the spend caps
+(402). The run gets a remuxed copy cut at that limit and probed again (lull.api.clip), so the
+duration that counts is the copy's, not what the container claims. Then it answers with
+text/event-stream: a `run` event, every engine event as it happens (stage_start / stage_end /
+call / cue / warning), a final `done` or `error`, and a `: ping` comment whenever the stream
+has been quiet for 15 s.
 
 The engine runs in a worker thread. Its callback only hands each event to the event loop
 (call_soon_threadsafe). On the loop the event gets its sequence number, is appended to
 runs/<id>/events.jsonl and goes to every listener. GET /v1/runs/{id}/events replays that file
 and follows the run if it is still going in this process. It resumes a live run nobody
-finished (no manifest, no error.json: the process stopped); the engine's stage cache makes
-that cheap. A run still going after WALL_CLOCK_S is given up: error event, error.json, the
-executor freed; its thread cannot be killed, but its next model call is refused and anything
-it reports after that is dropped.
+finished (no manifest, no error.json: the process stopped) for its owner (the edit token);
+the engine's stage cache makes that cheap. Replaying a finished run is open to anyone.
+
+A run still going after WALL_CLOCK_S is given up: error event, error.json, the executor
+freed; its thread cannot be killed, but its next model call is refused and anything it reports
+after that is dropped.
 """
 
 from __future__ import annotations
@@ -49,7 +52,7 @@ from starlette.types import Message
 from lull import media
 from lull.api import clip
 from lull.api.clean import Scrubber, default_roots
-from lull.api.owner import TOKEN_KEY, new_token
+from lull.api.owner import TOKEN_KEY, holds_token, new_token
 from lull.api.ratelimit import HOUR, RateLimiter
 from lull.api.settings import ApiSettings
 from lull.api.store import PENDING, RunStore
@@ -67,7 +70,8 @@ log = logging.getLogger(__name__)
 
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024  # Cloud Run refuses HTTP/1 bodies over 32 MiB
 FORM_SLACK = 64 * 1024  # multipart headers and the small fields around the file
-MAX_SECONDS = 120.0
+MAX_SECONDS = 60.0  # an upload (demo latency: the UI states it)
+MAX_SAMPLE_SECONDS = 45.0
 TRIM_SLACK = 1.0  # a stream copy cuts at a packet, a little past the limit
 FORMATS = (".mp4", ".mov", ".webm", ".mkv")
 HEARTBEAT_S = 15.0
@@ -500,6 +504,7 @@ class Live:
         self.heartbeat = HEARTBEAT_S
         self.max_bytes = MAX_UPLOAD_BYTES
         self.max_seconds = MAX_SECONDS
+        self.max_sample_seconds = MAX_SAMPLE_SECONDS
         self.max_uploads = MAX_UPLOADS
         self.upload_deadline = UPLOAD_DEADLINE_S
         self.uploading = 0  # uploads being received and checked now
@@ -692,9 +697,22 @@ def too_long(duration: float, limit: float) -> LiveError:
     )
 
 
+def check_container(info: media.Probe) -> None:
+    """The engine's media.assert_safe_container when it has one; until then the same rule
+    here: ffprobe's format_name may only name the mp4/mov and Matroska/WebM demuxers."""
+    engine_check = getattr(media, "assert_safe_container", None)
+    if engine_check is not None:
+        engine_check(info)
+        return
+    names = {n for n in str(getattr(info, "format_name", "")).split(",") if n}
+    if not names or not names <= clip.SAFE_CONTAINERS:
+        raise media.MediaError(f"container {getattr(info, 'format_name', '')!r} is not taken")
+
+
 async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
     try:
         info = await anyio.to_thread.run_sync(live.probe, video)
+        check_container(info)
     except Exception:
         log.info("live run %s: %s does not probe", run_id, video.name, exc_info=True)
         raise unreadable() from None
@@ -703,21 +721,21 @@ async def _probe(live: Live, run_id: str, video: Path) -> media.Probe:
     return info
 
 
-async def _cut(live: Live, run_id: str, video: Path) -> media.Probe:
-    """Check the video, then replace it by a remuxed copy cut at the length limit, and return
+async def _cut(live: Live, run_id: str, video: Path, limit: float) -> media.Probe:
+    """Check the video, then replace it by a remuxed copy cut at `limit` seconds, and return
     what probing that copy says: the container's own claim is not trusted."""
     info = await _probe(live, run_id, video)
-    if info.duration > live.max_seconds:
-        raise too_long(info.duration, live.max_seconds)
+    if info.duration > limit:
+        raise too_long(info.duration, limit)
     cut = video.with_name(f".trim-{video.name}")
     try:
-        await anyio.to_thread.run_sync(live.trim, video, cut, live.max_seconds)
+        await anyio.to_thread.run_sync(live.trim, video, cut, limit)
     except Exception:
         log.info("live run %s: %s does not remux", run_id, video.name, exc_info=True)
         raise unreadable() from None
     info = await _probe(live, run_id, cut)
-    if info.duration > live.max_seconds + TRIM_SLACK:
-        raise too_long(info.duration, live.max_seconds)
+    if info.duration > limit + TRIM_SLACK:
+        raise too_long(info.duration, limit)
     os.replace(cut, video)
     return info
 
@@ -741,7 +759,8 @@ async def _accept(
     if received is None:  # the deadline, not a TimeoutError from the disk (that is ours)
         raise upload_timeout(live.upload_deadline)
     opts, video, source = received
-    info = await _cut(live, run_id, video)
+    limit = live.max_sample_seconds if source["kind"] == "sample" else live.max_seconds
+    info = await _cut(live, run_id, video, limit)
     live.check_budget(run_id, info.duration)
     token, token_hash = new_token()
     _write_json(
@@ -980,6 +999,9 @@ async def run_events(run_id: str, request: Request, after: int | None = None) ->
             return Response(status_code=204)
         return _sse(rest)
 
+    # resuming spends: only the run's owner may (a finished run's replay stays open to all)
+    if not holds_token(run_dir, request):
+        raise LiveError(403, "forbidden", "Only the person who started this run can resume it.")
     job = _resume_job(live, run_id, run_dir)
     if live.executor.busy:
         raise busy()

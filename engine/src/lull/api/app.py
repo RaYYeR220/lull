@@ -3,6 +3,8 @@ and Studio caps, the rate limits and the per-run edit locks are in memory."""
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import mimetypes
 from collections.abc import AsyncIterator
@@ -52,10 +54,18 @@ def create_app(settings: ApiSettings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        swept = app.state.studio.sweep()  # before serving: no edit is in progress yet
+        studio = app.state.studio
+        swept = studio.sweep()  # before serving: no edit is in progress yet
         if swept:
             log.info("startup: removed %d edit folders nothing refers to", swept)
-        yield
+        studio.expire_forks()  # then every fork_sweep_every seconds while serving
+        timer = asyncio.create_task(studio.expire_forks_forever(), name="fork expiry")
+        try:
+            yield
+        finally:
+            timer.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await timer
 
     app = FastAPI(title="Lull API", version="0.1.0", lifespan=lifespan)
     app.state.settings = settings

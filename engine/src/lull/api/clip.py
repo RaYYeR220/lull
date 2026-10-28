@@ -12,13 +12,25 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 from lull.media import MediaError, Probe
 
 PROTOCOLS = "file,pipe"
 DEMUXERS = "mov,matroska"  # the "mov,mp4,m4a,3gp,3g2,mj2" and "matroska,webm" demuxers
+# the containers taken, as ffprobe names them (format_name is a comma list of these)
+SAFE_CONTAINERS = frozenset({"mov", "mp4", "m4a", "3gp", "3g2", "mj2", "matroska", "webm"})
 PROBE_TIMEOUT = 20.0
+
+
+@dataclass(frozen=True)
+class ClipProbe(Probe):
+    """lull.media.Probe and the container ffprobe found (format_name, e.g. "matroska,webm")."""
+
+    format_name: str = ""
+
+
 TRIM_TIMEOUT = 120.0
 
 
@@ -69,7 +81,8 @@ def probe(path: Path, *, timeout: float = PROBE_TIMEOUT) -> Probe:
         duration = info.get("format", {}).get("duration") or video.get("duration")
         if duration is None:
             raise MediaError(f"cannot determine duration of {path}")
-        return Probe(
+        return ClipProbe(
+            format_name=str(info.get("format", {}).get("format_name") or ""),
             duration=float(duration),
             width=int(video["width"]),
             height=int(video["height"]),

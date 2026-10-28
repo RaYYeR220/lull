@@ -4,6 +4,7 @@ ffprobe itself."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -15,11 +16,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from lull.api.app import create_app
+from lull.api.clip import ClipProbe
 from lull.api.ratelimit import RateLimiter
 from lull.ledger import BudgetExceeded, Ledger
-from lull.media import MediaError, Probe
+from lull.media import MediaError
 from lull.pipeline import Event
 
+MP4_FORMAT = "mov,mp4,m4a,3gp,3g2,mj2"
+OWNER = "owner-token-of-the-unfinished-run"
+OWNER_AUTH = {"Authorization": f"Bearer {OWNER}"}
 BUSY = "Another description is running. Try again in a minute, or open a recorded run."
 RUN_ID = re.compile(r"^live-\d{8}-\d{6}-[0-9a-f]{6}$")
 
@@ -33,7 +38,9 @@ def fake_probe(path):
     if head.startswith(b"BAD"):
         raise MediaError(f"ffprobe failed (exit 1): {path}: Invalid data found")
     secs = float(head[4:].split(b";")[0]) if head.startswith(b"DUR=") else 10.0
-    return Probe(duration=secs, width=64, height=64, fps=25.0, has_audio=True)
+    return ClipProbe(
+        duration=secs, width=64, height=64, fps=25.0, has_audio=True, format_name=MP4_FORMAT
+    )
 
 
 def fake_trim(src, dst, seconds):
@@ -193,6 +200,7 @@ def make_unfinished(data: Path, run_id="live-20261027-100000-abcdef", *, request
                     "options": {"mode": "extended", "voice": "Aria"},
                     "input": "input/clip.mp4",
                     "video": {"duration": 10.0},
+                    "edit_token_sha256": hashlib.sha256(OWNER.encode()).hexdigest(),
                 }
             )
         )
@@ -368,7 +376,7 @@ def test_too_long_422_names_the_duration(lc, live, data):
     r = post(lc, b"DUR=121.5;")
     assert r.status_code == 422
     j = r.json()
-    assert j["error"] == "too_long" and "121.5 s" in j["message"] and "120 s" in j["message"]
+    assert j["error"] == "too_long" and "121.5 s" in j["message"] and "60 s" in j["message"]
     assert live.runner.jobs == [] and run_dirs(data) == []
 
 
@@ -553,7 +561,7 @@ def test_follow_active_run_live(lc, live, data):
 
 def test_resume_unfinished_run(lc, live, data):
     d = make_unfinished(data)
-    r = lc.get(f"/v1/runs/{d.name}/events")
+    r = lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH)
     events = parse_sse(r.text)
     assert types(events) == [
         "run",
@@ -574,7 +582,7 @@ def test_resume_unfinished_run(lc, live, data):
     stored = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()]
     assert stored == events
     # finished now: replay only
-    assert parse_sse(lc.get(f"/v1/runs/{d.name}/events").text) == events
+    assert parse_sse(lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH).text) == events
     assert len(live.runner.jobs) == 1
 
 
@@ -585,7 +593,7 @@ def test_resume_busy_409(lc, live, data):
     with lc.stream("POST", "/v1/runs", files={"file": ("a.mp4", b"x", "video/mp4")}) as r:
         lines = r.iter_lines()
         lines_until(lines, "event: run")
-        busy = lc.get(f"/v1/runs/{d.name}/events")
+        busy = lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH)
         assert busy.status_code == 409 and busy.json()["error"] == "busy"
         gate.set()
         list(lines)
@@ -595,14 +603,14 @@ def test_resume_busy_409(lc, live, data):
 def test_resume_budget_402(lc, live, data, tmp_path):
     d = make_unfinished(data)
     live.ledger = Ledger(tmp_path / "caps.db", cap_run=0, cap_day=0, cap_total=0.001)
-    r = lc.get(f"/v1/runs/{d.name}/events")
+    r = lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH)
     assert r.status_code == 402 and r.json()["scope"] == "total"
     assert live.runner.jobs == []
 
 
-def test_not_resumable_without_request_404(lc, live, data):
-    d = make_unfinished(data, request=False)
-    assert lc.get(f"/v1/runs/{d.name}/events").status_code == 404
+def test_not_resumable_without_request_403(lc, live, data):
+    d = make_unfinished(data, request=False)  # no request.json: nobody can show they own it
+    assert lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH).status_code == 403
     assert live.runner.jobs == []
 
 
@@ -620,7 +628,7 @@ def test_resume_after_a_torn_last_line(lc, live, data):
     d = make_unfinished(data)
     with open(d / "events.jsonl", "ab") as f:
         f.write(b'{"type": "stage_end", "sta')  # the process stopped mid-write
-    events = parse_sse(lc.get(f"/v1/runs/{d.name}/events").text)
+    events = parse_sse(lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH).text)
     assert [e["seq"] for e in events] == list(range(8))
     stored = [json.loads(x) for x in (d / "events.jsonl").read_text("utf-8").splitlines()[3:]]
     assert stored == events[2:]
@@ -760,7 +768,9 @@ def test_a_container_that_understates_its_length_is_cut(lc, live, noaudio):
     def lying(path):
         if Path(path).name.startswith(".trim-"):
             return clip.probe(path)
-        return Probe(duration=1.0, width=720, height=1280, fps=25.0, has_audio=False)
+        return ClipProbe(
+            duration=1.0, width=720, height=1280, fps=25.0, has_audio=False, format_name=MP4_FORMAT
+        )
 
     live.probe, live.trim, live.max_seconds = lying, clip.trim, 2.0
     r = post(lc, noaudio.read_bytes(), name="portrait.mp4")
@@ -912,13 +922,28 @@ def test_ids_with_a_trailing_newline_are_refused(lc, data):
 
 
 @pytest.mark.parametrize(
-    "body", ["{not json", "[]", '{"options": {"mode": "silly"}, "input": "input/clip.mp4"}']
+    "body,status",
+    [
+        ("{not json", 403),  # the owner cannot be checked
+        ("[]", 403),
+        (
+            json.dumps(
+                {
+                    "options": {"mode": "silly"},
+                    "input": "input/clip.mp4",
+                    "edit_token_sha256": hashlib.sha256(OWNER.encode()).hexdigest(),
+                }
+            ),
+            404,
+        ),
+    ],
 )
-def test_resume_with_a_damaged_request_json_is_404(lc, live, data, body):
+def test_resume_with_a_damaged_request_json_is_refused(lc, live, data, body, status):
     d = make_unfinished(data)
     (d / "request.json").write_text(body)
-    r = lc.get(f"/v1/runs/{d.name}/events")
-    assert r.status_code == 404 and r.json()["error"] == "not_found"
+    r = lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH)
+    assert r.status_code == status
+    assert r.json()["error"] == ("forbidden" if status == 403 else "not_found")
     assert live.runner.jobs == []
 
 
@@ -1089,7 +1114,9 @@ def test_post_gives_the_edit_token_to_the_poster_only(lc, live, data):
 
 def test_a_resumed_run_hands_out_no_token(lc, live, data):
     d = make_unfinished(data)
-    events = parse_sse(lc.get(f"/v1/runs/{d.name}/events").text, keep_token=True)
+    events = parse_sse(
+        lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH).text, keep_token=True
+    )
     assert all("edit_token" not in e for e in events)
 
 
@@ -1197,3 +1224,89 @@ def test_a_stopped_run_skips_the_after_run_steps(lc, live, data):
     live.runner = Script()
     parse_sse(post(lc).text)
     assert len(seen) == 1
+
+
+# -- fix round 2: who may resume, how long a video may be, which containers ---------------------
+
+
+@pytest.mark.parametrize(
+    "headers", [{}, {"Authorization": "Bearer someone-else"}, {"Authorization": OWNER}]
+)
+def test_resuming_an_unfinished_run_needs_its_owner_token(lc, live, data, headers):
+    d = make_unfinished(data)
+    r = lc.get(f"/v1/runs/{d.name}/events", headers=headers)
+    assert r.status_code == 403 and r.json()["error"] == "forbidden"
+    assert live.runner.jobs == []
+    ok = lc.get(f"/v1/runs/{d.name}/events", headers=OWNER_AUTH)
+    assert ok.status_code == 200 and len(live.runner.jobs) == 1
+
+
+def test_replaying_a_finished_run_needs_no_token(lc, live, data):
+    events = parse_sse(post(lc).text)
+    with TestClient(lc.app) as anyone:
+        assert parse_sse(anyone.get(f"/v1/runs/{events[0]['run_id']}/events").text) == events
+
+
+def test_uploads_take_up_to_60_s(lc, live):
+    assert live.max_seconds == 60.0
+    assert post(lc, b"DUR=59.5;").status_code == 200
+    r = post(lc, b"DUR=60.5;")
+    assert r.status_code == 422 and "60 s" in r.json()["message"]
+
+
+@pytest.mark.parametrize("secs,ok", [(44.0, True), (46.0, False)])
+def test_samples_take_up_to_45_s(lc, live, data, secs, ok):
+    assert live.max_sample_seconds == 45.0
+    (data / "samples").mkdir(parents=True)
+    (data / "samples" / "street.mp4").write_bytes(f"DUR={secs};".encode())
+    seen = []
+    live.trim = lambda src, dst, limit: seen.append(limit) or fake_trim(src, dst, limit)
+    r = post(lc, None, sample="street")
+    if ok:
+        assert r.status_code == 200 and seen == [45.0]
+    else:
+        assert r.status_code == 422 and "45 s" in r.json()["message"]
+
+
+@pytest.mark.parametrize(
+    "fmt,ok",
+    [
+        ("mov,mp4,m4a,3gp,3g2,mj2", True),
+        ("matroska,webm", True),
+        ("avi", False),
+        ("concat", False),
+        ("", False),
+    ],
+)
+def test_only_mp4_mov_and_matroska_containers_are_taken(lc, live, fmt, ok):
+    def probe(path):
+        return ClipProbe(
+            duration=10.0, width=64, height=64, fps=25.0, has_audio=True, format_name=fmt
+        )
+
+    live.probe = probe
+    r = post(lc)
+    assert (r.status_code == 200) is ok
+    if not ok:
+        assert r.status_code == 422 and r.json()["error"] == "unreadable"
+
+
+def test_the_engine_container_check_is_used_when_it_exists(lc, live, monkeypatch):
+    from lull import media
+
+    seen = []
+
+    def engine_check(probe):
+        seen.append(probe)
+        raise media.MediaError("not a container we take")
+
+    monkeypatch.setattr(media, "assert_safe_container", engine_check, raising=False)
+    r = post(lc)
+    assert r.status_code == 422 and r.json()["error"] == "unreadable"
+    assert len(seen) == 1 and seen[0].format_name == MP4_FORMAT
+
+
+def test_the_real_probe_reports_the_container(noaudio):
+    from lull.api import clip
+
+    assert clip.probe(noaudio).format_name == MP4_FORMAT
