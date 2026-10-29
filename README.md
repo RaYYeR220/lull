@@ -15,7 +15,8 @@ frame check are held for that person instead of being spoken.
 
 - **Live site:** https://lull-omega.vercel.app
 - **API:** https://lull-api-494617981995.us-central1.run.app (REST and MCP)
-- **Demo video (under 3 minutes):** on the submission page (link added here once published)
+- **Demo video (under 3 minutes):** https://youtu.be/8rH2jLgbJvs
+- **The same video, audio-described by Lull (extended track):** https://youtu.be/XlGzhnaBFLQ
 
 ## The problem
 
